@@ -1,0 +1,280 @@
+/* SavingsTable Component Styles */
+.savingsTable {
+  padding: 32px;
+  background: var(--bg-surface);
+  border-radius: 20px;
+  box-shadow: 0 6px 24px var(--shadow-sm);
+  border: 1px solid var(--border-color);
+  margin: 24px 0;
+}
+
+.sectionTitle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--border-light);
+}
+
+.titleText {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.addButton {
+  padding: 12px 20px;
+  background: var(--gradient-primary);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 16px rgba(9, 105, 218, 0.25);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.addButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(9, 105, 218, 0.35);
+}
+
+/* Table Styles */
+.tableContainer {
+  margin-bottom: 24px;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-surface);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px var(--shadow-sm);
+  border: 1px solid var(--border-color);
+}
+
+.tableHeader {
+  background: var(--gradient-primary);
+  color: white;
+}
+
+.tableHeaderCell {
+  padding: 16px 20px;
+  font-weight: 600;
+  font-size: 15px;
+  text-align: left;
+  border: none;
+}
+
+.tableRow {
+  border-bottom: 1px solid var(--border-light);
+  transition: background-color 0.2s ease;
+}
+
+.tableRow:hover {
+  background-color: var(--bg-surface-alt);
+}
+
+.tableRow:last-child {
+  border-bottom: none;
+}
+
+.tableCell {
+  padding: 16px 20px;
+  border: none;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.tableCell.center {
+  text-align: center;
+}
+
+.tableCell.right {
+  text-align: right;
+}
+
+.savingsInput {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.savingsInput:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.1);
+}
+
+.deleteButton {
+  padding: 8px 12px;
+  background: var(--danger-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(207, 34, 46, 0.25);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.deleteButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(207, 34, 46, 0.35);
+  background: #b02a37;
+}
+
+/* Save Button */
+.saveButtonContainer {
+  text-align: right;
+  margin-top: 24px;
+}
+
+.saveButton {
+  padding: 14px 24px;
+  background: var(--gradient-secondary);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 6px 20px rgba(26, 127, 55, 0.25);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.saveButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(26, 127, 55, 0.35);
+}
+
+/* Summary Section */
+.summarySection {
+  padding: 24px;
+  background: linear-gradient(135deg, #e8f5e8 0%, #f0f8f0 100%);
+  border-radius: 16px;
+  margin-top: 32px;
+  border: 1px solid var(--border-light);
+}
+
+.summaryTitle {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summaryContent {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.summaryItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(26, 127, 55, 0.1);
+}
+
+.summaryItem:last-child {
+  border-bottom: none;
+}
+
+.summaryLabel {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.summaryValue {
+  font-weight: 700;
+  color: var(--secondary-color);
+  font-size: 1.1rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .savingsTable {
+    padding: 20px;
+    margin: 16px 0;
+  }
+
+  .sectionTitle {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .table {
+    font-size: 12px;
+  }
+
+  .tableHeaderCell,
+  .tableCell {
+    padding: 12px 8px;
+  }
+
+  .savingsInput {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .summaryContent {
+    grid-template-columns: 1fr;
+  }
+
+  .saveButton {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .savingsTable {
+    padding: 16px;
+  }
+
+  .titleText {
+    font-size: 1.2rem;
+  }
+
+  .table {
+    font-size: 11px;
+  }
+
+  .tableHeaderCell,
+  .tableCell {
+    padding: 8px 4px;
+  }
+
+  .deleteButton {
+    padding: 6px 8px;
+    font-size: 10px;
+  }
+}

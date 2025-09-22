@@ -1,0 +1,194 @@
+/* ExpenseTable Component Styles */
+.expenseTable {
+  padding: 32px;
+  background: var(--bg-surface);
+  border-radius: 20px;
+  box-shadow: 0 6px 24px var(--shadow-sm);
+  border: 1px solid var(--border-color);
+  margin: 24px 0;
+}
+
+.tableContainer {
+  overflow-x: auto;
+  margin-bottom: 24px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-surface);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px var(--shadow-sm);
+  border: 1px solid var(--border-color);
+}
+
+.tableHeader {
+  background: var(--gradient-primary);
+  color: white;
+}
+
+.tableHeaderCell {
+  padding: 18px 20px;
+  font-weight: 600;
+  font-size: 15px;
+  text-align: left;
+  border: none;
+}
+
+.tableHeaderCell.right {
+  text-align: right;
+}
+
+.tableRow {
+  border-bottom: 1px solid var(--border-light);
+  transition: background-color 0.2s ease;
+}
+
+.tableRow:hover {
+  background-color: var(--bg-surface-alt);
+}
+
+.tableRow:last-child {
+  border-bottom: none;
+}
+
+.tableCell {
+  padding: 16px 20px;
+  border: none;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.tableCell.right {
+  text-align: right;
+}
+
+.expenseInput {
+  width: 100px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  text-align: right;
+  font-size: 14px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.expenseInput:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.1);
+}
+
+.diffPositive {
+  color: var(--secondary-color);
+  font-weight: 600;
+}
+
+.diffNegative {
+  color: var(--danger-color);
+  font-weight: 600;
+}
+
+.totalRow {
+  background: var(--bg-surface-alt);
+  font-weight: 700;
+  border-top: 2px solid var(--border-color);
+}
+
+.totalCell {
+  padding: 16px 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+.totalCell.right {
+  text-align: right;
+}
+
+.totalDiffPositive {
+  color: var(--secondary-color);
+  font-weight: 700;
+}
+
+.totalDiffNegative {
+  color: var(--danger-color);
+  font-weight: 700;
+}
+
+.saveButtonContainer {
+  text-align: left;
+  margin-top: 24px;
+}
+
+.saveButton {
+  padding: 14px 24px;
+  background: var(--danger-color);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 6px 20px rgba(207, 34, 46, 0.25);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.saveButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(207, 34, 46, 0.35);
+  background: #b02a37;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .expenseTable {
+    padding: 20px;
+    margin: 16px 0;
+  }
+
+  .table {
+    font-size: 12px;
+  }
+
+  .tableHeaderCell,
+  .tableCell {
+    padding: 12px 8px;
+  }
+
+  .expenseInput {
+    width: 80px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .saveButton {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .expenseTable {
+    padding: 16px;
+  }
+
+  .table {
+    font-size: 11px;
+  }
+
+  .tableHeaderCell,
+  .tableCell {
+    padding: 8px 4px;
+  }
+
+  .expenseInput {
+    width: 70px;
+  }
+}
