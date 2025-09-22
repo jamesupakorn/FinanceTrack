@@ -1,0 +1,309 @@
+/* Home Page Styles */
+
+.homeContainer {
+  min-height: 100vh;
+  background-color: var(--bg-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  transition: background-color 0.3s ease;
+}
+
+.mainContent {
+  max-width: 1200px;
+  margin: auto;
+  padding: 24px;
+}
+
+/* Header Styles */
+.pageHeader {
+  text-align: center;
+  margin-bottom: 48px;
+  padding: 48px 24px;
+  background: var(--gradient-primary);
+  border-radius: 20px;
+  color: white;
+  box-shadow: 0 8px 32px var(--shadow-sm);
+  position: relative;
+}
+
+.themeToggleContainer {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+/* Content Sections */
+.sectionCard {
+  margin-bottom: 40px;
+  background: var(--bg-surface);
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 0 6px 24px var(--shadow-sm);
+  border: 1px solid var(--border-color);
+  transition: all 0.3s ease;
+}
+
+.sectionCard:hover {
+  box-shadow: 0 8px 32px var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+/* Tab Navigation */
+.tabNavigation {
+  margin-bottom: 40px;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  background-color: var(--bg-surface);
+  padding: 10px;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px var(--shadow-sm);
+  border: 1px solid var(--border-color);
+  transition: all 0.3s ease;
+}
+
+.tabButton {
+  padding: 14px 28px;
+  background-color: transparent;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+  position: relative;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.tabButton svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.tabButton.active {
+  background-color: var(--color-primary);
+  color: white;
+  font-weight: 600;
+}
+
+.tabButton:not(.active):hover {
+  background-color: var(--bg-surface-alt);
+  color: var(--text-primary);
+  transform: scale(1.02);
+}
+
+/* Tab Content */
+.tabContent {
+  background: var(--bg-surface);
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 0 6px 24px var(--shadow-sm);
+  border: 1px solid var(--border-color);
+  transition: all 0.3s ease;
+  animation: fadeIn 0.3s ease-in-out;
+  min-height: 400px;
+}
+
+.tabHeader {
+  margin-bottom: 32px;
+  padding: 20px 0;
+  border-bottom: 2px solid var(--border-light);
+}
+
+.tabTitle {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Responsive Design */
+/* Tablet Landscape */
+@media (max-width: 1024px) {
+  .mainContent {
+    padding: 18px;
+    max-width: 100%;
+  }
+  
+  .pageHeader {
+    padding: 35px 18px;
+  }
+  
+  .pageTitle {
+    font-size: 2.5rem;
+  }
+  
+  .tabNavigation {
+    gap: 8px;
+  }
+  
+  .tabButton {
+    padding: 12px 20px;
+    font-size: 15px;
+    gap: 6px;
+  }
+  
+  .tabButton svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* Tablet Portrait */
+@media (max-width: 768px) {
+  .mainContent {
+    padding: 16px;
+  }
+  
+  .pageHeader {
+    padding: 30px 16px;
+    margin-bottom: 24px;
+    border-radius: 12px;
+  }
+  
+  .pageTitle {
+    font-size: 2.2rem;
+    gap: 12px;
+  }
+  
+  .tabNavigation {
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+  }
+  
+  .tabButton {
+    min-width: calc(50% - 3px);
+    padding: 12px 16px;
+    font-size: 14px;
+    border-radius: 8px;
+    gap: 6px;
+  }
+  
+  .tabButton svg {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .sectionCard {
+    padding: 20px;
+    margin-bottom: 20px;
+    border-radius: 12px;
+  }
+  
+  .themeToggleContainer {
+    position: static;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: center;
+  }
+}
+
+/* Mobile Large */
+@media (max-width: 640px) {
+  .mainContent {
+    padding: 12px;
+  }
+  
+  .pageHeader {
+    padding: 24px 12px;
+    margin-bottom: 20px;
+  }
+  
+  .pageTitle {
+    font-size: 2rem;
+    gap: 10px;
+  }
+  
+  .tabButton {
+    min-width: calc(50% - 3px);
+    padding: 10px 12px;
+    font-size: 13px;
+    gap: 5px;
+  }
+  
+  .tabButton svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* Mobile Portrait */
+@media (max-width: 480px) {
+  .mainContent {
+    padding: 10px;
+  }
+  
+  .pageHeader {
+    padding: 20px 10px;
+    margin-bottom: 16px;
+    border-radius: 8px;
+  }
+  
+  .tabButton {
+    min-width: 100%;
+    margin-bottom: 6px;
+    padding: 12px 16px;
+    font-size: 14px;
+    gap: 6px;
+  }
+  
+  .tabButton svg {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .pageTitle {
+    font-size: 1.6rem;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .sectionCard {
+    padding: 16px;
+    margin-bottom: 16px;
+    border-radius: 8px;
+  }
+  
+  .themeToggleContainer {
+    margin-bottom: 16px;
+  }
+}
+
+/* Mobile Small */
+@media (max-width: 375px) {
+  .mainContent {
+    padding: 8px;
+  }
+  
+  .pageHeader {
+    padding: 16px 8px;
+  }
+  
+  .pageTitle {
+    font-size: 1.4rem;
+  }
+  
+  .sectionCard {
+    padding: 12px;
+  }
+}
