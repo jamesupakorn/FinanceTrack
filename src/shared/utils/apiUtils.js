@@ -25,6 +25,20 @@ export const incomeAPI = {
     }
   },
 
+  // ดึงข้อมูลรายรับทั้งหมด
+  getAll: async () => {
+    try {
+      const response = await fetch(API_URLS.INCOME);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching all income data:', error);
+      throw error;
+    }
+  },
+
   // บันทึกข้อมูลรายรับ
   save: async (month, values) => {
     try {
@@ -56,6 +70,20 @@ export const expenseAPI = {
       return await response.json();
     } catch (error) {
       console.error('Error fetching expense data:', error);
+      throw error;
+    }
+  },
+
+  // ดึงข้อมูลรายจ่ายทั้งหมด
+  getAll: async () => {
+    try {
+      const response = await fetch(API_URLS.EXPENSE);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching all expense data:', error);
       throw error;
     }
   },
@@ -96,12 +124,12 @@ export const savingsAPI = {
   },
 
   // บันทึกยอดออมสะสม
-  saveAccumulated: async (month, ยอดออมสะสม) => {
+  saveAccumulated: async (month, accumulated_savings) => {
     try {
       const response = await fetch(API_URLS.SAVINGS, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month, ยอดออมสะสม })
+        body: JSON.stringify({ month, accumulated_savings })
       });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -114,12 +142,12 @@ export const savingsAPI = {
   },
 
   // บันทึกรายการเงินออม
-  saveList: async (month, รายการเงินออม) => {
+  saveList: async (month, savings_list) => {
     try {
       const response = await fetch(API_URLS.SAVINGS, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month, รายการเงินออม })
+        body: JSON.stringify({ month, savings_list })
       });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -165,20 +193,19 @@ export const taxAPI = {
   // บันทึกภาษีสะสมรายปี
   saveYearly: async (year, data) => {
     try {
-      // รองรับทั้งการส่งข้อมูลแบบใหม่ (object) และแบบเก่า (number)
+      // Support both new (object) and old (number) formats
       let requestBody;
       if (typeof data === 'object' && data !== null) {
-        // ถ้าเป็น object ให้ส่งแยกเป็น ภาษีสะสม และ ภาษีรายเดือน
-        requestBody = { 
-          year, 
-          ภาษีสะสม: data.ภาษีสะสม,
-          ภาษีรายเดือน: data.ภาษีรายเดือน
+        // If object, send as accumulated_tax and monthly_tax
+        requestBody = {
+          year,
+          accumulated_tax: data.accumulated_tax,
+          monthly_tax: data.monthly_tax
         };
       } else {
-        // ถ้าเป็น number ให้ส่งแบบเก่า
-        requestBody = { year, ภาษีสะสม: data };
+        // If number, send as accumulated_tax only
+        requestBody = { year, accumulated_tax: data };
       }
-      
       const response = await fetch(API_URLS.TAX, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -253,12 +280,12 @@ export const salaryAPI = {
   },
 
   // บันทึกข้อมูลเงินเดือน
-  save: async (month, รายได้, หัก, หมายเหตุ = '') => {
+  save: async (month, income, deduct, note = '') => {
     try {
       const response = await fetch(API_URLS.SALARY, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month, รายได้, หัก, หมายเหตุ })
+        body: JSON.stringify({ month, income, deduct, note })
       });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

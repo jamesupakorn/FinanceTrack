@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { formatCurrency, parseAndFormat } from '../../shared/utils/numberUtils';
+import { formatCurrency, parseAndFormat, handleNumberInput, handleNumberBlur, parseToNumber } from '../../shared/utils/numberUtils';
 import { salaryAPI, incomeAPI } from '../../shared/utils/apiUtils';
 import styles from '../styles/SalaryCalculator.module.css';
 
@@ -14,22 +14,37 @@ const getThaiMonthName = (monthStr) => {
   return `${monthNames[parseInt(month) - 1]} ${year}`;
 };
 
+// Mapping English salary keys to Thai labels
+const salaryKeyThaiMapping = {
+  salary: 'เงินเดือน',
+  overtime_1x: 'ค่าล่วงเวลา 1 เท่า',
+  overtime_1_5x: 'ค่าล่วงเวลา 1.5 เท่า',
+  overtime_2x: 'ค่าล่วงเวลา 2 เท่า',
+  overtime_3x: 'ค่าล่วงเวลา 3 เท่า',
+  overtime_other: 'ค่าล่วงเวลาอื่นๆ',
+  bonus: 'โบนัส',
+  other_income: 'เงินได้อื่นๆ',
+  provident_fund: 'หักกองทุนสำรองเลี้ยงชีพ',
+  social_security: 'หักสมทบประกันสังคม',
+  tax: 'หักภาษี'
+};
+
 const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
   const [salaryData, setSalaryData] = useState({
     // รายได้
-    เงินเดือน: '',
-    ค่าล่วงเวลา_1เท่า: '',
-    ค่าล่วงเวลา_1_5เท่า: '',
-    ค่าล่วงเวลา_2เท่า: '',
-    ค่าล่วงเวลา_3เท่า: '',
-    ค่าล่วงเวลาอื่นๆ: '',
-    โบนัส: '',
-    เงินได้อื่นๆ: '',
-    
+    salary: '',
+    overtime_1x: '',
+    overtime_1_5x: '',
+    overtime_2x: '',
+    overtime_3x: '',
+    overtime_other: '',
+    bonus: '',
+    other_income: '',
+
     // หัก
-    หักกองทุนสำรองเลี้ยงชีพ: '',
-    หักสมทบประกันสังคม: '',
-    หักภาษี: ''
+    provident_fund: '',
+    social_security: '750',
+    tax: ''
   });
 
   const [calculatedResults, setCalculatedResults] = useState({
@@ -53,11 +68,15 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
   const loadSalaryData = async () => {
     try {
       const data = await salaryAPI.getByMonth(selectedMonth);
-      if (data && data.รายได้ && data.หัก) {
-        setSalaryData({
-          ...data.รายได้,
-          ...data.หัก
+      if (data && data.income && data.deduct) {
+        // รวมข้อมูล
+        const rawData = { ...data.income, ...data.deduct };
+        // Format ทุก field ด้วย handleInputBlur logic
+        const formattedData = {};
+        Object.keys(rawData).forEach(key => {
+          formattedData[key] = parseAndFormat(rawData[key]);
         });
+        setSalaryData(formattedData);
       }
     } catch (error) {
       console.error('Error loading salary data:', error);
@@ -67,15 +86,15 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
   const calculateTotals = () => {
     // คำนวณรวมรายได้
     const totalIncome = [
-      'เงินเดือน', 'ค่าล่วงเวลา_1เท่า', 'ค่าล่วงเวลา_1_5เท่า', 
-      'ค่าล่วงเวลา_2เท่า', 'ค่าล่วงเวลา_3เท่า', 'ค่าล่วงเวลาอื่นๆ', 
-      'โบนัส', 'เงินได้อื่นๆ'
-    ].reduce((sum, key) => sum + (parseFloat(salaryData[key]) || 0), 0);
+      'salary', 'overtime_1x', 'overtime_1_5x',
+      'overtime_2x', 'overtime_3x', 'overtime_other',
+      'bonus', 'other_income'
+    ].reduce((sum, key) => sum + parseToNumber(salaryData[key]), 0);
 
     // คำนวณรวมหัก
     const totalDeduction = [
-      'หักกองทุนสำรองเลี้ยงชีพ', 'หักสมทบประกันสังคม', 'หักภาษี'
-    ].reduce((sum, key) => sum + (parseFloat(salaryData[key]) || 0), 0);
+      'provident_fund', 'social_security', 'tax'
+    ].reduce((sum, key) => sum + parseToNumber(salaryData[key]), 0);
 
     // คำนวณเงินได้สุทธิ
     const netIncome = totalIncome - totalDeduction;
@@ -89,50 +108,60 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
 
   const handleInputChange = (field, value) => {
     // เก็บค่าแบบ raw ไว้ระหว่างการพิมพ์
-    setSalaryData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    handleNumberInput(value, setSalaryData, field);
   };
 
   const handleInputBlur = (field, value) => {
     // Format เฉพาะเมื่อออกจาก input
-    const formattedValue = parseAndFormat(value);
-    setSalaryData(prev => ({
-      ...prev,
-      [field]: formattedValue
-    }));
+    handleNumberInput(value, setSalaryData, field);
   };
 
   const saveSalaryData = async () => {
     try {
       // แยกข้อมูลรายได้และหัก
-      const รายได้ = {
-        เงินเดือน: parseFloat(salaryData.เงินเดือน) || 0,
-        ค่าล่วงเวลา_1เท่า: parseFloat(salaryData.ค่าล่วงเวลา_1เท่า) || 0,
-        ค่าล่วงเวลา_1_5เท่า: parseFloat(salaryData.ค่าล่วงเวลา_1_5เท่า) || 0,
-        ค่าล่วงเวลา_2เท่า: parseFloat(salaryData.ค่าล่วงเวลา_2เท่า) || 0,
-        ค่าล่วงเวลา_3เท่า: parseFloat(salaryData.ค่าล่วงเวลา_3เท่า) || 0,
-        ค่าล่วงเวลาอื่นๆ: parseFloat(salaryData.ค่าล่วงเวลาอื่นๆ) || 0,
-        โบนัส: parseFloat(salaryData.โบนัส) || 0,
-        เงินได้อื่นๆ: parseFloat(salaryData.เงินได้อื่นๆ) || 0
+      const income = {
+        salary: parseToNumber(salaryData.salary),
+        overtime_1x: parseToNumber(salaryData.overtime_1x),
+        overtime_1_5x: parseToNumber(salaryData.overtime_1_5x),
+        overtime_2x: parseToNumber(salaryData.overtime_2x),
+        overtime_3x: parseToNumber(salaryData.overtime_3x),
+        overtime_other: parseToNumber(salaryData.overtime_other),
+        bonus: parseToNumber(salaryData.bonus),
+        other_income: parseToNumber(salaryData.other_income)
       };
 
-      const หัก = {
-        หักกองทุนสำรองเลี้ยงชีพ: parseFloat(salaryData.หักกองทุนสำรองเลี้ยงชีพ) || 0,
-        หักสมทบประกันสังคม: parseFloat(salaryData.หักสมทบประกันสังคม) || 0,
-        หักภาษี: parseFloat(salaryData.หักภาษี) || 0
+      const deduction = {
+        provident_fund: parseToNumber(salaryData.provident_fund),
+        social_security: parseToNumber(salaryData.social_security),
+        tax: parseToNumber(salaryData.tax)
       };
 
       // บันทึกข้อมูลเงินเดือนเฉพาะ salary.json
-      const result = await salaryAPI.save(selectedMonth, รายได้, หัก);
-      
+      const result = await salaryAPI.save(selectedMonth, income, deduction);
+
       if (result.success) {
+        // อัพเดตข้อมูลภาษีรายเดือนใน tax_accumulated
+        try {
+          // แปลง selectedMonth เป็นปี พ.ศ. และเลขเดือน
+          const [yearStr, monthStr] = selectedMonth.split('-');
+          const year = (parseInt(yearStr) + 543).toString();
+          const month = monthStr.padStart(2, '0');
+          const taxValue = deduction.tax || 0;
+          await fetch('/api/tax_accumulated', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              year,
+              ภาษีรายเดือน: { [month]: taxValue }
+            })
+          });
+        } catch (e) {
+          // ไม่ต้องแจ้ง error ให้ user
+        }
         // เรียก callback เพื่อให้ parent component อัพเดต
         if (onSalaryUpdate) {
           onSalaryUpdate();
         }
-        
         alert('บันทึกข้อมูลเงินเดือนเรียบร้อย');
       } else {
         alert('เกิดข้อผิดพลาด: ' + (result.error || 'ไม่สามารถบันทึกได้'));
@@ -145,117 +174,42 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
 
   const clearAll = () => {
     setSalaryData({
-      เงินเดือน: '',
-      ค่าล่วงเวลา_1เท่า: '',
-      ค่าล่วงเวลา_1_5เท่า: '',
-      ค่าล่วงเวลา_2เท่า: '',
-      ค่าล่วงเวลา_3เท่า: '',
-      ค่าล่วงเวลาอื่นๆ: '',
-      โบนัส: '',
-      เงินได้อื่นๆ: '',
-      หักกองทุนสำรองเลี้ยงชีพ: '',
-      หักสมทบประกันสังคม: '',
-      หักภาษี: ''
+      salary: '',
+      overtime_1x: '',
+      overtime_1_5x: '',
+      overtime_2x: '',
+      overtime_3x: '',
+      overtime_other: '',
+      bonus: '',
+      other_income: '',
+      provident_fund: '',
+      social_security: '750',
+      tax: ''
     });
   };
 
   return (
     <div className={styles.salaryCalculator}>
       <h2 className={styles.title}>คำนวณเงินเดือน - {selectedMonth ? getThaiMonthName(selectedMonth) : 'กรุณาเลือกเดือน'}</h2>
-      
+
       <div className={styles.salaryContent}>
         {/* ส่วนรายได้ */}
         <div className={styles.incomeSection}>
           <h3 className={`${styles.sectionTitle} ${styles.incomeTitle}`}>รายได้</h3>
-          
+
           <div className={styles.inputGrid}>
-            <div className={styles.inputGroup}>
-              <label>เงินเดือน</label>
-              <input
-                type="text"
-                value={salaryData.เงินเดือน}
-                onChange={(e) => handleInputChange('เงินเดือน', e.target.value)}
-                onBlur={(e) => handleInputBlur('เงินเดือน', e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-
-            <div className={styles.inputGroup}>
-              <label>ค่าล่วงเวลา 1 เท่า</label>
-              <input
-                type="text"
-                value={salaryData.ค่าล่วงเวลา_1เท่า}
-                onChange={(e) => handleInputChange('ค่าล่วงเวลา_1เท่า', e.target.value)}
-                onBlur={(e) => handleInputBlur('ค่าล่วงเวลา_1เท่า', e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-
-            <div className={styles.inputGroup}>
-              <label>ค่าล่วงเวลา 1.5 เท่า</label>
-              <input
-                type="text"
-                value={salaryData.ค่าล่วงเวลา_1_5เท่า}
-                onChange={(e) => handleInputChange('ค่าล่วงเวลา_1_5เท่า', e.target.value)}
-                onBlur={(e) => handleInputBlur('ค่าล่วงเวลา_1_5เท่า', e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-
-            <div className={styles.inputGroup}>
-              <label>ค่าล่วงเวลา 2 เท่า</label>
-              <input
-                type="text"
-                value={salaryData.ค่าล่วงเวลา_2เท่า}
-                onChange={(e) => handleInputChange('ค่าล่วงเวลา_2เท่า', e.target.value)}
-                onBlur={(e) => handleInputBlur('ค่าล่วงเวลา_2เท่า', e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-
-            <div className={styles.inputGroup}>
-              <label>ค่าล่วงเวลา 3 เท่า</label>
-              <input
-                type="text"
-                value={salaryData.ค่าล่วงเวลา_3เท่า}
-                onChange={(e) => handleInputChange('ค่าล่วงเวลา_3เท่า', e.target.value)}
-                onBlur={(e) => handleInputBlur('ค่าล่วงเวลา_3เท่า', e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-
-            <div className={styles.inputGroup}>
-              <label>ค่าล่วงเวลาอื่นๆ</label>
-              <input
-                type="text"
-                value={salaryData.ค่าล่วงเวลาอื่นๆ}
-                onChange={(e) => handleInputChange('ค่าล่วงเวลาอื่นๆ', e.target.value)}
-                onBlur={(e) => handleInputBlur('ค่าล่วงเวลาอื่นๆ', e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-
-            <div className={styles.inputGroup}>
-              <label>โบนัส</label>
-              <input
-                type="text"
-                value={salaryData.โบนัส}
-                onChange={(e) => handleInputChange('โบนัส', e.target.value)}
-                onBlur={(e) => handleInputBlur('โบนัส', e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-
-            <div className={styles.inputGroup}>
-              <label>เงินได้อื่นๆ</label>
-              <input
-                type="text"
-                value={salaryData.เงินได้อื่นๆ}
-                onChange={(e) => handleInputChange('เงินได้อื่นๆ', e.target.value)}
-                onBlur={(e) => handleInputBlur('เงินได้อื่นๆ', e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
+            {['salary', 'overtime_1x', 'overtime_1_5x', 'overtime_2x', 'overtime_3x', 'overtime_other', 'bonus', 'other_income'].map((key) => (
+              <div className={styles.inputGroup} key={key}>
+                <label>{salaryKeyThaiMapping[key]}</label>
+                <input
+                  type="text"
+                  value={salaryData[key]}
+                  onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
+                  onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
+                  placeholder="0.00"
+                />
+              </div>
+            ))}
           </div>
 
           <div className={`${styles.subtotal} ${styles.incomeSubtotal}`}>
@@ -267,40 +221,20 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
         {/* ส่วนหัก */}
         <div className={styles.deductionSection}>
           <h3 className={`${styles.sectionTitle} ${styles.deductionTitle}`}>หัก</h3>
-          
+
           <div className={styles.inputGrid}>
-            <div className={styles.inputGroup}>
-              <label>หักกองทุนสำรองเลี้ยงชีพ</label>
-              <input
-                type="text"
-                value={salaryData.หักกองทุนสำรองเลี้ยงชีพ}
-                onChange={(e) => handleInputChange('หักกองทุนสำรองเลี้ยงชีพ', e.target.value)}
-                onBlur={(e) => handleInputBlur('หักกองทุนสำรองเลี้ยงชีพ', e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-
-            <div className={styles.inputGroup}>
-              <label>หักสมทบประกันสังคม</label>
-              <input
-                type="text"
-                value={salaryData.หักสมทบประกันสังคม}
-                onChange={(e) => handleInputChange('หักสมทบประกันสังคม', e.target.value)}
-                onBlur={(e) => handleInputBlur('หักสมทบประกันสังคม', e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-
-            <div className={styles.inputGroup}>
-              <label>หักภาษี</label>
-              <input
-                type="text"
-                value={salaryData.หักภาษี}
-                onChange={(e) => handleInputChange('หักภาษี', e.target.value)}
-                onBlur={(e) => handleInputBlur('หักภาษี', e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
+            {['provident_fund', 'social_security', 'tax'].map((key) => (
+              <div className={styles.inputGroup} key={key}>
+                <label>{salaryKeyThaiMapping[key]}</label>
+                <input
+                  type="text"
+                  value={salaryData[key]}
+                  onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
+                  onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
+                  placeholder="0.00"
+                />
+              </div>
+            ))}
           </div>
 
           <div className={`${styles.subtotal} ${styles.deductionSubtotal}`}>
