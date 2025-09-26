@@ -65,7 +65,6 @@ export default function ExpenseTable({ selectedMonth }) {
 
   return (
     <div className={styles.expenseTable}>
-      <h2>รายจ่ายรายเดือน {selectedMonth}</h2>
       {expenseData && (
         <>
           <div className={styles.tableContainer}>
