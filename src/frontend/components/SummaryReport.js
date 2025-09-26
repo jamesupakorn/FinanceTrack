@@ -49,12 +49,12 @@ const SummaryReport = ({ selectedMonth }) => {
 
       // ใช้ยอดรวมที่คำนวณแล้วจากแต่ละ API
       const totalIncome = parseFloat(incomeData.รวม || 0); // ยอดรวมจาก รายรับรายเดือน
-      const totalExpenseAll = parseFloat(expenseData.รวมประมาณ || 0); // ยอดรวมจาก รวมประมาณ  
-      const totalExpenseActual = parseFloat(expenseData.รวมจ่ายจริง || 0); // ยอดรวมจาก รวมจ่ายจริง
+  const totalExpenseAll = parseFloat(expenseData.totalEstimate || 0); // ยอดรวมจาก totalEstimate
+  const totalExpenseActual = parseFloat(expenseData.totalActualPaid || 0); // ยอดรวมจาก totalActualPaid
       const totalSavings = parseFloat(savingsData.รวมเงินเก็บ || 0); // ยอดรวมจาก รวมเงินเก็บ
       
-      // ดึงข้อมูลภาษีจากปีปัจจุบัน
-      const taxAccumulated = parseFloat(taxData[currentYear]?.ภาษีสะสม || 0);
+  // ดึงข้อมูลภาษีจากปีปัจจุบัน (ใช้ key accumulated_tax ให้ตรง backend)
+  const taxAccumulated = parseFloat(taxData[currentYear]?.accumulated_tax || 0);
       
       // คำนวณยอดคงเหลือ
       const remainingRough = totalIncome - totalExpenseAll; // รายรับ - รวมประมาณ
@@ -152,7 +152,11 @@ const SummaryReport = ({ selectedMonth }) => {
         <div className={styles.chartLegend}>
           <div className={styles.legendItem}>
             <span className={`${styles.legendColor} ${styles.income}`}></span>
-            <span>{รับPercent}%</span>
+            <span>รับ : {รับPercent}%</span>
+          </div>
+          <div className={styles.legendItem}>
+            <span className={`${styles.legendColor} ${styles.expense}`}></span>
+            <span>จ่าย : {จ่ายPercent}%</span>
           </div>
         </div>
       </div>
@@ -162,7 +166,6 @@ const SummaryReport = ({ selectedMonth }) => {
   return (
     <div className={styles.summaryReport}>
       <h2 className={styles.reportTitle}>งบประมาณ</h2>
-      
       <div className={styles.summaryContent}>
         {/* Pie Chart Section */}
         <div className={styles.chartsSection}>
@@ -184,7 +187,6 @@ const SummaryReport = ({ selectedMonth }) => {
         {/* Summary Table Section */}
         <div className={styles.summaryTablesSection}>
           <h3 className={styles.tableTitle}>สรุป</h3>
-          
           <div className={styles.tablesGrid}>
             {/* ตารางประมาณการ */}
             <div className={`${styles.summaryTable} ${styles.estimated}`}>
@@ -194,24 +196,20 @@ const SummaryReport = ({ selectedMonth }) => {
                   <span className={styles.itemLabel}>ยอดรวมรายรับรายเดือน</span>
                   <span className={`${styles.itemValue} ${styles.income}`}>{formatCurrency(summaryData.ยอดรวมรายรับรายเดือน)}</span>
                 </div>
-
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมค่าใช้จ่ายรายเดือน ทั้งหมด</span>
                   <span className={styles.itemValue}>{formatCurrency(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด)}</span>
                 </div>
-
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมเงินเก็บรายเดือน</span>
                   <span className={styles.itemValue}>{formatCurrency(summaryData.ยอดรวมเงินเก็บรายเดือน)}</span>
                 </div>
-
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดเงินคงเหลือ ประมาณการ</span>
                   <span className={`${styles.itemValue} ${styles.remaining}`}>{formatCurrency(summaryData.ยอดเงินคงเหลือ_ประมาณการ)}</span>
                 </div>
               </div>
             </div>
-
             {/* ตารางจ่ายจริง */}
             <div className={`${styles.summaryTable} ${styles.actual}`}>
               <h4 className={styles.tableSubtitle}>จ่ายจริง</h4>
@@ -220,17 +218,14 @@ const SummaryReport = ({ selectedMonth }) => {
                   <span className={styles.itemLabel}>ยอดรวมรายรับรายเดือน</span>
                   <span className={`${styles.itemValue} ${styles.income}`}>{formatCurrency(summaryData.ยอดรวมรายรับรายเดือน)}</span>
                 </div>
-
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมค่าใช้จ่ายรายเดือน จ่ายจริง</span>
                   <span className={styles.itemValue}>{formatCurrency(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง)}</span>
                 </div>
-
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมเงินเก็บรายเดือน</span>
                   <span className={styles.itemValue}>{formatCurrency(summaryData.ยอดรวมเงินเก็บรายเดือน)}</span>
                 </div>
-
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดเงินคงเหลือ จริง</span>
                   <span className={`${styles.itemValue} ${styles.remaining}`}>{formatCurrency(summaryData.ยอดเงินคงเหลือ_จริง)}</span>
@@ -238,7 +233,6 @@ const SummaryReport = ({ selectedMonth }) => {
               </div>
             </div>
           </div>
-
           {/* ภาษีสะสม (แยกต่างหาก) */}
           <div className={styles.taxSummary}>
             <div className={`${styles.summaryItem} ${styles.taxSection}`}>

@@ -22,6 +22,7 @@ const ThemeToggle = () => {
     return themes[themeName]?.name || themeName;
   };
 
+  // No number/money input fields; only theme selector
   return (
     <div className={styles.themeToggle}>
       <select
@@ -33,17 +34,12 @@ const ThemeToggle = () => {
           <option 
             key={key} 
             value={key}
-            style={{ 
-              backgroundColor: '#2d3748', 
-              color: 'white',
-              padding: '12px'
-            }}
+            className={styles.themeOption}
           >
             {theme.name}
           </option>
         ))}
       </select>
-      
       {/* Theme Icon Overlay */}
       <div className={styles.themeIconOverlay}>
         {getThemeIcon(currentTheme)}

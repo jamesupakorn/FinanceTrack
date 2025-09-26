@@ -1,5 +1,24 @@
+// Mapping ภาษาไทยสำหรับ key รายการค่าใช้จ่าย
+const expenseKeyThaiMap = {
+  house: 'ค่าบ้าน',
+  water: 'ค่าน้ำ',
+  internet: 'ค่าเน็ต',
+  electricity: 'ค่าไฟ',
+  mobile: 'โทรศัพท์มือถือ',
+  credit_kbank: 'บัตรเครดิต KBank',
+  credit_kungsri: 'บัตรเครดิต Kungsri',
+  credit_uob: 'บัตรเครดิต UOB',
+  credit_ttb: 'บัตรเครดิต TTB',
+  shopee: 'Shopee',
+  netflix: 'Netflix',
+  youtube: 'YouTube',
+  youtube_membership: 'YouTube Membership',
+  motorcycle: 'ค่ารถจักรยานยนต์',
+  miscellaneous: 'ค่าใช้จ่ายเบ็ดเตล็ด'
+};
 import { useState, useEffect } from 'react';
-import { formatCurrency, calculateSum, parseAndFormat, parseToNumber, formatExpenseData } from '../../shared/utils/numberUtils';
+import { formatCurrency, calculateSum, parseAndFormat, parseToNumber, formatExpenseData, getAccountSummary, handleNumberInput, handleNumberBlur } from '../../shared/utils/numberUtils';
+import BankAccountTable from './BankAccountTable';
 import { expenseAPI } from '../../shared/utils/apiUtils';
 import styles from '../styles/ExpenseTable.module.css';
 
@@ -20,21 +39,36 @@ export default function ExpenseTable({ selectedMonth }) {
 
   const handleExpenseChange = (item, field, value) => {
     const current = editExpense[item] || {};
-    // เก็บค่าแบบ raw ไว้ระหว่างการพิมพ์
-    setEditExpense({
-      ...editExpense,
-      [item]: { ...current, [field]: value }
-    });
+    if (field === 'paid') {
+      setEditExpense({
+        ...editExpense,
+        [item]: { ...current, [field]: value }
+      });
+    } else {
+      handleNumberInput(value, (val) => {
+        setEditExpense({
+          ...editExpense,
+          [item]: { ...current, [field]: val }
+        });
+      });
+    }
   };
 
   const handleExpenseBlur = (item, field, value) => {
     const current = editExpense[item] || {};
-    // Format เฉพาะเมื่อออกจาก input
-    const formattedValue = parseAndFormat(value);
-    setEditExpense({
-      ...editExpense,
-      [item]: { ...current, [field]: formattedValue }
-    });
+    if (field === 'paid') {
+      setEditExpense({
+        ...editExpense,
+        [item]: { ...current, [field]: value }
+      });
+    } else {
+      handleNumberBlur(value, (val) => {
+        setEditExpense({
+          ...editExpense,
+          [item]: { ...current, [field]: val }
+        });
+      });
+    }
   };
 
   const handleSave = async () => {
@@ -44,10 +78,14 @@ export default function ExpenseTable({ selectedMonth }) {
       Object.keys(editExpense).forEach(item => {
         numericExpense[item] = {};
         Object.keys(editExpense[item]).forEach(field => {
-          numericExpense[item][field] = parseToNumber(editExpense[item][field]);
+          if (field === 'paid') {
+            numericExpense[item][field] = !!editExpense[item][field];
+          } else {
+            numericExpense[item][field] = parseToNumber(editExpense[item][field]);
+          }
         });
       });
-      
+
       await expenseAPI.save(selectedMonth, numericExpense);
       // รีเฟรชข้อมูลหลังบันทึก
       const data = await expenseAPI.getByMonth(selectedMonth);
@@ -59,74 +97,92 @@ export default function ExpenseTable({ selectedMonth }) {
   };
 
   const calculateTotal = (field) => {
-    const values = Object.values(editExpense).map(item => item?.[field] || 0);
-    return calculateSum(values);
+  const values = Object.values(editExpense).map(item => parseToNumber(item?.[field]));
+  return calculateSum(values);
   };
 
   return (
     <div className={styles.expenseTable}>
       {expenseData && (
         <>
+          {/* ตารางหลักเดิม */}
           <div className={styles.tableContainer}>
             <table className={styles.table}>
               <thead className={styles.tableHeader}>
                 <tr>
-                  <th className={styles.tableHeaderCell}>รายการ</th>
-                  <th className={`${styles.tableHeaderCell} ${styles.right}`}>ประมาณ</th>
-                  <th className={`${styles.tableHeaderCell} ${styles.right}`}>จ่ายจริง</th>
+                  <th className={styles.tableHeaderCell}>รายการค่าใช้จ่าย</th>
+                  <th className={`${styles.tableHeaderCell} ${styles.right}`}>ยอดประมาณการ</th>
+                  <th className={`${styles.tableHeaderCell} ${styles.right}`}>ยอดที่จ่ายจริง</th>
+                  <th className={`${styles.tableHeaderCell} ${styles.center}`}>สถานะชำระ</th>
                   <th className={`${styles.tableHeaderCell} ${styles.right}`}>ส่วนต่าง</th>
                 </tr>
               </thead>
-            <tbody>
-              {expenseData.รายการ.map((item, i) => {
-                const ประมาณ = parseFloat(editExpense[item]?.['ประมาณ'] || 0);
-                const จ่ายจริง = parseFloat(editExpense[item]?.['จ่ายจริง'] || 0);
-                const ส่วนต่าง = ประมาณ - จ่ายจริง;
-                
-                return (
-                  <tr key={i} className={styles.tableRow}>
-                    <td className={styles.tableCell}>{item}</td>
-                    <td className={`${styles.tableCell} ${styles.right}`}>
-                      <input
-                        type="text"
-                        value={editExpense[item]?.['ประมาณ'] ?? ''}
-                        onChange={e => handleExpenseChange(item, 'ประมาณ', e.target.value)}
-                        onBlur={e => handleExpenseBlur(item, 'ประมาณ', e.target.value)}
-                        className={styles.expenseInput}
-                      />
-                    </td>
-                    <td className={`${styles.tableCell} ${styles.right}`}>
-                      <input
-                        type="text"
-                        value={editExpense[item]?.['จ่ายจริง'] ?? ''}
-                        onChange={e => handleExpenseChange(item, 'จ่ายจริง', e.target.value)}
-                        onBlur={e => handleExpenseBlur(item, 'จ่ายจริง', e.target.value)}
-                        className={styles.expenseInput}
-                      />
-                    </td>
-                    <td className={`${styles.tableCell} ${styles.right} ${ส่วนต่าง >= 0 ? styles.diffPositive : styles.diffNegative}`}>
-                      {formatCurrency(ส่วนต่าง)}
-                    </td>
-                  </tr>
-                );
-              })}
-              <tr className={styles.totalRow}>
-                <td className={styles.totalCell}>รวม</td>
-                <td className={`${styles.totalCell} ${styles.right}`}>{formatCurrency(calculateTotal('ประมาณ'))}</td>
-                <td className={`${styles.totalCell} ${styles.right}`}>{formatCurrency(calculateTotal('จ่ายจริง'))}</td>
-                <td className={`${styles.totalCell} ${styles.right} ${(calculateTotal('ประมาณ') - calculateTotal('จ่ายจริง')) >= 0 ? styles.totalDiffPositive : styles.totalDiffNegative}`}>
-                  {formatCurrency(calculateTotal('ประมาณ') - calculateTotal('จ่ายจริง'))}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+              <tbody>
+                {expenseData.items.map((item, i) => {
+                  // ใช้ field ใหม่ 'estimate', 'actual', 'paid'
+                    const estimate = parseToNumber(editExpense[item]?.['estimate'] ?? expenseData.months[selectedMonth]?.[item]?.['estimate'] ?? 0);
+                    const actual = parseToNumber(editExpense[item]?.['actual'] ?? expenseData.months[selectedMonth]?.[item]?.['actual'] ?? 0);
+                  // Default paid to false if undefined/null
+                  const paid = (editExpense[item]?.['paid'] !== undefined && editExpense[item]?.['paid'] !== null)
+                    ? editExpense[item]['paid']
+                    : (expenseData.months[selectedMonth]?.[item]?.['paid'] !== undefined && expenseData.months[selectedMonth]?.[item]?.['paid'] !== null)
+                      ? expenseData.months[selectedMonth][item]['paid']
+                      : false;
+                  const diff = estimate - actual;
+                  return (
+                    <tr key={i} className={styles.tableRow}>
+                      <td className={styles.tableCell}>{expenseKeyThaiMap[item] ?? item}</td>
+                      <td className={`${styles.tableCell} ${styles.right}`}> 
+                        <input
+                          type="text"
+                          value={editExpense[item]?.['estimate'] ?? expenseData.months[selectedMonth]?.[item]?.['estimate'] ?? ''}
+                          onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'estimate', val))}
+                          onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'estimate', val))}
+                          className={styles.expenseInput}
+                        />
+                      </td>
+                      <td className={`${styles.tableCell} ${styles.right}`}> 
+                        <input
+                          type="text"
+                          value={editExpense[item]?.['actual'] ?? expenseData.months[selectedMonth]?.[item]?.['actual'] ?? ''}
+                          onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'actual', val))}
+                          onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'actual', val))}
+                          className={styles.expenseInput}
+                        />
+                      </td>
+                      <td className={`${styles.tableCell} ${styles.center} ${styles.checkboxCell}`}> 
+                        <input
+                          type="checkbox"
+                          checked={paid === true || paid === 'true' ? true : false}
+                          onChange={e => handleExpenseChange(item, 'paid', e.target.checked)}
+                        />
+                      </td>
+                      <td className={`${styles.tableCell} ${styles.right} ${diff >= 0 ? styles.diffPositive : styles.diffNegative}`}> 
+                        {formatCurrency(diff)}
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr className={styles.totalRow}>
+                  <td className={styles.totalCell}>ยอดรวม</td>
+                  <td className={`${styles.totalCell} ${styles.right}`}>{formatCurrency(calculateTotal('estimate'))}</td>
+                  <td className={`${styles.totalCell} ${styles.right}`}>{formatCurrency(calculateTotal('actual'))}</td>
+                  <td className={`${styles.totalCell} ${styles.center}`}></td>
+                  <td className={`${styles.totalCell} ${styles.right} ${(calculateTotal('estimate') - calculateTotal('actual')) >= 0 ? styles.totalDiffPositive : styles.totalDiffNegative}`}>
+                    {formatCurrency(calculateTotal('estimate') - calculateTotal('actual'))}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
+          {/* ตารางสรุปค่าใช้จ่ายแต่ละบัญชี */}
+          <BankAccountTable accountSummary={getAccountSummary(editExpense)} />
           <div className={styles.saveButtonContainer}>
-            <button 
-              onClick={handleSave} 
+            <button
+              onClick={handleSave}
               className={styles.saveButton}
             >
-              บันทึกรายจ่าย
+              บันทึกข้อมูลรายจ่าย
             </button>
           </div>
         </>

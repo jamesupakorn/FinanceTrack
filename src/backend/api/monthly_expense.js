@@ -43,16 +43,16 @@ export default function handler(req, res) {
     
     Object.values(monthData).forEach(item => {
       if (item && typeof item === 'object') {
-        รวมประมาณ += parseFloat(item.ประมาณ) || 0;
-        รวมจ่ายจริง += parseFloat(item.จ่ายจริง) || 0;
+        รวมประมาณ += parseFloat(item.ประมาณการ) || 0;
+        รวมจ่ายจริง += parseFloat(item.ยอดชำระจริง) || 0;
       }
     });
     
     const response = {
       ...data,
       months: { [month]: monthData },
-      รวมประมาณ,
-      รวมจ่ายจริง
+      ยอดรวมประมาณการ: รวมประมาณ,
+      ยอดรวมยอดชำระจริง: รวมจ่ายจริง
     };
     
     res.status(200).json(response);

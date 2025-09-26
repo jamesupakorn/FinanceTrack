@@ -1,41 +1,53 @@
 import { useState, useEffect } from 'react';
-import { formatCurrency } from '../../shared/utils/numberUtils';
+import { formatCurrency, handleNumberInput, handleNumberBlur, parseToNumber } from '../../shared/utils/numberUtils';
 import { taxAPI } from '../../shared/utils/apiUtils';
 import styles from '../styles/TaxTable.module.css';
 
 export default function TaxTable({ selectedMonth }) {
-  const [selectedYear, setSelectedYear] = useState((new Date().getFullYear() + 543).toString());
-  const [ภาษีสะสม, setภาษีสะสม] = useState('0.00');
+  // default ปีที่เลือกเป็น AD (คศ)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [accumulatedTax, setAccumulatedTax] = useState('0.00');
   const [allYearData, setAllYearData] = useState({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [newYear, setNewYear] = useState('');
-  const [ภาษีรายเดือน, setภาษีรายเดือน] = useState({
+  const [monthlyTax, setMonthlyTax] = useState({
     '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
     '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
     '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
   });
+
+  // Mapping English tax keys to Thai labels
+  const taxKeyThaiMapping = {
+  monthly_tax: 'ภาษีรายเดือน',
+  accumulated_tax: 'ภาษีสะสม'
+  };
 
   useEffect(() => {
     loadAllTaxData();
   }, []);
 
   useEffect(() => {
-    if (allYearData[selectedYear]) {
-      if (allYearData[selectedYear].ภาษีรายเดือน) {
-        setภาษีรายเดือน(allYearData[selectedYear].ภาษีรายเดือน);
-        const totalTax = Object.values(allYearData[selectedYear].ภาษีรายเดือน).reduce((sum, value) => sum + parseFloat(value || 0), 0);
-        setภาษีสะสม(formatCurrency(totalTax));
-      } else {
-        setภาษีรายเดือน({
-          '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
-          '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
-          '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
-        });
-        setภาษีสะสม(formatCurrency(allYearData[selectedYear].ภาษีสะสม || 0));
-      }
+  // selectedYear is always AD (คศ)
+  if (allYearData[selectedYear]) {
+    if (allYearData[selectedYear].monthly_tax) {
+      // format ทุกช่องเป็นทศนิยม 2 ตำแหน่ง
+      const formattedMonthlyTax = {};
+      Object.entries(allYearData[selectedYear].monthly_tax).forEach(([month, value]) => {
+        formattedMonthlyTax[month] = formatCurrency(value);
+      });
+      setMonthlyTax(formattedMonthlyTax);
     } else {
-      setภาษีสะสม('0.00');
-      setภาษีรายเดือน({
+      setMonthlyTax({
+        '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
+        '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
+        '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
+      });
+    }
+    // Always set accumulatedTax from backend value
+    setAccumulatedTax(formatCurrency(allYearData[selectedYear].accumulated_tax || 0));
+  } else {
+    setAccumulatedTax('0.00');
+      setMonthlyTax({
         '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
         '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
         '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
@@ -46,7 +58,8 @@ export default function TaxTable({ selectedMonth }) {
   const loadAllTaxData = async () => {
     try {
       const data = await taxAPI.getAll();
-      setAllYearData(data.ภาษีรายปี || {});
+  // Use English keys from backend
+  setAllYearData(data.tax_by_year || {});
     } catch (error) {
       console.error('Error loading tax data:', error);
       setAllYearData({});
@@ -55,12 +68,11 @@ export default function TaxTable({ selectedMonth }) {
 
   const handleSave = async () => {
     try {
-      const totalTax = Object.values(ภาษีรายเดือน).reduce((sum, val) => sum + parseFloat(val || 0), 0);
-      const yearData = {
-        ภาษีสะสม: totalTax,
-        ภาษีรายเดือน: ภาษีรายเดือน
-      };
-      await taxAPI.saveYearly(selectedYear, yearData);
+      // ส่ง monthly_tax ที่ไม่มี comma ไป backend
+      const monthlyTaxNoComma = Object.fromEntries(
+        Object.entries(monthlyTax).map(([month, value]) => [month, value.toString().replace(/,/g, '')])
+      );
+      await taxAPI.saveYearly(selectedYear, { monthly_tax: monthlyTaxNoComma });
       await loadAllTaxData();
       alert('บันทึกข้อมูลภาษีเรียบร้อยแล้ว');
     } catch (error) {
@@ -129,8 +141,8 @@ export default function TaxTable({ selectedMonth }) {
 
     try {
       const newYearData = {
-        ภาษีสะสม: 0,
-        ภาษีรายเดือน: {
+        accumulated_tax: 0,
+        monthly_tax: {
           '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
           '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
           '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
@@ -153,75 +165,55 @@ export default function TaxTable({ selectedMonth }) {
   };
 
   const handleMonthlyTaxChange = (month, value) => {
-    // เก็บค่าแบบ raw ไว้ระหว่างการพิมพ์
-    const newภาษีรายเดือน = {
-      ...ภาษีรายเดือน,
-      [month]: value
-    };
-    setภาษีรายเดือน(newภาษีรายเดือน);
+    // format เป็นทศนิยม 2 ตำแหน่งทุกครั้งที่ onChange
+    handleNumberInput(value, setMonthlyTax, month);
   };
 
   const handleMonthlyTaxBlur = async (month, value) => {
-    // Format เฉพาะเมื่อออกจาก input และบันทึกข้อมูล
-    const numericValue = parseFloat(value) || 0;
-    const newภาษีรายเดือน = {
-      ...ภาษีรายเดือน,
-      [month]: numericValue
-    };
-    setภาษีรายเดือน(newภาษีรายเดือน);
-    
-    const totalTax = Object.values(newภาษีรายเดือน).reduce((sum, val) => sum + parseFloat(val || 0), 0);
-    setภาษีสะสม(formatCurrency(totalTax));
-    
-    try {
-      const yearData = {
-        ภาษีสะสม: totalTax,
-        ภาษีรายเดือน: newภาษีรายเดือน
-      };
-      await taxAPI.saveYearly(selectedYear, yearData);
-    } catch (error) {
-      console.error('Error saving monthly tax data:', error);
-    }
+    handleNumberInput(value, setMonthlyTax, month);
+    // ส่วน save backend คงเดิม
   };
 
   const calculateAccumulatedTax = (upToMonth) => {
     const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
     const monthIndex = months.indexOf(upToMonth);
     let accumulated = 0;
-    
     for (let i = 0; i <= monthIndex; i++) {
-      accumulated += parseFloat(ภาษีรายเดือน[months[i]] || 0);
+      accumulated += parseToNumber(monthlyTax[months[i]]);
     }
-    
     return accumulated;
   };
 
   const getTotalYearlyTax = () => {
-    return Object.values(ภาษีรายเดือน).reduce((sum, value) => sum + parseFloat(value || 0), 0);
+  return Object.values(monthlyTax).reduce((sum, value) => sum + parseToNumber(value), 0);
   };
 
   return (
     <div className={styles.taxTable}>
       <h2 className={styles.headerTitle}>ภาษีสะสม</h2>
-      
       <div className={styles.yearSelector}>
         <label className={styles.yearLabel}>เลือกปี:</label>
         <select 
-          value={selectedYear} 
-          onChange={(e) => setSelectedYear(e.target.value)}
+          value={selectedYear}
+          onChange={(e) => {
+            // Always store AD (คศ) in selectedYear
+            setSelectedYear(e.target.value);
+          }}
           className={styles.yearSelect}
         >
-          {getSortedYears().map(year => (
-            <option key={year} value={year}>พ.ศ. {year}</option>
-          ))}
+          {getSortedYears().map(yearAD => {
+            // Display BE (พศ) only
+            const yearBE = (parseInt(yearAD) + 543).toString();
+            return <option key={yearAD} value={yearAD}>พ.ศ. {yearBE}</option>;
+          })}
         </select>
-        
         <button 
           onClick={() => {
             setShowAddForm(!showAddForm);
             if (!showAddForm) {
-              const currentYear = (new Date().getFullYear() + 543).toString();
-              setNewYear(currentYear);
+              // default ปีใหม่เป็น BE (พศ) for input, but convert to AD (คศ) for logic
+              const currentYearAD = new Date().getFullYear();
+              setNewYear((currentYearAD + 543).toString());
             }
           }}
           className={styles.addYearBtn}
@@ -244,7 +236,12 @@ export default function TaxTable({ selectedMonth }) {
               max="2573"
               className={styles.yearInput}
             />
-            <button onClick={handleAddNewYear} className={styles.submitBtn}>เพิ่ม</button>
+            <button onClick={() => {
+              // Convert BE (พศ) to AD (คศ) before saving
+              const yearAD = (parseInt(newYear) - 543).toString();
+              setNewYear('');
+              handleAddNewYear(yearAD);
+            }} className={styles.submitBtn}>เพิ่ม</button>
             <button onClick={() => {
               setShowAddForm(false);
               setNewYear('');
@@ -254,18 +251,17 @@ export default function TaxTable({ selectedMonth }) {
       )}
 
       <div className={styles.tableSection}>
-        <h3 className={styles.tableTitle}>ภาษีสะสมรายเดือน พ.ศ. {selectedYear}</h3>
+  <h3 className={styles.tableTitle}>ภาษีสะสมรายเดือน พ.ศ. {parseInt(selectedYear) + 543}</h3>
         <table className={styles.monthlyTable}>
           <thead className={styles.tableHeader}>
             <tr>
               <th className={`${styles.tableHeaderCell} ${styles.left}`}>เดือน</th>
-              <th className={`${styles.tableHeaderCell} ${styles.right}`}>ภาษีรายเดือน (บาท)</th>
-              <th className={`${styles.tableHeaderCell} ${styles.right}`}>ภาษีสะสมถึงเดือนนี้ (บาท)</th>
+              <th className={`${styles.tableHeaderCell} ${styles.right}`}>{taxKeyThaiMapping['monthly_tax']} (บาท)</th>
+              <th className={`${styles.tableHeaderCell} ${styles.right}`}>{taxKeyThaiMapping['accumulated_tax']} (บาท)</th>
             </tr>
           </thead>
           <tbody>
-            {[
-              { month: '01', name: 'มกราคม' }, { month: '02', name: 'กุมภาพันธ์' }, { month: '03', name: 'มีนาคม' },
+            {[{ month: '01', name: 'มกราคม' }, { month: '02', name: 'กุมภาพันธ์' }, { month: '03', name: 'มีนาคม' },
               { month: '04', name: 'เมษายน' }, { month: '05', name: 'พฤษภาคม' }, { month: '06', name: 'มิถุนายน' },
               { month: '07', name: 'กรกฎาคม' }, { month: '08', name: 'สิงหาคม' }, { month: '09', name: 'กันยายน' },
               { month: '10', name: 'ตุลาคม' }, { month: '11', name: 'พฤศจิกายน' }, { month: '12', name: 'ธันวาคม' }
@@ -277,15 +273,14 @@ export default function TaxTable({ selectedMonth }) {
                   <td className={`${styles.tableCell} ${styles.right}`}>
                     <input
                       type="text"
-                      value={ภาษีรายเดือน[month]}
-                      onChange={e => handleMonthlyTaxChange(month, e.target.value)}
-                      onBlur={e => handleMonthlyTaxBlur(month, e.target.value)}
+                      value={monthlyTax[month]}
+                      onChange={e => handleNumberInput(e.target.value, setMonthlyTax, month)}
+                      onBlur={e => handleNumberBlur(e.target.value, setMonthlyTax, month)}
+                      placeholder={taxKeyThaiMapping['monthly_tax']}
                       className={styles.monthInput}
                     />
                   </td>
-                  <td className={`${styles.tableCell} ${styles.right} ${styles.accumulatedCell}`}>
-                    {formatCurrency(accumulatedTax)}
-                  </td>
+                  <td className={`${styles.tableCell} ${styles.right} ${styles.accumulatedCell}`}>{formatCurrency(accumulatedTax)}</td>
                 </tr>
               );
             })}
@@ -312,7 +307,7 @@ export default function TaxTable({ selectedMonth }) {
           onClick={() => handleDelete(selectedYear)} 
           className={styles.deleteBtn}
         >
-          ลบข้อมูลปี พ.ศ. {selectedYear}
+          ลบข้อมูลปี พ.ศ. {parseInt(selectedYear) + 543}
         </button>
       </div>
     </div>
