@@ -1,29 +1,103 @@
-import React, { useState } from 'react';
-import { getNextMonth, generateMonthOptions } from '../../shared/utils/numberUtils';
+import React, { useState, useEffect } from 'react';
+import { getNextMonth } from '../../shared/utils/numberUtils';
 import styles from '../styles/MonthManager.module.css';
+
 
 const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newMonthName, setNewMonthName] = useState('');
-  const monthOptions = generateMonthOptions();
+  const [monthOptions, setMonthOptions] = useState([]);
+
+  // Fetch all months from expense, income, salary and aggregate unique months
+  useEffect(() => {
+    let isMounted = true;
+    import('../../shared/utils/apiUtils').then(({ expenseAPI, incomeAPI, salaryAPI }) => {
+      Promise.all([
+        expenseAPI.getAll(),
+        incomeAPI.getAll(),
+        salaryAPI.getAll()
+      ]).then(([expenseData, incomeData, salaryData]) => {
+        // Extract months from each data source
+        const expenseMonths = expenseData?.months ? Object.keys(expenseData.months) : [];
+        const incomeMonths = incomeData?.months ? Object.keys(incomeData.months) : [];
+        const salaryMonths = salaryData?.months ? Object.keys(salaryData.months) : [];
+        // Union all months
+        const allMonthsSet = new Set([...expenseMonths, ...incomeMonths, ...salaryMonths]);
+        // กรองเฉพาะ key ที่ตรง format YYYY-MM
+        const validMonthRegex = /^\d{4}-\d{2}$/;
+        const allMonths = Array.from(allMonthsSet)
+          .filter(month => validMonthRegex.test(month))
+          .sort((a, b) => b.localeCompare(a));
+        // Format for dropdown
+        const options = allMonths.map(month => {
+          const [year, m] = month.split('-');
+          const date = new Date(Number(year), Number(m) - 1, 1);
+          const label = date.toLocaleDateString('th-TH', { year: 'numeric', month: 'long' });
+          return { value: month, label };
+        });
+        if (isMounted) setMonthOptions(options);
+      });
+    });
+    return () => { isMounted = false; };
+  }, [showAddForm, onDataRefresh]);
 
   const handleAddNewMonth = () => {
     const nextMonth = getNextMonth(selectedMonth);
-    const nextDate = new Date(nextMonth + '-01');
-    const monthLabel = nextDate.toLocaleDateString('th-TH', { 
-      year: 'numeric', 
-      month: 'long' 
+    // สร้าง values เริ่มต้นสำหรับทุก item รายจ่าย
+    const defaultExpenseItems = [
+      "house", "water", "internet", "electricity", "mobile",
+      "credit_kbank", "credit_kungsri", "credit_uob", "credit_ttb",
+      "shopee", "netflix", "youtube", "youtube_membership",
+      "motorcycle", "miscellaneous"
+    ];
+    const defaultExpenseValues = {};
+    defaultExpenseItems.forEach(item => {
+      defaultExpenseValues[item] = {
+        actual: 0,
+        paid: false
+      };
     });
-    
-    // เปลี่ยนไปเดือนใหม่
-    onMonthSelected(nextMonth);
-    
-    // รีเฟรชข้อมูล
-    onDataRefresh();
-    
-    // ซ่อนฟอร์ม
-    setShowAddForm(false);
-    setNewMonthName('');
+
+    // สร้าง values เริ่มต้นสำหรับรายรับ
+    const defaultIncomeItems = ["salary", "income2", "other"];
+    const defaultIncomeValues = {};
+    defaultIncomeItems.forEach(item => {
+      defaultIncomeValues[item] = 0;
+    });
+
+    // สร้าง values เริ่มต้นสำหรับ salary
+    const defaultSalary = {
+      income: {
+        salary: 0,
+        overtime_1x: 0,
+        overtime_1_5x: 0,
+        overtime_2x: 0,
+        overtime_3x: 0,
+        overtime_other: 0,
+        bonus: 0,
+        other_income: 0
+      },
+      deduct: {
+        provident_fund: 0,
+        social_security: 0,
+        tax: 0
+      },
+      note: ""
+    };
+
+    // เพิ่มข้อมูลเดือนใหม่ลง backend ทั้ง 3 json
+    import('../../shared/utils/apiUtils').then(({ expenseAPI, incomeAPI, salaryAPI }) => {
+      Promise.all([
+        expenseAPI.save(nextMonth, defaultExpenseValues),
+        incomeAPI.save(nextMonth, defaultIncomeValues),
+        salaryAPI.save(nextMonth, defaultSalary)
+      ]).then(() => {
+        onMonthSelected(nextMonth);
+        onDataRefresh();
+        setShowAddForm(false);
+        setNewMonthName('');
+      });
+    });
   };
 
   const handleCustomMonth = () => {

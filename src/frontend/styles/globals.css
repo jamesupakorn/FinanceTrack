@@ -714,7 +714,7 @@ body {
 /* Debug Helper - แสดงขนาดหน้าจอปัจจุบัน (เฉพาะ development) */
 @media (max-width: 375px) {
   body::before {
-    content: "📱 Mobile Small (≤375px)";
+    /* content: "📱 Mobile Small (≤375px)"; */
     position: fixed;
     top: 0;
     right: 0;
@@ -730,7 +730,7 @@ body {
 
 @media (min-width: 376px) and (max-width: 480px) {
   body::before {
-    content: "📱 Mobile (376px-480px)";
+    /* content: "📱 Mobile (376px-480px)"; */
     position: fixed;
     top: 0;
     right: 0;
@@ -746,7 +746,7 @@ body {
 
 @media (min-width: 481px) and (max-width: 640px) {
   body::before {
-    content: "📱 Mobile Large (481px-640px)";
+    /* content: "📱 Mobile Large (481px-640px)"; */
     position: fixed;
     top: 0;
     right: 0;
@@ -762,7 +762,7 @@ body {
 
 @media (min-width: 641px) and (max-width: 768px) {
   body::before {
-    content: "📱 Tablet Portrait (641px-768px)";
+    /* content: "📱 Tablet Portrait (641px-768px)"; */
     position: fixed;
     top: 0;
     right: 0;
@@ -778,7 +778,7 @@ body {
 
 @media (min-width: 769px) and (max-width: 1024px) {
   body::before {
-    content: "💻 Tablet Landscape (769px-1024px)";
+    /* content: "💻 Tablet Landscape (769px-1024px)"; */
     position: fixed;
     top: 0;
     right: 0;
@@ -794,7 +794,7 @@ body {
 
 @media (min-width: 1025px) and (max-width: 1280px) {
   body::before {
-    content: "🖥️ Desktop (1025px-1280px)";
+    /* content: "🖥️ Desktop (1025px-1280px)"; */
     position: fixed;
     top: 0;
     right: 0;
@@ -810,7 +810,7 @@ body {
 
 @media (min-width: 1281px) {
   body::before {
-    content: "🖥️ Desktop Large (≥1281px)";
+    /* content: "🖥️ Desktop Large (≥1281px)"; */
     position: fixed;
     top: 0;
     right: 0;

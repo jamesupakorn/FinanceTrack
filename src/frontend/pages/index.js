@@ -15,11 +15,45 @@ import styles from '../styles/Home.module.css';
 
 
 function HomeContent() {
+  React.useEffect(() => {
+    console.log('index.js months state:', months);
+  }, [months]);
   const { theme } = useTheme();
-  const monthOptions = generateMonthOptions();
   const [selectedMonth, setSelectedMonth] = useState('2025-09');
   const [activeTab, setActiveTab] = useState('income');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [months, setMonths] = useState([]);
+
+  // ดึงเดือนทั้งหมดจาก expense, income, salary แล้วรวม key
+  const fetchMonths = async () => {
+    try {
+      const [expenseRes, savingsRes, salaryRes] = await Promise.all([
+        expenseAPI.getAll(),
+        savingsAPI.getAll(),
+        salaryAPI.getAll()
+      ]);
+      console.log('expenseRes', expenseRes);
+      console.log('savingsRes', savingsRes);
+      console.log('salaryRes', salaryRes);
+      // สมมติ response เป็น object ที่ key เป็นเดือน เช่น { '2025-09': {...}, ... }
+      const expenseMonths = expenseRes ? Object.keys(expenseRes) : [];
+      const savingsMonths = savingsRes ? Object.keys(savingsRes) : [];
+      const salaryMonths = salaryRes ? Object.keys(salaryRes) : [];
+      const allMonths = Array.from(new Set([...expenseMonths, ...savingsMonths, ...salaryMonths])).sort().reverse();
+      setMonths(allMonths);
+      // ถ้าเดือนที่เลือกไม่มีใน allMonths ให้เลือกเดือนล่าสุด
+      if (allMonths.length && !allMonths.includes(selectedMonth)) {
+        setSelectedMonth(allMonths[0]);
+      }
+    } catch (err) {
+      setMonths([]);
+    }
+  };
+
+  // โหลดเดือนเมื่อ mount หรือ refresh
+  React.useEffect(() => {
+    fetchMonths();
+  }, [refreshTrigger]);
 
   const handleDataRefresh = () => {
     setRefreshTrigger(prev => prev + 1);
@@ -48,6 +82,7 @@ function HomeContent() {
         selectedMonth={selectedMonth}
         onMonthSelected={handleMonthSelected}
         onDataRefresh={handleDataRefresh}
+        months={months}
       />
 
       {/* คำนวณเงินเดือน */}

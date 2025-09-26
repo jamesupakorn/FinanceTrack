@@ -1,5 +1,35 @@
 import fs from 'fs';
 import path from 'path';
+/**
+ * อัพเดตข้อมูลภาษีรายเดือนในปีและเดือนที่ระบุ
+ * @param {string} year - ปี พ.ศ. เช่น "2568"
+ * @param {string} month - เดือน เช่น "09"
+ * @param {string|number} value - ยอดภาษีใหม่
+ */
+export function updateMonthlyTax(year, month, value) {
+  const dataThai = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  if (!dataThai.ภาษีรายปี) dataThai.ภาษีรายปี = {};
+  if (!dataThai.ภาษีรายปี[year]) {
+    dataThai.ภาษีรายปี[year] = { ภาษีสะสม: 0, ภาษีรายเดือน: {} };
+  }
+  if (!dataThai.ภาษีรายปี[year].ภาษีรายเดือน) {
+    dataThai.ภาษีรายปี[year].ภาษีรายเดือน = {};
+  }
+  dataThai.ภาษีรายปี[year].ภาษีรายเดือน[month] = value.toString();  
+  fs.writeFileSync(filePath, JSON.stringify(dataThai, null, 2));
+
+  const dataEng = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  if (!dataEng.tax_by_year) dataEng.tax_by_year = {};
+  if (!dataEng.tax_by_year[year]) {
+    dataEng.tax_by_year[year] = { accumulated_tax: 0, monthly_tax: {} };
+  }
+  if (!dataEng.tax_by_year[year].monthly_tax) {
+    dataEng.tax_by_year[year].monthly_tax = {};
+  }
+  dataEng.tax_by_year[year].monthly_tax[month] = value.toString();
+  fs.writeFileSync(filePath, JSON.stringify(dataEng, null, 2));
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
 
 const filePath = path.join(process.cwd(), 'src', 'backend', 'data', 'tax_accumulated.json');
 
@@ -54,11 +84,20 @@ export default function handler(req, res) {
         if (!data.ภาษีรายปี[year]) {
           data.ภาษีรายปี[year] = {};
         }
-        if (ภาษีสะสม !== undefined) {
-          data.ภาษีรายปี[year].ภาษีสะสม = parseFloat(ภาษีสะสม) || 0;
-        }
         if (ภาษีรายเดือน !== undefined) {
-          data.ภาษีรายปี[year].ภาษีรายเดือน = ภาษีรายเดือน;
+          if (!data.ภาษีรายปี[year].ภาษีรายเดือน) {
+            data.ภาษีรายปี[year].ภาษีรายเดือน = {};
+          }
+          // merge ข้อมูลเดิมกับใหม่
+          Object.assign(data.ภาษีรายปี[year].ภาษีรายเดือน, ภาษีรายเดือน);
+          // คำนวณภาษีสะสมใหม่จากข้อมูลภาษีรายเดือน
+          const sum = Object.values(data.ภาษีรายปี[year].ภาษีรายเดือน)
+            .map(v => parseFloat(v) || 0)
+            .reduce((a, b) => a + b, 0);
+          data.ภาษีรายปี[year].ภาษีสะสม = sum;
+        } else if (ภาษีสะสม !== undefined) {
+          // ถ้าอัพเดตเฉพาะภาษีสะสม
+          data.ภาษีรายปี[year].ภาษีสะสม = parseFloat(ภาษีสะสม) || 0;
         }
       }
     }
@@ -69,32 +108,23 @@ export default function handler(req, res) {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
     res.status(201).json({ success: true });
   } else if (req.method === 'DELETE') {
-    try {
-      const { year } = req.body;
-      console.log('🗑️ DELETE request received for year:', year);
-      
-      let data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-      
-      // ตรวจสอบว่ามี structure ภาษีรายปี หรือไม่
-      if (!data.ภาษีรายปี) {
-        console.log('❌ No tax data structure found');
-        data.ภาษีรายปี = {};
-        res.status(404).json({ success: false, message: 'ไม่พบข้อมูลภาษี' });
-        return;
+    if (year) {
+      // Always recalculate accumulated_tax from monthly_tax
+      if (!data.tax_by_year[year]) {
+        data.tax_by_year[year] = { accumulated_tax: 0, monthly_tax: {} };
       }
-      
-      // ตรวจสอบว่ามีปีที่ต้องการลบหรือไม่
-      if (!year) {
-        console.log('❌ No year specified');
-        res.status(400).json({ success: false, message: 'กรุณาระบุปีที่ต้องการลบ' });
-        return;
+      if (monthly_tax !== undefined) {
+        if (!data.tax_by_year[year].monthly_tax) {
+          data.tax_by_year[year].monthly_tax = {};
+        }
+        Object.assign(data.tax_by_year[year].monthly_tax, monthly_tax);
       }
-      
-      if (!data.ภาษีรายปี[year]) {
-        console.log(`❌ Year ${year} not found in data`);
-        res.status(404).json({ success: false, message: `ไม่พบข้อมูลภาษีปี ${year}` });
-        return;
-      }
+      // Recalculate accumulated_tax from monthly_tax
+      const sum = Object.values(data.tax_by_year[year].monthly_tax)
+        .map(v => parseFloat(v.toString().replace(/,/g, '')) || 0)
+        .reduce((a, b) => a + b, 0);
+      data.tax_by_year[year].accumulated_tax = sum;
+    }
       
       // สำรองข้อมูลก่อนลบ (ใน log)
       console.log(`🗑️ กำลังลบข้อมูลภาษีปี ${year}:`, data.ภาษีรายปี[year]);

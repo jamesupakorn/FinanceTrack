@@ -2,9 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   pageExtensions: ['js', 'jsx', 'ts', 'tsx'],
-  experimental: {
-    appDir: false
-  },
+  // experimental: {
+  //   appDir: false
+  // },
   // กำหนด path สำหรับ pages directory
   async rewrites() {
     return [

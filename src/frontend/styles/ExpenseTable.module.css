@@ -1,3 +1,17 @@
+.checkboxCell {
+  text-align: center;
+  padding-left: 0;
+  padding-right: 0;
+  width: 60px;
+}
+.checkboxCell {
+  text-align: center;
+}
+
+.checkboxCell input[type="checkbox"] {
+  display: block;
+  margin: 0 auto;
+}
 /* ExpenseTable Component Styles */
 .expenseTable {
   padding: 32px;

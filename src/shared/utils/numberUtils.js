@@ -1,9 +1,30 @@
+// สรุปยอดรายจ่ายแต่ละบัญชี (mapping)
+export const getAccountSummary = (editExpense) => {
+  const mapping = {
+    "กรุงศรี": ["credit_kungsri"],
+    "ttb": ["house", "credit_ttb"],
+    "กสิกร": ["credit_kbank", "shopee", "netflix", "youtube", "youtube_membership"],
+    "UOB": ["credit_uob"]
+  };
+  const summary = {};
+  Object.entries(mapping).forEach(([account, items]) => {
+    let sum = 0;
+    items.forEach(item => {
+      sum += parseToNumber(editExpense[item]?.['estimate'] || 0);
+    });
+    summary[account] = sum;
+  });
+  return summary;
+};
 // Utility functions สำหรับจัดการตัวเลขและเงิน
 
 // จัดรูปแบบตัวเลขเป็นทศนิยม 2 ตำแหน่ง
 export const formatNumber = (value) => {
-  const numValue = parseFloat(value) || 0;
-  return numValue.toFixed(2);
+  // รองรับ input ที่มี comma เช่น 40,560.00
+  let cleaned = typeof value === 'string' ? value.replace(/,/g, '') : value;
+  const numValue = parseFloat(cleaned) || 0;
+  // เพิ่ม comma ขั้นหลักพัน
+  return numValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 // แปลงค่าเป็นตัวเลขและจัดรูปแบบ (สำหรับแสดงผล)
@@ -13,13 +34,18 @@ export const parseAndFormat = (value) => {
 
 // แปลงค่าเป็น number สำหรับบันทึกข้อมูล
 export const parseToNumber = (value) => {
+  // Remove comma before parsing
+  if (typeof value === 'string') {
+    return parseFloat(value.replace(/,/g, '')) || 0;
+  }
   return parseFloat(value) || 0;
 };
 
 // จัดรูปแบบการแสดงเงิน (แสดงเป็นตัวเลขธรรมดา เช่น 700.00)
 export const formatCurrency = (value) => {
   const numValue = parseFloat(value) || 0;
-  return numValue.toFixed(2);
+    const num = parseFloat(typeof value === 'string' ? value.replace(/,/g, '') : value) || 0;
+    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 // คำนวณผลรวม
@@ -34,6 +60,16 @@ export const isValidNumber = (value) => {
 
 // จัดการ input change event สำหรับตัวเลข
 export const handleNumberInput = (value, setState, key = null) => {
+  // ไม่ format ทันที ให้เก็บ raw value เพื่อให้พิมพ์ได้หลายหลัก
+  if (key) {
+    setState(prev => ({ ...prev, [key]: value }));
+  } else {
+    setState(value);
+  }
+};
+
+// ใช้สำหรับ onBlur เท่านั้น เพื่อ format เป็นทศนิยม 2 ตำแหน่ง
+export const handleNumberBlur = (value, setState, key = null) => {
   const formattedValue = parseAndFormat(value);
   if (key) {
     setState(prev => ({ ...prev, [key]: formattedValue }));

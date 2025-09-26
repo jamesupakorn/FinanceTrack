@@ -23,18 +23,23 @@ export default function SavingsTable({ selectedMonth }) {
     setรายการเงินออม([...รายการเงินออม, { รายการ: '', จำนวนเงิน: '0' }]);
   };
 
+  // ใช้ shared numberUtils สำหรับ input logic
   const handleSavingsItemChange = (index, field, value) => {
     const newList = [...รายการเงินออม];
-    newList[index][field] = field === 'จำนวนเงิน' ? value : value;
+    newList[index][field] = value;
     setรายการเงินออม(newList);
   };
 
-  const handleSavingsItemBlur = (index, field, value) => {
-    if (field === 'จำนวนเงิน') {
-      const newList = [...รายการเงินออม];
-      newList[index][field] = parseAndFormat(value);
-      setรายการเงินออม(newList);
-    }
+  const handleSavingsAmountInput = (value, index) => {
+    const newList = [...รายการเงินออม];
+    newList[index]['savings_amount'] = value;
+    setรายการเงินออม(newList);
+  };
+
+  const handleSavingsAmountBlur = (value, index) => {
+    const newList = [...รายการเงินออม];
+    newList[index]['savings_amount'] = parseAndFormat(value);
+    setรายการเงินออม(newList);
   };
 
   const handleDeleteSavingsItem = (index) => {
@@ -61,6 +66,12 @@ export default function SavingsTable({ selectedMonth }) {
 
   const รวมเงินเก็บ = calculateSum(รายการเงินออม.map(item => item.จำนวนเงิน || 0));
 
+  // Mapping English savings keys to Thai labels
+  const savingsKeyThaiMapping = {
+    savings_type: 'รายการออม',
+    savings_amount: 'จำนวนเงินออม'
+  };
+
   return (
     <div className={styles.savingsTable}>
       {/* รายการเงินออม */}
@@ -83,29 +94,30 @@ export default function SavingsTable({ selectedMonth }) {
           <table className={styles.table}>
             <thead className={styles.tableHeader}>
               <tr>
-                <th className={styles.tableHeaderCell}>รายการ</th>
-                <th className={styles.tableHeaderCell}>จำนวนเงิน (บาท)</th>
+                <th className={styles.tableHeaderCell}>{savingsKeyThaiMapping['savings_type']}</th>
+                <th className={styles.tableHeaderCell}>{savingsKeyThaiMapping['savings_amount']}</th>
                 <th className={styles.tableHeaderCell}>การจัดการ</th>
               </tr>
             </thead>
-                      <tbody>
+            <tbody>
               {รายการเงินออม.map((item, index) => (
                 <tr key={index} className={styles.tableRow}>
                   <td className={styles.tableCell}>
                     <input
                       type="text"
-                      value={item.รายการ || ''}
-                      onChange={(e) => handleEditSavingsItem(index, 'รายการ', e.target.value)}
-                      placeholder="ระบุรายการ"
+                      value={item.savings_type || ''}
+                      onChange={(e) => handleEditSavingsItem(index, 'savings_type', e.target.value)}
+                      placeholder={savingsKeyThaiMapping['savings_type']}
                       className={styles.savingsInput}
                     />
                   </td>
                   <td className={styles.tableCell}>
                     <input
                       type="text"
-                      value={item.จำนวนเงิน || ''}
-                      onChange={(e) => handleEditSavingsItem(index, 'จำนวนเงิน', e.target.value)}
-                      placeholder="0.00"
+                      value={item.savings_amount || ''}
+                      onChange={e => handleSavingsAmountInput(e.target.value, index)}
+                      onBlur={e => handleSavingsAmountBlur(e.target.value, index)}
+                      placeholder={savingsKeyThaiMapping['savings_amount']}
                       className={styles.savingsInput}
                     />
                   </td>

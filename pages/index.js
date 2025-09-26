@@ -49,20 +49,20 @@ function HomeContent() {
           onDataRefresh={handleDataRefresh}
         />
 
+        {/* สรุปงบประมาณ */}
+        <div className={styles.sectionCard}>
+          <SummaryReport 
+            selectedMonth={selectedMonth}
+            key={`summary-${refreshTrigger}`}
+          />
+        </div>
+
         {/* คำนวณเงินเดือน */}
         <div className={styles.sectionCard}>
           <SalaryCalculator 
             selectedMonth={selectedMonth}
             onSalaryUpdate={handleDataRefresh}
             key={refreshTrigger}
-          />
-        </div>
-
-        {/* สรุปงบประมาณ */}
-        <div className={styles.sectionCard}>
-          <SummaryReport 
-            selectedMonth={selectedMonth}
-            key={`summary-${refreshTrigger}`}
           />
         </div>
 

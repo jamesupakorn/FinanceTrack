@@ -1,6 +1,12 @@
+// Mapping ภาษาไทยสำหรับ key รายรับ
+const incomeKeyThaiMap = {
+  salary: 'เงินเดือน',
+  income2: 'แหล่งรายรับ 2',
+  other: 'อื่นๆ'
+};
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { formatCurrency, calculateSum, parseAndFormat, parseToNumber, formatIncomeData } from '../../shared/utils/numberUtils';
+import { formatCurrency, calculateSum, parseAndFormat, parseToNumber, formatIncomeData, handleNumberInput, handleNumberBlur } from '../../shared/utils/numberUtils';
 import { incomeAPI, salaryAPI } from '../../shared/utils/apiUtils';
 import { Icons } from './Icons';
 import styles from '../styles/IncomeTable.module.css';
@@ -72,9 +78,10 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
     // คำนวณรวมโดยรวมเงินเดือนสุทธิจาก salary
     const otherIncomes = Object.entries(editIncome)
       .filter(([key]) => key !== 'เงินเดือน')
-      .map(([, value]) => value);
-    
-    return calculateSum([...otherIncomes, salaryNetIncome]);
+      .map(([, value]) => parseToNumber(value));
+    // เงินเดือนสุทธิอาจมี comma หรือเป็น string
+    const salaryValue = parseToNumber(salaryNetIncome);
+    return calculateSum([...otherIncomes, salaryValue]);
   };
 
   return (
@@ -89,14 +96,14 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
               </tr>
             </thead>
             <tbody>
-              {incomeData.รายการ.map((item, i) => (
+              {incomeData.items.map((item, i) => (
                 <tr key={i} className={styles.tableRow}>
-                  <td className={styles.tableCell}>{item}</td>
+                  <td className={styles.tableCell}>{incomeKeyThaiMap[item] ?? item}</td>
                   <td className={styles.inputCell}>
                     {item === 'เงินเดือน' ? (
                       // แสดงเงินเดือนสุทธิจาก salary (ไม่ให้แก้ไข)
                       <div className={styles.salaryCell}>
-                        {formatCurrency(salaryNetIncome)}
+                        {formatCurrency(salaryNetIncome || editIncome[item] || 0)}
                         <small className={styles.salarySource}>
                           (จากระบบเงินเดือน)
                         </small>
@@ -106,8 +113,8 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
                       <input
                         type="text"
                         value={editIncome[item] ?? ''}
-                        onChange={e => handleIncomeChange(item, e.target.value)}
-                        onBlur={(e) => handleIncomeBlur(item, e.target.value)}
+                        onChange={e => handleNumberInput(e.target.value, setEditIncome, item)}
+                        onBlur={e => handleNumberBlur(e.target.value, setEditIncome, item)}
                         className={styles.incomeInput}
                       />
                     )}

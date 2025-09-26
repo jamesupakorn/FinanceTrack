@@ -1,3 +1,9 @@
+/* สำหรับ option ใน ThemeToggle */
+.themeOption {
+  background-color: #2d3748;
+  color: white;
+  padding: 12px;
+}
 /* ThemeToggle Component Styles - ปรับโทนสีให้สบายตา */
 
 .themeToggle {
