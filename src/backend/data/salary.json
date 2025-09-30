@@ -1,7 +1,7 @@
 {
-  "2025-09": {
+  "2024-09": {
     "income": {
-      "salary": 0,
+      "salary": 38000,
       "overtime_1x": 0,
       "overtime_1_5x": 0,
       "overtime_2x": 0,
@@ -14,14 +14,187 @@
       "provident_fund": 0,
       "social_security": 0,
       "tax": 0
+    }
+  },
+  
+  "2024-12": {
+    "income": {
+      "salary": 38500,
+      "overtime_1x": 0,
+      "overtime_1_5x": 0,
+      "overtime_2x": 0,
+      "overtime_3x": 0,
+      "overtime_other": 0,
+      "bonus": 0,
+      "other_income": 0
     },
+    "deduct": {
+      "provident_fund": 0,
+      "social_security": 0,
+      "tax": 0
+    }
+  },
+  "2025-01": {
+    "income": {
+      "salary": 38000,
+      "overtime_1x": 0,
+      "overtime_1_5x": 0,
+      "overtime_2x": 0,
+      "overtime_3x": 0,
+      "overtime_other": 0,
+      "bonus": 0,
+      "other_income": 0
+    },
+    "deduct": {
+      "provident_fund": 0,
+      "social_security": 0,
+      "tax": 5100
+    },
+    "note": "",
+    "recorded_at": "2025-09-23T07:07:53.197Z"
+  },
+  "2025-02": {
+    "income": {
+      "salary": 40000,
+      "overtime_1x": 0,
+      "overtime_1_5x": 0,
+      "overtime_2x": 0,
+      "overtime_3x": 0,
+      "overtime_other": 0,
+      "bonus": 0,
+      "other_income": 0
+    },
+    "deduct": {
+      "provident_fund": 0,
+      "social_security": 0,
+      "tax": 9100
+    }
+  },
+  "2025-03": {
+    "income": {
+      "salary": 40000,
+      "overtime_1x": 0,
+      "overtime_1_5x": 0,
+      "overtime_2x": 0,
+      "overtime_3x": 0,
+      "overtime_other": 0,
+      "bonus": 0,
+      "other_income": 0
+    },
+    "deduct": {
+      "provident_fund": 0,
+      "social_security": 0,
+      "tax": 1509
+    }
+  },
+  "2025-04": {
+    "income": {
+      "salary": 40000,
+      "overtime_1x": 0,
+      "overtime_1_5x": 0,
+      "overtime_2x": 0,
+      "overtime_3x": 0,
+      "overtime_other": 0,
+      "bonus": 0,
+      "other_income": 0
+    },
+    "deduct": {
+      "provident_fund": 0,
+      "social_security": 0,
+      "tax": 697
+    }
+  },
+  "2025-05": {
+    "income": {
+      "salary": 38655,
+      "overtime_1x": 0,
+      "overtime_1_5x": 0,
+      "overtime_2x": 0,
+      "overtime_3x": 0,
+      "overtime_other": 0,
+      "bonus": 0,
+      "other_income": 0
+    },
+    "deduct": {
+      "provident_fund": 0,
+      "social_security": 0,
+      "tax": 761
+    }
+  },
+  "2025-06": {
+    "income": {
+      "salary": 41000,
+      "overtime_1x": 0,
+      "overtime_1_5x": 0,
+      "overtime_2x": 0,
+      "overtime_3x": 0,
+      "overtime_other": 0,
+      "bonus": 0,
+      "other_income": 0
+    },
+    "deduct": {
+      "provident_fund": 0,
+      "social_security": 0,
+      "tax": 1255
+    }
+  },
+  "2025-07": {
+    "income": {
+      "salary": 38000,
+      "overtime_1x": 0,
+      "overtime_1_5x": 0,
+      "overtime_2x": 0,
+      "overtime_3x": 0,
+      "overtime_other": 0,
+      "bonus": 0,
+      "other_income": 0
+    },
+    "deduct": {
+      "provident_fund": 0,
+      "social_security": 0,
+      "tax": 697
+    }
+  },
+  "2025-08": {
+    "income": {
+      "salary": 39000,
+      "overtime_1x": 0,
+      "overtime_1_5x": 0,
+      "overtime_2x": 0,
+      "overtime_3x": 0,
+      "overtime_other": 0,
+      "bonus": 0,
+      "other_income": 0
+    },
+    "deduct": {
+      "provident_fund": 0,
+      "social_security": 0,
+      "tax": 850
+    }
+  },
+  "2025-09": {
+    "income": {
+      "salary": 40560,
+      "overtime_1x": 0,
+      "overtime_1_5x": 0,
+      "overtime_2x": 0,
+      "overtime_3x": 0,
+      "overtime_other": 0,
+      "bonus": 0,
+      "other_income": 1000
+    },
+    "deduct": {
+      "provident_fund": 2028,
+      "social_security": 750,
+      "tax": 697
+    },
+    "note": "",
+    "saved_at": "2025-09-25T08:56:46.386Z",
     "summary": {
-      "total_income": 0,
-      "total_deduct": 0,
-      "net_income": 0
-    },
-    "saved_at": "2025-09-26T05:40:01.254Z",
-    "note": ""
+      "total_income": 41560,
+      "total_deduct": 3475,
+      "net_income": 38085
+    }
   },
   "2025-10": {
     "income": {
