@@ -82,32 +82,32 @@
     "2025-09": {
       "house": {
         "estimate": 9000,
-        "actual": 0,
+        "actual": 9000,
         "paid": true
       },
       "water": {
         "estimate": 150,
-        "actual": 0,
+        "actual": 150,
         "paid": true
       },
       "internet": {
         "estimate": 500,
-        "actual": 0,
+        "actual": 500,
         "paid": true
       },
       "electricity": {
         "estimate": 1964.08,
-        "actual": 0,
+        "actual": 1964.08,
         "paid": true
       },
       "mobile": {
         "estimate": 700,
-        "actual": 0,
+        "actual": 700,
         "paid": true
       },
       "credit_kbank": {
         "estimate": 4799.56,
-        "actual": 0,
+        "actual": 4799.56,
         "paid": true
       },
       "credit_kungsri": {
@@ -117,37 +117,37 @@
       },
       "credit_uob": {
         "estimate": 2817.9,
-        "actual": 0,
+        "actual": 2817.9,
         "paid": true
       },
       "credit_ttb": {
         "estimate": 4664.34,
-        "actual": 0,
+        "actual": 4664.34,
         "paid": true
       },
       "shopee": {
         "estimate": 7898.73,
-        "actual": 0,
+        "actual": 7898.73,
         "paid": true
       },
       "netflix": {
         "estimate": 617,
-        "actual": 0,
+        "actual": 617,
         "paid": true
       },
       "youtube": {
         "estimate": 469,
-        "actual": 0,
+        "actual": 469,
         "paid": true
       },
       "youtube_membership": {
         "estimate": 330,
-        "actual": 0,
+        "actual": 330,
         "paid": true
       },
       "motorcycle": {
         "estimate": 3000,
-        "actual": 0,
+        "actual": 2000,
         "paid": true
       },
       "miscellaneous": {

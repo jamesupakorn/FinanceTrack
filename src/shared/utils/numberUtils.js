@@ -95,7 +95,21 @@ export const formatExpenseData = (data, month) => {
   Object.keys(monthData).forEach(item => {
     formattedData[item] = {};
     Object.keys(monthData[item] || {}).forEach(field => {
-      formattedData[item][field] = parseAndFormat(monthData[item][field]);
+      if (field === 'paid') {
+        // Preserve boolean for 'paid' field
+        const val = monthData[item][field];
+        if (typeof val === 'boolean') {
+          formattedData[item][field] = val;
+        } else if (typeof val === 'string') {
+          formattedData[item][field] = val === 'true' || val === '1';
+        } else if (typeof val === 'number') {
+          formattedData[item][field] = val === 1;
+        } else {
+          formattedData[item][field] = false;
+        }
+      } else {
+        formattedData[item][field] = parseAndFormat(monthData[item][field]);
+      }
     });
   });
   return formattedData;
