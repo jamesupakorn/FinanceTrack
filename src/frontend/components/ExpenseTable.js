@@ -17,12 +17,12 @@ const expenseKeyThaiMap = {
   miscellaneous: 'ค่าใช้จ่ายเบ็ดเตล็ด'
 };
 import { useState, useEffect } from 'react';
-import { formatCurrency, calculateSum, parseAndFormat, parseToNumber, formatExpenseData, getAccountSummary, handleNumberInput, handleNumberBlur } from '../../shared/utils/numberUtils';
+import { formatCurrency, calculateSum, parseAndFormat, parseToNumber, formatExpenseData, getAccountSummary, handleNumberInput, handleNumberBlur, maskNumberFormat } from '../../shared/utils/numberUtils';
 import BankAccountTable from './BankAccountTable';
 import { expenseAPI } from '../../shared/utils/apiUtils';
 import styles from '../styles/ExpenseTable.module.css';
 
-export default function ExpenseTable({ selectedMonth }) {
+export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
   const [expenseData, setExpenseData] = useState(null);
   const [editExpense, setEditExpense] = useState({});
 
@@ -101,6 +101,8 @@ export default function ExpenseTable({ selectedMonth }) {
   return calculateSum(values);
   };
 
+
+
   return (
     <div className={styles.expenseTable}>
       {expenseData && (
@@ -132,44 +134,71 @@ export default function ExpenseTable({ selectedMonth }) {
                   return (
                     <tr key={i} className={styles.tableRow}>
                       <td className={styles.tableCell}>{expenseKeyThaiMap[item] ?? item}</td>
-                      <td className={`${styles.tableCell} ${styles.right}`}> 
-                        <input
-                          type="text"
-                          value={editExpense[item]?.['estimate'] ?? expenseData.months[selectedMonth]?.[item]?.['estimate'] ?? ''}
-                          onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'estimate', val))}
-                          onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'estimate', val))}
-                          className={styles.expenseInput}
-                        />
+                      <td className={`${styles.tableCell} ${styles.right}`}>
+                        {mode === 'edit' ? (
+                          <input
+                            type="text"
+                            value={editExpense[item]?.['estimate'] ?? expenseData.months[selectedMonth]?.[item]?.['estimate'] ?? ''}
+                            onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'estimate', val))}
+                            onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'estimate', val))}
+                            className={styles.expenseInput}
+                          />
+                        ) : (
+                          <span>{(() => {
+                            const value = parseToNumber(estimate);
+                            return value === 0 ? '0' : maskNumberFormat(value);
+                          })()}</span>
+                        )}
                       </td>
-                      <td className={`${styles.tableCell} ${styles.right}`}> 
-                        <input
-                          type="text"
-                          value={editExpense[item]?.['actual'] ?? expenseData.months[selectedMonth]?.[item]?.['actual'] ?? ''}
-                          onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'actual', val))}
-                          onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'actual', val))}
-                          className={styles.expenseInput}
-                        />
+                      <td className={`${styles.tableCell} ${styles.right}`}>
+                        {mode === 'edit' ? (
+                          <input
+                            type="text"
+                            value={editExpense[item]?.['actual'] ?? expenseData.months[selectedMonth]?.[item]?.['actual'] ?? ''}
+                            onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'actual', val))}
+                            onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'actual', val))}
+                            className={styles.expenseInput}
+                          />
+                        ) : (
+                          <span>{(() => {
+                            const value = parseToNumber(actual);
+                            return value === 0 ? '0' : maskNumberFormat(value);
+                          })()}</span>
+                        )}
                       </td>
-                      <td className={`${styles.tableCell} ${styles.center} ${styles.checkboxCell}`}> 
+                      <td className={`${styles.tableCell} ${styles.center} ${styles.checkboxCell}`}>
                         <input
                           type="checkbox"
                           checked={paid === true || paid === 'true' ? true : false}
                           onChange={e => handleExpenseChange(item, 'paid', e.target.checked)}
+                          disabled={mode !== 'edit'}
                         />
                       </td>
-                      <td className={`${styles.tableCell} ${styles.right} ${diff >= 0 ? styles.diffPositive : styles.diffNegative}`}> 
-                        {formatCurrency(diff)}
+                      <td className={`${styles.tableCell} ${styles.right} ${diff >= 0 ? styles.diffPositive : styles.diffNegative}`}>
+                        {mode === 'edit' ? formatCurrency(diff) : (() => {
+                          const value = parseToNumber(diff);
+                          return value === 0 ? '0' : maskNumberFormat(value);
+                        })()}
                       </td>
                     </tr>
                   );
                 })}
                 <tr className={styles.totalRow}>
                   <td className={styles.totalCell}>ยอดรวม</td>
-                  <td className={`${styles.totalCell} ${styles.right}`}>{formatCurrency(calculateTotal('estimate'))}</td>
-                  <td className={`${styles.totalCell} ${styles.right}`}>{formatCurrency(calculateTotal('actual'))}</td>
+                  <td className={`${styles.totalCell} ${styles.right}`}>{mode === 'edit' ? formatCurrency(calculateTotal('estimate')) : (() => {
+                    const value = parseToNumber(calculateTotal('estimate'));
+                    return value === 0 ? '0' : maskNumberFormat(value);
+                  })()}</td>
+                  <td className={`${styles.totalCell} ${styles.right}`}>{mode === 'edit' ? formatCurrency(calculateTotal('actual')) : (() => {
+                    const value = parseToNumber(calculateTotal('actual'));
+                    return value === 0 ? '0' : maskNumberFormat(value);
+                  })()}</td>
                   <td className={`${styles.totalCell} ${styles.center}`}></td>
                   <td className={`${styles.totalCell} ${styles.right} ${(calculateTotal('estimate') - calculateTotal('actual')) >= 0 ? styles.totalDiffPositive : styles.totalDiffNegative}`}>
-                    {formatCurrency(calculateTotal('estimate') - calculateTotal('actual'))}
+                    {mode === 'edit' ? formatCurrency(calculateTotal('estimate') - calculateTotal('actual')) : (() => {
+                      const value = parseToNumber(calculateTotal('estimate') - calculateTotal('actual'));
+                      return value === 0 ? '0' : maskNumberFormat(value);
+                    })()}
                   </td>
                 </tr>
               </tbody>
@@ -177,14 +206,16 @@ export default function ExpenseTable({ selectedMonth }) {
           </div>
           {/* ตารางสรุปค่าใช้จ่ายแต่ละบัญชี */}
           <BankAccountTable accountSummary={getAccountSummary(editExpense)} />
-          <div className={styles.saveButtonContainer}>
-            <button
-              onClick={handleSave}
-              className={styles.saveButton}
-            >
-              บันทึกข้อมูลรายจ่าย
-            </button>
-          </div>
+          {mode === 'edit' && (
+            <div className={styles.saveButtonContainer}>
+              <button
+                onClick={handleSave}
+                className={styles.saveButton}
+              >
+                บันทึกข้อมูลรายจ่าย
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
