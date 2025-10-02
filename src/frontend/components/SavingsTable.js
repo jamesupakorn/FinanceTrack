@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { formatCurrency, calculateSum, parseAndFormat, parseToNumber } from '../../shared/utils/numberUtils';
+import { formatCurrency, calculateSum, parseAndFormat, parseToNumber, maskNumberFormat } from '../../shared/utils/numberUtils';
 import { savingsAPI } from '../../shared/utils/apiUtils';
 import { Icons } from './Icons';
 import styles from '../styles/SavingsTable.module.css';
 
-export default function SavingsTable({ selectedMonth }) {
+export default function SavingsTable({ selectedMonth, mode = 'view' }) {
+
   const [savingsData, setSavingsData] = useState(null);
   const [รายการเงินออม, setรายการเงินออม] = useState([]);
 
@@ -81,13 +82,15 @@ export default function SavingsTable({ selectedMonth }) {
             <Icons.Edit size={20} color="var(--text-primary)" />
             รายการเงินออม
           </h3>
-          <button 
-            onClick={handleAddSavingsItem}
-            className={styles.addButton}
-          >
-            <Icons.Plus size={16} color="white" />
-            เพิ่มรายการ
-          </button>
+          {mode === 'edit' && (
+            <button 
+              onClick={handleAddSavingsItem}
+              className={styles.addButton}
+            >
+              <Icons.Plus size={16} color="white" />
+              เพิ่มรายการ
+            </button>
+          )}
         </div>
 
         <div className={styles.tableContainer}>
@@ -103,32 +106,42 @@ export default function SavingsTable({ selectedMonth }) {
               {รายการเงินออม.map((item, index) => (
                 <tr key={index} className={styles.tableRow}>
                   <td className={styles.tableCell}>
-                    <input
-                      type="text"
-                      value={item.savings_type || ''}
-                      onChange={(e) => handleEditSavingsItem(index, 'savings_type', e.target.value)}
-                      placeholder={savingsKeyThaiMapping['savings_type']}
-                      className={styles.savingsInput}
-                    />
+                    {mode === 'edit' ? (
+                      <input
+                        type="text"
+                        value={item.savings_type || ''}
+                        onChange={(e) => handleEditSavingsItem(index, 'savings_type', e.target.value)}
+                        placeholder={savingsKeyThaiMapping['savings_type']}
+                        className={styles.savingsInput}
+                      />
+                    ) : (
+                      <span>{item.savings_type}</span>
+                    )}
                   </td>
                   <td className={styles.tableCell}>
-                    <input
-                      type="text"
-                      value={item.savings_amount || ''}
-                      onChange={e => handleSavingsAmountInput(e.target.value, index)}
-                      onBlur={e => handleSavingsAmountBlur(e.target.value, index)}
-                      placeholder={savingsKeyThaiMapping['savings_amount']}
-                      className={styles.savingsInput}
-                    />
+                    {mode === 'edit' ? (
+                      <input
+                        type="text"
+                        value={item.savings_amount || ''}
+                        onChange={e => handleSavingsAmountInput(e.target.value, index)}
+                        onBlur={e => handleSavingsAmountBlur(e.target.value, index)}
+                        placeholder={savingsKeyThaiMapping['savings_amount']}
+                        className={styles.savingsInput}
+                      />
+                    ) : (
+                      <span>{maskNumberFormat(parseToNumber(item.savings_amount))}</span>
+                    )}
                   </td>
                   <td className={`${styles.tableCell} ${styles.center}`}>
-                    <button 
-                      onClick={() => handleDeleteSavingsItem(index)}
-                      className={styles.deleteButton}
-                    >
-                      <Icons.Trash size={14} color="white" />
-                      ลบ
-                    </button>
+                    {mode === 'edit' && (
+                      <button 
+                        onClick={() => handleDeleteSavingsItem(index)}
+                        className={styles.deleteButton}
+                      >
+                        <Icons.Trash size={14} color="white" />
+                        ลบ
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -136,15 +149,17 @@ export default function SavingsTable({ selectedMonth }) {
           </table>
         </div>
 
-        <div className={styles.saveButtonContainer}>
-          <button 
-            onClick={handleSavingsSave}
-            className={styles.saveButton}
-          >
-            <Icons.Save size={16} color="white" />
-            บันทึกรายการเงินออม
-          </button>
-        </div>
+        {mode === 'edit' && (
+          <div className={styles.saveButtonContainer}>
+            <button 
+              onClick={handleSavingsSave}
+              className={styles.saveButton}
+            >
+              <Icons.Save size={16} color="white" />
+              บันทึกรายการเงินออม
+            </button>
+          </div>
+        )}
       </div>
 
       {/* สรุป */}
@@ -156,7 +171,7 @@ export default function SavingsTable({ selectedMonth }) {
         <div className={styles.summaryContent}>
           <div className={styles.summaryItem}>
             <span className={styles.summaryLabel}>รวมเงินออมเดือนนี้:</span>
-            <span className={styles.summaryValue}>{formatCurrency(รวมเงินเก็บ)}</span>
+            <span className={styles.summaryValue}>{mode === 'edit' ? formatCurrency(รวมเงินเก็บ) : maskNumberFormat(parseToNumber(รวมเงินเก็บ))}</span>
           </div>
         </div>
       </div>

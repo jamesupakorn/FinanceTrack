@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { formatCurrency, parseAndFormat, handleNumberInput, handleNumberBlur, parseToNumber } from '../../shared/utils/numberUtils';
+import { formatCurrency, parseAndFormat, handleNumberInput, handleNumberBlur, parseToNumber, maskNumberFormat } from '../../shared/utils/numberUtils';
 import { salaryAPI, incomeAPI } from '../../shared/utils/apiUtils';
 import styles from '../styles/SalaryCalculator.module.css';
 
@@ -29,7 +29,8 @@ const salaryKeyThaiMapping = {
   tax: 'หักภาษี'
 };
 
-const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
+const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
+
   const [salaryData, setSalaryData] = useState({
     // รายได้
     salary: '',
@@ -201,20 +202,24 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
             {['salary', 'overtime_1x', 'overtime_1_5x', 'overtime_2x', 'overtime_3x', 'overtime_other', 'bonus', 'other_income'].map((key) => (
               <div className={styles.inputGroup} key={key}>
                 <label>{salaryKeyThaiMapping[key]}</label>
-                <input
-                  type="text"
-                  value={salaryData[key]}
-                  onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
-                  onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
-                  placeholder="0.00"
-                />
+                {mode === 'edit' ? (
+                  <input
+                    type="text"
+                    value={salaryData[key]}
+                    onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
+                    onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
+                    placeholder="0.00"
+                  />
+                ) : (
+                  <span>{maskNumberFormat(parseToNumber(salaryData[key]))}</span>
+                )}
               </div>
             ))}
           </div>
 
           <div className={`${styles.subtotal} ${styles.incomeSubtotal}`}>
             <span>รวมรายได้: </span>
-            <span className={styles.amount}>{formatCurrency(calculatedResults.รวมรายได้)}</span>
+            <span className={styles.amount}>{mode === 'edit' ? formatCurrency(calculatedResults.รวมรายได้) : maskNumberFormat(parseToNumber(calculatedResults.รวมรายได้))}</span>
           </div>
         </div>
 
@@ -226,38 +231,44 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
             {['provident_fund', 'social_security', 'tax'].map((key) => (
               <div className={styles.inputGroup} key={key}>
                 <label>{salaryKeyThaiMapping[key]}</label>
-                <input
-                  type="text"
-                  value={salaryData[key]}
-                  onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
-                  onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
-                  placeholder="0.00"
-                />
+                {mode === 'edit' ? (
+                  <input
+                    type="text"
+                    value={salaryData[key]}
+                    onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
+                    onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
+                    placeholder="0.00"
+                  />
+                ) : (
+                  <span>{maskNumberFormat(parseToNumber(salaryData[key]))}</span>
+                )}
               </div>
             ))}
           </div>
 
           <div className={`${styles.subtotal} ${styles.deductionSubtotal}`}>
             <span>รวมหัก: </span>
-            <span className={styles.amount}>{formatCurrency(calculatedResults.รวมหัก)}</span>
+            <span className={styles.amount}>{mode === 'edit' ? formatCurrency(calculatedResults.รวมหัก) : maskNumberFormat(parseToNumber(calculatedResults.รวมหัก))}</span>
           </div>
         </div>
       </div>
 
       {/* ผลลัพธ์สุทธิ */}
       <div className={styles.netResult}>
-        <h3>เงินได้สุทธิ: <span className={styles.netAmount}>{formatCurrency(calculatedResults.เงินได้สุทธิ)}</span></h3>
+  <h3>เงินได้สุทธิ: <span className={styles.netAmount}>{mode === 'edit' ? formatCurrency(calculatedResults.เงินได้สุทธิ) : maskNumberFormat(parseToNumber(calculatedResults.เงินได้สุทธิ))}</span></h3>
       </div>
 
       {/* ปุ่มจัดการ */}
-      <div className={styles.actionButtons}>
-        <button onClick={saveSalaryData} className={styles.saveBtn}>
-          บันทึกเงินเดือน
-        </button>
-        <button onClick={clearAll} className={styles.clearBtn}>
-          ล้างข้อมูล
-        </button>
-      </div>
+      {mode === 'edit' && (
+        <div className={styles.actionButtons}>
+          <button onClick={saveSalaryData} className={styles.saveBtn}>
+            บันทึกเงินเดือน
+          </button>
+          <button onClick={clearAll} className={styles.clearBtn}>
+            ล้างข้อมูล
+          </button>
+        </div>
+      )}
     </div>
   );
 };

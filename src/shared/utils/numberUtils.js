@@ -1,3 +1,32 @@
+// Mask number for view mode: 2,345 → xx,345 | 1,234 → x,234 | 123 → 123 | 45 → 45 | 7 → 7
+export function maskNumberFormat(num) {
+  const original = num;
+  if (typeof num !== 'number') {
+    num = Number(num);
+  }
+  if (isNaN(num) || num === null || num === undefined || num === '') {
+    console.log('maskNumberFormat input:', original, '=>', '');
+    return '';
+  }
+  const absNum = Math.abs(num);
+  if (absNum === 0) {
+    console.log('maskNumberFormat input:', original, '=>', '0');
+    return '0';
+  }
+  if (absNum < 1000) {
+    const resultBelow = num.toLocaleString();
+    console.log('maskNumberFormat input:', original, '=>', resultBelow);
+    return resultBelow;
+  }
+  // ถ้าเลข >= 1000 ให้แสดง xxx,xxx (x คงที่ 3 ตัว)
+  const last3 = (Math.floor(absNum) % 1000).toString().padStart(3, '0');
+  const resultMask = (num < 0 ? '-' : '') + 'xxx,' + last3;
+  console.log('maskNumberFormat input:', original, '=>', resultMask);
+  return resultMask;
+  const result = num.toLocaleString();
+  console.log('maskNumberFormat input:', original, '=>', result);
+  return result;
+}
 // สรุปยอดรายจ่ายแต่ละบัญชี (mapping)
 export const getAccountSummary = (editExpense) => {
   const mapping = {

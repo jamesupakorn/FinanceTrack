@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { formatCurrency } from '../../shared/utils/numberUtils';
+import { formatCurrency, maskNumberFormat, parseToNumber } from '../../shared/utils/numberUtils';
 import { incomeAPI, expenseAPI, savingsAPI, taxAPI, salaryAPI } from '../../shared/utils/apiUtils';
 import styles from '../styles/SummaryReport.module.css';
 
-const SummaryReport = ({ selectedMonth }) => {
+const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
+
   const [summaryData, setSummaryData] = useState({
     ยอดรวมรายรับรายเดือน: 0,
     ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด: 0,
@@ -28,6 +29,7 @@ const SummaryReport = ({ selectedMonth }) => {
       เปอร์เซ็นต์จ่าย: 0
     }
   });
+
 
   useEffect(() => {
     loadSummaryData();
@@ -72,25 +74,20 @@ const SummaryReport = ({ selectedMonth }) => {
 
       // คำนวณเปอร์เซ็นต์สำหรับ pie chart ประมาณการ
       const totalEstimated = totalIncome + totalExpenseAll;
-      const estimatedData = {
-        รับ: totalIncome,
-        จ่าย: totalExpenseAll,
-        เปอร์เซ็นต์รับ: totalEstimated > 0 ? Math.round((totalIncome / totalEstimated) * 100) : 0,
-        เปอร์เซ็นต์จ่าย: totalEstimated > 0 ? Math.round((totalExpenseAll / totalEstimated) * 100) : 0
-      };
-
-      // คำนวณเปอร์เซ็นต์สำหรับ pie chart จ่ายจริง
       const totalActual = totalIncome + totalExpenseActual;
-      const actualData = {
-        รับ: totalIncome,
-        จ่าย: totalExpenseActual,
-        เปอร์เซ็นต์รับ: totalActual > 0 ? Math.round((totalIncome / totalActual) * 100) : 0,
-        เปอร์เซ็นต์จ่าย: totalActual > 0 ? Math.round((totalExpenseActual / totalActual) * 100) : 0
-      };
-
       setChartData({
-        ประมาณการ: estimatedData,
-        จ่ายจริง: actualData
+        ประมาณการ: {
+          รับ: totalIncome,
+          จ่าย: totalExpenseAll,
+          เปอร์เซ็นต์รับ: totalEstimated > 0 ? Math.round((totalIncome / totalEstimated) * 100) : 0,
+          เปอร์เซ็นต์จ่าย: totalEstimated > 0 ? Math.round((totalExpenseAll / totalEstimated) * 100) : 0
+        },
+        จ่ายจริง: {
+          รับ: totalIncome,
+          จ่าย: totalExpenseActual,
+          เปอร์เซ็นต์รับ: totalActual > 0 ? Math.round((totalIncome / totalActual) * 100) : 0,
+          เปอร์เซ็นต์จ่าย: totalActual > 0 ? Math.round((totalExpenseActual / totalActual) * 100) : 0
+        }
       });
     } catch (error) {
       console.error('Error loading summary data:', error);
@@ -172,12 +169,12 @@ const SummaryReport = ({ selectedMonth }) => {
           <h3 className={styles.chartTitle}>% ของรายรับที่ใช้</h3>
           <div className={styles.chartsGrid}>
             <PieChart 
-              รับPercent={chartData.ประมาณการ.เปอร์เซ็นต์รับ} 
+              รับPercent={chartData.ประมาณการ.เปอร์เซ็นต์รับ}
               จ่ายPercent={chartData.ประมาณการ.เปอร์เซ็นต์จ่าย}
               title="ประมาณการ"
             />
             <PieChart 
-              รับPercent={chartData.จ่ายจริง.เปอร์เซ็นต์รับ} 
+              รับPercent={chartData.จ่ายจริง.เปอร์เซ็นต์รับ}
               จ่ายPercent={chartData.จ่ายจริง.เปอร์เซ็นต์จ่าย}
               title="จ่ายจริง"
             />
@@ -194,19 +191,19 @@ const SummaryReport = ({ selectedMonth }) => {
               <div className={styles.summaryGrid}>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมรายรับรายเดือน</span>
-                  <span className={`${styles.itemValue} ${styles.income}`}>{formatCurrency(summaryData.ยอดรวมรายรับรายเดือน)}</span>
+                  <span className={`${styles.itemValue} ${styles.income}`}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมรายรับรายเดือน) : (() => { const val = parseToNumber(summaryData.ยอดรวมรายรับรายเดือน); const masked = maskNumberFormat(val); console.log('รายรับรายเดือน:', val, '=>', masked); return masked; })()}</span>
                 </div>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมค่าใช้จ่ายรายเดือน ทั้งหมด</span>
-                  <span className={styles.itemValue}>{formatCurrency(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด)}</span>
+                  <span className={styles.itemValue}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด) : (() => { const val = parseToNumber(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด); const masked = maskNumberFormat(val); console.log('ค่าใช้จ่ายทั้งหมด:', val, '=>', masked); return masked; })()}</span>
                 </div>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมเงินเก็บรายเดือน</span>
-                  <span className={styles.itemValue}>{formatCurrency(summaryData.ยอดรวมเงินเก็บรายเดือน)}</span>
+                  <span className={styles.itemValue}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมเงินเก็บรายเดือน) : (() => { const val = parseToNumber(summaryData.ยอดรวมเงินเก็บรายเดือน); const masked = maskNumberFormat(val); console.log('เงินเก็บรายเดือน:', val, '=>', masked); return masked; })()}</span>
                 </div>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดเงินคงเหลือ ประมาณการ</span>
-                  <span className={`${styles.itemValue} ${styles.remaining}`}>{formatCurrency(summaryData.ยอดเงินคงเหลือ_ประมาณการ)}</span>
+                  <span className={`${styles.itemValue} ${styles.remaining}`}>{mode === 'edit' ? formatCurrency(summaryData.ยอดเงินคงเหลือ_ประมาณการ) : (() => { const val = parseToNumber(summaryData.ยอดเงินคงเหลือ_ประมาณการ); const masked = maskNumberFormat(val); console.log('คงเหลือประมาณการ:', val, '=>', masked); return masked; })()}</span>
                 </div>
               </div>
             </div>
@@ -216,19 +213,19 @@ const SummaryReport = ({ selectedMonth }) => {
               <div className={styles.summaryGrid}>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมรายรับรายเดือน</span>
-                  <span className={`${styles.itemValue} ${styles.income}`}>{formatCurrency(summaryData.ยอดรวมรายรับรายเดือน)}</span>
+                  <span className={`${styles.itemValue} ${styles.income}`}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมรายรับรายเดือน) : (() => { const val = parseToNumber(summaryData.ยอดรวมรายรับรายเดือน); const masked = maskNumberFormat(val); console.log('รายรับรายเดือน(จ่ายจริง):', val, '=>', masked); return masked; })()}</span>
                 </div>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมค่าใช้จ่ายรายเดือน จ่ายจริง</span>
-                  <span className={styles.itemValue}>{formatCurrency(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง)}</span>
+                  <span className={styles.itemValue}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง) : (() => { const val = parseToNumber(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง); const masked = maskNumberFormat(val); console.log('ค่าใช้จ่ายจ่ายจริง:', val, '=>', masked); return masked; })()}</span>
                 </div>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมเงินเก็บรายเดือน</span>
-                  <span className={styles.itemValue}>{formatCurrency(summaryData.ยอดรวมเงินเก็บรายเดือน)}</span>
+                  <span className={styles.itemValue}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมเงินเก็บรายเดือน) : (() => { const val = parseToNumber(summaryData.ยอดรวมเงินเก็บรายเดือน); const masked = maskNumberFormat(val); console.log('เงินเก็บรายเดือน(จ่ายจริง):', val, '=>', masked); return masked; })()}</span>
                 </div>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดเงินคงเหลือ จริง</span>
-                  <span className={`${styles.itemValue} ${styles.remaining}`}>{formatCurrency(summaryData.ยอดเงินคงเหลือ_จริง)}</span>
+                  <span className={`${styles.itemValue} ${styles.remaining}`}>{mode === 'edit' ? formatCurrency(summaryData.ยอดเงินคงเหลือ_จริง) : (() => { const val = parseToNumber(summaryData.ยอดเงินคงเหลือ_จริง); const masked = maskNumberFormat(val); console.log('คงเหลือจริง:', val, '=>', masked); return masked; })()}</span>
                 </div>
               </div>
             </div>
@@ -237,7 +234,7 @@ const SummaryReport = ({ selectedMonth }) => {
           <div className={styles.taxSummary}>
             <div className={`${styles.summaryItem} ${styles.taxSection}`}>
               <span className={styles.itemLabel}>ภาษีสะสมตั้งแต่เดือนแรก</span>
-              <span className={`${styles.itemValue} ${styles.tax}`}>{formatCurrency(summaryData.ภาษีสะสมตั้งแต่เดือนแรก)}</span>
+              <span className={`${styles.itemValue} ${styles.tax}`}>{mode === 'edit' ? formatCurrency(summaryData.ภาษีสะสมตั้งแต่เดือนแรก) : (() => { const val = parseToNumber(summaryData.ภาษีสะสมตั้งแต่เดือนแรก); const masked = maskNumberFormat(val); console.log('ภาษีสะสม:', val, '=>', masked); return masked; })()}</span>
             </div>
           </div>
         </div>
