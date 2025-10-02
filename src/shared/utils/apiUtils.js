@@ -224,7 +224,7 @@ export const taxAPI = {
   // ลบปีออกจากระบบ
   deleteYear: async (year) => {
     try {
-      console.log('🌐 API deleteYear called with year:', year);
+  //
       
       const response = await fetch(API_URLS.TAX, {
         method: 'DELETE',
@@ -232,14 +232,14 @@ export const taxAPI = {
         body: JSON.stringify({ year })
       });
       
-      console.log('🌐 DELETE Response status:', response.status);
+  //
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const result = await response.json();
-      console.log('🌐 DELETE Response data:', result);
+  //
       
       return result;
     } catch (error) {

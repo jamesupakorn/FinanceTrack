@@ -10,17 +10,20 @@ import ThemeToggle from '../components/ThemeToggle';
 import { Icons } from '../components/Icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { generateMonthOptions } from '../../shared/utils/numberUtils';
+
+// Utility: get current month in YYYY-MM
+function getCurrentMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
 import { incomeAPI, expenseAPI, savingsAPI, salaryAPI } from '../../shared/utils/apiUtils';
 import styles from '../styles/Home.module.css';
 
 
 function HomeContent() {
   const [mode, setMode] = useState('view');
-  React.useEffect(() => {
-    console.log('index.js months state:', months);
-  }, [months]);
   const { theme } = useTheme();
-  const [selectedMonth, setSelectedMonth] = useState('2025-09');
+  const [selectedMonth, setSelectedMonth] = useState(null); // null for first load
   const [activeTab, setActiveTab] = useState('income');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [months, setMonths] = useState([]);
@@ -33,17 +36,20 @@ function HomeContent() {
         savingsAPI.getAll(),
         salaryAPI.getAll()
       ]);
-      console.log('expenseRes', expenseRes);
-      console.log('savingsRes', savingsRes);
-      console.log('salaryRes', salaryRes);
-      // สมมติ response เป็น object ที่ key เป็นเดือน เช่น { '2025-09': {...}, ... }
       const expenseMonths = expenseRes ? Object.keys(expenseRes) : [];
       const savingsMonths = savingsRes ? Object.keys(savingsRes) : [];
       const salaryMonths = salaryRes ? Object.keys(salaryRes) : [];
       const allMonths = Array.from(new Set([...expenseMonths, ...savingsMonths, ...salaryMonths])).sort().reverse();
       setMonths(allMonths);
-      // ถ้าเดือนที่เลือกไม่มีใน allMonths ให้เลือกเดือนล่าสุด
-      if (allMonths.length && !allMonths.includes(selectedMonth)) {
+      const currentMonth = getCurrentMonth();
+      // Debug log
+      console.log('[fetchMonths] allMonths:', allMonths, 'currentMonth:', currentMonth, 'selectedMonth before:', selectedMonth);
+      if (allMonths.includes(currentMonth)) {
+        console.log('[fetchMonths] setSelectedMonth:', currentMonth);
+        setSelectedMonth(currentMonth);
+      } else if (allMonths.length && !allMonths.includes(selectedMonth)) {
+        // ถ้าไม่มี currentMonth แต่ selectedMonth ก็ไม่มีใน allMonths ให้ fallback เป็นเดือนล่าสุด
+        console.log('[fetchMonths] setSelectedMonth fallback:', allMonths[0]);
         setSelectedMonth(allMonths[0]);
       }
     } catch (err) {
@@ -53,6 +59,7 @@ function HomeContent() {
 
   // โหลดเดือนเมื่อ mount หรือ refresh
   React.useEffect(() => {
+    console.log('[useEffect] call fetchMonths, refreshTrigger:', refreshTrigger);
     fetchMonths();
   }, [refreshTrigger]);
 

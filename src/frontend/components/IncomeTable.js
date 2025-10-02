@@ -6,7 +6,7 @@ const incomeKeyThaiMap = {
 };
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { formatCurrency, calculateSum, parseAndFormat, parseToNumber, formatIncomeData, handleNumberInput, handleNumberBlur, maskNumberFormat } from '../../shared/utils/numberUtils';
+import { formatCurrency, calculateSum, parseAndFormat, parseToNumber, formatIncomeData, handleNumberInput, handleNumberBlur, maskNumberFormat, calculateTotalFromObject, calculateTotalWithSalary as calculateTotalWithSalaryUtil } from '../../shared/utils/numberUtils';
 import { incomeAPI, salaryAPI } from '../../shared/utils/apiUtils';
 import { Icons } from './Icons';
 import styles from '../styles/IncomeTable.module.css';
@@ -71,19 +71,9 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, mode =
     }
   };
 
-  const calculateTotal = () => {
-    return calculateSum(Object.values(editIncome));
-  };
+  const calculateTotal = () => calculateTotalFromObject(editIncome);
 
-  const calculateTotalWithSalary = () => {
-    // คำนวณรวมโดยรวมเงินเดือนสุทธิจาก salary
-    const otherIncomes = Object.entries(editIncome)
-      .filter(([key]) => key !== 'เงินเดือน')
-      .map(([, value]) => parseToNumber(value));
-    // เงินเดือนสุทธิอาจมี comma หรือเป็น string
-    const salaryValue = parseToNumber(salaryNetIncome);
-    return calculateSum([...otherIncomes, salaryValue]);
-  };
+  const calculateTotalWithSalary = () => calculateTotalWithSalaryUtil(editIncome, salaryNetIncome);
 
   return (
     <div className={styles.incomeContainer}>

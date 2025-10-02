@@ -191,19 +191,19 @@ const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
               <div className={styles.summaryGrid}>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมรายรับรายเดือน</span>
-                  <span className={`${styles.itemValue} ${styles.income}`}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมรายรับรายเดือน) : (() => { const val = parseToNumber(summaryData.ยอดรวมรายรับรายเดือน); const masked = maskNumberFormat(val); console.log('รายรับรายเดือน:', val, '=>', masked); return masked; })()}</span>
+                  <span className={`${styles.itemValue} ${styles.income}`}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมรายรับรายเดือน) : (() => { const val = parseToNumber(summaryData.ยอดรวมรายรับรายเดือน); const masked = maskNumberFormat(val); return masked; })()}</span>
                 </div>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมค่าใช้จ่ายรายเดือน ทั้งหมด</span>
-                  <span className={styles.itemValue}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด) : (() => { const val = parseToNumber(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด); const masked = maskNumberFormat(val); console.log('ค่าใช้จ่ายทั้งหมด:', val, '=>', masked); return masked; })()}</span>
+                  <span className={styles.itemValue}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด) : (() => { const val = parseToNumber(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด); const masked = maskNumberFormat(val); return masked; })()}</span>
                 </div>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมเงินเก็บรายเดือน</span>
-                  <span className={styles.itemValue}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมเงินเก็บรายเดือน) : (() => { const val = parseToNumber(summaryData.ยอดรวมเงินเก็บรายเดือน); const masked = maskNumberFormat(val); console.log('เงินเก็บรายเดือน:', val, '=>', masked); return masked; })()}</span>
+                  <span className={styles.itemValue}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมเงินเก็บรายเดือน) : (() => { const val = parseToNumber(summaryData.ยอดรวมเงินเก็บรายเดือน); const masked = maskNumberFormat(val); return masked; })()}</span>
                 </div>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดเงินคงเหลือ ประมาณการ</span>
-                  <span className={`${styles.itemValue} ${styles.remaining}`}>{mode === 'edit' ? formatCurrency(summaryData.ยอดเงินคงเหลือ_ประมาณการ) : (() => { const val = parseToNumber(summaryData.ยอดเงินคงเหลือ_ประมาณการ); const masked = maskNumberFormat(val); console.log('คงเหลือประมาณการ:', val, '=>', masked); return masked; })()}</span>
+                  <span className={`${styles.itemValue} ${styles.remaining}`}>{mode === 'edit' ? formatCurrency(summaryData.ยอดเงินคงเหลือ_ประมาณการ) : (() => { const val = parseToNumber(summaryData.ยอดเงินคงเหลือ_ประมาณการ); const masked = maskNumberFormat(val); return masked; })()}</span>
                 </div>
               </div>
             </div>
@@ -213,19 +213,19 @@ const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
               <div className={styles.summaryGrid}>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมรายรับรายเดือน</span>
-                  <span className={`${styles.itemValue} ${styles.income}`}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมรายรับรายเดือน) : (() => { const val = parseToNumber(summaryData.ยอดรวมรายรับรายเดือน); const masked = maskNumberFormat(val); console.log('รายรับรายเดือน(จ่ายจริง):', val, '=>', masked); return masked; })()}</span>
+                  <span className={`${styles.itemValue} ${styles.income}`}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมรายรับรายเดือน) : (() => { const val = parseToNumber(summaryData.ยอดรวมรายรับรายเดือน); const masked = maskNumberFormat(val); return masked; })()}</span>
                 </div>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมค่าใช้จ่ายรายเดือน จ่ายจริง</span>
-                  <span className={styles.itemValue}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง) : (() => { const val = parseToNumber(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง); const masked = maskNumberFormat(val); console.log('ค่าใช้จ่ายจ่ายจริง:', val, '=>', masked); return masked; })()}</span>
+                  <span className={styles.itemValue}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง) : (() => { const val = parseToNumber(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง); const masked = maskNumberFormat(val); return masked; })()}</span>
                 </div>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดรวมเงินเก็บรายเดือน</span>
-                  <span className={styles.itemValue}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมเงินเก็บรายเดือน) : (() => { const val = parseToNumber(summaryData.ยอดรวมเงินเก็บรายเดือน); const masked = maskNumberFormat(val); console.log('เงินเก็บรายเดือน(จ่ายจริง):', val, '=>', masked); return masked; })()}</span>
+                  <span className={styles.itemValue}>{mode === 'edit' ? formatCurrency(summaryData.ยอดรวมเงินเก็บรายเดือน) : (() => { const val = parseToNumber(summaryData.ยอดรวมเงินเก็บรายเดือน); const masked = maskNumberFormat(val); return masked; })()}</span>
                 </div>
                 <div className={styles.summaryItem}>
                   <span className={styles.itemLabel}>ยอดเงินคงเหลือ จริง</span>
-                  <span className={`${styles.itemValue} ${styles.remaining}`}>{mode === 'edit' ? formatCurrency(summaryData.ยอดเงินคงเหลือ_จริง) : (() => { const val = parseToNumber(summaryData.ยอดเงินคงเหลือ_จริง); const masked = maskNumberFormat(val); console.log('คงเหลือจริง:', val, '=>', masked); return masked; })()}</span>
+                  <span className={`${styles.itemValue} ${styles.remaining}`}>{mode === 'edit' ? formatCurrency(summaryData.ยอดเงินคงเหลือ_จริง) : (() => { const val = parseToNumber(summaryData.ยอดเงินคงเหลือ_จริง); const masked = maskNumberFormat(val); return masked; })()}</span>
                 </div>
               </div>
             </div>
@@ -234,7 +234,7 @@ const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
           <div className={styles.taxSummary}>
             <div className={`${styles.summaryItem} ${styles.taxSection}`}>
               <span className={styles.itemLabel}>ภาษีสะสมตั้งแต่เดือนแรก</span>
-              <span className={`${styles.itemValue} ${styles.tax}`}>{mode === 'edit' ? formatCurrency(summaryData.ภาษีสะสมตั้งแต่เดือนแรก) : (() => { const val = parseToNumber(summaryData.ภาษีสะสมตั้งแต่เดือนแรก); const masked = maskNumberFormat(val); console.log('ภาษีสะสม:', val, '=>', masked); return masked; })()}</span>
+              <span className={`${styles.itemValue} ${styles.tax}`}>{mode === 'edit' ? formatCurrency(summaryData.ภาษีสะสมตั้งแต่เดือนแรก) : (() => { const val = parseToNumber(summaryData.ภาษีสะสมตั้งแต่เดือนแรก); const masked = maskNumberFormat(val); return masked; })()}</span>
             </div>
           </div>
         </div>

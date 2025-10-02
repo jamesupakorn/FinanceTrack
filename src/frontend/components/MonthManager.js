@@ -113,6 +113,8 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
     }
   };
 
+  // Debug log
+  console.log('[MonthManager] selectedMonth prop:', selectedMonth);
   return (
     <div className={styles.monthManager}>
       {/* แสดงเดือนปัจจุบันและ dropdown เลือกเดือน */}
