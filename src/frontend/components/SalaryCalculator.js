@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { formatCurrency, parseAndFormat, handleNumberInput, handleNumberBlur, parseToNumber, maskNumberFormat } from '../../shared/utils/numberUtils';
+import { formatCurrency, parseAndFormat, handleNumberInput, handleNumberBlur, parseToNumber, maskNumberFormat, calculateSalaryTotals } from '../../shared/utils/numberUtils';
 import { salaryAPI, incomeAPI } from '../../shared/utils/apiUtils';
 import styles from '../styles/SalaryCalculator.module.css';
 
@@ -85,26 +85,7 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
   };
 
   const calculateTotals = () => {
-    // คำนวณรวมรายได้
-    const totalIncome = [
-      'salary', 'overtime_1x', 'overtime_1_5x',
-      'overtime_2x', 'overtime_3x', 'overtime_other',
-      'bonus', 'other_income'
-    ].reduce((sum, key) => sum + parseToNumber(salaryData[key]), 0);
-
-    // คำนวณรวมหัก
-    const totalDeduction = [
-      'provident_fund', 'social_security', 'tax'
-    ].reduce((sum, key) => sum + parseToNumber(salaryData[key]), 0);
-
-    // คำนวณเงินได้สุทธิ
-    const netIncome = totalIncome - totalDeduction;
-
-    setCalculatedResults({
-      รวมรายได้: totalIncome,
-      รวมหัก: totalDeduction,
-      เงินได้สุทธิ: netIncome
-    });
+    setCalculatedResults(calculateSalaryTotals(salaryData));
   };
 
   const handleInputChange = (field, value) => {

@@ -5,26 +5,26 @@ export function maskNumberFormat(num) {
     num = Number(num);
   }
   if (isNaN(num) || num === null || num === undefined || num === '') {
-    console.log('maskNumberFormat input:', original, '=>', '');
+  //
     return '';
   }
   const absNum = Math.abs(num);
   if (absNum === 0) {
-    console.log('maskNumberFormat input:', original, '=>', '0');
+  //
     return '0';
   }
   if (absNum < 1000) {
     const resultBelow = num.toLocaleString();
-    console.log('maskNumberFormat input:', original, '=>', resultBelow);
+  //
     return resultBelow;
   }
   // ถ้าเลข >= 1000 ให้แสดง xxx,xxx (x คงที่ 3 ตัว)
   const last3 = (Math.floor(absNum) % 1000).toString().padStart(3, '0');
   const resultMask = (num < 0 ? '-' : '') + 'xxx,' + last3;
-  console.log('maskNumberFormat input:', original, '=>', resultMask);
+  //
   return resultMask;
   const result = num.toLocaleString();
-  console.log('maskNumberFormat input:', original, '=>', result);
+  //
   return result;
 }
 // สรุปยอดรายจ่ายแต่ละบัญชี (mapping)
@@ -80,6 +80,41 @@ export const formatCurrency = (value) => {
 // คำนวณผลรวม
 export const calculateSum = (values) => {
   return values.reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
+};
+
+// คำนวณรวมรายรับ (object of values)
+export const calculateTotalFromObject = (obj) => {
+  return calculateSum(Object.values(obj));
+};
+
+// คำนวณรวมรายรับแบบมีเงินเดือน (object of values, salaryNetIncome)
+export const calculateTotalWithSalary = (obj, salaryNetIncome) => {
+  // ตัด key ที่เป็นเงินเดือนออกก่อน แล้วรวมกับ salaryNetIncome
+  const otherIncomes = Object.entries(obj)
+    .filter(([key]) => key !== 'เงินเดือน')
+    .map(([, value]) => parseToNumber(value));
+  const salaryValue = parseToNumber(salaryNetIncome);
+  return calculateSum([...otherIncomes, salaryValue]);
+};
+
+// คำนวณรวมรายได้/รวมหัก/เงินได้สุทธิ สำหรับ SalaryCalculator
+export const calculateSalaryTotals = (salaryData) => {
+  const totalIncome = [
+    'salary', 'overtime_1x', 'overtime_1_5x',
+    'overtime_2x', 'overtime_3x', 'overtime_other',
+    'bonus', 'other_income'
+  ].reduce((sum, key) => sum + parseToNumber(salaryData[key]), 0);
+
+  const totalDeduction = [
+    'provident_fund', 'social_security', 'tax'
+  ].reduce((sum, key) => sum + parseToNumber(salaryData[key]), 0);
+
+  const netIncome = totalIncome - totalDeduction;
+  return {
+    รวมรายได้: totalIncome,
+    รวมหัก: totalDeduction,
+    เงินได้สุทธิ: netIncome
+  };
 };
 
 // ตรวจสอบว่าเป็นตัวเลขที่ถูกต้องหรือไม่

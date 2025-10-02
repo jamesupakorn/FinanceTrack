@@ -97,8 +97,8 @@ export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
   };
 
   const calculateTotal = (field) => {
-  const values = Object.values(editExpense).map(item => parseToNumber(item?.[field]));
-  return calculateSum(values);
+    const values = Object.values(editExpense).map(item => parseToNumber(item?.[field]));
+    return calculateSum(values);
   };
 
 
