@@ -15,6 +15,7 @@ import styles from '../styles/Home.module.css';
 
 
 function HomeContent() {
+  const [mode, setMode] = useState('view');
   React.useEffect(() => {
     console.log('index.js months state:', months);
   }, [months]);
@@ -69,7 +70,7 @@ function HomeContent() {
         <header className={styles.pageHeader}>
           {/* Theme Toggle */}
           <div className={styles.themeToggleContainer}>
-            <ThemeToggle />
+            <ThemeToggle mode={mode} setMode={setMode} />
           </div>
                     
           <h1 className={styles.pageTitle}>
@@ -135,6 +136,7 @@ function HomeContent() {
               selectedMonth={selectedMonth}
               salaryUpdateTrigger={refreshTrigger}
               key={`income-${refreshTrigger}`}
+              mode={mode}
             />
           </div>
         )}
@@ -150,6 +152,7 @@ function HomeContent() {
             <ExpenseTable 
               selectedMonth={selectedMonth}
               key={`expense-${refreshTrigger}`}
+              mode={mode}
             />
           </div>
         )}
@@ -165,6 +168,7 @@ function HomeContent() {
             <SavingsTable 
               selectedMonth={selectedMonth}
               key={`savings-${refreshTrigger}`}
+              mode={mode}
             />
           </div>
         )}
@@ -180,6 +184,7 @@ function HomeContent() {
             <TaxTable 
               selectedMonth={selectedMonth}
               key={`tax-${refreshTrigger}`}
+              mode={mode}
             />
           </div>
         )}

@@ -1,49 +1,62 @@
-import { useTheme } from '../contexts/ThemeContext';
-import { Icons } from './Icons';
+
+import { useRouter } from 'next/router';
+import { useState } from 'react';
 import styles from '../styles/ThemeToggle.module.css';
+import ModePasswordModal from './ModePasswordModal';
 
-const ThemeToggle = () => {
-  const { currentTheme, themes, switchTheme, toggleTheme } = useTheme();
 
-  const getThemeIcon = (themeName) => {
-    switch (themeName) {
-      case 'light':
-        return <Icons.Sun size={18} color="white" />;
-      case 'dark':
-        return <Icons.Moon size={18} color="white" />;
-      case 'financial':
-        return <Icons.DollarSign size={18} color="white" />;
-      default:
-        return <Icons.Settings size={18} color="white" />;
+const MODE_OPTIONS = [
+  { value: 'view', label: 'ดูข้อมูล' },
+  { value: 'edit', label: 'แก้ไขข้อมูล' },
+];
+
+const EDIT_PASSWORD = 'financepro2025'; // สามารถเปลี่ยนทีหลังหรือย้ายไป env ได้
+
+const ThemeToggle = ({ mode, setMode }) => {
+  const router = useRouter();
+  const [showModal, setShowModal] = useState(false);
+  const [pendingMode, setPendingMode] = useState(null);
+
+  const handleModeChange = (e) => {
+    const selected = e.target.value;
+    if (selected === 'edit') {
+      setPendingMode('edit');
+      setShowModal(true);
+    } else {
+      setMode('view');
+      router.push('/');
     }
   };
 
-  const getThemeLabel = (themeName) => {
-    return themes[themeName]?.name || themeName;
+  const handleModalClose = () => {
+    setShowModal(false);
+    setPendingMode(null);
   };
 
-  // No number/money input fields; only theme selector
+  const handleModalSubmit = (password) => {
+    if (password === EDIT_PASSWORD) {
+      setMode('edit');
+      setShowModal(false);
+      router.push('/edit');
+    } else {
+      alert('รหัสผ่านไม่ถูกต้อง');
+    }
+  };
+
   return (
     <div className={styles.themeToggle}>
       <select
-        value={currentTheme}
-        onChange={(e) => switchTheme(e.target.value)}
+        value={mode}
+        onChange={handleModeChange}
         className={styles.themeSelector}
       >
-        {Object.entries(themes).map(([key, theme]) => (
-          <option 
-            key={key} 
-            value={key}
-            className={styles.themeOption}
-          >
-            {theme.name}
+        {MODE_OPTIONS.map(opt => (
+          <option key={opt.value} value={opt.value} className={styles.themeOption}>
+            {opt.label}
           </option>
         ))}
       </select>
-      {/* Theme Icon Overlay */}
-      <div className={styles.themeIconOverlay}>
-        {getThemeIcon(currentTheme)}
-      </div>
+      <ModePasswordModal open={showModal} onClose={handleModalClose} onSubmit={handleModalSubmit} />
     </div>
   );
 };

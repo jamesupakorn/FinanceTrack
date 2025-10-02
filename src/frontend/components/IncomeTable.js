@@ -6,12 +6,13 @@ const incomeKeyThaiMap = {
 };
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { formatCurrency, calculateSum, parseAndFormat, parseToNumber, formatIncomeData, handleNumberInput, handleNumberBlur } from '../../shared/utils/numberUtils';
+import { formatCurrency, calculateSum, parseAndFormat, parseToNumber, formatIncomeData, handleNumberInput, handleNumberBlur, maskNumberFormat } from '../../shared/utils/numberUtils';
 import { incomeAPI, salaryAPI } from '../../shared/utils/apiUtils';
 import { Icons } from './Icons';
 import styles from '../styles/IncomeTable.module.css';
 
-export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
+export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, mode = 'view' }) {
+
   const [incomeData, setIncomeData] = useState(null);
   const [editIncome, setEditIncome] = useState({});
   const [salaryNetIncome, setSalaryNetIncome] = useState(0);
@@ -101,22 +102,38 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
                   <td className={styles.tableCell}>{incomeKeyThaiMap[item] ?? item}</td>
                   <td className={styles.inputCell}>
                     {item === 'เงินเดือน' ? (
-                      // แสดงเงินเดือนสุทธิจาก salary (ไม่ให้แก้ไข)
                       <div className={styles.salaryCell}>
-                        {formatCurrency(salaryNetIncome || editIncome[item] || 0)}
+                        {mode === 'edit'
+                          ? formatCurrency(salaryNetIncome || editIncome[item] || 0)
+                          : (() => {
+                              const value = (salaryNetIncome !== undefined && salaryNetIncome !== null && salaryNetIncome !== '' && !isNaN(Number(salaryNetIncome)))
+                                ? Number(salaryNetIncome)
+                                : (editIncome[item] !== undefined && editIncome[item] !== null && editIncome[item] !== '' && !isNaN(parseToNumber(editIncome[item])))
+                                  ? parseToNumber(editIncome[item])
+                                  : 0;
+                              return value === 0 ? '0' : maskNumberFormat(value);
+                            })()}
                         <small className={styles.salarySource}>
                           (จากระบบเงินเดือน)
                         </small>
                       </div>
                     ) : (
-                      // รายการอื่นๆ ให้แก้ไขได้ปกติ
-                      <input
-                        type="text"
-                        value={editIncome[item] ?? ''}
-                        onChange={e => handleNumberInput(e.target.value, setEditIncome, item)}
-                        onBlur={e => handleNumberBlur(e.target.value, setEditIncome, item)}
-                        className={styles.incomeInput}
-                      />
+                      mode === 'edit' ? (
+                        <input
+                          type="text"
+                          value={editIncome[item] ?? ''}
+                          onChange={e => handleNumberInput(e.target.value, setEditIncome, item)}
+                          onBlur={e => handleNumberBlur(e.target.value, setEditIncome, item)}
+                          className={styles.incomeInput}
+                        />
+                      ) : (
+                        <span>{(() => {
+                          const value = (editIncome[item] !== undefined && editIncome[item] !== null && editIncome[item] !== '' && !isNaN(parseToNumber(editIncome[item])))
+                            ? parseToNumber(editIncome[item])
+                            : 0;
+                          return value === 0 ? '0' : maskNumberFormat(value);
+                        })()}</span>
+                      )
                     )}
                   </td>
                 </tr>
@@ -124,17 +141,24 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
               <tr className={styles.totalRow}>
                 <td className={styles.totalCell}>รวม</td>
                 <td className={`${styles.totalCell} ${styles.totalValue}`}>
-                  {formatCurrency(calculateTotalWithSalary())}
+                  {mode === 'edit'
+                    ? formatCurrency(calculateTotalWithSalary())
+                    : (() => {
+                        const total = Number(calculateTotalWithSalary()) || 0;
+                        return total === 0 ? '0' : maskNumberFormat(total);
+                      })()}
                 </td>
               </tr>
             </tbody>
           </table>
-          <div className={styles.saveButtonContainer}>
-            <button onClick={handleSave} className={styles.saveButton}>
-              <Icons.Save size={16} color="white" className={styles.saveButtonIcon} />
-              บันทึกรายรับ
-            </button>
-          </div>
+          {mode === 'edit' && (
+            <div className={styles.saveButtonContainer}>
+              <button onClick={handleSave} className={styles.saveButton}>
+                <Icons.Save size={16} color="white" className={styles.saveButtonIcon} />
+                บันทึกรายรับ
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

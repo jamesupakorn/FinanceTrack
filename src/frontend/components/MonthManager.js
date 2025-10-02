@@ -3,7 +3,7 @@ import { getNextMonth } from '../../shared/utils/numberUtils';
 import styles from '../styles/MonthManager.module.css';
 
 
-const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
+const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'view' }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newMonthName, setNewMonthName] = useState('');
   const [monthOptions, setMonthOptions] = useState([]);
@@ -133,27 +133,27 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
         </div>
       </div>
 
-      <div className={styles.monthActions}>
-        <button 
-          onClick={() => setShowAddForm(!showAddForm)}
-          className={styles.addMonthBtn}
-        >
-          + เพิ่มเดือนใหม่
-        </button>
-      </div>
+      {mode === 'edit' && (
+        <div className={styles.monthActions}>
+          <button 
+            onClick={() => setShowAddForm(!showAddForm)}
+            className={styles.addMonthBtn}
+          >
+            + เพิ่มเดือนใหม่
+          </button>
+        </div>
+      )}
 
-      {showAddForm && (
+      {showAddForm && mode === 'edit' && (
         <div className={styles.addMonthForm}>
           <div className={styles.formContent}>
             <h4>เพิ่มเดือนใหม่</h4>
-            
             <button 
               onClick={handleAddNewMonth}
               className={styles.quickAddBtn}
             >
               เดือนถัดไป ({getNextMonth(selectedMonth)})
             </button>
-            
             <div className={styles.customMonth}>
               <input
                 type="text"
@@ -166,7 +166,6 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
                 เพิ่ม
               </button>
             </div>
-            
             <button 
               onClick={() => setShowAddForm(false)}
               className={styles.cancelBtn}
