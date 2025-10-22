@@ -19,62 +19,77 @@
   "months": {
     "2025-10": {
       "house": {
+        "estimate": 9000,
         "actual": 0,
         "paid": false
       },
       "water": {
+        "estimate": 150,
         "actual": 0,
         "paid": false
       },
       "internet": {
+        "estimate": 500,
         "actual": 0,
         "paid": false
       },
       "electricity": {
+        "estimate": 1964.08,
         "actual": 0,
         "paid": false
       },
       "mobile": {
+        "estimate": 700,
         "actual": 0,
         "paid": false
       },
       "credit_kbank": {
+        "estimate": 4786.56,
         "actual": 0,
         "paid": false
       },
       "credit_kungsri": {
+        "estimate": 0,
         "actual": 0,
         "paid": false
       },
       "credit_uob": {
+        "estimate": 2817.9,
         "actual": 0,
         "paid": false
       },
       "credit_ttb": {
+        "estimate": 5756.35,
         "actual": 0,
         "paid": false
       },
       "shopee": {
+        "estimate": 4915.13,
         "actual": 0,
         "paid": false
       },
       "netflix": {
+        "estimate": 617,
         "actual": 0,
         "paid": false
       },
       "youtube": {
+        "estimate": 469,
         "actual": 0,
         "paid": false
       },
       "youtube_membership": {
+        "estimate": 330,
         "actual": 0,
         "paid": false
       },
       "motorcycle": {
+        "estimate": 3000,
         "actual": 0,
         "paid": false
       },
       "miscellaneous": {
+        "estimate": 0,
         "actual": 0,
         "paid": false
       }

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 // updateMonthlyTax ต้องแก้ import path หลังย้าย
-import { updateMonthlyTax } from './tax_accumulated';
+import { updateMonthlyTax, updateMonthlyIncome } from './tax_accumulated';
 
 const dataPath = path.join(process.cwd(), 'src', 'backend', 'data', 'salary.json');
 
@@ -128,13 +128,17 @@ export default function handler(req, res) {
 			salaryData.summary = calculateSummary(salaryData);
 			allData[month] = salaryData;
 			writeSalaryData(allData);
-			// อัพเดตภาษีสะสม
-			// month = YYYY-MM, ต้องแยกเป็นปี พ.ศ. และเลขเดือน
-			if (month && salaryData.deduct.tax !== undefined) {
-				const [yearAD, monthNum] = month.split('-');
-				const yearBE = (parseInt(yearAD) + 543).toString();
-				updateMonthlyTax(yearBE, monthNum.padStart(2, '0'), salaryData.deduct.tax);
-			}
+									// อัพเดตภาษีสะสมและรายรับสะสม (ใช้ปี ค.ศ. ตามที่ตกลง)
+									// month = YYYY-MM, ต้องแยกเป็นปี ค.ศ. และเลขเดือน
+									if (month) {
+											const [yearAD, monthNum] = month.split('-');
+											if (salaryData.deduct.tax !== undefined) {
+												updateMonthlyTax(yearAD, monthNum.padStart(2, '0'), salaryData.deduct.tax);
+											}
+											if (salaryData.summary && salaryData.summary.total_income !== undefined) {
+												updateMonthlyIncome(yearAD, monthNum.padStart(2, '0'), salaryData.summary.total_income);
+											}
+									}
 			return res.status(201).json({ success: true });
 		} else if (req.method === 'DELETE') {
 			const { month } = req.query;
