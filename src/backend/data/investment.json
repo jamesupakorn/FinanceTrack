@@ -1,0 +1,14 @@
+{
+  "2025-10": [
+    {
+      "name": "S&P500",
+      "percent": 50,
+      "amount": 1000
+    },
+    {
+      "name": "Bualuang RMF",
+      "percent": 50,
+      "amount": 1000
+    }
+  ]
+}

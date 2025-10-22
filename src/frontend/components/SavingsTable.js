@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { formatCurrency, calculateSum, parseAndFormat, parseToNumber, maskNumberFormat } from '../../shared/utils/numberUtils';
 import { savingsAPI } from '../../shared/utils/apiUtils';
 import { Icons } from './Icons';
+import InvestmentTable from './InvestmentTable';
 import styles from '../styles/SavingsTable.module.css';
 
 export default function SavingsTable({ selectedMonth, mode = 'view' }) {
@@ -174,6 +175,11 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
             <span className={styles.summaryValue}>{mode === 'edit' ? formatCurrency(รวมเงินเก็บ) : maskNumberFormat(parseToNumber(รวมเงินเก็บ))}</span>
           </div>
         </div>
+      </div>
+
+      {/* การลงทุน */}
+      <div style={{ marginTop: 32 }}>
+        <InvestmentTable selectedMonth={selectedMonth} mode={mode} />
       </div>
     </div>
   );
