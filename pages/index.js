@@ -38,28 +38,45 @@ function HomeContent() {
       const savingsMonths = savingsRes ? Object.keys(savingsRes) : [];
       const salaryMonths = salaryRes ? Object.keys(salaryRes) : [];
       const allMonths = Array.from(new Set([...expenseMonths, ...savingsMonths, ...salaryMonths])).sort().reverse();
+      console.log('[DEBUG] expenseMonths:', expenseMonths);
+      console.log('[DEBUG] savingsMonths:', savingsMonths);
+      console.log('[DEBUG] salaryMonths:', salaryMonths);
+      console.log('[DEBUG] allMonths:', allMonths);
       setMonths(allMonths);
       const currentMonth = getCurrentMonth();
-      // Debug log
-      console.log('[fetchMonths] allMonths:', allMonths, 'currentMonth:', currentMonth, 'selectedMonth before:', selectedMonth);
+      console.log('[DEBUG] currentMonth:', currentMonth);
       if (allMonths.includes(currentMonth)) {
-        console.log('[fetchMonths] setSelectedMonth:', currentMonth);
+        console.log('[DEBUG] setSelectedMonth:', currentMonth);
         setSelectedMonth(currentMonth);
       } else if (allMonths.length && !allMonths.includes(selectedMonth)) {
-        // ถ้าไม่มี currentMonth แต่ selectedMonth ก็ไม่มีใน allMonths ให้ fallback เป็นเดือนล่าสุด
-        console.log('[fetchMonths] setSelectedMonth fallback:', allMonths[0]);
+        console.log('[DEBUG] setSelectedMonth fallback:', allMonths[0]);
         setSelectedMonth(allMonths[0]);
       }
+      console.log('[DEBUG] selectedMonth after set:', selectedMonth);
     } catch (err) {
       setMonths([]);
+      console.log('[DEBUG] fetchMonths error:', err);
     }
   };
+
 
   // โหลดเดือนเมื่อ mount หรือ refresh
   React.useEffect(() => {
     console.log('[useEffect] call fetchMonths, refreshTrigger:', refreshTrigger);
     fetchMonths();
   }, [refreshTrigger]);
+
+  // เซต selectedMonth เป็นเดือนปัจจุบันทันทีเมื่อ mount ถ้ายังไม่ได้เซต
+  React.useEffect(() => {
+    if (!selectedMonth && months.length > 0) {
+      const currentMonth = getCurrentMonth();
+      if (months.includes(currentMonth)) {
+        setSelectedMonth(currentMonth);
+      } else {
+        setSelectedMonth(months[0]);
+      }
+    }
+  }, [months, selectedMonth]);
 
   const handleDataRefresh = () => {
     setRefreshTrigger(prev => prev + 1);

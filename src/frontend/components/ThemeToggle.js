@@ -1,36 +1,31 @@
 
 import { useRouter } from 'next/router';
+import { ENCODED_EDIT_PASSWORD } from '../config/password.enc';
 import { useState } from 'react';
+
 import styles from '../styles/ThemeToggle.module.css';
 import ModePasswordModal from './ModePasswordModal';
 
+function decodePassword(encoded) {
+  if (typeof window !== 'undefined' && window.atob) {
+    return window.atob(encoded);
+  }
+  // fallback for Node.js (SSR)
+  return Buffer.from(encoded, 'base64').toString('utf-8');
+}
 
-const MODE_OPTIONS = [
-  { value: 'view', label: 'ดูข้อมูล' },
-  { value: 'edit', label: 'แก้ไขข้อมูล' },
-];
+const EDIT_PASSWORD = decodePassword(ENCODED_EDIT_PASSWORD); // base64 decode
 
-const EDIT_PASSWORD = 'financepro2025'; // สามารถเปลี่ยนทีหลังหรือย้ายไป env ได้
-
-const ThemeToggle = ({ mode, setMode }) => {
+const ThemeToggle = ({ mode, setMode = () => {} }) => {
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
-  const [pendingMode, setPendingMode] = useState(null);
 
-  const handleModeChange = (e) => {
-    const selected = e.target.value;
-    if (selected === 'edit') {
-      setPendingMode('edit');
-      setShowModal(true);
-    } else {
-      setMode('view');
-      router.push('/');
-    }
+  const handleEditClick = () => {
+    setShowModal(true);
   };
 
   const handleModalClose = () => {
     setShowModal(false);
-    setPendingMode(null);
   };
 
   const handleModalSubmit = (password) => {
@@ -45,17 +40,13 @@ const ThemeToggle = ({ mode, setMode }) => {
 
   return (
     <div className={styles.themeToggle}>
-      <select
-        value={mode}
-        onChange={handleModeChange}
-        className={styles.themeSelector}
+      <button
+        className={styles.editButton}
+        onClick={handleEditClick}
+        disabled={mode === 'edit'}
       >
-        {MODE_OPTIONS.map(opt => (
-          <option key={opt.value} value={opt.value} className={styles.themeOption}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+        เข้าสู่โหมดแก้ไข
+      </button>
       <ModePasswordModal open={showModal} onClose={handleModalClose} onSubmit={handleModalSubmit} />
     </div>
   );

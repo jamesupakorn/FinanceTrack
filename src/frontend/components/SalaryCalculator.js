@@ -140,6 +140,23 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
         } catch (e) {
           // ไม่ต้องแจ้ง error ให้ user
         }
+        // อัพเดต monthly_income.json ด้วยเงินได้สุทธิ
+        try {
+          await fetch('/api/monthly_income', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              month: selectedMonth,
+              values: {
+                salary: calculatedResults.เงินได้สุทธิ,
+                income2: 0,
+                other: 0
+              }
+            })
+          });
+        } catch (e) {
+          // ไม่ต้องแจ้ง error ให้ user
+        }
         // เรียก callback เพื่อให้ parent component อัพเดต
         if (onSalaryUpdate) {
           onSalaryUpdate();
