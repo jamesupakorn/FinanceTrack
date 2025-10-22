@@ -4,6 +4,7 @@ import { ENCODED_EDIT_PASSWORD } from '../config/password.enc';
 import { useState } from 'react';
 
 import styles from '../styles/ThemeToggle.module.css';
+import homeStyles from '../styles/Home.module.css';
 import ModePasswordModal from './ModePasswordModal';
 
 function decodePassword(encoded) {
@@ -41,9 +42,10 @@ const ThemeToggle = ({ mode, setMode = () => {} }) => {
   return (
     <div className={styles.themeToggle}>
       <button
-        className={styles.editButton}
+        className={homeStyles.normalModeButton}
         onClick={handleEditClick}
         disabled={mode === 'edit'}
+        type="button"
       >
         เข้าสู่โหมดแก้ไข
       </button>
