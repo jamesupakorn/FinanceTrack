@@ -197,26 +197,26 @@
   },
   "2025-10": {
     "income": {
-      "salary": 38000,
+      "salary": 40560,
       "overtime_1x": 0,
       "overtime_1_5x": 0,
       "overtime_2x": 0,
       "overtime_3x": 0,
       "overtime_other": 0,
       "bonus": 0,
-      "other_income": 0
+      "other_income": 1000
     },
     "deduct": {
-      "provident_fund": 0,
-      "social_security": 0,
-      "tax": 0
+      "provident_fund": 2028,
+      "social_security": 750,
+      "tax": 697
     },
     "note": "",
-    "saved_at": "2025-10-22T09:32:40.094Z",
+    "saved_at": "2025-09-25T08:56:46.386Z",
     "summary": {
-      "total_income": 38000,
-      "total_deduct": 0,
-      "net_income": 38000
+      "total_income": 41560,
+      "total_deduct": 3475,
+      "net_income": 38085
     }
   }
 }
