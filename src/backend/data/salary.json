@@ -16,7 +16,6 @@
       "tax": 0
     }
   },
-  
   "2024-12": {
     "income": {
       "salary": 38500,
@@ -198,7 +197,7 @@
   },
   "2025-10": {
     "income": {
-      "salary": 0,
+      "salary": 41000,
       "overtime_1x": 0,
       "overtime_1_5x": 0,
       "overtime_2x": 0,
@@ -212,12 +211,12 @@
       "social_security": 0,
       "tax": 0
     },
+    "note": "",
+    "saved_at": "2025-10-20T17:05:17.623Z",
     "summary": {
-      "total_income": 0,
+      "total_income": 41000,
       "total_deduct": 0,
-      "net_income": 0
-    },
-    "saved_at": "2025-09-26T05:40:24.043Z",
-    "note": ""
+      "net_income": 41000
+    }
   }
 }

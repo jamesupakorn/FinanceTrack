@@ -122,7 +122,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
         <div className={styles.monthSelectionRow}>
           <label className={styles.monthLabel}>เดือนปัจจุบัน: </label>
           <select 
-            value={selectedMonth} 
+            value={selectedMonth ?? ''} 
             onChange={(e) => onMonthSelected(e.target.value)}
             className={styles.monthSelect}
           >

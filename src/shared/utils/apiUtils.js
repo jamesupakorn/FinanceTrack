@@ -1,3 +1,4 @@
+// ...existing code...
 // Utility functions สำหรับเรียก API
 
 // URL constants
@@ -109,6 +110,19 @@ export const expenseAPI = {
 
 // API สำหรับเงินออม
 export const savingsAPI = {
+  // ดึงข้อมูลเงินออมทั้งหมด
+  getAll: async () => {
+    try {
+      const response = await fetch(API_URLS.SAVINGS);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching all savings data:', error);
+      throw error;
+    }
+  },
   // ดึงข้อมูลเงินออมตามเดือน
   getByMonth: async (month) => {
     try {
@@ -122,7 +136,6 @@ export const savingsAPI = {
       throw error;
     }
   },
-
   // บันทึกยอดออมสะสม
   saveAccumulated: async (month, accumulated_savings) => {
     try {
@@ -140,7 +153,6 @@ export const savingsAPI = {
       throw error;
     }
   },
-
   // บันทึกรายการเงินออม
   saveList: async (month, savings_list) => {
     try {
