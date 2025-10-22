@@ -1,3 +1,23 @@
+/* ปุ่มกลับโหมดปกติให้เหมือนปุ่มหลักของแอป */
+.normalModeButton {
+  font-family: inherit;
+  font-size: 1.1rem;
+  font-weight: 600;
+  padding: 10px 24px;
+  border-radius: 10px;
+  border: none;
+  background: var(--bg-surface, #fff);
+  color: var(--color-primary, #0969da);
+  box-shadow: 0 2px 8px var(--shadow-sm, rgba(27,31,35,0.04));
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+  outline: none;
+}
+.normalModeButton:hover, .normalModeButton:focus {
+  background: var(--gradient-primary, #218bff);
+  color: #fff;
+  box-shadow: 0 4px 16px var(--shadow-md, rgba(27,31,35,0.08));
+}
 /* Home Page Styles */
 
 .homeContainer {

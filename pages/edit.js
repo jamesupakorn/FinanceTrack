@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/router';
 import IncomeTable from '../src/frontend/components/IncomeTable';
 import ExpenseTable from '../src/frontend/components/ExpenseTable';
 import SavingsTable from '../src/frontend/components/SavingsTable';
@@ -19,6 +20,40 @@ function getCurrentMonth() {
 }
 
 export default function EditPage() {
+  const router = useRouter();
+  // Session timeout: 30 minutes (1800 seconds)
+  const SESSION_TIMEOUT = 30 * 60 * 1000;
+  const SESSION_KEY = 'edit_last_activity';
+
+  // Update last activity timestamp
+  const updateActivity = () => {
+    localStorage.setItem(SESSION_KEY, Date.now().toString());
+  };
+
+  // Set up event listeners for user activity
+  React.useEffect(() => {
+    updateActivity();
+    const events = ['mousemove', 'keydown', 'click', 'scroll'];
+    events.forEach(event => window.addEventListener(event, updateActivity));
+    return () => {
+      events.forEach(event => window.removeEventListener(event, updateActivity));
+    };
+  }, []);
+
+  // Check for session timeout every 1 minute
+  React.useEffect(() => {
+    const checkTimeout = () => {
+      const last = parseInt(localStorage.getItem(SESSION_KEY), 10);
+      if (!last || Date.now() - last > SESSION_TIMEOUT) {
+        localStorage.removeItem(SESSION_KEY);
+        router.replace('/');
+      }
+    };
+    const interval = setInterval(checkTimeout, 60 * 1000);
+    // Also check immediately on mount
+    checkTimeout();
+    return () => clearInterval(interval);
+  }, [router]);
   const { theme } = useTheme();
   const [mode] = useState('edit');
   const [selectedMonth, setSelectedMonth] = useState(null);
@@ -83,17 +118,24 @@ export default function EditPage() {
   };
 
   return (
-    <div className={styles.homeContainer}>
+  <div className={styles.homeContainer} onClick={updateActivity} onKeyDown={updateActivity} onMouseMove={updateActivity}>
       <div className={styles.mainContent}>
         <header className={styles.pageHeader}>
-          <div className={styles.themeToggleContainer}>
-            <ThemeToggle mode={mode} />
-          </div>
+          {/* ThemeToggle removed in edit mode */}
           <h1 className={styles.pageTitle}>
             <Icons.Wallet size={40} color="white" />
             โหมดแก้ไขข้อมูล
           </h1>
-        </header>
+          <div style={{ position: 'absolute', right: 24, top: 24, zIndex: 10 }}>
+            <button
+              className={styles.normalModeButton}
+              onClick={() => router.push('/')}
+              type="button"
+            >
+              กลับโหมดปกติ
+            </button>
+          </div>
+  </header>
 
       <MonthManager 
         selectedMonth={selectedMonth}
