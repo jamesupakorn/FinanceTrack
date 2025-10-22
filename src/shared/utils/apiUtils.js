@@ -1,3 +1,43 @@
+// API สำหรับการลงทุน
+export const investmentAPI = {
+  // ดึงข้อมูลการลงทุนทั้งหมด
+  getAll: async () => {
+    try {
+      const response = await fetch('/api/investment');
+      if (!response.ok) throw new Error('Failed to fetch investment');
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching investment:', error);
+      return {};
+    }
+  },
+  // ดึงข้อมูลการลงทุนตามเดือน
+  getByMonth: async (month) => {
+    try {
+      const response = await fetch(`/api/investment?month=${month}`);
+      if (!response.ok) throw new Error('Failed to fetch investment by month');
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching investment by month:', error);
+      return [];
+    }
+  },
+  // บันทึกข้อมูลการลงทุน (ทั้งเดือน)
+  saveList: async (month, investments) => {
+    try {
+      const response = await fetch('/api/investment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month, investments })
+      });
+      if (!response.ok) throw new Error('Failed to save investment');
+      return await response.json();
+    } catch (error) {
+      console.error('Error saving investment:', error);
+      return null;
+    }
+  }
+};
 // ...existing code...
 // Utility functions สำหรับเรียก API
 
