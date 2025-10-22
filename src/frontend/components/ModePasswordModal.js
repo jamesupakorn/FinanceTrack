@@ -4,6 +4,7 @@ const ModePasswordModal = ({ open, onClose, onSubmit }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (password.trim() === '') {
@@ -11,8 +12,14 @@ const ModePasswordModal = ({ open, onClose, onSubmit }) => {
       return;
     }
     setError('');
-    onSubmit(password);
-    setPassword('');
+    onSubmit(password, clearPasswordIfFail);
+  };
+
+  // Callback for parent to clear password if fail
+  const clearPasswordIfFail = (success) => {
+    if (success) {
+      setPassword('');
+    }
   };
 
   if (!open) return null;
@@ -29,6 +36,11 @@ const ModePasswordModal = ({ open, onClose, onSubmit }) => {
           onChange={e => setPassword(e.target.value)}
           placeholder="รหัสผ่าน"
           style={{ width: '100%', padding: 12, fontSize: 16, borderRadius: 8, border: '1px solid #ccc', marginBottom: 12 }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              handleSubmit(e);
+            }
+          }}
         />
         {error && <div style={{ color: 'red', marginBottom: 8 }}>{error}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
