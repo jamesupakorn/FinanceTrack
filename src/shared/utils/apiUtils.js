@@ -248,12 +248,15 @@ export const taxAPI = {
       // Support both new (object) and old (number) formats
       let requestBody;
       if (typeof data === 'object' && data !== null) {
-        // If object, send as accumulated_tax and monthly_tax
+        // If object, send as accumulated_tax, monthly_tax, and monthly_income if present
         requestBody = {
           year,
           accumulated_tax: data.accumulated_tax,
           monthly_tax: data.monthly_tax
         };
+        if (data.monthly_income) {
+          requestBody.monthly_income = data.monthly_income;
+        }
       } else {
         // If number, send as accumulated_tax only
         requestBody = { year, accumulated_tax: data };

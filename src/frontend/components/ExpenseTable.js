@@ -130,7 +130,7 @@ export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
                     : (expenseData.months[selectedMonth]?.[item]?.['paid'] !== undefined && expenseData.months[selectedMonth]?.[item]?.['paid'] !== null)
                       ? expenseData.months[selectedMonth][item]['paid']
                       : false;
-                  const diff = estimate - actual;
+                  const diff = actual - estimate;
                   return (
                     <tr key={i} className={styles.tableRow}>
                       <td className={styles.tableCell}>{expenseKeyThaiMap[item] ?? item}</td>
@@ -194,9 +194,9 @@ export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
                     return value === 0 ? '0' : maskNumberFormat(value);
                   })()}</td>
                   <td className={`${styles.totalCell} ${styles.center}`}></td>
-                  <td className={`${styles.totalCell} ${styles.right} ${(calculateTotal('estimate') - calculateTotal('actual')) >= 0 ? styles.totalDiffPositive : styles.totalDiffNegative}`}>
-                    {mode === 'edit' ? formatCurrency(calculateTotal('estimate') - calculateTotal('actual')) : (() => {
-                      const value = parseToNumber(calculateTotal('estimate') - calculateTotal('actual'));
+                  <td className={`${styles.totalCell} ${styles.right} ${(calculateTotal('actual') - calculateTotal('estimate')) >= 0 ? styles.totalDiffPositive : styles.totalDiffNegative}`}>
+                    {mode === 'edit' ? formatCurrency(calculateTotal('actual') - calculateTotal('estimate')) : (() => {
+                      const value = parseToNumber(calculateTotal('actual') - calculateTotal('estimate'));
                       return value === 0 ? '0' : maskNumberFormat(value);
                     })()}
                   </td>
@@ -205,7 +205,7 @@ export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
             </table>
           </div>
           {/* ตารางสรุปค่าใช้จ่ายแต่ละบัญชี */}
-          <BankAccountTable accountSummary={getAccountSummary(editExpense)} />
+          <BankAccountTable accountSummary={getAccountSummary(editExpense)} mode={mode} />
           {mode === 'edit' && (
             <div className={styles.saveButtonContainer}>
               <button

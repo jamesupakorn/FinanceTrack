@@ -1,13 +1,20 @@
 import { useState, useEffect } from 'react';
 import { formatCurrency, handleNumberInput, handleNumberBlur, parseToNumber, maskNumberFormat } from '../../shared/utils/numberUtils';
-import { taxAPI } from '../../shared/utils/apiUtils';
+import { taxAPI, incomeAPI } from '../../shared/utils/apiUtils';
 import styles from '../styles/TaxTable.module.css';
 
 export default function TaxTable({ selectedMonth, mode = 'view' }) {
-
   // default ปีที่เลือกเป็น AD (คศ)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  // รวมเงินได้ทั้งปี
+  const [totalYearlyIncome, setTotalYearlyIncome] = useState('0.00');
   const [accumulatedTax, setAccumulatedTax] = useState('0.00');
+  // รายรับแต่ละเดือนของปีที่เลือก
+  const [monthlyIncome, setMonthlyIncome] = useState({
+    '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
+    '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
+    '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
+  });
   const [allYearData, setAllYearData] = useState({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [newYear, setNewYear] = useState('');
@@ -16,6 +23,55 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
     '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
     '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
   });
+
+  // โหลดรายรับทั้งปีเมื่อปีที่เลือกเปลี่ยน
+  useEffect(() => {
+    const fetchIncome = async () => {
+      try {
+        const incomeData = await incomeAPI.getAll();
+        // incomeData.months: { '2025-01': {...}, ... }
+        if (incomeData && incomeData.months) {
+          const year = selectedYear;
+          let sum = 0;
+          const monthly = {
+            '01': 0, '02': 0, '03': 0, '04': 0, '05': 0, '06': 0,
+            '07': 0, '08': 0, '09': 0, '10': 0, '11': 0, '12': 0
+          };
+          Object.entries(incomeData.months).forEach(([monthKey, values]) => {
+            if (monthKey.startsWith(year + '-')) {
+              // monthKey: '2025-01' => '01'
+              const m = monthKey.split('-')[1];
+              const monthSum = Object.values(values).reduce((acc, v) => acc + parseToNumber(v), 0);
+              sum += monthSum;
+              if (monthly[m] !== undefined) monthly[m] += monthSum;
+            }
+          });
+          setTotalYearlyIncome(formatCurrency(sum));
+          // format each month
+          const formatted = {};
+          Object.entries(monthly).forEach(([k, v]) => {
+            formatted[k] = formatCurrency(v);
+          });
+          setMonthlyIncome(formatted);
+        } else {
+          setTotalYearlyIncome('0.00');
+          setMonthlyIncome({
+            '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
+            '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
+            '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
+          });
+        }
+      } catch (e) {
+        setTotalYearlyIncome('0.00');
+        setMonthlyIncome({
+          '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
+          '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
+          '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
+        });
+      }
+    };
+    fetchIncome();
+  }, [selectedYear]);
 
   // Mapping English tax keys to Thai labels
   const taxKeyThaiMapping = {
@@ -30,8 +86,8 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
   useEffect(() => {
   // selectedYear is always AD (คศ)
   if (allYearData[selectedYear]) {
+    // Monthly Tax
     if (allYearData[selectedYear].monthly_tax) {
-      // Always normalize month key to 2 digits and support both '2' and '02' from backend
       const rawMonthlyTax = {};
       for (let i = 1; i <= 12; i++) {
         const key = i.toString().padStart(2, '0');
@@ -47,9 +103,28 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
       });
     }
     setAccumulatedTax(formatCurrency(allYearData[selectedYear].accumulated_tax || 0));
+
+    // Monthly Income: always merge backend data into all 12 months
+    const defaultIncome = {
+      '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
+      '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
+      '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
+    };
+    let mergedIncome = { ...defaultIncome };
+    if (allYearData[selectedYear].monthly_income) {
+      Object.entries(allYearData[selectedYear].monthly_income).forEach(([m, v]) => {
+        if (mergedIncome[m] !== undefined) mergedIncome[m] = v;
+      });
+    }
+    setMonthlyIncome(mergedIncome);
   } else {
     setAccumulatedTax('0.00');
     setMonthlyTax({
+      '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
+      '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
+      '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
+    });
+    setMonthlyIncome({
       '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
       '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
       '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
@@ -70,11 +145,15 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
 
   const handleSave = async () => {
     try {
-      // ส่ง monthly_tax ที่ไม่มี comma ไป backend
+      // ส่ง monthly_tax ที่ไม่มี comma และ monthly_income ไป backend
       const monthlyTaxNoComma = Object.fromEntries(
         Object.entries(monthlyTax).map(([month, value]) => [month, value.toString().replace(/,/g, '')])
       );
-      await taxAPI.saveYearly(selectedYear, { monthly_tax: monthlyTaxNoComma });
+      // ส่ง monthly_income ด้วย (ไม่ต้องแปลง comma เพราะเป็น string ที่ format แล้ว)
+      await taxAPI.saveYearly(selectedYear, {
+        monthly_tax: monthlyTaxNoComma,
+        monthly_income: monthlyIncome
+      });
       await loadAllTaxData();
       alert('บันทึกข้อมูลภาษีเรียบร้อยแล้ว');
     } catch (error) {
@@ -260,6 +339,7 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
           <thead className={styles.tableHeader}>
             <tr>
               <th className={`${styles.tableHeaderCell} ${styles.left}`}>เดือน</th>
+              <th className={`${styles.tableHeaderCell} ${styles.right}`}>รายรับ (บาท)</th>
               <th className={`${styles.tableHeaderCell} ${styles.right}`}>{taxKeyThaiMapping['monthly_tax']} (บาท)</th>
               <th className={`${styles.tableHeaderCell} ${styles.right}`}>{taxKeyThaiMapping['accumulated_tax']} (บาท)</th>
             </tr>
@@ -286,9 +366,25 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
                 : 0;
               let displayAccumulatedTax = maskNumberFormat(parseToNumber(safeAccumulated));
               if (!displayAccumulatedTax) displayAccumulatedTax = '0';
+              // รายรับแต่ละเดือน
+              const income = monthlyIncome[month] || '0.00';
               return (
                 <tr key={month} className={styles.tableRow}>
                   <td className={`${styles.tableCell} ${styles.left}`}>{name}</td>
+                  <td className={`${styles.tableCell} ${styles.right}`}>
+                    {mode === 'edit' ? (
+                      <input
+                        type="text"
+                        value={income}
+                        onChange={e => handleNumberInput(e.target.value, setMonthlyIncome, month)}
+                        onBlur={e => handleNumberBlur(e.target.value, setMonthlyIncome, month)}
+                        placeholder="รายรับ"
+                        className={styles.monthInput}
+                      />
+                    ) : (
+                      <span>{income}</span>
+                    )}
+                  </td>
                   <td className={`${styles.tableCell} ${styles.right}`}>
                     {mode === 'edit' ? (
                       <input
@@ -311,8 +407,27 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
           <tfoot>
             <tr className={styles.totalRow}>
               <td className={styles.totalCell}>รวมทั้งปี</td>
-              <td className={`${styles.totalCell} ${styles.right}`}>{mode === 'edit' ? formatCurrency(getTotalYearlyTax()) : maskNumberFormat(parseToNumber(getTotalYearlyTax()))}</td>
-              <td className={`${styles.totalCell} ${styles.right}`}>{mode === 'edit' ? formatCurrency(getTotalYearlyTax()) : maskNumberFormat(parseToNumber(getTotalYearlyTax()))}</td>
+              <td className={`${styles.totalCell} ${styles.right}`}>
+                {(() => {
+                  // Sum all monthlyIncome values
+                  const sum = Object.values(monthlyIncome).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
+                  return formatCurrency(sum);
+                })()}
+              </td>
+              <td className={`${styles.totalCell} ${styles.right}`}>
+                {(() => {
+                  // Sum all monthlyTax values
+                  const sum = Object.values(monthlyTax).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
+                  return formatCurrency(sum);
+                })()}
+              </td>
+              <td className={`${styles.totalCell} ${styles.right}`}>
+                {(() => {
+                  // Sum all monthlyTax values for accumulated tax (should match last accumulated cell)
+                  const sum = Object.values(monthlyTax).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
+                  return formatCurrency(sum);
+                })()}
+              </td>
             </tr>
           </tfoot>
         </table>

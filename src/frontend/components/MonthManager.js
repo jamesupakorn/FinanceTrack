@@ -41,63 +41,69 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
     return () => { isMounted = false; };
   }, [showAddForm, onDataRefresh]);
 
-  const handleAddNewMonth = () => {
+    const handleAddNewMonth = async () => {
     const nextMonth = getNextMonth(selectedMonth);
-    // สร้าง values เริ่มต้นสำหรับทุก item รายจ่าย
-    const defaultExpenseItems = [
-      "house", "water", "internet", "electricity", "mobile",
-      "credit_kbank", "credit_kungsri", "credit_uob", "credit_ttb",
-      "shopee", "netflix", "youtube", "youtube_membership",
-      "motorcycle", "miscellaneous"
-    ];
-    const defaultExpenseValues = {};
-    defaultExpenseItems.forEach(item => {
-      defaultExpenseValues[item] = {
-        actual: 0,
-        paid: false
-      };
-    });
+      // ดึงข้อมูลเดือนล่าสุดของแต่ละหมวด
+      const importApis = await import('../../shared/utils/apiUtils');
+      const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = importApis;
 
-    // สร้าง values เริ่มต้นสำหรับรายรับ
-    const defaultIncomeItems = ["salary", "income2", "other"];
-    const defaultIncomeValues = {};
-    defaultIncomeItems.forEach(item => {
-      defaultIncomeValues[item] = 0;
-    });
+      // หาเดือนล่าสุดที่มีข้อมูลในแต่ละหมวด
+      const [expenseAll, incomeAll, salaryAll, savingsAll, investmentAll] = await Promise.all([
+        expenseAPI.getAll(),
+        incomeAPI.getAll(),
+        salaryAPI.getAll(),
+        savingsAPI.getAll ? savingsAPI.getAll() : Promise.resolve({}),
+        investmentAPI.getAll ? investmentAPI.getAll() : Promise.resolve({})
+      ]);
 
-    // สร้าง values เริ่มต้นสำหรับ salary
-    const defaultSalary = {
-      income: {
-        salary: 0,
-        overtime_1x: 0,
-        overtime_1_5x: 0,
-        overtime_2x: 0,
-        overtime_3x: 0,
-        overtime_other: 0,
-        bonus: 0,
-        other_income: 0
-      },
-      deduct: {
-        provident_fund: 0,
-        social_security: 0,
-        tax: 0
-      },
-      note: ""
-    };
+      // Helper: หาเดือนล่าสุดที่มีข้อมูล (เรียงจากใหม่ไปเก่า)
+      function getLatestMonth(obj) {
+        if (!obj || !obj.months) return null;
+        const months = Object.keys(obj.months).filter(m => /^\d{4}-\d{2}$/.test(m));
+        return months.sort((a, b) => b.localeCompare(a))[0] || null;
+      }
 
-    // เพิ่มข้อมูลเดือนใหม่ลง backend ทั้ง 3 json
-    import('../../shared/utils/apiUtils').then(({ expenseAPI, incomeAPI, salaryAPI }) => {
-      Promise.all([
-        expenseAPI.save(nextMonth, defaultExpenseValues),
-        incomeAPI.save(nextMonth, defaultIncomeValues),
-        salaryAPI.save(nextMonth, defaultSalary)
-      ]).then(() => {
-        onMonthSelected(nextMonth);
-        onDataRefresh();
-        setShowAddForm(false);
-        setNewMonthName('');
-      });
-    });
+      // รายจ่าย
+      let expenseLatestMonth = getLatestMonth(expenseAll);
+      let expenseLatest = (expenseAll.months && expenseAll.months[expenseLatestMonth]) ? JSON.parse(JSON.stringify(expenseAll.months[expenseLatestMonth])) : {};
+
+      // รายรับ
+      let incomeLatestMonth = getLatestMonth(incomeAll);
+      let incomeLatest = (incomeAll.months && incomeAll.months[incomeLatestMonth]) ? JSON.parse(JSON.stringify(incomeAll.months[incomeLatestMonth])) : {};
+
+      // เงินเดือน
+      let salaryLatestMonth = getLatestMonth(salaryAll);
+      let salaryLatest = (salaryAll.months && salaryAll.months[salaryLatestMonth]) ? JSON.parse(JSON.stringify(salaryAll.months[salaryLatestMonth])) : {};
+
+      // เงินออม (optional)
+      let savingsLatest = {};
+      if (savingsAll && savingsAll.savings_list) {
+        const savingsMonths = Object.keys(savingsAll.savings_list).filter(m => /^\d{4}-\d{2}$/.test(m));
+        const latestSavingsMonth = savingsMonths.sort((a, b) => b.localeCompare(a))[0];
+        savingsLatest = latestSavingsMonth ? JSON.parse(JSON.stringify(savingsAll.savings_list[latestSavingsMonth])) : [];
+      }
+
+      // การลงทุน (optional)
+      let investmentLatest = [];
+      if (investmentAll) {
+        const investMonths = Object.keys(investmentAll).filter(m => /^\d{4}-\d{2}$/.test(m));
+        const latestInvestMonth = investMonths.sort((a, b) => b.localeCompare(a))[0];
+        investmentLatest = latestInvestMonth ? JSON.parse(JSON.stringify(investmentAll[latestInvestMonth])) : [];
+      }
+
+      // Save ข้อมูล copy ไปเดือนใหม่
+      await Promise.all([
+        expenseAPI.save(nextMonth, expenseLatest),
+        incomeAPI.save(nextMonth, incomeLatest),
+        salaryAPI.save(nextMonth, salaryLatest.income || {}, salaryLatest.deduct || {}, salaryLatest.note || ''),
+        savingsAPI.saveList ? savingsAPI.saveList(nextMonth, savingsLatest) : Promise.resolve(),
+        investmentAPI.saveList ? investmentAPI.saveList(nextMonth, investmentLatest) : Promise.resolve()
+      ]);
+
+      onMonthSelected(nextMonth);
+      onDataRefresh();
+      setShowAddForm(false);
+      setNewMonthName('');
   };
 
   const handleCustomMonth = () => {
