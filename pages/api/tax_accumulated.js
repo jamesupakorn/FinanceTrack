@@ -8,12 +8,31 @@ export function updateMonthlyIncome(year, month, value) {
 	const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 	if (!data.tax_by_year) data.tax_by_year = {};
 	if (!data.tax_by_year[year]) {
-		data.tax_by_year[year] = { accumulated_tax: 0, monthly_tax: {}, monthly_income: {} };
+		data.tax_by_year[year] = { accumulated_tax: 0, monthly_tax: {}, monthly_income: {}, monthly_provident: {} };
 	}
 	if (!data.tax_by_year[year].monthly_income) {
 		data.tax_by_year[year].monthly_income = {};
 	}
 	data.tax_by_year[year].monthly_income[month] = value.toString();
+	fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
+
+/**
+ * อัพเดตข้อมูลกองทุนสำรองเลี้ยงชีพรายเดือนในปีและเดือนที่ระบุ
+ * @param {string} year - ปี พ.ศ. เช่น "2568"
+ * @param {string} month - เดือน เช่น "09"
+ * @param {string|number} value - ยอดกองทุนใหม่
+ */
+export function updateMonthlyProvident(year, month, value) {
+	const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+	if (!data.tax_by_year) data.tax_by_year = {};
+	if (!data.tax_by_year[year]) {
+		data.tax_by_year[year] = { accumulated_tax: 0, monthly_tax: {}, monthly_income: {}, monthly_provident: {} };
+	}
+	if (!data.tax_by_year[year].monthly_provident) {
+		data.tax_by_year[year].monthly_provident = {};
+	}
+	data.tax_by_year[year].monthly_provident[month] = value.toString();
 	fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 import fs from 'fs';
@@ -57,43 +76,51 @@ export default function handler(req, res) {
 	if (req.method === 'GET') {
 		const { year } = req.query;
 		const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-		if (year) {
-			const yearData = data.tax_by_year?.[year] || { accumulated_tax: 0 };
-			res.status(200).json({ [year]: yearData });
-		} else {
-			res.status(200).json(data);
-		}
+			if (year) {
+				const yearData = data.tax_by_year?.[year] || { accumulated_tax: 0 };
+				// Ensure monthly_provident is always present for frontend
+				if (!yearData.monthly_provident) yearData.monthly_provident = {};
+				res.status(200).json({ [year]: yearData });
+			} else {
+				// Ensure all years have monthly_provident
+				Object.values(data.tax_by_year || {}).forEach(y => { if (!y.monthly_provident) y.monthly_provident = {}; });
+				res.status(200).json(data);
+			}
 		} else if (req.method === 'POST') {
-			const { year, accumulated_tax, monthly_tax, monthly_income } = req.body;
+			const { year, accumulated_tax, monthly_tax, monthly_income, monthly_provident } = req.body;
 			let data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 			if (!data.tax_by_year) {
 				data.tax_by_year = {};
 			}
-			if (year) {
-				if (typeof accumulated_tax === 'object' && accumulated_tax !== null) {
-					data.tax_by_year[year] = accumulated_tax;
-				} else {
-					if (!data.tax_by_year[year]) {
-						data.tax_by_year[year] = {};
-					}
-					if (monthly_tax !== undefined) {
-						if (!data.tax_by_year[year].monthly_tax) {
-							data.tax_by_year[year].monthly_tax = {};
+					if (year) {
+						if (typeof accumulated_tax === 'object' && accumulated_tax !== null) {
+							data.tax_by_year[year] = accumulated_tax;
+						} else {
+							if (!data.tax_by_year[year]) {
+								data.tax_by_year[year] = {};
+							}
+							if (monthly_tax !== undefined) {
+								if (!data.tax_by_year[year].monthly_tax) {
+									data.tax_by_year[year].monthly_tax = {};
+								}
+								Object.assign(data.tax_by_year[year].monthly_tax, monthly_tax);
+								const sum = Object.values(data.tax_by_year[year].monthly_tax)
+									.map(v => parseFloat(v) || 0)
+									.reduce((a, b) => a + b, 0);
+								data.tax_by_year[year].accumulated_tax = sum;
+							} else if (accumulated_tax !== undefined) {
+								data.tax_by_year[year].accumulated_tax = parseFloat(accumulated_tax) || 0;
+							}
+							// เพิ่มการบันทึก monthly_income
+							if (monthly_income !== undefined) {
+								data.tax_by_year[year].monthly_income = { ...monthly_income };
+							}
+							// เพิ่มการบันทึก monthly_provident
+							if (monthly_provident !== undefined) {
+								data.tax_by_year[year].monthly_provident = { ...monthly_provident };
+							}
 						}
-						Object.assign(data.tax_by_year[year].monthly_tax, monthly_tax);
-						const sum = Object.values(data.tax_by_year[year].monthly_tax)
-							.map(v => parseFloat(v) || 0)
-							.reduce((a, b) => a + b, 0);
-						data.tax_by_year[year].accumulated_tax = sum;
-					} else if (accumulated_tax !== undefined) {
-						data.tax_by_year[year].accumulated_tax = parseFloat(accumulated_tax) || 0;
 					}
-					// เพิ่มการบันทึก monthly_income
-					if (monthly_income !== undefined) {
-						data.tax_by_year[year].monthly_income = { ...monthly_income };
-					}
-				}
-			}
 			// data = cleanOldYearData(data); // ปิดชั่วคราวเพื่อทดสอบ
 			fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 			res.status(201).json({ success: true });
