@@ -1,9 +1,122 @@
+
+// ...imports and component definition...
 import { useState, useEffect } from 'react';
 import { formatCurrency, handleNumberInput, handleNumberBlur, parseToNumber, maskNumberFormat } from '../../shared/utils/numberUtils';
 import { taxAPI, incomeAPI } from '../../shared/utils/apiUtils';
 import styles from '../styles/TaxTable.module.css';
 
 export default function TaxTable({ selectedMonth, mode = 'view' }) {
+  // ...existing code...
+  // เพิ่มปีใหม่ (เฉพาะโหมด edit)
+  const handleAddNewYear = (yearAD) => {
+    if (!yearAD || allYearData[yearAD]) return;
+    // สร้างข้อมูลว่างสำหรับปีใหม่
+    const emptyYearData = {
+      monthly_tax: {
+        '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
+        '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
+        '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
+      },
+      monthly_income: {
+        '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
+        '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
+        '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
+      },
+      monthly_provident: {
+        '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
+        '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
+        '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
+      }
+    };
+    setAllYearData(prev => ({ ...prev, [yearAD]: emptyYearData }));
+    setSelectedYear(yearAD);
+    setMonthlyTax(emptyYearData.monthly_tax);
+    setMonthlyIncome(emptyYearData.monthly_income);
+    setMonthlyProvident(emptyYearData.monthly_provident);
+    setShowAddForm(false);
+  };  // ลบปี (เฉพาะโหมด edit)
+  const handleDelete = async (yearAD) => {
+    if (!yearAD || !allYearData[yearAD]) return;
+    // ลบที่ backend ก่อน
+    try {
+      const res = await fetch('/api/tax_accumulated', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year: yearAD })
+      });
+      const result = await res.json();
+      if (!result.success) {
+        alert(result.message || 'ลบข้อมูลไม่สำเร็จ');
+        return;
+      }
+    } catch (e) {
+      alert('เกิดข้อผิดพลาดในการลบข้อมูล');
+      return;
+    }
+    // ลบที่ frontend
+    const updated = { ...allYearData };
+    delete updated[yearAD];
+    setAllYearData(updated);
+    if (selectedYear === yearAD) {
+      const years = Object.keys(updated);
+      if (years.length > 0) {
+        const latest = years.sort((a, b) => parseInt(b) - parseInt(a))[0];
+        setSelectedYear(latest);
+      } else {
+        setSelectedYear('');
+        setMonthlyTax({});
+        setMonthlyIncome({});
+        setMonthlyProvident({});
+      }
+    }
+  };
+  // โหลดข้อมูลปีทั้งหมดสำหรับ dropdown ปี (ต้องอยู่ในฟังก์ชันคอมโพเนนต์เท่านั้น)
+  useEffect(() => {
+    const fetchAllYears = async () => {
+      try {
+        const res = await fetch('/api/tax_accumulated');
+        const data = await res.json();
+        setAllYearData(data.tax_by_year || {});
+      } catch (error) {
+        setAllYearData({});
+      }
+    };
+    fetchAllYears();
+  }, []);
+  // Save handler: POST all tax data including provident to backend
+  const handleSave = async () => {
+    try {
+      await fetch('/api/tax_accumulated', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          year: selectedYear,
+          monthly_tax: monthlyTax,
+          monthly_income: monthlyIncome,
+          monthly_provident: monthlyProvident
+        })
+      });
+      alert('บันทึกข้อมูลภาษีสำเร็จ');
+    } catch (e) {
+      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูลภาษี');
+    }
+  };
+  // State for provident fund and its tax
+  const [monthlyProvident, setMonthlyProvident] = useState({
+    '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
+    '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
+    '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
+  });
+  const [monthlyProvidentTax, setMonthlyProvidentTax] = useState({
+    '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
+    '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
+    '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
+  });
+  // Mapping English tax keys to Thai labels
+  const taxKeyThaiMapping = {
+    monthly_tax: 'ภาษีรายเดือน',
+    accumulated_tax: 'ภาษีสะสม'
+  };
   // default ปีที่เลือกเป็น AD (คศ)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   // รวมเงินได้ทั้งปี
@@ -24,222 +137,35 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
     '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
   });
 
-  // โหลดรายรับทั้งปีเมื่อปีที่เลือกเปลี่ยน
+  // โหลดข้อมูลภาษีและ provident เมื่อปีที่เลือกเปลี่ยน
   useEffect(() => {
-    const fetchIncome = async () => {
+    const fetchTaxData = async () => {
       try {
-        const incomeData = await incomeAPI.getAll();
-        // incomeData.months: { '2025-01': {...}, ... }
-        if (incomeData && incomeData.months) {
-          const year = selectedYear;
-          let sum = 0;
-          const monthly = {
-            '01': 0, '02': 0, '03': 0, '04': 0, '05': 0, '06': 0,
-            '07': 0, '08': 0, '09': 0, '10': 0, '11': 0, '12': 0
-          };
-          Object.entries(incomeData.months).forEach(([monthKey, values]) => {
-            if (monthKey.startsWith(year + '-')) {
-              // monthKey: '2025-01' => '01'
-              const m = monthKey.split('-')[1];
-              const monthSum = Object.values(values).reduce((acc, v) => acc + parseToNumber(v), 0);
-              sum += monthSum;
-              if (monthly[m] !== undefined) monthly[m] += monthSum;
-            }
-          });
-          setTotalYearlyIncome(formatCurrency(sum));
-          // format each month
-          const formatted = {};
-          Object.entries(monthly).forEach(([k, v]) => {
-            formatted[k] = formatCurrency(v);
-          });
-          setMonthlyIncome(formatted);
-        } else {
-          setTotalYearlyIncome('0.00');
-          setMonthlyIncome({
-            '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
-            '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
-            '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
-          });
-        }
-      } catch (e) {
-        setTotalYearlyIncome('0.00');
-        setMonthlyIncome({
+        const res = await fetch(`/api/tax_accumulated?year=${selectedYear}`);
+        const data = await res.json();
+        const yearData = data[selectedYear];
+        const default12 = {
           '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
           '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
           '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
-        });
-      }
-    };
-    fetchIncome();
-  }, [selectedYear]);
-
-  // Mapping English tax keys to Thai labels
-  const taxKeyThaiMapping = {
-  monthly_tax: 'ภาษีรายเดือน',
-  accumulated_tax: 'ภาษีสะสม'
-  };
-
-  useEffect(() => {
-    loadAllTaxData();
-  }, []);
-
-  useEffect(() => {
-  // selectedYear is always AD (คศ)
-  if (allYearData[selectedYear]) {
-    // Monthly Tax
-    if (allYearData[selectedYear].monthly_tax) {
-      const rawMonthlyTax = {};
-      for (let i = 1; i <= 12; i++) {
-        const key = i.toString().padStart(2, '0');
-        const value = allYearData[selectedYear].monthly_tax[key] ?? allYearData[selectedYear].monthly_tax[i.toString()] ?? '0.00';
-        rawMonthlyTax[key] = value;
-      }
-      setMonthlyTax(rawMonthlyTax);
-    } else {
-      setMonthlyTax({
-        '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
-        '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
-        '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
-      });
-    }
-    setAccumulatedTax(formatCurrency(allYearData[selectedYear].accumulated_tax || 0));
-
-    // Monthly Income: always merge backend data into all 12 months
-    const defaultIncome = {
-      '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
-      '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
-      '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
-    };
-    let mergedIncome = { ...defaultIncome };
-    if (allYearData[selectedYear].monthly_income) {
-      Object.entries(allYearData[selectedYear].monthly_income).forEach(([m, v]) => {
-        if (mergedIncome[m] !== undefined) mergedIncome[m] = v;
-      });
-    }
-    setMonthlyIncome(mergedIncome);
-  } else {
-    setAccumulatedTax('0.00');
-    setMonthlyTax({
-      '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
-      '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
-      '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
-    });
-    setMonthlyIncome({
-      '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
-      '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
-      '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
-    });
-  }
-}, [selectedYear, allYearData]);
-
-  const loadAllTaxData = async () => {
-    try {
-      const data = await taxAPI.getAll();
-  // Use English keys from backend
-  setAllYearData(data.tax_by_year || {});
-    } catch (error) {
-      console.error('Error loading tax data:', error);
-      setAllYearData({});
-    }
-  };
-
-  const handleSave = async () => {
-    try {
-      // ส่ง monthly_tax ที่ไม่มี comma และ monthly_income ไป backend
-      const monthlyTaxNoComma = Object.fromEntries(
-        Object.entries(monthlyTax).map(([month, value]) => [month, value.toString().replace(/,/g, '')])
-      );
-      // ส่ง monthly_income ด้วย (ไม่ต้องแปลง comma เพราะเป็น string ที่ format แล้ว)
-      await taxAPI.saveYearly(selectedYear, {
-        monthly_tax: monthlyTaxNoComma,
-        monthly_income: monthlyIncome
-      });
-      await loadAllTaxData();
-      alert('บันทึกข้อมูลภาษีเรียบร้อยแล้ว');
-    } catch (error) {
-      console.error('Error saving tax data:', error);
-      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
-    }
-  };
-
-  const handleDelete = async (year) => {
-    const confirmDelete = confirm(`คุณแน่ใจหรือไม่ที่จะลบข้อมูลภาษีปี ${year}?`);
-    
-    if (!confirmDelete) return;
-
-    try {
-      const response = await taxAPI.deleteYear(year);
-      
-      if (!response.success) {
-        alert(`เกิดข้อผิดพลาด: ${response.message}`);
-        return;
-      }
-      
-      await loadAllTaxData();
-      
-      const remainingYears = Object.keys(allYearData).filter(y => y !== year);
-      
-      if (remainingYears.length > 0) {
-        setSelectedYear(remainingYears[0]);
-      } else {
-        const currentYear = (new Date().getFullYear() + 543).toString();
-        const newYearData = {
-          ภาษีสะสม: 0,
-          ภาษีรายเดือน: {
-            '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
-            '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
-            '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
-          }
         };
-        await taxAPI.saveYearly(currentYear, newYearData);
-        setSelectedYear(currentYear);
-        await loadAllTaxData();
-      }
-      
-      alert(`ลบข้อมูลภาษีปี ${year} เรียบร้อยแล้ว`);
-    } catch (error) {
-      console.error('Error deleting tax data:', error);
-      alert('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์ กรุณาลองใหม่อีกครั้ง');
-    }
-  };
-
-  const handleAddNewYear = async () => {
-    if (!newYear.trim()) {
-      alert('กรุณากรอกปี');
-      return;
-    }
-
-    const year = parseInt(newYear);
-    if (isNaN(year) || year < 2563 || year > 2573) {
-      alert('กรุณากรอกปี พ.ศ. ระหว่าง 2563-2573');
-      return;
-    }
-
-    if (allYearData[year.toString()]) {
-      alert('ปีนี้มีข้อมูลอยู่แล้ว');
-      return;
-    }
-
-    try {
-      const newYearData = {
-        accumulated_tax: 0,
-        monthly_tax: {
+        setMonthlyTax((yearData && yearData.monthly_tax) ? yearData.monthly_tax : { ...default12 });
+        setMonthlyIncome((yearData && yearData.monthly_income) ? yearData.monthly_income : { ...default12 });
+        setMonthlyProvident((yearData && yearData.monthly_provident) ? yearData.monthly_provident : { ...default12 });
+      } catch (error) {
+        const default12 = {
           '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
           '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
           '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
-        }
-      };
-      await taxAPI.saveYearly(year.toString(), newYearData);
-      await loadAllTaxData();
-      setSelectedYear(year.toString());
-      setShowAddForm(false);
-      setNewYear('');
-      alert('เพิ่มปีใหม่เรียบร้อยแล้ว');
-    } catch (error) {
-      console.error('Error adding new year:', error);
-      alert('เกิดข้อผิดพลาดในการเพิ่มปีใหม่');
-    }
-  };
+        };
+        setMonthlyTax({ ...default12 });
+        setMonthlyIncome({ ...default12 });
+        setMonthlyProvident({ ...default12 });
+        console.error('Error fetching tax data:', error);
+      }
+    };
+    fetchTaxData();
+  }, [selectedYear]);
 
   const getSortedYears = () => {
     return Object.keys(allYearData).sort((a, b) => parseInt(b) - parseInt(a));
@@ -269,6 +195,17 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
   return Object.values(monthlyTax).reduce((sum, value) => sum + parseToNumber(value), 0);
   };
 
+  // ฟังก์ชันคำนวณรายได้สะสมถึงเดือนที่กำหนด
+  const calculateAccumulatedIncome = (upToMonth) => {
+    const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+    const monthIndex = months.indexOf(upToMonth);
+    let accumulated = 0;
+    for (let i = 0; i <= monthIndex; i++) {
+      accumulated += parseToNumber(monthlyIncome[months[i]]);
+    }
+    return accumulated;
+  };
+
   return (
     <div className={styles.taxTable}>
       <h2 className={styles.headerTitle}>ภาษีสะสม</h2>
@@ -277,35 +214,40 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
         <select 
           value={selectedYear}
           onChange={(e) => {
-            // Always store AD (คศ) in selectedYear
             setSelectedYear(e.target.value);
           }}
           className={styles.yearSelect}
         >
           {getSortedYears().map(yearAD => {
-            // Display BE (พศ) only
             const yearBE = (parseInt(yearAD) + 543).toString();
             return <option key={yearAD} value={yearAD}>พ.ศ. {yearBE}</option>;
           })}
         </select>
         {mode === 'edit' && (
-          <button 
-            onClick={() => {
-              setShowAddForm(!showAddForm);
-              if (!showAddForm) {
-                // default ปีใหม่เป็น BE (พศ) for input, but convert to AD (คศ) for logic
-                const currentYearAD = new Date().getFullYear();
-                setNewYear((currentYearAD + 543).toString());
-              }
-            }}
-            className={styles.addYearBtn}
-          >
-            + เพิ่มปีใหม่
-          </button>
+          <>
+            <button 
+              onClick={() => {
+                setShowAddForm(!showAddForm);
+                if (!showAddForm) {
+                  const currentYearAD = new Date().getFullYear();
+                  setNewYear((currentYearAD + 543).toString());
+                }
+              }}
+              className={styles.addYearBtn}
+            >
+              + เพิ่มปีใหม่
+            </button>
+            <button 
+              onClick={() => handleDelete(selectedYear)}
+              className={styles.deleteBtn}
+            >
+              ลบข้อมูลปี พ.ศ. {parseInt(selectedYear) + 543}
+            </button>
+          </>
         )}
       </div>
 
-  {showAddForm && mode === 'edit' && (
+      {showAddForm && mode === 'edit' && (
         <div className={styles.addForm}>
           <h4 className={styles.addFormTitle}>เพิ่มปีใหม่</h4>
           <div className={styles.addFormControls}>
@@ -320,7 +262,6 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
               className={styles.yearInput}
             />
             <button onClick={() => {
-              // Convert BE (พศ) to AD (คศ) before saving
               const yearAD = (parseInt(newYear) - 543).toString();
               setNewYear('');
               handleAddNewYear(yearAD);
@@ -334,12 +275,14 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
       )}
 
       <div className={styles.tableSection}>
-  <h3 className={styles.tableTitle}>ภาษีสะสมรายเดือน พ.ศ. {parseInt(selectedYear) + 543}</h3>
+        <h3 className={styles.tableTitle}>ภาษีสะสมรายเดือน พ.ศ. {parseInt(selectedYear) + 543}</h3>
         <table className={styles.monthlyTable}>
           <thead className={styles.tableHeader}>
             <tr>
               <th className={`${styles.tableHeaderCell} ${styles.left}`}>เดือน</th>
               <th className={`${styles.tableHeaderCell} ${styles.right}`}>รายรับ (บาท)</th>
+              <th className={`${styles.tableHeaderCell} ${styles.right}`}>รายได้สะสม (บาท)</th>
+              <th className={`${styles.tableHeaderCell} ${styles.right}`}>กองทุนสำรองเลี้ยงชีพ (บาท)</th>
               <th className={`${styles.tableHeaderCell} ${styles.right}`}>{taxKeyThaiMapping['monthly_tax']} (บาท)</th>
               <th className={`${styles.tableHeaderCell} ${styles.right}`}>{taxKeyThaiMapping['accumulated_tax']} (บาท)</th>
             </tr>
@@ -351,6 +294,11 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
               { month: '10', name: 'ตุลาคม' }, { month: '11', name: 'พฤศจิกายน' }, { month: '12', name: 'ธันวาคม' }
             ].map(({ month, name }) => {
               const accumulatedTax = calculateAccumulatedTax(month);
+              const accumulatedIncome = calculateAccumulatedIncome(month);
+              const income = monthlyIncome[month] || '0.00';
+              let displayAccumulatedIncome = maskNumberFormat(parseToNumber(accumulatedIncome));
+              if (!displayAccumulatedIncome) displayAccumulatedIncome = '0';
+              const provident = monthlyProvident?.[month] || '0.00';
               const safeMonthly = monthlyTax[month] !== undefined && monthlyTax[month] !== null && monthlyTax[month] !== ''
                 ? parseToNumber(monthlyTax[month])
                 : 0;
@@ -366,8 +314,6 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
                 : 0;
               let displayAccumulatedTax = maskNumberFormat(parseToNumber(safeAccumulated));
               if (!displayAccumulatedTax) displayAccumulatedTax = '0';
-              // รายรับแต่ละเดือน
-              const income = monthlyIncome[month] || '0.00';
               return (
                 <tr key={month} className={styles.tableRow}>
                   <td className={`${styles.tableCell} ${styles.left}`}>{name}</td>
@@ -382,7 +328,24 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
                         className={styles.monthInput}
                       />
                     ) : (
-                      <span>{income}</span>
+                      <span>{maskNumberFormat(parseToNumber(income))}</span>
+                    )}
+                  </td>
+                  <td className={`${styles.tableCell} ${styles.right}`}>
+                    <span>{mode === 'edit' ? formatCurrency(accumulatedIncome) : displayAccumulatedIncome}</span>
+                  </td>
+                  <td className={`${styles.tableCell} ${styles.right}`}>
+                    {mode === 'edit' ? (
+                      <input
+                        type="text"
+                        value={provident}
+                        onChange={e => handleNumberInput(e.target.value, setMonthlyProvident, month)}
+                        onBlur={e => handleNumberBlur(e.target.value, setMonthlyProvident, month)}
+                        placeholder="กองทุนสำรองเลี้ยงชีพ"
+                        className={styles.monthInput}
+                      />
+                    ) : (
+                      <span>{maskNumberFormat(parseToNumber(provident))}</span>
                     )}
                   </td>
                   <td className={`${styles.tableCell} ${styles.right}`}>
@@ -409,21 +372,31 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
               <td className={styles.totalCell}>รวมทั้งปี</td>
               <td className={`${styles.totalCell} ${styles.right}`}>
                 {(() => {
-                  // Sum all monthlyIncome values
                   const sum = Object.values(monthlyIncome).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
                   return formatCurrency(sum);
                 })()}
               </td>
               <td className={`${styles.totalCell} ${styles.right}`}>
                 {(() => {
-                  // Sum all monthlyTax values
+                  // รายได้สะสมทั้งปี = รายรับรวมทั้งปี
+                  const sum = Object.values(monthlyIncome).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
+                  return formatCurrency(sum);
+                })()}
+              </td>
+              <td className={`${styles.totalCell} ${styles.right}`}>
+                {(() => {
+                  const sum = Object.values(monthlyProvident || {}).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
+                  return formatCurrency(sum);
+                })()}
+              </td>
+              <td className={`${styles.totalCell} ${styles.right}`}>
+                {(() => {
                   const sum = Object.values(monthlyTax).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
                   return formatCurrency(sum);
                 })()}
               </td>
               <td className={`${styles.totalCell} ${styles.right}`}>
                 {(() => {
-                  // Sum all monthlyTax values for accumulated tax (should match last accumulated cell)
                   const sum = Object.values(monthlyTax).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
                   return formatCurrency(sum);
                 })()}
@@ -441,12 +414,6 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
             className={styles.saveBtn}
           >
             บันทึกภาษี
-          </button>
-          <button 
-            onClick={() => handleDelete(selectedYear)} 
-            className={styles.deleteBtn}
-          >
-            ลบข้อมูลปี พ.ศ. {parseInt(selectedYear) + 543}
           </button>
         </div>
       )}
