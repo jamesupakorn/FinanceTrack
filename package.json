@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "mongodb": "^6.20.0",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest"

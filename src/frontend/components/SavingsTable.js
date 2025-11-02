@@ -15,7 +15,20 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
       savingsAPI.getByMonth(selectedMonth)
         .then(data => {
           setSavingsData(data);
-          setรายการเงินออม(data.รายการเงินออม || []);
+          // Map API fields to Thai fields for frontend compatibility
+          if (Array.isArray(data.savings_list)) {
+            setรายการเงินออม(
+              data.savings_list.map(item => ({
+                ...item,
+                รายการ: item.savings_type ?? item.รายการ ?? '',
+                จำนวนเงิน: item.savings_amount ?? item.amount ?? item.จำนวนเงิน ?? 0
+              }))
+            );
+          } else if (Array.isArray(data.รายการเงินออม)) {
+            setรายการเงินออม(data.รายการเงินออม);
+          } else {
+            setรายการเงินออม([]);
+          }
         })
         .catch(error => console.error('Error loading savings data:', error));
     }
@@ -111,7 +124,7 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
                       <input
                         type="text"
                         value={item.savings_type || ''}
-                        onChange={(e) => handleEditSavingsItem(index, 'savings_type', e.target.value)}
+                        onChange={(e) => handleSavingsItemChange(index, 'savings_type', e.target.value)}
                         placeholder={savingsKeyThaiMapping['savings_type']}
                         className={styles.savingsInput}
                       />

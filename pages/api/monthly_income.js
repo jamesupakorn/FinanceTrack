@@ -1,48 +1,71 @@
-// Re-export API จาก backend structure
-import fs from 'fs';
-import path from 'path';
+import dbPromise from '../../lib/mongodb';
 
-const filePath = path.join(process.cwd(), 'src', 'backend', 'data', 'monthly_income.json');
+export default async function handler(req, res) {
+  const db = await dbPromise;
+  const collection = db.collection('monthly_income');
 
-const cleanOldMonthData = (data, newMonth) => {
-	const months = Object.keys(data.months || {});
-	if (!months.includes(newMonth)) {
-		months.push(newMonth);
-	}
-	months.sort((a, b) => b.localeCompare(a));
-	const recentMonths = months.slice(0, 15);
-	const cleanedData = { ...data };
-	cleanedData.months = {};
-	recentMonths.forEach(month => {
-		if (data.months && data.months[month]) {
-			cleanedData.months[month] = data.months[month];
-		}
-	});
-	return cleanedData;
-};
-
-export default function handler(req, res) {
-	if (req.method === 'GET') {
-		const { month } = req.query;
-		const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-		const monthData = data.months[month] || {};
-		const รวม = Object.values(monthData).reduce((sum, value) => {
-			return sum + (parseFloat(value) || 0);
-		}, 0);
-		const response = {
-			...data,
-			months: { [month]: monthData },
-			รวม
-		};
-		res.status(200).json(response);
-	} else if (req.method === 'POST') {
-		const { month, values } = req.body;
-		const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-		data.months[month] = values;
-		const cleanedData = cleanOldMonthData(data, month);
-		fs.writeFileSync(filePath, JSON.stringify(cleanedData, null, 2));
-		res.status(201).json({ success: true });
-	} else {
-		res.status(405).end();
-	}
+  if (req.method === 'GET') {
+    const { month } = req.query;
+    if (month) {
+      // Try to find direct month doc first
+      let doc = await collection.findOne({ month });
+      if (!doc) {
+        // fallback: หาใน obj: 'months'
+        const monthsDoc = await collection.findOne({ obj: 'months' });
+        if (monthsDoc && monthsDoc.months && monthsDoc.months[month]) {
+          doc = { month, ...monthsDoc.months[month] };
+        }
+      }
+      const monthData = doc ? { ...doc } : {};
+      delete monthData._id;
+      const รวม = Object.values(monthData)
+        .filter(v => typeof v === 'number')
+        .reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
+      const response = {
+        month,
+        ...monthData,
+        รวม
+      };
+      return res.status(200).json(response);
+    } else {
+      // ดึงข้อมูลทุกเดือน (เฉพาะ doc ที่มี month จริง)
+      const allDocs = await collection.find({ month: { $exists: true } }).toArray();
+      const data = {};
+      allDocs.forEach(doc => {
+        const monthData = { ...doc };
+        delete monthData._id;
+        const รวม = Object.values(monthData)
+          .filter(v => typeof v === 'number')
+          .reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
+        data[doc.month] = {
+          ...monthData,
+          รวม
+        };
+      });
+      // fallback: ถ้ายังไม่มี months ครบ ลองเติมจาก obj: 'months'
+      const monthsDoc = await collection.findOne({ obj: 'months' });
+      if (monthsDoc && monthsDoc.months) {
+        for (const [m, values] of Object.entries(monthsDoc.months)) {
+          if (!data[m]) {
+            data[m] = { month: m, ...values };
+            data[m].รวม = Object.values(values).filter(v => typeof v === 'number').reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
+          }
+        }
+      }
+      return res.status(200).json(data);
+    }
+  } else if (req.method === 'POST') {
+    const { month, values } = req.body;
+    if (!month || !values) {
+      return res.status(400).json({ error: 'month and values required' });
+    }
+    await collection.updateOne(
+      { month },
+      { $set: { ...values, month } },
+      { upsert: true }
+    );
+    return res.status(201).json({ success: true });
+  } else {
+    res.status(405).end();
+  }
 }

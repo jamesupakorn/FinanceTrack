@@ -73,7 +73,8 @@ export const incomeAPI = {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      return await response.json();
+      const data = await response.json();
+      return { months: data };
     } catch (error) {
       console.error('Error fetching all income data:', error);
       throw error;
@@ -122,7 +123,8 @@ export const expenseAPI = {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      return await response.json();
+      const data = await response.json();
+      return { months: data };
     } catch (error) {
       console.error('Error fetching all expense data:', error);
       throw error;
@@ -157,7 +159,8 @@ export const savingsAPI = {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      return await response.json();
+      const data = await response.json();
+      return { months: data };
     } catch (error) {
       console.error('Error fetching all savings data:', error);
       throw error;
@@ -221,7 +224,8 @@ export const taxAPI = {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      return await response.json();
+      const data = await response.json();
+      return { months: data };
     } catch (error) {
       console.error('Error fetching tax data:', error);
       throw error;
@@ -327,7 +331,8 @@ export const salaryAPI = {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      return await response.json();
+      const data = await response.json();
+      return { months: data };
     } catch (error) {
       console.error('Error fetching all salary data:', error);
       throw error;

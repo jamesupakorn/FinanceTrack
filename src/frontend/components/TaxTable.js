@@ -373,32 +373,32 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
               <td className={`${styles.totalCell} ${styles.right}`}>
                 {(() => {
                   const sum = Object.values(monthlyIncome).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
-                  return formatCurrency(sum);
+                  return mode === 'edit' ? formatCurrency(sum) : maskNumberFormat(sum);
                 })()}
               </td>
               <td className={`${styles.totalCell} ${styles.right}`}>
                 {(() => {
                   // รายได้สะสมทั้งปี = รายรับรวมทั้งปี
                   const sum = Object.values(monthlyIncome).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
-                  return formatCurrency(sum);
+                  return mode === 'edit' ? formatCurrency(sum) : maskNumberFormat(sum);
                 })()}
               </td>
               <td className={`${styles.totalCell} ${styles.right}`}>
                 {(() => {
                   const sum = Object.values(monthlyProvident || {}).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
-                  return formatCurrency(sum);
+                  return mode === 'edit' ? formatCurrency(sum) : maskNumberFormat(sum);
                 })()}
               </td>
               <td className={`${styles.totalCell} ${styles.right}`}>
                 {(() => {
                   const sum = Object.values(monthlyTax).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
-                  return formatCurrency(sum);
+                  return mode === 'edit' ? formatCurrency(sum) : maskNumberFormat(sum);
                 })()}
               </td>
               <td className={`${styles.totalCell} ${styles.right}`}>
                 {(() => {
                   const sum = Object.values(monthlyTax).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
-                  return formatCurrency(sum);
+                  return mode === 'edit' ? formatCurrency(sum) : maskNumberFormat(sum);
                 })()}
               </td>
             </tr>

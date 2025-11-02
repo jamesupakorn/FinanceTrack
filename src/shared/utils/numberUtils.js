@@ -144,37 +144,48 @@ export const handleNumberBlur = (value, setState, key = null) => {
 
 // จัดรูปแบบข้อมูลที่โหลดจาก API สำหรับรายรับ
 export const formatIncomeData = (data, month) => {
+  // Always return all keys (salary, income2, other) for UI
+  const keys = ['salary', 'income2', 'other'];
   const formattedData = {};
-  const monthData = data.months[month] || {};
-  Object.keys(monthData).forEach(key => {
-    formattedData[key] = parseAndFormat(monthData[key]);
+  let monthData = {};
+  // Support both { months: { ... } } and flat { salary, ... }
+  if (data && typeof data === 'object') {
+    if (data.months && typeof data.months === 'object' && data.months[month]) {
+      monthData = data.months[month];
+    } else {
+      monthData = data;
+    }
+  }
+  keys.forEach(key => {
+    formattedData[key] = parseAndFormat(monthData[key] ?? 0);
   });
   return formattedData;
 };
 
 // จัดรูปแบบข้อมูลที่โหลดจาก API สำหรับรายจ่าย
 export const formatExpenseData = (data, month) => {
+  // Always return all keys for UI
+  const keys = [
+    'house', 'water', 'internet', 'electricity', 'mobile',
+    'credit_kbank', 'credit_kungsri', 'credit_uob', 'credit_ttb',
+    'shopee', 'netflix', 'youtube', 'youtube_membership',
+    'motorcycle', 'miscellaneous'
+  ];
   const formattedData = {};
-  const monthData = data.months[month] || {};
-  Object.keys(monthData).forEach(item => {
+  let monthData = {};
+  // Support both { months: { ... } } and flat { house, ... }
+  if (data && typeof data === 'object') {
+    if (data.months && typeof data.months === 'object' && data.months[month]) {
+      monthData = data.months[month];
+    } else {
+      monthData = data;
+    }
+  }
+  keys.forEach(item => {
     formattedData[item] = {};
-    Object.keys(monthData[item] || {}).forEach(field => {
-      if (field === 'paid') {
-        // Preserve boolean for 'paid' field
-        const val = monthData[item][field];
-        if (typeof val === 'boolean') {
-          formattedData[item][field] = val;
-        } else if (typeof val === 'string') {
-          formattedData[item][field] = val === 'true' || val === '1';
-        } else if (typeof val === 'number') {
-          formattedData[item][field] = val === 1;
-        } else {
-          formattedData[item][field] = false;
-        }
-      } else {
-        formattedData[item][field] = parseAndFormat(monthData[item][field]);
-      }
-    });
+    formattedData[item]['estimate'] = parseAndFormat(monthData[item]?.estimate ?? monthData[item]?.estimate ?? monthData[item]?.['estimate'] ?? monthData[item]?.['actual'] ?? monthData[item] ?? 0);
+    formattedData[item]['actual'] = parseAndFormat(monthData[item]?.actual ?? monthData[item]?.['actual'] ?? 0);
+    formattedData[item]['paid'] = (typeof monthData[item]?.paid === 'boolean') ? monthData[item].paid : false;
   });
   return formattedData;
 };
