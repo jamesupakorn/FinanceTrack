@@ -75,6 +75,16 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, mode =
 
   const calculateTotalWithSalary = () => calculateTotalWithSalaryUtil(editIncome, salaryNetIncome);
 
+  // Fallback: use keys from editIncome or incomeData (excluding 'month' and 'รวม') if items is missing
+  let incomeItems = [];
+  if (incomeData && Array.isArray(incomeData.items)) {
+    incomeItems = incomeData.items;
+  } else if (editIncome && Object.keys(editIncome).length > 0) {
+    incomeItems = Object.keys(editIncome);
+  } else if (incomeData && typeof incomeData === 'object') {
+    incomeItems = Object.keys(incomeData).filter(k => k !== 'month' && k !== 'รวม');
+  }
+
   return (
     <div className={styles.incomeContainer}>
       {incomeData && (
@@ -87,7 +97,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, mode =
               </tr>
             </thead>
             <tbody>
-              {incomeData.items.map((item, i) => (
+              {incomeItems.map((item, i) => (
                 <tr key={i} className={styles.tableRow}>
                   <td className={styles.tableCell}>{incomeKeyThaiMap[item] ?? item}</td>
                   <td className={styles.inputCell}>

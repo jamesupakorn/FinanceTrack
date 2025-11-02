@@ -120,16 +120,28 @@ export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
                 </tr>
               </thead>
               <tbody>
-                {expenseData.items.map((item, i) => {
+                {Object.keys(expenseKeyThaiMap).map((item, i) => {
                   // ใช้ field ใหม่ 'estimate', 'actual', 'paid'
-                    const estimate = parseToNumber(editExpense[item]?.['estimate'] ?? expenseData.months[selectedMonth]?.[item]?.['estimate'] ?? 0);
-                    const actual = parseToNumber(editExpense[item]?.['actual'] ?? expenseData.months[selectedMonth]?.[item]?.['actual'] ?? 0);
-                  // Default paid to false if undefined/null
-                  const paid = (editExpense[item]?.['paid'] !== undefined && editExpense[item]?.['paid'] !== null)
-                    ? editExpense[item]['paid']
-                    : (expenseData.months[selectedMonth]?.[item]?.['paid'] !== undefined && expenseData.months[selectedMonth]?.[item]?.['paid'] !== null)
-                      ? expenseData.months[selectedMonth][item]['paid']
-                      : false;
+                    const estimate = parseToNumber(
+                      editExpense[item]?.['estimate'] ??
+                      (expenseData.estimate && expenseData.estimate[item]) ??
+                      (expenseData.months && expenseData.months[selectedMonth]?.[item]?.['estimate']) ??
+                      0
+                    );
+                    const actual = parseToNumber(
+                      editExpense[item]?.['actual'] ??
+                      (expenseData.actual && expenseData.actual[item]) ??
+                      (expenseData.months && expenseData.months[selectedMonth]?.[item]?.['actual']) ??
+                      0
+                    );
+                    // Default paid to false if undefined/null
+                    const paid = (editExpense[item]?.['paid'] !== undefined && editExpense[item]?.['paid'] !== null)
+                      ? editExpense[item]['paid']
+                      : (expenseData.actual && typeof expenseData.actual[item] === 'object' && expenseData.actual[item]?.['paid'] !== undefined)
+                        ? expenseData.actual[item]['paid']
+                        : (expenseData.months && expenseData.months[selectedMonth]?.[item]?.['paid'] !== undefined)
+                          ? expenseData.months[selectedMonth][item]['paid']
+                          : false;
                   const diff = actual - estimate;
                   return (
                     <tr key={i} className={styles.tableRow}>
