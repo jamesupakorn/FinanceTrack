@@ -8,6 +8,17 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
   const [newMonthName, setNewMonthName] = useState('');
   const [monthOptions, setMonthOptions] = useState([]);
 
+  // ถ้า selectedMonth ไม่มีใน monthOptions ให้เลือกเดือนล่าสุดอัตโนมัติ
+  useEffect(() => {
+    if (monthOptions.length > 0) {
+      const monthValues = monthOptions.map(opt => opt.value);
+      if (!selectedMonth || !monthValues.includes(selectedMonth)) {
+        // เลือกเดือนล่าสุด (ตัวแรกใน options เพราะเรียงใหม่ -> เก่า)
+        onMonthSelected(monthOptions[0].value);
+      }
+    }
+  }, [monthOptions, selectedMonth, onMonthSelected]);
+
   // Fetch all months from expense, income, salary and aggregate unique months
   useEffect(() => {
     let isMounted = true;
