@@ -63,7 +63,7 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
     setInvestments([...investments, { name: '', percent: '', amount: '' }]);
   };
 
-  // ลบรายการและ sync DB ทันที
+  // ลบรายการและลบออกจาก DB ทันที
   const removeInvestment = async (idx) => {
     const newInvestments = investments.filter((_, i) => i !== idx);
     setInvestments(newInvestments);
@@ -160,23 +160,14 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
           <button type="button" onClick={addInvestment} style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: '#1a7f37', color: 'white', fontWeight: 600, cursor: 'pointer' }}>+ เพิ่มรายการลงทุน</button>
           <button
             type="button"
-            onClick={async () => {
+            onClick={() => {
               if (investments.length === 0) return;
               const avg = Math.floor((100 * 100) / investments.length) / 100;
               let remain = 100 - avg * (investments.length - 1);
-              const newInvestments = investments.map((item, idx) => ({
+              setInvestments(investments.map((item, idx) => ({
                 ...item,
                 percent: (idx === investments.length - 1 ? remain : avg).toString()
-              }));
-              setInvestments(newInvestments);
-              // sync DB ทันที
-              if (selectedMonth) {
-                await investmentAPI.saveList(selectedMonth, newInvestments.map(item => ({
-                  ...item,
-                  amount: parseFloat(item.amount) || 0,
-                  percent: parseFloat(item.percent) || 0
-                })));
-              }
+              })));
             }}
             style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: '#f59e42', color: 'white', fontWeight: 600, cursor: investments.length === 0 ? 'not-allowed' : 'pointer', opacity: investments.length === 0 ? 0.5 : 1 }}
             disabled={investments.length === 0}
