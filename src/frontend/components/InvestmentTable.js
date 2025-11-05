@@ -63,9 +63,18 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
     setInvestments([...investments, { name: '', percent: '', amount: '' }]);
   };
 
-  // ลบรายการ
-  const removeInvestment = (idx) => {
-    setInvestments(investments.filter((_, i) => i !== idx));
+  // ลบรายการและ sync DB ทันที
+  const removeInvestment = async (idx) => {
+    const newInvestments = investments.filter((_, i) => i !== idx);
+    setInvestments(newInvestments);
+    // ลบออกจาก DB ทันที
+    if (selectedMonth) {
+      await investmentAPI.saveList(selectedMonth, newInvestments.map(item => ({
+        ...item,
+        amount: parseFloat(item.amount) || 0,
+        percent: parseFloat(item.percent) || 0
+      })));
+    }
   };
 
   // อัปเดตฟิลด์
@@ -151,14 +160,23 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
           <button type="button" onClick={addInvestment} style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: '#1a7f37', color: 'white', fontWeight: 600, cursor: 'pointer' }}>+ เพิ่มรายการลงทุน</button>
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
               if (investments.length === 0) return;
               const avg = Math.floor((100 * 100) / investments.length) / 100;
               let remain = 100 - avg * (investments.length - 1);
-              setInvestments(investments.map((item, idx) => ({
+              const newInvestments = investments.map((item, idx) => ({
                 ...item,
                 percent: (idx === investments.length - 1 ? remain : avg).toString()
-              })));
+              }));
+              setInvestments(newInvestments);
+              // sync DB ทันที
+              if (selectedMonth) {
+                await investmentAPI.saveList(selectedMonth, newInvestments.map(item => ({
+                  ...item,
+                  amount: parseFloat(item.amount) || 0,
+                  percent: parseFloat(item.percent) || 0
+                })));
+              }
             }}
             style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: '#f59e42', color: 'white', fontWeight: 600, cursor: investments.length === 0 ? 'not-allowed' : 'pointer', opacity: investments.length === 0 ? 0.5 : 1 }}
             disabled={investments.length === 0}
@@ -168,8 +186,8 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
           <button
             type="button"
             onClick={handleSave}
-            style={{ padding: '6px 24px', borderRadius: 6, border: 'none', background: '#2563eb', color: 'white', fontWeight: 600, cursor: (totalPercent !== 100 && totalPercent !== 0) ? 'not-allowed' : 'pointer', opacity: (totalPercent !== 100 && totalPercent !== 0) ? 0.5 : 1 }}
-            disabled={totalPercent !== 100 && totalPercent !== 0}
+            style={{ padding: '6px 24px', borderRadius: 6, border: 'none', background: '#2563eb', color: 'white', fontWeight: 600, cursor: totalPercent !== 100 ? 'not-allowed' : 'pointer', opacity: totalPercent !== 100 ? 0.5 : 1 }}
+            disabled={totalPercent !== 100}
           >
             บันทึก
           </button>
