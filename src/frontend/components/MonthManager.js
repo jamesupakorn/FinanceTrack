@@ -53,12 +53,39 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
   }, [showAddForm, onDataRefresh]);
 
     const handleAddNewMonth = async () => {
-    const nextMonth = getNextMonth(selectedMonth);
-      // ดึงข้อมูลเดือนล่าสุดของแต่ละหมวด
+      const nextMonth = getNextMonth(selectedMonth);
+      // สร้างข้อมูลเปล่า (ไม่ copy)
       const importApis = await import('../../shared/utils/apiUtils');
       const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = importApis;
+      await Promise.all([
+        expenseAPI.save(nextMonth, {}),
+        incomeAPI.save(nextMonth, {}),
+        salaryAPI.save(nextMonth, {}, {}, ''),
+        savingsAPI.saveList ? savingsAPI.saveList(nextMonth, []) : Promise.resolve(),
+        investmentAPI.saveList ? investmentAPI.saveList(nextMonth, []) : Promise.resolve()
+      ]);
+      onMonthSelected(nextMonth);
+      onDataRefresh();
+      setShowAddForm(false);
+      setNewMonthName('');
+    };
 
-      // หาเดือนล่าสุดที่มีข้อมูลในแต่ละหมวด
+    // ปุ่ม copy ข้อมูลจากเดือนก่อนหน้า
+    const handleCopyPrevMonth = async () => {
+      if (!newMonthName || !/^\d{4}-\d{2}$/.test(newMonthName)) {
+        alert('กรุณากรอกเดือนใหม่ให้ถูกต้องก่อน (YYYY-MM)');
+        return;
+      }
+      // หาเดือนก่อนหน้า
+      const prevMonth = (() => {
+        const [y, m] = newMonthName.split('-').map(Number);
+        let prevY = y, prevM = m - 1;
+        if (prevM < 1) { prevY -= 1; prevM = 12; }
+        return `${prevY}-${String(prevM).padStart(2, '0')}`;
+      })();
+      const importApis = await import('../../shared/utils/apiUtils');
+      const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = importApis;
+      // ดึงข้อมูลเดือนก่อนหน้า
       const [expenseAll, incomeAll, salaryAll, savingsAll, investmentAll] = await Promise.all([
         expenseAPI.getAll(),
         incomeAPI.getAll(),
@@ -66,56 +93,40 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
         savingsAPI.getAll ? savingsAPI.getAll() : Promise.resolve({}),
         investmentAPI.getAll ? investmentAPI.getAll() : Promise.resolve({})
       ]);
-
-      // Helper: หาเดือนล่าสุดที่มีข้อมูล (เรียงจากใหม่ไปเก่า)
-      function getLatestMonth(obj) {
-        if (!obj || !obj.months) return null;
-        const months = Object.keys(obj.months).filter(m => /^\d{4}-\d{2}$/.test(m));
-        return months.sort((a, b) => b.localeCompare(a))[0] || null;
+      // Helper: หาเดือนที่ต้องการ
+      function getMonthData(obj, month) {
+        if (!obj || !obj.months) return {};
+        return obj.months[month] ? JSON.parse(JSON.stringify(obj.months[month])) : {};
       }
-
       // รายจ่าย
-      let expenseLatestMonth = getLatestMonth(expenseAll);
-      let expenseLatest = (expenseAll.months && expenseAll.months[expenseLatestMonth]) ? JSON.parse(JSON.stringify(expenseAll.months[expenseLatestMonth])) : {};
-
+      let expensePrev = getMonthData(expenseAll, prevMonth);
       // รายรับ
-      let incomeLatestMonth = getLatestMonth(incomeAll);
-      let incomeLatest = (incomeAll.months && incomeAll.months[incomeLatestMonth]) ? JSON.parse(JSON.stringify(incomeAll.months[incomeLatestMonth])) : {};
-
+      let incomePrev = getMonthData(incomeAll, prevMonth);
       // เงินเดือน
-      let salaryLatestMonth = getLatestMonth(salaryAll);
-      let salaryLatest = (salaryAll.months && salaryAll.months[salaryLatestMonth]) ? JSON.parse(JSON.stringify(salaryAll.months[salaryLatestMonth])) : {};
-
-      // เงินออม (optional)
-      let savingsLatest = {};
-      if (savingsAll && savingsAll.savings_list) {
-        const savingsMonths = Object.keys(savingsAll.savings_list).filter(m => /^\d{4}-\d{2}$/.test(m));
-        const latestSavingsMonth = savingsMonths.sort((a, b) => b.localeCompare(a))[0];
-        savingsLatest = latestSavingsMonth ? JSON.parse(JSON.stringify(savingsAll.savings_list[latestSavingsMonth])) : [];
+      let salaryPrev = getMonthData(salaryAll, prevMonth);
+      // เงินออม
+      let savingsPrev = [];
+      if (savingsAll && savingsAll.savings_list && savingsAll.savings_list[prevMonth]) {
+        savingsPrev = JSON.parse(JSON.stringify(savingsAll.savings_list[prevMonth]));
       }
-
-      // การลงทุน (optional)
-      let investmentLatest = [];
-      if (investmentAll) {
-        const investMonths = Object.keys(investmentAll).filter(m => /^\d{4}-\d{2}$/.test(m));
-        const latestInvestMonth = investMonths.sort((a, b) => b.localeCompare(a))[0];
-        investmentLatest = latestInvestMonth ? JSON.parse(JSON.stringify(investmentAll[latestInvestMonth])) : [];
+      // การลงทุน
+      let investmentPrev = [];
+      if (investmentAll && investmentAll[prevMonth]) {
+        investmentPrev = JSON.parse(JSON.stringify(investmentAll[prevMonth]));
       }
-
       // Save ข้อมูล copy ไปเดือนใหม่
       await Promise.all([
-        expenseAPI.save(nextMonth, expenseLatest),
-        incomeAPI.save(nextMonth, incomeLatest),
-        salaryAPI.save(nextMonth, salaryLatest.income || {}, salaryLatest.deduct || {}, salaryLatest.note || ''),
-        savingsAPI.saveList ? savingsAPI.saveList(nextMonth, savingsLatest) : Promise.resolve(),
-        investmentAPI.saveList ? investmentAPI.saveList(nextMonth, investmentLatest) : Promise.resolve()
+        expenseAPI.save(newMonthName, expensePrev),
+        incomeAPI.save(newMonthName, incomePrev),
+        salaryAPI.save(newMonthName, salaryPrev.income || {}, salaryPrev.deduct || {}, salaryPrev.note || ''),
+        savingsAPI.saveList ? savingsAPI.saveList(newMonthName, savingsPrev) : Promise.resolve(),
+        investmentAPI.saveList ? investmentAPI.saveList(newMonthName, investmentPrev) : Promise.resolve()
       ]);
-
-      onMonthSelected(nextMonth);
+      onMonthSelected(newMonthName);
       onDataRefresh();
       setShowAddForm(false);
       setNewMonthName('');
-  };
+    };
 
   const handleCustomMonth = () => {
     if (newMonthName.trim()) {
@@ -182,7 +193,10 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
                 className={styles.monthInput}
               />
               <button onClick={handleCustomMonth} className={styles.customAddBtn}>
-                เพิ่ม
+                เพิ่ม (ข้อมูลเปล่า)
+              </button>
+              <button onClick={handleCopyPrevMonth} className={styles.customAddBtn} style={{marginLeft:8}}>
+                ดึงข้อมูลจากเดือนก่อนหน้า
               </button>
             </div>
             <button 
