@@ -137,7 +137,7 @@ export const expenseAPI = {
       const response = await fetch(API_URLS.EXPENSE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month, values })
+        body: JSON.stringify({ month, expense_data: values })
       });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
