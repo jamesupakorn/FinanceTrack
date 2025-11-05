@@ -168,8 +168,8 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
           <button
             type="button"
             onClick={handleSave}
-            style={{ padding: '6px 24px', borderRadius: 6, border: 'none', background: '#2563eb', color: 'white', fontWeight: 600, cursor: totalPercent !== 100 ? 'not-allowed' : 'pointer', opacity: totalPercent !== 100 ? 0.5 : 1 }}
-            disabled={totalPercent !== 100}
+            style={{ padding: '6px 24px', borderRadius: 6, border: 'none', background: '#2563eb', color: 'white', fontWeight: 600, cursor: (totalPercent !== 100 && totalPercent !== 0) ? 'not-allowed' : 'pointer', opacity: (totalPercent !== 100 && totalPercent !== 0) ? 0.5 : 1 }}
+            disabled={totalPercent !== 100 && totalPercent !== 0}
           >
             บันทึก
           </button>
