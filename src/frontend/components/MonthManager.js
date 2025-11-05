@@ -171,6 +171,13 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
           >
             + เพิ่มเดือนใหม่
           </button>
+          <button 
+            onClick={handleCopyPrevMonth}
+            className={styles.addMonthBtn}
+            style={{marginLeft:8}}
+          >
+            ดึงข้อมูลจากเดือนก่อนหน้า
+          </button>
         </div>
       )}
 
@@ -193,10 +200,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
                 className={styles.monthInput}
               />
               <button onClick={handleCustomMonth} className={styles.customAddBtn}>
-                เพิ่ม (ข้อมูลเปล่า)
-              </button>
-              <button onClick={handleCopyPrevMonth} className={styles.customAddBtn} style={{marginLeft:8}}>
-                ดึงข้อมูลจากเดือนก่อนหน้า
+                เพิ่ม
               </button>
             </div>
             <button 
