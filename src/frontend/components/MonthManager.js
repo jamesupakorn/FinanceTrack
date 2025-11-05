@@ -121,7 +121,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
     if (newMonthName.trim()) {
       // สร้างเดือนใหม่จากที่กรอก (format: YYYY-MM)
       if (/^\d{4}-\d{2}$/.test(newMonthName)) {
-        onMonthChange(newMonthName);
+          onMonthSelected(newMonthName);
         setShowAddForm(false);
         setNewMonthName('');
       } else {
