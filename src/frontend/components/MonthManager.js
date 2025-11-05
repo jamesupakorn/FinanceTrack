@@ -70,15 +70,15 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
       setNewMonthName('');
     };
 
-    // ปุ่ม copy ข้อมูลจากเดือนก่อนหน้า
+    // ปุ่ม copy ข้อมูลจากเดือนก่อนหน้า (ใช้ selectedMonth เป็นเป้าหมาย)
     const handleCopyPrevMonth = async () => {
-      if (!newMonthName || !/^\d{4}-\d{2}$/.test(newMonthName)) {
-        alert('กรุณากรอกเดือนใหม่ให้ถูกต้องก่อน (YYYY-MM)');
+      if (!selectedMonth || !/^\d{4}-\d{2}$/.test(selectedMonth)) {
+        alert('กรุณาเลือกเดือนที่ต้องการก่อน (YYYY-MM)');
         return;
       }
       // หาเดือนก่อนหน้า
       const prevMonth = (() => {
-        const [y, m] = newMonthName.split('-').map(Number);
+        const [y, m] = selectedMonth.split('-').map(Number);
         let prevY = y, prevM = m - 1;
         if (prevM < 1) { prevY -= 1; prevM = 12; }
         return `${prevY}-${String(prevM).padStart(2, '0')}`;
@@ -114,18 +114,16 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
       if (investmentAll && investmentAll[prevMonth]) {
         investmentPrev = JSON.parse(JSON.stringify(investmentAll[prevMonth]));
       }
-      // Save ข้อมูล copy ไปเดือนใหม่
+      // Save ข้อมูล copy ไปเดือนนี้ (selectedMonth)
       await Promise.all([
-        expenseAPI.save(newMonthName, expensePrev),
-        incomeAPI.save(newMonthName, incomePrev),
-        salaryAPI.save(newMonthName, salaryPrev.income || {}, salaryPrev.deduct || {}, salaryPrev.note || ''),
-        savingsAPI.saveList ? savingsAPI.saveList(newMonthName, savingsPrev) : Promise.resolve(),
-        investmentAPI.saveList ? investmentAPI.saveList(newMonthName, investmentPrev) : Promise.resolve()
+        expenseAPI.save(selectedMonth, expensePrev),
+        incomeAPI.save(selectedMonth, incomePrev),
+        salaryAPI.save(selectedMonth, salaryPrev.income || {}, salaryPrev.deduct || {}, salaryPrev.note || ''),
+        savingsAPI.saveList ? savingsAPI.saveList(selectedMonth, savingsPrev) : Promise.resolve(),
+        investmentAPI.saveList ? investmentAPI.saveList(selectedMonth, investmentPrev) : Promise.resolve()
       ]);
-      onMonthSelected(newMonthName);
+      onMonthSelected(selectedMonth);
       onDataRefresh();
-      setShowAddForm(false);
-      setNewMonthName('');
     };
 
   const handleCustomMonth = () => {
