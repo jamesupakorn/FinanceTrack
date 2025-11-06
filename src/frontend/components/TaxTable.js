@@ -185,7 +185,7 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
           onChange={(e) => setSelectedYear(e.target.value)}
           className={styles.yearSelect}
         >
-          {getSortedYears().map(yearAD => {
+          {getSortedYears(allYearData).map(yearAD => {
             const yearBE = (parseInt(yearAD) + 543).toString();
             return <option key={yearAD} value={yearAD}>พ.ศ. {yearBE}</option>;
           })}

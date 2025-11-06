@@ -67,7 +67,8 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, mode =
   };
 
   // ใช้ฟังก์ชันรวมที่ตัดเงินเดือนออกก่อนบวก salaryNetIncome
-  const getTotalIncome = () => calculateTotalWithSalary(editIncome, salaryNetIncome);
+  // ยอดรวมรายรับจาก backend
+  const getTotalIncome = () => (incomeData && typeof incomeData.รวม === 'number' ? incomeData.รวม : 0);
 
   // Fallback: use keys from editIncome or incomeData (excluding 'month' and 'รวม') if items is missing
   let incomeItems = [];

@@ -81,7 +81,16 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
   };
 
   const calculateTotals = () => {
-    setCalculatedResults(calculateSalaryTotals(salaryData));
+    // ใช้ summary จาก backend ถ้ามี
+    if (salaryData && salaryData.summary) {
+      setCalculatedResults({
+        รวมรายได้: salaryData.summary.total_income || 0,
+        รวมหัก: salaryData.summary.total_deduct || 0,
+        เงินได้สุทธิ: salaryData.summary.net_income || 0
+      });
+    } else {
+      setCalculatedResults(calculateSalaryTotals(salaryData));
+    }
   };
 
   const handleInputChange = (field, value) => {
@@ -236,7 +245,7 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
 
       {/* ผลลัพธ์สุทธิ */}
       <div className={styles.netResult}>
-        <h3>เงินได้สุทธิ: <span className={styles.netAmount}>{mode === 'edit' ? formatCurrency(calculatedResults.เงินได้สุทธิ) : getDisplayValue(calculatedResults.เงินได้สุทธิ)}</span></h3>
+  <h3>เงินได้สุทธิ: <span className={styles.netAmount}>{mode === 'edit' ? formatCurrency(calculatedResults.เงินได้สุทธิ) : getDisplayValue(calculatedResults.เงินได้สุทธิ)}</span></h3>
       </div>
 
       {/* ปุ่มจัดการ */}

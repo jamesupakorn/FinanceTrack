@@ -49,19 +49,25 @@ export default async function handler(req, res) {
 						await collection.updateOne({ month }, { $set: { ...doc } });
 					}
 				}
-				const summary = calculateSalarySummary(doc);
+				// Ensure summary is present
+				let summary = doc && doc.summary ? doc.summary : calculateSalarySummary(doc);
 				return res.json({
 					...doc,
 					summary
 				});
 			} else {
-				// return all
-				const allDocs = await collection.find({}).toArray();
-				const allData = {};
-				allDocs.forEach(doc => {
-					allData[doc.month] = doc;
-				});
-				return res.json(allData);
+			// return all
+			const allDocs = await collection.find({}).toArray();
+			const allData = {};
+			allDocs.forEach(doc => {
+				// Ensure summary is present
+				let summary = doc && doc.summary ? doc.summary : calculateSalarySummary(doc);
+				allData[doc.month] = {
+					...doc,
+					summary
+				};
+			});
+			return res.json(allData);
 			}
 		} else if (req.method === 'POST') {
 			const { month, income, deduct, note } = req.body;
