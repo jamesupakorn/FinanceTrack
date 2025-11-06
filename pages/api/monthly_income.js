@@ -18,9 +18,9 @@ export default async function handler(req, res) {
       }
       const monthData = doc ? { ...doc } : {};
       delete monthData._id;
-      const รวม = Object.values(monthData)
-        .filter(v => typeof v === 'number')
-        .reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
+      const รวม = Object.entries(monthData)
+        .filter(([key, v]) => typeof v === 'number' && key !== 'รวม')
+        .reduce((sum, [, value]) => sum + (parseFloat(value) || 0), 0);
       const response = {
         month,
         ...monthData,
@@ -34,9 +34,9 @@ export default async function handler(req, res) {
       allDocs.forEach(doc => {
         const monthData = { ...doc };
         delete monthData._id;
-        const รวม = Object.values(monthData)
-          .filter(v => typeof v === 'number')
-          .reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
+        const รวม = Object.entries(monthData)
+          .filter(([key, v]) => typeof v === 'number' && key !== 'รวม')
+          .reduce((sum, [, value]) => sum + (parseFloat(value) || 0), 0);
         data[doc.month] = {
           ...monthData,
           รวม
@@ -48,7 +48,7 @@ export default async function handler(req, res) {
         for (const [m, values] of Object.entries(monthsDoc.months)) {
           if (!data[m]) {
             data[m] = { month: m, ...values };
-            data[m].รวม = Object.values(values).filter(v => typeof v === 'number').reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
+            data[m].รวม = Object.entries(values).filter(([key, v]) => typeof v === 'number' && key !== 'รวม').reduce((sum, [, value]) => sum + (parseFloat(value) || 0), 0);
           }
         }
       }
@@ -59,6 +59,8 @@ export default async function handler(req, res) {
     if (!month || !values) {
       return res.status(400).json({ error: 'month and values required' });
     }
+    // Remove field 'รวม' if present
+    if ('รวม' in values) delete values['รวม'];
     await collection.updateOne(
       { month },
       { $set: { ...values, month } },
