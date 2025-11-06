@@ -99,7 +99,6 @@ export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
     <div className={styles.expenseTable}>
       {expenseData && (
         <>
-          {/* ตารางหลักเดิม */}
           <div className={styles.tableContainer}>
             <table className={styles.table}>
               <thead className={styles.tableHeader}>
@@ -113,27 +112,25 @@ export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
               </thead>
               <tbody>
                 {Object.keys(expenseKeyThaiMap).map((item, i) => {
-                  // ใช้ field ใหม่ 'estimate', 'actual', 'paid'
-                    const estimate = parseToNumber(
-                      editExpense[item]?.['estimate'] ??
-                      (expenseData.estimate && expenseData.estimate[item]) ??
-                      (expenseData.months && expenseData.months[selectedMonth]?.[item]?.['estimate']) ??
-                      0
-                    );
-                    const actual = parseToNumber(
-                      editExpense[item]?.['actual'] ??
-                      (expenseData.actual && expenseData.actual[item]) ??
-                      (expenseData.months && expenseData.months[selectedMonth]?.[item]?.['actual']) ??
-                      0
-                    );
-                    // Default paid to false if undefined/null
-                    const paid = (editExpense[item]?.['paid'] !== undefined && editExpense[item]?.['paid'] !== null)
-                      ? editExpense[item]['paid']
-                      : (expenseData.actual && typeof expenseData.actual[item] === 'object' && expenseData.actual[item]?.['paid'] !== undefined)
-                        ? expenseData.actual[item]['paid']
-                        : (expenseData.months && expenseData.months[selectedMonth]?.[item]?.['paid'] !== undefined)
-                          ? expenseData.months[selectedMonth][item]['paid']
-                          : false;
+                  const estimate = parseToNumber(
+                    editExpense[item]?.['estimate'] ??
+                    (expenseData.estimate && expenseData.estimate[item]) ??
+                    (expenseData.months && expenseData.months[selectedMonth]?.[item]?.['estimate']) ??
+                    0
+                  );
+                  const actual = parseToNumber(
+                    editExpense[item]?.['actual'] ??
+                    (expenseData.actual && expenseData.actual[item]) ??
+                    (expenseData.months && expenseData.months[selectedMonth]?.[item]?.['actual']) ??
+                    0
+                  );
+                  const paid = (editExpense[item]?.['paid'] !== undefined && editExpense[item]?.['paid'] !== null)
+                    ? editExpense[item]['paid']
+                    : (expenseData.actual && typeof expenseData.actual[item] === 'object' && expenseData.actual[item]?.['paid'] !== undefined)
+                      ? expenseData.actual[item]['paid']
+                      : (expenseData.months && expenseData.months[selectedMonth]?.[item]?.['paid'] !== undefined)
+                        ? expenseData.months[selectedMonth][item]['paid']
+                        : false;
                   const diff = actual - estimate;
                   return (
                     <tr key={i} className={styles.tableRow}>
@@ -199,8 +196,8 @@ export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
               </tbody>
             </table>
           </div>
-          {/* ตารางสรุปค่าใช้จ่ายแต่ละบัญชี */}
-          <BankAccountTable accountSummary={accountSummary} mode={mode} />
+          {/* ตารางสรุปค่าใช้จ่ายแต่ละบัญชี (อัพเดตเรียลไทม์) */}
+          <BankAccountTable accountSummary={getAccountSummary(editExpense)} mode={mode} />
           {mode === 'edit' && (
             <div className={styles.saveButtonContainer}>
               <button
