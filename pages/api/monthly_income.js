@@ -17,7 +17,15 @@ export default async function handler(req, res) {
       }
       const monthData = doc ? { ...doc } : {};
       delete monthData._id;
-      const รวม = sumValues(monthData, ['รวม']);
+        // คำนวณยอดรวมรายรับ
+        function getTotalIncome(data) {
+          let sum = 0;
+          Object.values(data).forEach(v => {
+            if (typeof v === 'number') sum += v;
+          });
+          return Math.round(sum * 100) / 100;
+        }
+        const รวม = getTotalIncome(monthData);
       const response = {
         month,
         ...monthData,
@@ -30,7 +38,14 @@ export default async function handler(req, res) {
       allDocs.forEach(doc => {
         const monthData = { ...doc };
         delete monthData._id;
-        const รวม = sumValues(monthData, ['รวม']);
+          function getTotalIncome(data) {
+            let sum = 0;
+            Object.values(data).forEach(v => {
+              if (typeof v === 'number') sum += v;
+            });
+            return Math.round(sum * 100) / 100;
+          }
+          const รวม = getTotalIncome(monthData);
         data[doc.month] = {
           ...monthData,
           รวม

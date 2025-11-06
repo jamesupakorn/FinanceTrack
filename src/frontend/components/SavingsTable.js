@@ -67,7 +67,8 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
 
   if (!savingsData) return <div>กำลังโหลด...</div>;
 
-  const รวมเงินเก็บ = calculateTotalSavings(รายการเงินออม);
+  // ยอดรวมเงินเก็บจาก backend
+  const รวมเงินเก็บ = savingsData && typeof savingsData.รวมเงินเก็บ === 'number' ? savingsData.รวมเงินเก็บ : 0;
   const savingsKeyThaiMapping = {
     savings_type: 'รายการออม',
     savings_amount: 'จำนวนเงินออม'

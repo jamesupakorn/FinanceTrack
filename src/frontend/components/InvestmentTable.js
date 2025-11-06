@@ -9,6 +9,28 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
   const [baseAmount, setBaseAmount] = useState('');
   const [investments, setInvestments] = useState([]);
   const isFirstLoad = useRef(true);
+  // เพิ่มฟังก์ชันเพิ่มรายการลงทุนใหม่
+  const addInvestment = () => {
+    setInvestments(prev => [
+      ...prev,
+      { name: '', percent: '', amount: '' }
+    ]);
+  };
+
+  // ฟังก์ชันบันทึกข้อมูลการลงทุน
+  const [saveStatus, setSaveStatus] = useState('idle');
+  const handleSave = async () => {
+    if (!selectedMonth) return;
+    setSaveStatus('saving');
+    const result = await investmentAPI.saveList(selectedMonth, investments);
+    if (result) {
+      setSaveStatus('success');
+      if (typeof onDataChange === 'function') onDataChange();
+    } else {
+      setSaveStatus('error');
+    }
+    setTimeout(() => setSaveStatus('idle'), 2000);
+  };
 
   // โหลดข้อมูลจาก backend เมื่อ selectedMonth เปลี่ยน
   useEffect(() => {
