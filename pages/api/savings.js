@@ -1,4 +1,5 @@
 import dbPromise from '../../lib/mongodb';
+import { calculateTotalSavings } from '../../src/shared/utils/apiUtils';
 
 export default async function handler(req, res) {
   const db = await dbPromise;
@@ -10,7 +11,7 @@ export default async function handler(req, res) {
       const doc = await collection.findOne({ month });
       // Always return default structure if not found, to match legacy JSON behavior
       const savingsList = doc && Array.isArray(doc.savings_list) ? doc.savings_list : [];
-      const totalSavings = savingsList.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+      const totalSavings = calculateTotalSavings(savingsList);
       const response = {
         total_savings: doc && typeof doc.total_savings === 'number' ? doc.total_savings : 0,
         savings_list: savingsList,
@@ -29,7 +30,7 @@ export default async function handler(req, res) {
           }
           try {
             const savingsList = doc.savings_list || [];
-            const totalSavings = savingsList.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+            const totalSavings = calculateTotalSavings(savingsList);
             data[doc.month] = {
               total_savings: doc.total_savings || 0,
               savings_list: savingsList,

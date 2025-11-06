@@ -2,6 +2,7 @@
 // ...imports and component definition...
 import { useState, useEffect } from 'react';
 import { formatCurrency, handleNumberInput, handleNumberBlur, parseToNumber, maskNumberFormat } from '../../shared/utils/numberUtils';
+import { createDefault12MonthsObject, sumAccumulated, sumYearly, getSortedYears } from '../../shared/utils/taxUtils';
 import { taxAPI, incomeAPI } from '../../shared/utils/apiUtils';
 import styles from '../styles/TaxTable.module.css';
 
@@ -12,21 +13,9 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
     if (!yearAD || allYearData[yearAD]) return;
     // สร้างข้อมูลว่างสำหรับปีใหม่
     const emptyYearData = {
-      monthly_tax: {
-        '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
-        '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
-        '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
-      },
-      monthly_income: {
-        '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
-        '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
-        '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
-      },
-      monthly_provident: {
-        '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
-        '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
-        '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
-      }
+      monthly_tax: createDefault12MonthsObject('0.00'),
+      monthly_income: createDefault12MonthsObject('0.00'),
+      monthly_provident: createDefault12MonthsObject('0.00')
     };
     setAllYearData(prev => ({ ...prev, [yearAD]: emptyYearData }));
     setSelectedYear(yearAD);
@@ -144,32 +133,20 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
         const res = await fetch(`/api/tax_accumulated?year=${selectedYear}`);
         const data = await res.json();
         const yearData = data[selectedYear];
-        const default12 = {
-          '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
-          '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
-          '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
-        };
+        const default12 = createDefault12MonthsObject('0.00');
         setMonthlyTax((yearData && yearData.monthly_tax) ? yearData.monthly_tax : { ...default12 });
         setMonthlyIncome((yearData && yearData.monthly_income) ? yearData.monthly_income : { ...default12 });
         setMonthlyProvident((yearData && yearData.monthly_provident) ? yearData.monthly_provident : { ...default12 });
       } catch (error) {
-        const default12 = {
-          '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
-          '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
-          '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
-        };
+        const default12 = createDefault12MonthsObject('0.00');
         setMonthlyTax({ ...default12 });
         setMonthlyIncome({ ...default12 });
         setMonthlyProvident({ ...default12 });
-        console.error('Error fetching tax data:', error);
       }
     };
     fetchTaxData();
   }, [selectedYear]);
 
-  const getSortedYears = () => {
-    return Object.keys(allYearData).sort((a, b) => parseInt(b) - parseInt(a));
-  };
 
   const handleMonthlyTaxChange = (month, value) => {
     // format เป็นทศนิยม 2 ตำแหน่งทุกครั้งที่ onChange
@@ -181,29 +158,21 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
     // ส่วน save backend คงเดิม
   };
 
-  const calculateAccumulatedTax = (upToMonth) => {
-    const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
-    const monthIndex = months.indexOf(upToMonth);
-    let accumulated = 0;
-    for (let i = 0; i <= monthIndex; i++) {
-      accumulated += parseToNumber(monthlyTax[months[i]]);
-    }
-    return accumulated;
-  };
+  const calculateAccumulatedTax = (upToMonth) => sumAccumulated(monthlyTax, upToMonth, parseToNumber);
 
-  const getTotalYearlyTax = () => {
-  return Object.values(monthlyTax).reduce((sum, value) => sum + parseToNumber(value), 0);
-  };
+  const getTotalYearlyTax = () => sumYearly(monthlyTax, parseToNumber);
 
   // ฟังก์ชันคำนวณรายได้สะสมถึงเดือนที่กำหนด
-  const calculateAccumulatedIncome = (upToMonth) => {
-    const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
-    const monthIndex = months.indexOf(upToMonth);
-    let accumulated = 0;
-    for (let i = 0; i <= monthIndex; i++) {
-      accumulated += parseToNumber(monthlyIncome[months[i]]);
-    }
-    return accumulated;
+  const calculateAccumulatedIncome = (upToMonth) => sumAccumulated(monthlyIncome, upToMonth, parseToNumber);
+
+  // Helper: format value for display
+  const getDisplayValue = (value) => {
+    const num = parseToNumber(value);
+    return num === 0 ? '0' : maskNumberFormat(num);
+  };
+  const getSumDisplay = (obj) => {
+    const sum = Object.values(obj).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
+    return mode === 'edit' ? formatCurrency(sum) : getDisplayValue(sum);
   };
 
   return (
@@ -213,9 +182,7 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
         <label className={styles.yearLabel}>เลือกปี:</label>
         <select 
           value={selectedYear}
-          onChange={(e) => {
-            setSelectedYear(e.target.value);
-          }}
+          onChange={(e) => setSelectedYear(e.target.value)}
           className={styles.yearSelect}
         >
           {getSortedYears().map(yearAD => {
@@ -293,27 +260,11 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
               { month: '07', name: 'กรกฎาคม' }, { month: '08', name: 'สิงหาคม' }, { month: '09', name: 'กันยายน' },
               { month: '10', name: 'ตุลาคม' }, { month: '11', name: 'พฤศจิกายน' }, { month: '12', name: 'ธันวาคม' }
             ].map(({ month, name }) => {
-              const accumulatedTax = calculateAccumulatedTax(month);
-              const accumulatedIncome = calculateAccumulatedIncome(month);
+              const accumulatedTaxVal = calculateAccumulatedTax(month);
+              const accumulatedIncomeVal = calculateAccumulatedIncome(month);
               const income = monthlyIncome[month] || '0.00';
-              let displayAccumulatedIncome = maskNumberFormat(parseToNumber(accumulatedIncome));
-              if (!displayAccumulatedIncome) displayAccumulatedIncome = '0';
               const provident = monthlyProvident?.[month] || '0.00';
-              const safeMonthly = monthlyTax[month] !== undefined && monthlyTax[month] !== null && monthlyTax[month] !== ''
-                ? parseToNumber(monthlyTax[month])
-                : 0;
-              let displayMonthlyTax;
-              if (safeMonthly === 0) {
-                displayMonthlyTax = '0';
-              } else {
-                displayMonthlyTax = maskNumberFormat(parseToNumber(safeMonthly));
-                if (!displayMonthlyTax) displayMonthlyTax = '0';
-              }
-              const safeAccumulated = accumulatedTax !== undefined && accumulatedTax !== null && accumulatedTax !== ''
-                ? parseToNumber(accumulatedTax)
-                : 0;
-              let displayAccumulatedTax = maskNumberFormat(parseToNumber(safeAccumulated));
-              if (!displayAccumulatedTax) displayAccumulatedTax = '0';
+              const monthlyTaxVal = monthlyTax[month] || '0.00';
               return (
                 <tr key={month} className={styles.tableRow}>
                   <td className={`${styles.tableCell} ${styles.left}`}>{name}</td>
@@ -328,11 +279,11 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
                         className={styles.monthInput}
                       />
                     ) : (
-                      <span>{maskNumberFormat(parseToNumber(income))}</span>
+                      <span>{getDisplayValue(income)}</span>
                     )}
                   </td>
                   <td className={`${styles.tableCell} ${styles.right}`}>
-                    <span>{mode === 'edit' ? formatCurrency(accumulatedIncome) : displayAccumulatedIncome}</span>
+                    <span>{mode === 'edit' ? formatCurrency(accumulatedIncomeVal) : getDisplayValue(accumulatedIncomeVal)}</span>
                   </td>
                   <td className={`${styles.tableCell} ${styles.right}`}>
                     {mode === 'edit' ? (
@@ -345,24 +296,24 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
                         className={styles.monthInput}
                       />
                     ) : (
-                      <span>{maskNumberFormat(parseToNumber(provident))}</span>
+                      <span>{getDisplayValue(provident)}</span>
                     )}
                   </td>
                   <td className={`${styles.tableCell} ${styles.right}`}>
                     {mode === 'edit' ? (
                       <input
                         type="text"
-                        value={monthlyTax[month]}
+                        value={monthlyTaxVal}
                         onChange={e => handleNumberInput(e.target.value, setMonthlyTax, month)}
                         onBlur={e => handleNumberBlur(e.target.value, setMonthlyTax, month)}
                         placeholder={taxKeyThaiMapping['monthly_tax']}
                         className={styles.monthInput}
                       />
                     ) : (
-                      <span>{displayMonthlyTax}</span>
+                      <span>{getDisplayValue(monthlyTaxVal)}</span>
                     )}
                   </td>
-                  <td className={`${styles.tableCell} ${styles.right} ${styles.accumulatedCell}`}>{mode === 'edit' ? formatCurrency(accumulatedTax) : displayAccumulatedTax}</td>
+                  <td className={`${styles.tableCell} ${styles.right} ${styles.accumulatedCell}`}>{mode === 'edit' ? formatCurrency(accumulatedTaxVal) : getDisplayValue(accumulatedTaxVal)}</td>
                 </tr>
               );
             })}
@@ -370,37 +321,11 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
           <tfoot>
             <tr className={styles.totalRow}>
               <td className={styles.totalCell}>รวมทั้งปี</td>
-              <td className={`${styles.totalCell} ${styles.right}`}>
-                {(() => {
-                  const sum = Object.values(monthlyIncome).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
-                  return mode === 'edit' ? formatCurrency(sum) : maskNumberFormat(sum);
-                })()}
-              </td>
-              <td className={`${styles.totalCell} ${styles.right}`}>
-                {(() => {
-                  // รายได้สะสมทั้งปี = รายรับรวมทั้งปี
-                  const sum = Object.values(monthlyIncome).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
-                  return mode === 'edit' ? formatCurrency(sum) : maskNumberFormat(sum);
-                })()}
-              </td>
-              <td className={`${styles.totalCell} ${styles.right}`}>
-                {(() => {
-                  const sum = Object.values(monthlyProvident || {}).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
-                  return mode === 'edit' ? formatCurrency(sum) : maskNumberFormat(sum);
-                })()}
-              </td>
-              <td className={`${styles.totalCell} ${styles.right}`}>
-                {(() => {
-                  const sum = Object.values(monthlyTax).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
-                  return mode === 'edit' ? formatCurrency(sum) : maskNumberFormat(sum);
-                })()}
-              </td>
-              <td className={`${styles.totalCell} ${styles.right}`}>
-                {(() => {
-                  const sum = Object.values(monthlyTax).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
-                  return mode === 'edit' ? formatCurrency(sum) : maskNumberFormat(sum);
-                })()}
-              </td>
+              <td className={`${styles.totalCell} ${styles.right}`}>{getSumDisplay(monthlyIncome)}</td>
+              <td className={`${styles.totalCell} ${styles.right}`}>{getSumDisplay(monthlyIncome)}</td>
+              <td className={`${styles.totalCell} ${styles.right}`}>{getSumDisplay(monthlyProvident)}</td>
+              <td className={`${styles.totalCell} ${styles.right}`}>{getSumDisplay(monthlyTax)}</td>
+              <td className={`${styles.totalCell} ${styles.right}`}>{getSumDisplay(monthlyTax)}</td>
             </tr>
           </tfoot>
         </table>

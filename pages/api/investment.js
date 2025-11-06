@@ -1,4 +1,5 @@
 import dbPromise from '../../lib/mongodb';
+import { mapInvestmentDoc } from '../../src/shared/utils/apiUtils';
 
 export default async function handler(req, res) {
   const db = await dbPromise;
@@ -8,13 +9,13 @@ export default async function handler(req, res) {
     const { month } = req.query;
     if (month) {
       const doc = await collection.findOne({ month });
-      return res.status(200).json(doc ? doc.investments || [] : []);
+      return res.status(200).json(mapInvestmentDoc(doc));
     } else {
       // ดึงข้อมูลทุกเดือน
       const allDocs = await collection.find({}).toArray();
       const data = {};
       allDocs.forEach(doc => {
-        data[doc.month] = doc.investments || [];
+        data[doc.month] = mapInvestmentDoc(doc);
       });
       return res.status(200).json(data);
     }

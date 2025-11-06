@@ -25,6 +25,7 @@ function HomeContent() {
   const [activeTab, setActiveTab] = useState('income');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [months, setMonths] = useState([]);
+  const [mode, setMode] = useState('view');
 
   // ดึงเดือนทั้งหมดจาก expense, income, salary แล้วรวม key
   const fetchMonths = async () => {
@@ -38,31 +39,24 @@ function HomeContent() {
       const savingsMonths = savingsRes ? Object.keys(savingsRes) : [];
       const salaryMonths = salaryRes ? Object.keys(salaryRes) : [];
       const allMonths = Array.from(new Set([...expenseMonths, ...savingsMonths, ...salaryMonths])).sort().reverse();
-      console.log('[DEBUG] expenseMonths:', expenseMonths);
-      console.log('[DEBUG] savingsMonths:', savingsMonths);
-      console.log('[DEBUG] salaryMonths:', salaryMonths);
-      console.log('[DEBUG] allMonths:', allMonths);
+      // Debug logs removed for production
       setMonths(allMonths);
       const currentMonth = getCurrentMonth();
-      console.log('[DEBUG] currentMonth:', currentMonth);
       if (allMonths.includes(currentMonth)) {
-        console.log('[DEBUG] setSelectedMonth:', currentMonth);
         setSelectedMonth(currentMonth);
       } else if (allMonths.length && !allMonths.includes(selectedMonth)) {
-        console.log('[DEBUG] setSelectedMonth fallback:', allMonths[0]);
         setSelectedMonth(allMonths[0]);
       }
-      console.log('[DEBUG] selectedMonth after set:', selectedMonth);
+      // Debug logs removed for production
     } catch (err) {
       setMonths([]);
-      console.log('[DEBUG] fetchMonths error:', err);
+      // Debug logs removed for production
     }
   };
 
 
   // โหลดเดือนเมื่อ mount หรือ refresh
   React.useEffect(() => {
-    console.log('[useEffect] call fetchMonths, refreshTrigger:', refreshTrigger);
     fetchMonths();
   }, [refreshTrigger]);
 
@@ -92,7 +86,7 @@ function HomeContent() {
         <header className={styles.pageHeader}>
           {/* Theme Toggle */}
           <div className={styles.themeToggleContainer}>
-            <ThemeToggle />
+            <ThemeToggle mode={mode} setMode={setMode} />
           </div>
           
           <h1 className={styles.pageTitle}>
