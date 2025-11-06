@@ -39,6 +39,78 @@ export const investmentAPI = {
   }
 };
 // ...existing code...
+
+// Salary summary calculation
+export function calculateSalarySummary(salaryData) {
+  const total_income = Object.values(salaryData.income || {}).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
+  const total_deduct = Object.values(salaryData.deduct || {}).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
+  const net_income = total_income - total_deduct;
+  return { total_income, total_deduct, net_income };
+}
+
+// Savings summary calculation
+export function calculateTotalSavings(savingsList) {
+  return savingsList.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+}
+
+// Investment: map doc to month-data object
+export function mapInvestmentDoc(doc) {
+  return doc && doc.investments ? doc.investments : [];
+}
+
+// Tax accumulated: ensure monthly_provident always present
+export function ensureMonthlyProvident(doc) {
+  if (!doc.monthly_provident) doc.monthly_provident = {};
+  return doc;
+}
+// Utility: คำนวณผลรวมจาก object
+export function sumValues(obj, excludeKeys = []) {
+  return Object.entries(obj)
+    .filter(([key, v]) => typeof v === 'number' && !excludeKeys.includes(key))
+    .reduce((sum, [, value]) => sum + (parseFloat(value) || 0), 0);
+}
+
+// Utility: map doc expense/income เป็น flat object พร้อม summary
+export function mapDocToFlatItemObjectWithTotals(doc) {
+  if (!doc) return {};
+  if (doc.months) return doc;
+  let out = {};
+  if (doc.estimate && doc.actual) {
+    const items = Array.from(new Set([...Object.keys(doc.estimate), ...Object.keys(doc.actual)]));
+    items.forEach(key => {
+      out[key] = {
+        estimate: doc.estimate[key] ?? 0,
+        actual: doc.actual[key] ?? 0,
+        paid: false
+      };
+    });
+  } else {
+    Object.keys(doc).forEach(key => {
+      if (key === 'month' || key === '_id') return;
+      const val = doc[key];
+      if (val && typeof val === 'object') {
+        out[key] = {
+          estimate: val.estimate ?? 0,
+          actual: val.actual ?? 0,
+          paid: typeof val.paid === 'boolean' ? val.paid : false
+        };
+      }
+    });
+  }
+  // Add summary fields
+  const sumEstimate = Object.values(out).reduce((sum, v) => sum + (typeof v === 'object' && v.estimate ? parseFloat(v.estimate) || 0 : 0), 0);
+  const sumActual = Object.values(out).reduce((sum, v) => sum + (typeof v === 'object' && v.actual ? parseFloat(v.actual) || 0 : 0), 0);
+  out.totalEstimate = Math.round(sumEstimate * 100) / 100;
+  out.totalActualPaid = Math.round(sumActual * 100) / 100;
+  return out;
+}
+
+// Utility: ลบ field summary ออกจาก object
+export function removeSummaryFields(obj, fields = ['รวม', 'totalEstimate', 'totalActualPaid']) {
+  const out = { ...obj };
+  fields.forEach(f => { if (f in out) delete out[f]; });
+  return out;
+}
 // Utility functions สำหรับเรียก API
 
 // URL constants

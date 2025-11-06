@@ -1,4 +1,5 @@
 import dbPromise from '../../lib/mongodb';
+import { ensureMonthlyProvident } from '../../src/shared/utils/apiUtils';
 
 export default async function handler(req, res) {
 	const db = await dbPromise;
@@ -11,16 +12,13 @@ export default async function handler(req, res) {
 			if (!doc) {
 				return res.status(200).json({ [year]: { accumulated_tax: 0, monthly_tax: {}, monthly_income: {}, monthly_provident: {} } });
 			}
-			// Ensure monthly_provident is always present for frontend
-			if (!doc.monthly_provident) doc.monthly_provident = {};
-			return res.status(200).json({ [year]: doc });
+			return res.status(200).json({ [year]: ensureMonthlyProvident(doc) });
 		} else {
 			// all years
 			const allDocs = await collection.find({}).toArray();
 			const data = { tax_by_year: {} };
 			allDocs.forEach(doc => {
-				if (!doc.monthly_provident) doc.monthly_provident = {};
-				data.tax_by_year[doc.year] = doc;
+				data.tax_by_year[doc.year] = ensureMonthlyProvident(doc);
 			});
 			return res.status(200).json(data);
 		}

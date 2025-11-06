@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { formatCurrency, calculateSum, parseAndFormat, parseToNumber, maskNumberFormat } from '../../shared/utils/numberUtils';
+import { formatCurrency, parseAndFormat, parseToNumber, maskNumberFormat } from '../../shared/utils/numberUtils';
+import { mapSavingsApiToList, calculateTotalSavings } from '../../shared/utils/savingsUtils';
 import { savingsAPI } from '../../shared/utils/apiUtils';
 import { Icons } from './Icons';
 import InvestmentTable from './InvestmentTable';
@@ -15,20 +16,7 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
       savingsAPI.getByMonth(selectedMonth)
         .then(data => {
           setSavingsData(data);
-          // Map API fields to Thai fields for frontend compatibility
-          if (Array.isArray(data.savings_list)) {
-            setรายการเงินออม(
-              data.savings_list.map(item => ({
-                ...item,
-                รายการ: item.savings_type ?? item.รายการ ?? '',
-                จำนวนเงิน: item.savings_amount ?? item.amount ?? item.จำนวนเงิน ?? 0
-              }))
-            );
-          } else if (Array.isArray(data.รายการเงินออม)) {
-            setรายการเงินออม(data.รายการเงินออม);
-          } else {
-            setรายการเงินออม([]);
-          }
+          setรายการเงินออม(mapSavingsApiToList(data));
         })
         .catch(error => console.error('Error loading savings data:', error));
     }
@@ -79,12 +67,16 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
 
   if (!savingsData) return <div>กำลังโหลด...</div>;
 
-  const รวมเงินเก็บ = calculateSum(รายการเงินออม.map(item => item.จำนวนเงิน || 0));
-
-  // Mapping English savings keys to Thai labels
+  const รวมเงินเก็บ = calculateTotalSavings(รายการเงินออม);
   const savingsKeyThaiMapping = {
     savings_type: 'รายการออม',
     savings_amount: 'จำนวนเงินออม'
+  };
+
+  // Helper: format value for display
+  const getDisplayValue = (value) => {
+    const num = parseToNumber(value);
+    return num === 0 ? '0' : maskNumberFormat(num);
   };
 
   return (
@@ -143,7 +135,7 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
                         className={styles.savingsInput}
                       />
                     ) : (
-                      <span>{maskNumberFormat(parseToNumber(item.savings_amount))}</span>
+                      <span>{getDisplayValue(item.savings_amount)}</span>
                     )}
                   </td>
                   <td className={`${styles.tableCell} ${styles.center}`}>
@@ -185,13 +177,13 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
         <div className={styles.summaryContent}>
           <div className={styles.summaryItem}>
             <span className={styles.summaryLabel}>รวมเงินออมเดือนนี้:</span>
-            <span className={styles.summaryValue}>{mode === 'edit' ? formatCurrency(รวมเงินเก็บ) : maskNumberFormat(parseToNumber(รวมเงินเก็บ))}</span>
+            <span className={styles.summaryValue}>{mode === 'edit' ? formatCurrency(รวมเงินเก็บ) : getDisplayValue(รวมเงินเก็บ)}</span>
           </div>
         </div>
       </div>
 
       {/* การลงทุน */}
-      <div style={{ marginTop: 32 }}>
+      <div className={styles.investmentSection}>
         <InvestmentTable selectedMonth={selectedMonth} mode={mode} />
       </div>
     </div>
