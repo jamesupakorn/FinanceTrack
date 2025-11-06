@@ -1,4 +1,5 @@
 import dbPromise from '../../lib/mongodb';
+import { calculateSalarySummary } from '../../src/shared/utils/apiUtils';
 
 function createDefaultSalaryStructure() {
 	return {
@@ -27,21 +28,6 @@ function createDefaultSalaryStructure() {
 	};
 }
 
-function calculateSummary(salaryData) {
-	const total_income = Object.values(salaryData.income || {}).reduce(
-		(sum, val) => sum + (parseFloat(val) || 0), 0
-	);
-	const total_deduct = Object.values(salaryData.deduct || {}).reduce(
-		(sum, val) => sum + (parseFloat(val) || 0), 0
-	);
-	const net_income = total_income - total_deduct;
-	return {
-		total_income,
-		total_deduct,
-		net_income
-	};
-}
-
 export default async function handler(req, res) {
 	const db = await dbPromise;
 	const collection = db.collection('salary');
@@ -63,12 +49,10 @@ export default async function handler(req, res) {
 						await collection.updateOne({ month }, { $set: { ...doc } });
 					}
 				}
-				const total_income = Object.values(doc.income || {}).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
-				const total_deduct = Object.values(doc.deduct || {}).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
-				const net_income = total_income - total_deduct;
+				const summary = calculateSalarySummary(doc);
 				return res.json({
 					...doc,
-					summary: { total_income, total_deduct, net_income }
+					summary
 				});
 			} else {
 				// return all
@@ -90,7 +74,7 @@ export default async function handler(req, res) {
 				note: note || "",
 				saved_at: new Date().toISOString()
 			};
-			salaryData.summary = calculateSummary(salaryData);
+			salaryData.summary = calculateSalarySummary(salaryData);
 			await collection.updateOne(
 				{ month },
 				{ $set: { ...salaryData, month } },

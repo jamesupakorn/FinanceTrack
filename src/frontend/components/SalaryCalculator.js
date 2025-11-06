@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { formatCurrency, parseAndFormat, handleNumberInput, handleNumberBlur, parseToNumber, maskNumberFormat, calculateSalaryTotals } from '../../shared/utils/numberUtils';
+import { formatSalaryData, splitSalaryData } from '../../shared/utils/salaryUtils';
 import { salaryAPI, incomeAPI } from '../../shared/utils/apiUtils';
 import styles from '../styles/SalaryCalculator.module.css';
 
@@ -70,14 +71,9 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
     try {
       const data = await salaryAPI.getByMonth(selectedMonth);
       if (data && data.income && data.deduct) {
-        // รวมข้อมูล
+        // รวมข้อมูลและ format ด้วยฟังก์ชันกลาง
         const rawData = { ...data.income, ...data.deduct };
-        // Format ทุก field ด้วย handleInputBlur logic
-        const formattedData = {};
-        Object.keys(rawData).forEach(key => {
-          formattedData[key] = parseAndFormat(rawData[key]);
-        });
-        setSalaryData(formattedData);
+        setSalaryData(formatSalaryData(rawData, parseAndFormat));
       }
     } catch (error) {
       console.error('Error loading salary data:', error);
@@ -100,23 +96,8 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
 
   const saveSalaryData = async () => {
     try {
-      // แยกข้อมูลรายได้และหัก
-      const income = {
-        salary: parseToNumber(salaryData.salary),
-        overtime_1x: parseToNumber(salaryData.overtime_1x),
-        overtime_1_5x: parseToNumber(salaryData.overtime_1_5x),
-        overtime_2x: parseToNumber(salaryData.overtime_2x),
-        overtime_3x: parseToNumber(salaryData.overtime_3x),
-        overtime_other: parseToNumber(salaryData.overtime_other),
-        bonus: parseToNumber(salaryData.bonus),
-        other_income: parseToNumber(salaryData.other_income)
-      };
-
-      const deduction = {
-        provident_fund: parseToNumber(salaryData.provident_fund),
-        social_security: parseToNumber(salaryData.social_security),
-        tax: parseToNumber(salaryData.tax)
-      };
+      // แยกข้อมูลรายได้และหักด้วยฟังก์ชันกลาง
+      const { income, deduction } = splitSalaryData(salaryData, parseToNumber);
 
       // บันทึกข้อมูลเงินเดือนเฉพาะ salary.json
       const result = await salaryAPI.save(selectedMonth, income, deduction);
@@ -187,6 +168,12 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
     });
   };
 
+  // Helper: format value for display
+  const getDisplayValue = (value) => {
+    const num = parseToNumber(value);
+    return num === 0 ? '0' : maskNumberFormat(num);
+  };
+
   return (
     <div className={styles.salaryCalculator}>
       <h2 className={styles.title}>คำนวณเงินเดือน - {selectedMonth ? getThaiMonthName(selectedMonth) : 'กรุณาเลือกเดือน'}</h2>
@@ -195,7 +182,6 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
         {/* ส่วนรายได้ */}
         <div className={styles.incomeSection}>
           <h3 className={`${styles.sectionTitle} ${styles.incomeTitle}`}>รายได้</h3>
-
           <div className={styles.inputGrid}>
             {['salary', 'overtime_1x', 'overtime_1_5x', 'overtime_2x', 'overtime_3x', 'overtime_other', 'bonus', 'other_income'].map((key) => (
               <div className={styles.inputGroup} key={key}>
@@ -209,22 +195,20 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
                     placeholder="0.00"
                   />
                 ) : (
-                  <span>{maskNumberFormat(parseToNumber(salaryData[key]))}</span>
+                  <span>{getDisplayValue(salaryData[key])}</span>
                 )}
               </div>
             ))}
           </div>
-
           <div className={`${styles.subtotal} ${styles.incomeSubtotal}`}>
             <span>รวมรายได้: </span>
-            <span className={styles.amount}>{mode === 'edit' ? formatCurrency(calculatedResults.รวมรายได้) : maskNumberFormat(parseToNumber(calculatedResults.รวมรายได้))}</span>
+            <span className={styles.amount}>{mode === 'edit' ? formatCurrency(calculatedResults.รวมรายได้) : getDisplayValue(calculatedResults.รวมรายได้)}</span>
           </div>
         </div>
 
         {/* ส่วนหัก */}
         <div className={styles.deductionSection}>
           <h3 className={`${styles.sectionTitle} ${styles.deductionTitle}`}>หัก</h3>
-
           <div className={styles.inputGrid}>
             {['provident_fund', 'social_security', 'tax'].map((key) => (
               <div className={styles.inputGroup} key={key}>
@@ -238,22 +222,21 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
                     placeholder="0.00"
                   />
                 ) : (
-                  <span>{maskNumberFormat(parseToNumber(salaryData[key]))}</span>
+                  <span>{getDisplayValue(salaryData[key])}</span>
                 )}
               </div>
             ))}
           </div>
-
           <div className={`${styles.subtotal} ${styles.deductionSubtotal}`}>
             <span>รวมหัก: </span>
-            <span className={styles.amount}>{mode === 'edit' ? formatCurrency(calculatedResults.รวมหัก) : maskNumberFormat(parseToNumber(calculatedResults.รวมหัก))}</span>
+            <span className={styles.amount}>{mode === 'edit' ? formatCurrency(calculatedResults.รวมหัก) : getDisplayValue(calculatedResults.รวมหัก)}</span>
           </div>
         </div>
       </div>
 
       {/* ผลลัพธ์สุทธิ */}
       <div className={styles.netResult}>
-  <h3>เงินได้สุทธิ: <span className={styles.netAmount}>{mode === 'edit' ? formatCurrency(calculatedResults.เงินได้สุทธิ) : maskNumberFormat(parseToNumber(calculatedResults.เงินได้สุทธิ))}</span></h3>
+        <h3>เงินได้สุทธิ: <span className={styles.netAmount}>{mode === 'edit' ? formatCurrency(calculatedResults.เงินได้สุทธิ) : getDisplayValue(calculatedResults.เงินได้สุทธิ)}</span></h3>
       </div>
 
       {/* ปุ่มจัดการ */}

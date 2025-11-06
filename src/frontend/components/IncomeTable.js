@@ -6,7 +6,9 @@ const incomeKeyThaiMap = {
 };
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { formatCurrency, calculateSum, parseAndFormat, parseToNumber, formatIncomeData, handleNumberInput, handleNumberBlur, maskNumberFormat, calculateTotalFromObject, calculateTotalWithSalary as calculateTotalWithSalaryUtil } from '../../shared/utils/numberUtils';
+import { formatCurrency, parseAndFormat, parseToNumber, formatIncomeData, handleNumberInput, handleNumberBlur, maskNumberFormat } from '../../shared/utils/numberUtils';
+import { formatIncomeForSave } from '../../shared/utils/incomeUtils';
+import { calculateTotalWithSalary } from '../../shared/utils/numberUtils';
 import { incomeAPI, salaryAPI } from '../../shared/utils/apiUtils';
 import { Icons } from './Icons';
 import styles from '../styles/IncomeTable.module.css';
@@ -54,14 +56,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, mode =
       // แยกเงินเดือนออกก่อนบันทึก (ไม่บันทึกเพราะมาจาก salary)
       const incomeToSave = { ...editIncome };
       delete incomeToSave.เงินเดือน;
-      
-      // แปลงเป็น number ก่อนบันทึก
-      const numericIncome = {};
-      Object.keys(incomeToSave).forEach(key => {
-        numericIncome[key] = parseToNumber(incomeToSave[key]);
-      });
-      
-      await incomeAPI.save(selectedMonth, numericIncome);
+      await incomeAPI.save(selectedMonth, formatIncomeForSave(incomeToSave, parseToNumber));
       // รีเฟรชข้อมูลหลังบันทึก
       const data = await incomeAPI.getByMonth(selectedMonth);
       setIncomeData(data);
@@ -71,9 +66,8 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, mode =
     }
   };
 
-  const calculateTotal = () => calculateTotalFromObject(editIncome);
-
-  const calculateTotalWithSalary = () => calculateTotalWithSalaryUtil(editIncome, salaryNetIncome);
+  // ใช้ฟังก์ชันรวมที่ตัดเงินเดือนออกก่อนบวก salaryNetIncome
+  const getTotalIncome = () => calculateTotalWithSalary(editIncome, salaryNetIncome);
 
   // Fallback: use keys from editIncome or incomeData (excluding 'month' and 'รวม') if items is missing
   let incomeItems = [];
@@ -84,6 +78,23 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, mode =
   } else if (incomeData && typeof incomeData === 'object') {
     incomeItems = Object.keys(incomeData).filter(k => k !== 'month' && k !== 'รวม');
   }
+
+  // Helper: format value for display
+  const getDisplayValue = (value) => {
+    const num = parseToNumber(value);
+    return num === 0 ? '0' : maskNumberFormat(num);
+  };
+
+  // Helper: get salary value for display
+  const getSalaryDisplayValue = () => {
+    if (salaryNetIncome !== undefined && salaryNetIncome !== null && salaryNetIncome !== '' && !isNaN(Number(salaryNetIncome))) {
+      return Number(salaryNetIncome);
+    }
+    if (editIncome['เงินเดือน'] !== undefined && editIncome['เงินเดือน'] !== null && editIncome['เงินเดือน'] !== '' && !isNaN(parseToNumber(editIncome['เงินเดือน']))) {
+      return parseToNumber(editIncome['เงินเดือน']);
+    }
+    return 0;
+  };
 
   return (
     <div className={styles.incomeContainer}>
@@ -105,14 +116,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, mode =
                       <div className={styles.salaryCell}>
                         {mode === 'edit'
                           ? formatCurrency(salaryNetIncome || editIncome[item] || 0)
-                          : (() => {
-                              const value = (salaryNetIncome !== undefined && salaryNetIncome !== null && salaryNetIncome !== '' && !isNaN(Number(salaryNetIncome)))
-                                ? Number(salaryNetIncome)
-                                : (editIncome[item] !== undefined && editIncome[item] !== null && editIncome[item] !== '' && !isNaN(parseToNumber(editIncome[item])))
-                                  ? parseToNumber(editIncome[item])
-                                  : 0;
-                              return value === 0 ? '0' : maskNumberFormat(value);
-                            })()}
+                          : getDisplayValue(getSalaryDisplayValue())}
                         <small className={styles.salarySource}>
                           (จากระบบเงินเดือน)
                         </small>
@@ -127,12 +131,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, mode =
                           className={styles.incomeInput}
                         />
                       ) : (
-                        <span>{(() => {
-                          const value = (editIncome[item] !== undefined && editIncome[item] !== null && editIncome[item] !== '' && !isNaN(parseToNumber(editIncome[item])))
-                            ? parseToNumber(editIncome[item])
-                            : 0;
-                          return value === 0 ? '0' : maskNumberFormat(value);
-                        })()}</span>
+                        <span>{getDisplayValue(editIncome[item])}</span>
                       )
                     )}
                   </td>
@@ -142,11 +141,8 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, mode =
                 <td className={styles.totalCell}>รวม</td>
                 <td className={`${styles.totalCell} ${styles.totalValue}`}>
                   {mode === 'edit'
-                    ? formatCurrency(calculateTotalWithSalary())
-                    : (() => {
-                        const total = Number(calculateTotalWithSalary()) || 0;
-                        return total === 0 ? '0' : maskNumberFormat(total);
-                      })()}
+                    ? formatCurrency(getTotalIncome())
+                    : getDisplayValue(getTotalIncome())}
                 </td>
               </tr>
             </tbody>

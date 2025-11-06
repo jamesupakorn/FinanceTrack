@@ -39,7 +39,11 @@ export const getAccountSummary = (editExpense) => {
   Object.entries(mapping).forEach(([account, items]) => {
     let sum = 0;
     items.forEach(item => {
-      sum += parseToNumber(editExpense[item]?.['estimate'] || 0);
+      // รวมเฉพาะยอดที่ยังไม่จ่าย
+      const paid = editExpense[item]?.['paid'];
+      if (paid !== true && paid !== 'true') {
+        sum += parseToNumber(editExpense[item]?.['estimate'] || 0);
+      }
     });
     summary[account] = sum;
   });

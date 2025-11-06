@@ -17,7 +17,8 @@ const expenseKeyThaiMap = {
   miscellaneous: 'ค่าใช้จ่ายเบ็ดเตล็ด'
 };
 import { useState, useEffect } from 'react';
-import { formatCurrency, calculateSum, parseAndFormat, parseToNumber, formatExpenseData, getAccountSummary, handleNumberInput, handleNumberBlur, maskNumberFormat } from '../../shared/utils/numberUtils';
+import { formatCurrency, parseAndFormat, parseToNumber, formatExpenseData, getAccountSummary, handleNumberInput, handleNumberBlur, maskNumberFormat } from '../../shared/utils/numberUtils';
+import { formatExpenseForSave, calculateExpenseTotal } from '../../shared/utils/expenseUtils';
 import BankAccountTable from './BankAccountTable';
 import { expenseAPI } from '../../shared/utils/apiUtils';
 import styles from '../styles/ExpenseTable.module.css';
@@ -73,20 +74,8 @@ export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
 
   const handleSave = async () => {
     try {
-      // แปลงเป็น number ก่อนบันทึก
-      const numericExpense = {};
-      Object.keys(editExpense).forEach(item => {
-        numericExpense[item] = {};
-        Object.keys(editExpense[item]).forEach(field => {
-          if (field === 'paid') {
-            numericExpense[item][field] = !!editExpense[item][field];
-          } else {
-            numericExpense[item][field] = parseToNumber(editExpense[item][field]);
-          }
-        });
-      });
-
-      await expenseAPI.save(selectedMonth, numericExpense);
+      // ใช้ฟังก์ชันกลาง format ข้อมูลก่อน save
+      await expenseAPI.save(selectedMonth, formatExpenseForSave(editExpense, parseToNumber));
       // รีเฟรชข้อมูลหลังบันทึก
       const data = await expenseAPI.getByMonth(selectedMonth);
       setExpenseData(data);
@@ -96,10 +85,7 @@ export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
     }
   };
 
-  const calculateTotal = (field) => {
-    const values = Object.values(editExpense).map(item => parseToNumber(item?.[field]));
-    return calculateSum(values);
-  };
+  const calculateTotal = (field) => calculateExpenseTotal(editExpense, field, parseToNumber);
 
 
 

@@ -1,0 +1,135 @@
+.investmentContainer {
+  margin-top: 24px;
+}
+
+.investmentTitle {
+  margin-bottom: 12px;
+}
+
+.baseAmountInput {
+  margin-left: 8px;
+  padding: 4px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  width: 120px;
+}
+
+.investmentTable {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tableHeaderRow {
+  background: #f3f4f6;
+}
+
+.tableHeaderCell {
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.tableCell {
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.inputText {
+  width: 100%;
+  padding: 4px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+
+.inputPercent {
+  width: 80px;
+  padding: 4px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+
+.amountCell {
+  text-align: right;
+}
+
+.deleteCell {
+  text-align: center;
+}
+
+.deleteButton {
+  color: #dc2626;
+  background: none;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.actionBar {
+  margin-top: 12px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.addButton {
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: none;
+  background: #1a7f37;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.averageButton {
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: none;
+  background: #f59e42;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.saveButton {
+  padding: 6px 24px;
+  border-radius: 6px;
+  border: none;
+  background: #2563eb;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.saveButton:disabled,
+.averageButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.statusSaving {
+  color: #2563eb;
+}
+
+.statusSuccess {
+  color: #16a34a;
+}
+
+.statusError {
+  color: #dc2626;
+}
+
+.percentSummary {
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+.percentSummaryError {
+  color: red;
+}
+
+.percentSummaryNormal {
+  color: #666;
+}
