@@ -26,6 +26,9 @@ import styles from '../styles/ExpenseTable.module.css';
 export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
   const [expenseData, setExpenseData] = useState(null);
   const [editExpense, setEditExpense] = useState({});
+  const [accountSummary, setAccountSummary] = useState({});
+  const [totalEstimate, setTotalEstimate] = useState(0);
+  const [totalActualPaid, setTotalActualPaid] = useState(0);
 
   useEffect(() => {
     if (selectedMonth) {
@@ -33,6 +36,9 @@ export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
         .then(data => {
           setExpenseData(data);
           setEditExpense(formatExpenseData(data, selectedMonth));
+          setAccountSummary(data.accountSummary || {});
+          setTotalEstimate(data.totalEstimate || 0);
+          setTotalActualPaid(data.totalActualPaid || 0);
         })
         .catch(error => console.error('Error loading expense data:', error));
     }
@@ -183,27 +189,18 @@ export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
                 })}
                 <tr className={styles.totalRow}>
                   <td className={styles.totalCell}>ยอดรวม</td>
-                  <td className={`${styles.totalCell} ${styles.right}`}>{mode === 'edit' ? formatCurrency(calculateTotal('estimate')) : (() => {
-                    const value = parseToNumber(calculateTotal('estimate'));
-                    return value === 0 ? '0' : maskNumberFormat(value);
-                  })()}</td>
-                  <td className={`${styles.totalCell} ${styles.right}`}>{mode === 'edit' ? formatCurrency(calculateTotal('actual')) : (() => {
-                    const value = parseToNumber(calculateTotal('actual'));
-                    return value === 0 ? '0' : maskNumberFormat(value);
-                  })()}</td>
+                  <td className={`${styles.totalCell} ${styles.right}`}>{mode === 'edit' ? formatCurrency(totalEstimate) : maskNumberFormat(totalEstimate)}</td>
+                  <td className={`${styles.totalCell} ${styles.right}`}>{mode === 'edit' ? formatCurrency(totalActualPaid) : maskNumberFormat(totalActualPaid)}</td>
                   <td className={`${styles.totalCell} ${styles.center}`}></td>
-                  <td className={`${styles.totalCell} ${styles.right} ${(calculateTotal('actual') - calculateTotal('estimate')) >= 0 ? styles.totalDiffPositive : styles.totalDiffNegative}`}>
-                    {mode === 'edit' ? formatCurrency(calculateTotal('actual') - calculateTotal('estimate')) : (() => {
-                      const value = parseToNumber(calculateTotal('actual') - calculateTotal('estimate'));
-                      return value === 0 ? '0' : maskNumberFormat(value);
-                    })()}
+                  <td className={`${styles.totalCell} ${styles.right} ${(totalActualPaid - totalEstimate) >= 0 ? styles.totalDiffPositive : styles.totalDiffNegative}`}>
+                    {mode === 'edit' ? formatCurrency(totalActualPaid - totalEstimate) : maskNumberFormat(totalActualPaid - totalEstimate)}
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
           {/* ตารางสรุปค่าใช้จ่ายแต่ละบัญชี */}
-          <BankAccountTable accountSummary={getAccountSummary(editExpense)} mode={mode} />
+          <BankAccountTable accountSummary={accountSummary} mode={mode} />
           {mode === 'edit' && (
             <div className={styles.saveButtonContainer}>
               <button
