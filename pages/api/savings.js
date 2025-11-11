@@ -61,9 +61,14 @@ export default async function handler(req, res) {
     if (!month) {
       return res.status(400).json({ error: 'month required' });
     }
+    // สร้าง object สำหรับบันทึก โดยไม่ใส่ total_savings ถ้าไม่ได้ส่งมา
+    const updateObj = { month, savings_list };
+    if (typeof total_savings !== 'undefined') {
+      updateObj.total_savings = total_savings;
+    }
     await collection.updateOne(
       { month },
-      { $set: { month, total_savings, savings_list } },
+      { $set: updateObj },
       { upsert: true }
     );
     return res.status(201).json({ success: true });

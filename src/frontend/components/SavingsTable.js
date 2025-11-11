@@ -57,8 +57,7 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
         ...item,
         จำนวนเงิน: parseToNumber(item.จำนวนเงิน)
       }));
-      
-      await savingsAPI.saveList(selectedMonth, numericSavings);
+  await savingsAPI.saveList(selectedMonth, numericSavings);
       alert('บันทึกรายการเงินออมสำเร็จ!');
     } catch (error) {
       console.error('Error saving savings list:', error);
