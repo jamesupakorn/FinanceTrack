@@ -40,9 +40,16 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
     });
   }, [selectedMonth]);
 
-  // ...other logic functions (updateField, removeInvestment, addInvestment, handleSave, etc.)...
-
-  // Calculate totalPercent and saveStatus as needed
+  // เพิ่มฟังก์ชันแก้ไขฟิลด์ในแต่ละรายการ
+  const updateField = (idx, field, value) => {
+    setInvestments(prev => prev.map((item, i) =>
+      i === idx ? { ...item, [field]: value } : item
+    ));
+  };
+  // เพิ่มฟังก์ชันลบรายการลงทุน
+  const removeInvestment = (idx) => {
+    setInvestments(prev => prev.filter((_, i) => i !== idx));
+  };
 
   // คำนวณเปอร์เซ็นรวมของรายการลงทุน
   const totalPercent = investments.reduce((sum, item) => sum + (parseFloat(item.percent) || 0), 0);
