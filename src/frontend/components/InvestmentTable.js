@@ -8,13 +8,22 @@ import { averagePercent, calcAmountFromPercent, sumPercent, mapInvestmentData } 
 export default function InvestmentTable({ selectedMonth, mode = 'view', onDataChange }) {
   const [baseAmount, setBaseAmount] = useState('');
   const [investments, setInvestments] = useState([]);
+
+  // ฟังก์ชันคำนวณ amount ตามเปอร์เซ็นต์
+  const recalcAmounts = (amount, invList) => {
+    const base = parseToNumber(amount);
+    return invList.map(item => ({
+      ...item,
+      amount: base && item.percent ? ((parseFloat(item.percent) / 100) * base).toFixed(2) : ''
+    }));
+  };
   const isFirstLoad = useRef(true);
   // เพิ่มฟังก์ชันเพิ่มรายการลงทุนใหม่
   const addInvestment = () => {
-    setInvestments(prev => [
+    setInvestments(prev => recalcAmounts(baseAmount, [
       ...prev,
       { name: '', percent: '', amount: '' }
-    ]);
+    ]));
   };
 
   // ฟังก์ชันบันทึกข้อมูลการลงทุน
@@ -36,15 +45,27 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
   useEffect(() => {
     if (!selectedMonth) return;
     investmentAPI.getByMonth(selectedMonth).then((data) => {
-      // ...existing code for data fetch...
+      // data คือ array investments จาก backend
+      if (Array.isArray(data)) {
+        setInvestments(data);
+      } else {
+        setInvestments([]);
+      }
     });
   }, [selectedMonth]);
 
   // เพิ่มฟังก์ชันแก้ไขฟิลด์ในแต่ละรายการ
   const updateField = (idx, field, value) => {
-    setInvestments(prev => prev.map((item, i) =>
-      i === idx ? { ...item, [field]: value } : item
-    ));
+    setInvestments(prev => {
+      const updated = prev.map((item, i) =>
+        i === idx ? { ...item, [field]: value } : item
+      );
+      // ถ้าแก้ percent ให้คำนวณ amount ใหม่
+      if (field === 'percent') {
+        return recalcAmounts(baseAmount, updated);
+      }
+      return updated;
+    });
   };
   // เพิ่มฟังก์ชันลบรายการลงทุน
   const removeInvestment = (idx) => {
@@ -65,7 +86,10 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
               type="number"
               min="0"
               value={baseAmount}
-              onChange={e => setBaseAmount(e.target.value)}
+              onChange={e => {
+                setBaseAmount(e.target.value);
+                setInvestments(prev => recalcAmounts(e.target.value, prev));
+              }}
               className={styles.baseAmountInput}
               disabled={mode !== 'edit'}
             />
