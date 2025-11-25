@@ -1,3 +1,76 @@
+/* Mobile Card Styles */
+.mobileCardList {
+  display: none;
+}
+.savingsCard {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  margin-bottom: 14px;
+  padding: 14px 12px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cardRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cardLabel {
+  font-size: 1em;
+  min-width: 90px;
+  color: #444;
+}
+.emptyCard {
+  text-align: center;
+  color: #aaa;
+  margin: 20px 0;
+}
+.hideOnMobile {
+  display: block;
+}
+.hideOnDesktop {
+  display: none;
+}
+@media (max-width: 700px) {
+  .tableContainer,
+  .table {
+    display: none !important;
+  }
+  .mobileCardList {
+    display: block;
+    margin-top: 8px;
+  }
+  .hideOnMobile {
+    display: none !important;
+  }
+  .hideOnDesktop {
+    display: block !important;
+  }
+  .savingsCard {
+    padding: 12px 8px 8px 8px;
+    margin-bottom: 10px;
+    font-size: 15px;
+  }
+  .cardLabel {
+    font-size: 0.98em;
+    min-width: 80px;
+  }
+  .savingsInput {
+    font-size: 15px;
+    padding: 7px 8px;
+    border-radius: 7px;
+  }
+  .deleteButton {
+    font-size: 15px;
+    padding: 6px 18px;
+    border-radius: 7px;
+    margin-left: auto;
+    margin-right: 0;
+  }
+}
 /* SavingsTable Component Styles */
 .savingsTable {
   padding: 32px;
@@ -276,5 +349,65 @@
   .deleteButton {
     padding: 6px 8px;
     font-size: 10px;
+  }
+}
+
+/* Responsive Design (เพิ่มเติม) */
+@media (max-width: 900px) {
+  .savingsTable {
+    padding: 16px;
+    margin: 12px 0;
+  }
+  .tableHeaderCell, .tableCell {
+    padding: 10px 6px;
+    font-size: 13px;
+  }
+  .savingsInput {
+    font-size: 13px;
+    padding: 6px 8px;
+  }
+  .addButton, .saveButton {
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+}
+
+@media (max-width: 600px) {
+  .savingsTable {
+    padding: 8px;
+    margin: 6px 0;
+  }
+  .sectionTitle {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .tableContainer {
+    overflow-x: auto;
+  }
+  .table {
+    font-size: 11px;
+    min-width: 400px;
+    overflow-x: auto;
+    display: block;
+  }
+  .tableHeaderCell, .tableCell {
+    padding: 6px 2px;
+    font-size: 11px;
+  }
+  .savingsInput {
+    font-size: 11px;
+    padding: 4px 6px;
+  }
+  .addButton, .saveButton {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+  .summarySection {
+    padding: 12px;
+    margin-top: 16px;
+  }
+  .summaryTitle {
+    font-size: 1rem;
   }
 }

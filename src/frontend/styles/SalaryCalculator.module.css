@@ -357,6 +357,13 @@
   
   .saveBtn, .clearBtn {
     width: 100%;
+    min-height: 44px;
+    min-width: 44px;
+    box-sizing: border-box;
+  }
+  .saveBtn:focus-visible, .clearBtn:focus-visible {
+    outline: 2px solid var(--color-primary, #0969da);
+    outline-offset: 2px;
   }
 }
 

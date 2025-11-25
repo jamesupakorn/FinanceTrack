@@ -1,3 +1,14 @@
+.headerAction {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 !important;
+  justify-content: flex-end;
+}
 /* ปุ่มกลับโหมดปกติให้เหมือนปุ่มหลักของแอป */
 .normalModeButton {
   font-family: inherit;
@@ -163,28 +174,27 @@
     padding: 18px;
     max-width: 100%;
   }
-  
   .pageHeader {
     padding: 35px 18px;
   }
-  
   .pageTitle {
     font-size: 2.5rem;
   }
-  
   .tabNavigation {
     gap: 8px;
   }
-  
   .tabButton {
     padding: 12px 20px;
     font-size: 15px;
     gap: 6px;
   }
-  
   .tabButton svg {
     width: 16px;
     height: 16px;
+  }
+  .headerAction {
+    top: 24px;
+    right: 24px;
   }
 }
 
@@ -193,24 +203,20 @@
   .mainContent {
     padding: 16px;
   }
-  
   .pageHeader {
     padding: 30px 16px;
     margin-bottom: 24px;
     border-radius: 12px;
   }
-  
   .pageTitle {
     font-size: 2.2rem;
     gap: 12px;
   }
-  
   .tabNavigation {
     flex-wrap: wrap;
     gap: 6px;
     justify-content: center;
   }
-  
   .tabButton {
     min-width: calc(50% - 3px);
     padding: 12px 16px;
@@ -218,23 +224,18 @@
     border-radius: 8px;
     gap: 6px;
   }
-  
   .tabButton svg {
     width: 16px;
     height: 16px;
   }
-  
   .sectionCard {
     padding: 20px;
     margin-bottom: 20px;
     border-radius: 12px;
   }
-  
-  .themeToggleContainer {
-    position: static;
-    margin-bottom: 20px;
-    display: flex;
-    justify-content: center;
+  .headerAction {
+    top: 24px;
+    right: 24px;
   }
 }
 
@@ -243,27 +244,27 @@
   .mainContent {
     padding: 12px;
   }
-  
   .pageHeader {
     padding: 24px 12px;
     margin-bottom: 20px;
   }
-  
   .pageTitle {
     font-size: 2rem;
     gap: 10px;
   }
-  
   .tabButton {
     min-width: calc(50% - 3px);
     padding: 10px 12px;
     font-size: 13px;
     gap: 5px;
   }
-  
   .tabButton svg {
     width: 14px;
     height: 14px;
+  }
+  .headerAction {
+    top: 24px;
+    right: 24px;
   }
 }
 
@@ -272,13 +273,11 @@
   .mainContent {
     padding: 10px;
   }
-  
   .pageHeader {
     padding: 20px 10px;
     margin-bottom: 16px;
     border-radius: 8px;
   }
-  
   .tabButton {
     min-width: 100%;
     margin-bottom: 6px;
@@ -286,26 +285,23 @@
     font-size: 14px;
     gap: 6px;
   }
-  
   .tabButton svg {
     width: 16px;
     height: 16px;
   }
-  
   .pageTitle {
     font-size: 1.6rem;
     flex-direction: column;
     gap: 8px;
   }
-  
   .sectionCard {
     padding: 16px;
     margin-bottom: 16px;
     border-radius: 8px;
   }
-  
-  .themeToggleContainer {
-    margin-bottom: 16px;
+  .headerAction {
+    top: 24px;
+    right: 24px;
   }
 }
 
@@ -325,5 +321,34 @@
   
   .sectionCard {
     padding: 12px;
+  }
+}
+
+.modeToggleBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+  .modeToggleBar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .normalModeButton {
+    width: 100%;
+    font-size: 1rem;
+    padding: 12px 0;
+    min-height: 44px;
+    min-width: 44px;
+    box-sizing: border-box;
+  }
+  .normalModeButton:focus-visible {
+    outline: 2px solid var(--color-primary, #0969da);
+    outline-offset: 2px;
   }
 }

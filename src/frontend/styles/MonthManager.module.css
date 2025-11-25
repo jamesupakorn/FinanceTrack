@@ -1,3 +1,24 @@
+.closeModalBtn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 28px;
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  z-index: 10;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+.closeModalBtn:active, .closeModalBtn:focus {
+  background: #eee;
+  outline: 2px solid var(--color-primary);
+}
 /* Month Manager Component Styles */
 .monthManager {
   margin-bottom: 48px;
@@ -58,29 +79,50 @@
   border-top: 1px solid var(--border-light);
 }
 
+
 .addMonthBtn {
   background: var(--gradient-primary);
-  color: white;
+  color: #fff;
   border: none;
-  padding: 16px 32px;
-  border-radius: 12px;
+  padding: 18px 0;
+  border-radius: 18px;
   cursor: pointer;
-  font-size: 16px;
-  font-weight: 600;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 6px 20px rgba(9, 105, 218, 0.25);
-  display: inline-flex;
+  font-size: 1.15rem;
+  font-weight: 700;
+  width: 100%;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 18px 0 rgba(9, 105, 218, 0.18);
+  transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+  display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  letter-spacing: 0.01em;
 }
-
-.addMonthBtn:hover {
+.addMonthBtn:hover, .addMonthBtn:focus-visible {
+  background: linear-gradient(90deg, #218bff 0%, #4f8cff 100%);
+  box-shadow: 0 8px 32px 0 rgba(9, 105, 218, 0.28);
+  outline: none;
   transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(9, 105, 218, 0.35);
+}
+.addMonthBtn:active {
+  background: var(--color-primary);
+  box-shadow: 0 2px 8px 0 rgba(9, 105, 218, 0.12);
+  transform: translateY(0);
 }
 
-.addMonthBtn:active {
-  transform: translateY(0);
+.addMonthBtnMargin {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.monthActions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-light);
 }
 
 .saveAllBtn {
@@ -106,29 +148,40 @@
 }
 
 /* Modal Overlay */
+/* Modal Overlay: รองรับ scroll บนจอเล็ก */
 .addMonthForm {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   background: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   z-index: 1000;
   backdrop-filter: blur(4px);
+  overflow-y: auto;
+  padding-top: 10vh;
+  box-sizing: border-box;
 }
 
+
+/* Modal Content: รองรับจอเล็ก, padding มากขึ้น, relative สำหรับปุ่มปิด */
 .formContent {
+  position: relative;
   background: var(--bg-surface);
-  padding: 24px;
+  padding: 24px 16px 16px 16px;
   border-radius: 12px;
   box-shadow: 0 10px 25px var(--shadow-strong);
   text-align: center;
   min-width: 300px;
   border: 1px solid var(--border-color);
+  width: 100%;
+  max-width: 350px;
+  margin: 0 auto;
 }
+
 
 .formContent h4 {
   margin-bottom: 20px;

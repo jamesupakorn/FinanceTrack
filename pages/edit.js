@@ -9,6 +9,9 @@ import SummaryReport from '../src/frontend/components/SummaryReport';
 import SalaryCalculator from '../src/frontend/components/SalaryCalculator';
 import MonthManager from '../src/frontend/components/MonthManager';
 import ThemeToggle from '../src/frontend/components/ThemeToggle';
+import ModePasswordModal from '../src/frontend/components/ModePasswordModal';
+import { ENCODED_EDIT_PASSWORD } from '../src/frontend/config/password.enc';
+import { decodePassword } from '../src/frontend/shared/utils/authUtils';
 import { Icons } from '../src/frontend/components/Icons';
 import { useTheme } from '../src/frontend/contexts/ThemeContext';
 import { incomeAPI, expenseAPI, savingsAPI, salaryAPI } from '../src/shared/utils/apiUtils';
@@ -18,6 +21,8 @@ function getCurrentMonth() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
+
+const EDIT_PASSWORD = decodePassword(ENCODED_EDIT_PASSWORD);
 
 export default function EditPage() {
   const router = useRouter();
@@ -61,6 +66,28 @@ export default function EditPage() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [salaryUpdateTrigger, setSalaryUpdateTrigger] = useState(0);
   const [months, setMonths] = useState([]);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const SESSION_KEY = 'edit_password_verified';
+  // ตรวจสอบ session password
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const verified = localStorage.getItem(SESSION_KEY);
+      if (verified !== 'true') {
+        setShowPasswordModal(true);
+      }
+    }
+  }, []);
+
+  const handlePasswordSubmit = (password) => {
+    if (password === EDIT_PASSWORD) {
+      localStorage.setItem(SESSION_KEY, 'true');
+      setShowPasswordModal(false);
+    } else {
+      alert('รหัสผ่านไม่ถูกต้อง');
+      localStorage.removeItem(SESSION_KEY);
+      setShowPasswordModal(true);
+    }
+  };
 
   // ดึงเดือนทั้งหมดจาก expense, income, salary แล้วรวม key
   const fetchMonths = async () => {
@@ -117,16 +144,22 @@ export default function EditPage() {
     setSelectedMonth(month);
   };
 
+  if (showPasswordModal) {
+    return (
+      <ModePasswordModal
+        open={true}
+        onClose={() => {}}
+        onSubmit={handlePasswordSubmit}
+        forceOpen
+      />
+    );
+  }
+
   return (
   <div className={styles.homeContainer} onClick={updateActivity} onKeyDown={updateActivity} onMouseMove={updateActivity}>
       <div className={styles.mainContent}>
         <header className={styles.pageHeader}>
-          {/* ThemeToggle removed in edit mode */}
-          <h1 className={styles.pageTitle}>
-            <Icons.Wallet size={40} color="white" />
-            โหมดแก้ไขข้อมูล
-          </h1>
-          <div style={{ position: 'absolute', right: 24, top: 24, zIndex: 10 }}>
+          <div className={styles.headerAction}>
             <button
               className={styles.normalModeButton}
               onClick={() => router.push('/')}
@@ -135,7 +168,11 @@ export default function EditPage() {
               กลับโหมดปกติ
             </button>
           </div>
-  </header>
+          <h1 className={styles.pageTitle}>
+            <Icons.Wallet size={40} color="white" />
+            โหมดแก้ไขข้อมูล
+          </h1>
+        </header>
 
       <MonthManager 
         selectedMonth={selectedMonth}

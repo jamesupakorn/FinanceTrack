@@ -120,52 +120,101 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
           )}
         </label>
       </div>
-      <table className={styles.investmentTable}>
-        <thead>
-          <tr className={styles.tableHeaderRow}>
-            <th className={styles.tableHeaderCell}>ชื่อหุ้น/กองทุน</th>
-            <th className={styles.tableHeaderCell}>เปอร์เซ็นการลงทุน (%)</th>
-            <th className={styles.tableHeaderCell}>จำนวนเงิน (บาท)</th>
-            {mode === 'edit' && <th className={styles.tableHeaderCell}>ลบ</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {investments.map((item, idx) => (
-            <tr key={idx}>
-              <td className={styles.tableCell}>
-                <input
-                  type="text"
-                  value={item.name}
-                  onChange={e => updateField(idx, 'name', e.target.value)}
-                  className={styles.inputText}
-                  disabled={mode !== 'edit'}
-                />
-              </td>
-              <td className={styles.tableCell}>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={item.percent}
-                  onChange={e => updateField(idx, 'percent', e.target.value)}
-                  className={styles.inputPercent}
-                  disabled={mode !== 'edit'}
-                />
-              </td>
-              <td className={`${styles.tableCell} ${styles.amountCell}`}>
+      {/* Desktop Table */}
+      <div className={styles.investmentTableWrapper + ' ' + styles.hideOnMobile}>
+        <table className={styles.investmentTable}>
+          <thead>
+            <tr className={styles.tableHeaderRow}>
+              <th className={styles.tableHeaderCell}>ชื่อหุ้น/กองทุน</th>
+              <th className={styles.tableHeaderCell}>เปอร์เซ็นการลงทุน (%)</th>
+              <th className={styles.tableHeaderCell}>จำนวนเงิน (บาท)</th>
+              {mode === 'edit' && <th className={styles.tableHeaderCell}>ลบ</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {investments.map((item, idx) => (
+              <tr key={idx}>
+                <td className={styles.tableCell}>
+                  <input
+                    type="text"
+                    value={item.name}
+                    onChange={e => updateField(idx, 'name', e.target.value)}
+                    className={styles.inputText}
+                    disabled={mode !== 'edit'}
+                  />
+                </td>
+                <td className={styles.tableCell}>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={item.percent}
+                    onChange={e => updateField(idx, 'percent', e.target.value)}
+                    className={styles.inputPercent}
+                    disabled={mode !== 'edit'}
+                  />
+                </td>
+                <td className={`${styles.tableCell} ${styles.amountCell}`}>
+                  {mode === 'edit'
+                    ? formatCurrency(item.amount)
+                    : maskNumberFormat(parseToNumber(item.amount))}
+                </td>
+                {mode === 'edit' && (
+                  <td className={`${styles.tableCell} ${styles.deleteCell}`}>
+                    <button type="button" onClick={() => removeInvestment(idx)} className={styles.deleteButton}>ลบ</button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile Card List */}
+      <div className={styles.mobileCardList + ' ' + styles.hideOnDesktop}>
+        {investments.length === 0 && (
+          <div className={styles.emptyCard}>ไม่มีรายการลงทุน</div>
+        )}
+        {investments.map((item, idx) => (
+          <div className={styles.investmentCard} key={idx}>
+            <div className={styles.cardRow}>
+              <label className={styles.cardLabel}>ชื่อหุ้น/กองทุน</label>
+              <input
+                type="text"
+                value={item.name}
+                onChange={e => updateField(idx, 'name', e.target.value)}
+                className={styles.inputText}
+                disabled={mode !== 'edit'}
+              />
+            </div>
+            <div className={styles.cardRow}>
+              <label className={styles.cardLabel}>เปอร์เซ็น (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={item.percent}
+                onChange={e => updateField(idx, 'percent', e.target.value)}
+                className={styles.inputPercent}
+                disabled={mode !== 'edit'}
+              />
+            </div>
+            <div className={styles.cardRow}>
+              <label className={styles.cardLabel}>จำนวนเงิน (บาท)</label>
+              <span className={styles.cardAmount}>
                 {mode === 'edit'
                   ? formatCurrency(item.amount)
                   : maskNumberFormat(parseToNumber(item.amount))}
-              </td>
-              {mode === 'edit' && (
-                <td className={`${styles.tableCell} ${styles.deleteCell}`}>
-                  <button type="button" onClick={() => removeInvestment(idx)} className={styles.deleteButton}>ลบ</button>
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </span>
+            </div>
+            {mode === 'edit' && (
+              <div className={styles.cardRow}>
+                <button type="button" onClick={() => removeInvestment(idx)} className={styles.deleteButton}>ลบ</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
       {mode === 'edit' && (
         <div className={styles.actionBar}>
           <button type="button" onClick={addInvestment} className={styles.addButton}>+ เพิ่มรายการลงทุน</button>
