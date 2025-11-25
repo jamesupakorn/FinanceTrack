@@ -75,11 +75,9 @@ function HomeContent() {
     <div className={styles.homeContainer}>
       <div className={styles.mainContent}>
         <header className={styles.pageHeader}>
-          {/* Theme Toggle */}
-          <div className={styles.themeToggleContainer}>
+          <div className={styles.headerAction}>
             <ThemeToggle mode={mode} setMode={setMode} />
           </div>
-                    
           <h1 className={styles.pageTitle}>
             <Icons.Wallet size={40} color="white" />
             ระบบจัดการการเงิน

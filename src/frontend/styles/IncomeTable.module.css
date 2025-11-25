@@ -1,3 +1,68 @@
+/* Mobile Card Styles */
+.mobileCardList {
+  display: none;
+}
+.incomeCard {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  margin-bottom: 14px;
+  padding: 14px 12px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.totalCard {
+  background: #f3f4f6;
+  font-weight: 700;
+}
+.cardRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cardLabel {
+  font-size: 1em;
+  min-width: 90px;
+  color: #444;
+}
+.hideOnMobile {
+  display: block;
+}
+.hideOnDesktop {
+  display: none;
+}
+@media (max-width: 700px) {
+  .incomeTable {
+    display: none !important;
+  }
+  .mobileCardList {
+    display: block;
+    margin-top: 8px;
+  }
+  .hideOnMobile {
+    display: none !important;
+  }
+  .hideOnDesktop {
+    display: block !important;
+  }
+  .incomeCard {
+    padding: 12px 8px 8px 8px;
+    margin-bottom: 10px;
+    font-size: 15px;
+  }
+  .cardLabel {
+    font-size: 0.98em;
+    min-width: 80px;
+  }
+  .incomeInput {
+    font-size: 15px;
+    padding: 7px 8px;
+    border-radius: 7px;
+    min-width: 100px;
+  }
+}
 /* IncomeTable Component Styles - ปรับโทนสีใหม่สบายตา */
 
 .incomeContainer {

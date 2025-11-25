@@ -99,7 +99,8 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
           )}
         </div>
 
-        <div className={styles.tableContainer}>
+        {/* Desktop Table */}
+        <div className={styles.tableContainer + ' ' + styles.hideOnMobile}>
           <table className={styles.table}>
             <thead className={styles.tableHeader}>
               <tr>
@@ -153,6 +154,57 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card List */}
+        <div className={styles.mobileCardList + ' ' + styles.hideOnDesktop}>
+          {รายการเงินออม.length === 0 && (
+            <div className={styles.emptyCard}>ไม่มีรายการเงินออม</div>
+          )}
+          {รายการเงินออม.map((item, index) => (
+            <div className={styles.savingsCard} key={index}>
+              <div className={styles.cardRow}>
+                <label className={styles.cardLabel}>{savingsKeyThaiMapping['savings_type']}</label>
+                {mode === 'edit' ? (
+                  <input
+                    type="text"
+                    value={item.savings_type || ''}
+                    onChange={e => handleSavingsItemChange(index, 'savings_type', e.target.value)}
+                    placeholder={savingsKeyThaiMapping['savings_type']}
+                    className={styles.savingsInput}
+                  />
+                ) : (
+                  <span>{item.savings_type}</span>
+                )}
+              </div>
+              <div className={styles.cardRow}>
+                <label className={styles.cardLabel}>{savingsKeyThaiMapping['savings_amount']}</label>
+                {mode === 'edit' ? (
+                  <input
+                    type="text"
+                    value={item.savings_amount || ''}
+                    onChange={e => handleSavingsAmountInput(e.target.value, index)}
+                    onBlur={e => handleSavingsAmountBlur(e.target.value, index)}
+                    placeholder={savingsKeyThaiMapping['savings_amount']}
+                    className={styles.savingsInput}
+                  />
+                ) : (
+                  <span>{getDisplayValue(item.savings_amount)}</span>
+                )}
+              </div>
+              {mode === 'edit' && (
+                <div className={styles.cardRow}>
+                  <button 
+                    onClick={() => handleDeleteSavingsItem(index)}
+                    className={styles.deleteButton}
+                  >
+                    <Icons.Trash size={14} color="white" />
+                    ลบ
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
 
         {mode === 'edit' && (
