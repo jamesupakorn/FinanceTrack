@@ -45,11 +45,33 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
   useEffect(() => {
     if (!selectedMonth) return;
     investmentAPI.getByMonth(selectedMonth).then((data) => {
-      // data คือ array investments จาก backend
-      if (Array.isArray(data)) {
+      if (Array.isArray(data) && data.length > 0) {
         setInvestments(data);
       } else {
-        setInvestments([]);
+        // ถ้าเดือนนี้ยังไม่มีข้อมูล ให้ดึงชื่อหุ้น/กองทุนจากเดือนก่อนหน้า
+        investmentAPI.getAll().then((allData) => {
+          // allData เป็น object {month: [investments]}
+          const months = Object.keys(allData).filter(m => m !== selectedMonth).sort();
+          // หาเดือนล่าสุดก่อนหน้า
+          let prevMonth = null;
+          for (let i = months.length - 1; i >= 0; i--) {
+            if (months[i] < selectedMonth) {
+              prevMonth = months[i];
+              break;
+            }
+          }
+          if (prevMonth && Array.isArray(allData[prevMonth])) {
+            // copy เฉพาะ name, percent (amount จะคำนวณใหม่)
+            const prevInvestments = allData[prevMonth].map(item => ({
+              name: item.name || '',
+              percent: item.percent || '',
+              amount: ''
+            }));
+            setInvestments(prevInvestments);
+          } else {
+            setInvestments([]);
+          }
+        });
       }
     });
   }, [selectedMonth]);
