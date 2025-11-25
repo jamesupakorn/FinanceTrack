@@ -173,15 +173,21 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
 
       {mode === 'edit' && (
         <div className={styles.monthActions}>
-          <button 
+          <button
             onClick={() => setShowAddForm(!showAddForm)}
             className={styles.addMonthBtn}
+            aria-label="เพิ่มเดือนใหม่"
+            tabIndex={0}
+            style={{ minHeight: 44, minWidth: 44 }}
           >
             + เพิ่มเดือนใหม่
           </button>
-          <button 
+          <button
             onClick={handleCopyPrevMonth}
             className={`${styles.addMonthBtn} ${styles.addMonthBtnMargin}`}
+            aria-label="คัดลอกข้อมูลจากเดือนก่อนหน้า"
+            tabIndex={0}
+            style={{ minHeight: 44, minWidth: 44 }}
           >
             ดึงข้อมูลจากเดือนก่อนหน้า
           </button>
@@ -189,12 +195,24 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
       )}
 
       {showAddForm && mode === 'edit' && (
-        <div className={styles.addMonthForm}>
+        <div className={styles.addMonthForm} tabIndex={-1} aria-modal="true" role="dialog">
           <div className={styles.formContent}>
-            <h4>เพิ่มเดือนใหม่</h4>
-            <button 
+            <button
+              className={styles.closeModalBtn}
+              aria-label="ปิดหน้าต่าง"
+              onClick={() => setShowAddForm(false)}
+              tabIndex={0}
+              style={{ position: 'absolute', top: 8, right: 8, minWidth: 44, minHeight: 44, fontSize: 28, background: 'none', border: 'none', color: '#888', cursor: 'pointer' }}
+            >
+              ×
+            </button>
+            <h4 style={{ marginTop: 32 }}>เพิ่มเดือนใหม่</h4>
+            <button
               onClick={handleAddNewMonth}
               className={styles.quickAddBtn}
+              aria-label={`เพิ่มเดือนถัดไป (${getNextMonth(selectedMonth)})`}
+              tabIndex={0}
+              style={{ minHeight: 44 }}
             >
               เดือนถัดไป ({getNextMonth(selectedMonth)})
             </button>
@@ -205,14 +223,26 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
                 value={newMonthName}
                 onChange={(e) => setNewMonthName(e.target.value)}
                 className={styles.monthInput}
+                aria-label="กรอกเดือนใหม่ (YYYY-MM)"
+                tabIndex={0}
+                style={{ minHeight: 44 }}
               />
-              <button onClick={handleCustomMonth} className={styles.customAddBtn}>
+              <button
+                onClick={handleCustomMonth}
+                className={styles.customAddBtn}
+                aria-label="เพิ่มเดือนที่กรอกเอง"
+                tabIndex={0}
+                style={{ minHeight: 44 }}
+              >
                 เพิ่ม
               </button>
             </div>
-            <button 
+            <button
               onClick={() => setShowAddForm(false)}
               className={styles.cancelBtn}
+              aria-label="ยกเลิก"
+              tabIndex={0}
+              style={{ minHeight: 44 }}
             >
               ยกเลิก
             </button>

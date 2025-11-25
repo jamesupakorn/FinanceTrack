@@ -101,7 +101,8 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, mode =
     <div className={styles.incomeContainer}>
       {incomeData && (
         <>
-          <table className={styles.incomeTable}>
+          {/* Desktop Table */}
+          <table className={styles.incomeTable + ' ' + styles.hideOnMobile}>
             <thead>
               <tr className={styles.tableHeader}>
                 <th className={styles.headerCell}>รายการ</th>
@@ -148,6 +149,44 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, mode =
               </tr>
             </tbody>
           </table>
+
+          {/* Mobile Card List */}
+          <div className={styles.mobileCardList + ' ' + styles.hideOnDesktop}>
+            {incomeItems.map((item, i) => (
+              <div className={styles.incomeCard} key={i}>
+                <div className={styles.cardRow}><span className={styles.cardLabel}>รายการ</span><span>{incomeKeyThaiMap[item] ?? item}</span></div>
+                <div className={styles.cardRow}>
+                  <span className={styles.cardLabel}>จำนวนเงิน</span>
+                  {item === 'เงินเดือน' ? (
+                    <div className={styles.salaryCell}>
+                      {mode === 'edit'
+                        ? formatCurrency(salaryNetIncome || editIncome[item] || 0)
+                        : getDisplayValue(getSalaryDisplayValue())}
+                      <small className={styles.salarySource}>
+                        (จากระบบเงินเดือน)
+                      </small>
+                    </div>
+                  ) : (
+                    mode === 'edit' ? (
+                      <input
+                        type="text"
+                        value={editIncome[item] ?? ''}
+                        onChange={e => handleNumberInput(e.target.value, setEditIncome, item)}
+                        onBlur={e => handleNumberBlur(e.target.value, setEditIncome, item)}
+                        className={styles.incomeInput}
+                      />
+                    ) : (
+                      <span>{getDisplayValue(editIncome[item])}</span>
+                    )
+                  )}
+                </div>
+              </div>
+            ))}
+            {/* Total summary card */}
+            <div className={styles.incomeCard + ' ' + styles.totalCard}>
+              <div className={styles.cardRow}><span className={styles.cardLabel}>รวม</span><span className={styles.totalValue}>{mode === 'edit' ? formatCurrency(getTotalIncome()) : getDisplayValue(getTotalIncome())}</span></div>
+            </div>
+          </div>
           {mode === 'edit' && (
             <div className={styles.saveButtonContainer}>
               <button onClick={handleSave} className={styles.saveButton}>

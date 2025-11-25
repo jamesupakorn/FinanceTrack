@@ -1,4 +1,3 @@
-
 import { useRouter } from 'next/router';
 import { ENCODED_EDIT_PASSWORD } from '../config/password.enc';
 import { decodePassword } from '../../shared/utils/authUtils';
@@ -32,12 +31,15 @@ const ThemeToggle = ({ mode, setMode }) => {
   };
 
   return (
-    <div className={styles.themeToggle}>
+    <>
       <button
         className={homeStyles.normalModeButton}
         onClick={handleEditClick}
         disabled={mode === 'edit'}
         type="button"
+        aria-label="เข้าสู่โหมดแก้ไข"
+        tabIndex={0}
+        style={{ minHeight: 44, minWidth: 44 }}
       >
         เข้าสู่โหมดแก้ไข
       </button>
@@ -46,7 +48,7 @@ const ThemeToggle = ({ mode, setMode }) => {
         onClose={handleModalClose} 
         onSubmit={handleModalSubmit} 
       />
-    </div>
+    </>
   );
 };
 

@@ -241,7 +241,8 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
         </div>
       )}
 
-      <div className={styles.tableSection}>
+      {/* Desktop Table */}
+      <div className={styles.tableSection + ' ' + styles.hideOnMobile}>
         <h3 className={styles.tableTitle}>ภาษีสะสมรายเดือน พ.ศ. {parseInt(selectedYear) + 543}</h3>
         <table className={styles.monthlyTable}>
           <thead className={styles.tableHeader}>
@@ -329,6 +330,73 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
             </tr>
           </tfoot>
         </table>
+      </div>
+
+      {/* Mobile Card List */}
+      <div className={styles.mobileCardList + ' ' + styles.hideOnDesktop}>
+        {[{ month: '01', name: 'มกราคม' }, { month: '02', name: 'กุมภาพันธ์' }, { month: '03', name: 'มีนาคม' },
+          { month: '04', name: 'เมษายน' }, { month: '05', name: 'พฤษภาคม' }, { month: '06', name: 'มิถุนายน' },
+          { month: '07', name: 'กรกฎาคม' }, { month: '08', name: 'สิงหาคม' }, { month: '09', name: 'กันยายน' },
+          { month: '10', name: 'ตุลาคม' }, { month: '11', name: 'พฤศจิกายน' }, { month: '12', name: 'ธันวาคม' }
+        ].map(({ month, name }) => {
+          const accumulatedTaxVal = calculateAccumulatedTax(month);
+          const accumulatedIncomeVal = calculateAccumulatedIncome(month);
+          const income = monthlyIncome[month] || '0.00';
+          const provident = monthlyProvident?.[month] || '0.00';
+          const monthlyTaxVal = monthlyTax[month] || '0.00';
+          return (
+            <div className={styles.taxCard} key={month}>
+              <div className={styles.cardRow}><span className={styles.cardLabel}>เดือน</span><span>{name}</span></div>
+              <div className={styles.cardRow}>
+                <span className={styles.cardLabel}>รายรับ</span>
+                {mode === 'edit' ? (
+                  <input
+                    type="text"
+                    value={income}
+                    onChange={e => handleNumberInput(e.target.value, setMonthlyIncome, month)}
+                    onBlur={e => handleNumberBlur(e.target.value, setMonthlyIncome, month)}
+                    placeholder="รายรับ"
+                    className={styles.monthInput}
+                  />
+                ) : (
+                  <span>{getDisplayValue(income)}</span>
+                )}
+              </div>
+              <div className={styles.cardRow}><span className={styles.cardLabel}>รายได้สะสม</span><span>{mode === 'edit' ? formatCurrency(accumulatedIncomeVal) : getDisplayValue(accumulatedIncomeVal)}</span></div>
+              <div className={styles.cardRow}>
+                <span className={styles.cardLabel}>กองทุนสำรองเลี้ยงชีพ</span>
+                {mode === 'edit' ? (
+                  <input
+                    type="text"
+                    value={provident}
+                    onChange={e => handleNumberInput(e.target.value, setMonthlyProvident, month)}
+                    onBlur={e => handleNumberBlur(e.target.value, setMonthlyProvident, month)}
+                    placeholder="กองทุนสำรองเลี้ยงชีพ"
+                    className={styles.monthInput}
+                  />
+                ) : (
+                  <span>{getDisplayValue(provident)}</span>
+                )}
+              </div>
+              <div className={styles.cardRow}>
+                <span className={styles.cardLabel}>{taxKeyThaiMapping['monthly_tax']}</span>
+                {mode === 'edit' ? (
+                  <input
+                    type="text"
+                    value={monthlyTaxVal}
+                    onChange={e => handleNumberInput(e.target.value, setMonthlyTax, month)}
+                    onBlur={e => handleNumberBlur(e.target.value, setMonthlyTax, month)}
+                    placeholder={taxKeyThaiMapping['monthly_tax']}
+                    className={styles.monthInput}
+                  />
+                ) : (
+                  <span>{getDisplayValue(monthlyTaxVal)}</span>
+                )}
+              </div>
+              <div className={styles.cardRow}><span className={styles.cardLabel}>{taxKeyThaiMapping['accumulated_tax']}</span><span>{mode === 'edit' ? formatCurrency(accumulatedTaxVal) : getDisplayValue(accumulatedTaxVal)}</span></div>
+            </div>
+          );
+        })}
       </div>
 
       {/* ปุ่มจัดการข้อมูล */}

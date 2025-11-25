@@ -99,7 +99,8 @@ export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
     <div className={styles.expenseTable}>
       {expenseData && (
         <>
-          <div className={styles.tableContainer}>
+          {/* Desktop Table */}
+          <div className={styles.tableContainer + ' ' + styles.hideOnMobile}>
             <table className={styles.table}>
               <thead className={styles.tableHeader}>
                 <tr>
@@ -195,6 +196,96 @@ export default function ExpenseTable({ selectedMonth, mode = 'view' }) {
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Card List */}
+          <div className={styles.mobileCardList + ' ' + styles.hideOnDesktop}>
+            {Object.keys(expenseKeyThaiMap).map((item, i) => {
+              const estimate = parseToNumber(
+                editExpense[item]?.['estimate'] ??
+                (expenseData.estimate && expenseData.estimate[item]) ??
+                (expenseData.months && expenseData.months[selectedMonth]?.[item]?.['estimate']) ??
+                0
+              );
+              const actual = parseToNumber(
+                editExpense[item]?.['actual'] ??
+                (expenseData.actual && expenseData.actual[item]) ??
+                (expenseData.months && expenseData.months[selectedMonth]?.[item]?.['actual']) ??
+                0
+              );
+              const paid = (editExpense[item]?.['paid'] !== undefined && editExpense[item]?.['paid'] !== null)
+                ? editExpense[item]['paid']
+                : (expenseData.actual && typeof expenseData.actual[item] === 'object' && expenseData.actual[item]?.['paid'] !== undefined)
+                  ? expenseData.actual[item]['paid']
+                  : (expenseData.months && expenseData.months[selectedMonth]?.[item]?.['paid'] !== undefined)
+                    ? expenseData.months[selectedMonth][item]['paid']
+                    : false;
+              const diff = actual - estimate;
+              return (
+                <div className={styles.expenseCard} key={i}>
+                  <div className={styles.cardRow}><span className={styles.cardLabel}>รายการ</span><span>{expenseKeyThaiMap[item] ?? item}</span></div>
+                  <div className={styles.cardRow}>
+                    <span className={styles.cardLabel}>ยอดประมาณการ</span>
+                    {mode === 'edit' ? (
+                      <input
+                        type="text"
+                        value={editExpense[item]?.['estimate'] ?? expenseData.months[selectedMonth]?.[item]?.['estimate'] ?? ''}
+                        onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'estimate', val))}
+                        onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'estimate', val))}
+                        className={styles.expenseInput}
+                      />
+                    ) : (
+                      <span>{(() => {
+                        const value = parseToNumber(estimate);
+                        return value === 0 ? '0' : maskNumberFormat(value);
+                      })()}</span>
+                    )}
+                  </div>
+                  <div className={styles.cardRow}>
+                    <span className={styles.cardLabel}>ยอดที่จ่ายจริง</span>
+                    {mode === 'edit' ? (
+                      <input
+                        type="text"
+                        value={editExpense[item]?.['actual'] ?? expenseData.months[selectedMonth]?.[item]?.['actual'] ?? ''}
+                        onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'actual', val))}
+                        onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'actual', val))}
+                        className={styles.expenseInput}
+                      />
+                    ) : (
+                      <span>{(() => {
+                        const value = parseToNumber(actual);
+                        return value === 0 ? '0' : maskNumberFormat(value);
+                      })()}</span>
+                    )}
+                  </div>
+                  <div className={styles.cardRow}>
+                    <span className={styles.cardLabel}>สถานะชำระ</span>
+                    <input
+                      type="checkbox"
+                      checked={paid === true || paid === 'true' ? true : false}
+                      onChange={e => handleExpenseChange(item, 'paid', e.target.checked)}
+                      disabled={mode !== 'edit'}
+                    />
+                  </div>
+                  <div className={styles.cardRow}>
+                    <span className={styles.cardLabel}>ส่วนต่าง</span>
+                    <span className={diff >= 0 ? styles.diffPositive : styles.diffNegative}>
+                      {mode === 'edit' ? formatCurrency(diff) : (() => {
+                        const value = parseToNumber(diff);
+                        return value === 0 ? '0' : maskNumberFormat(value);
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+            {/* Total summary card */}
+            <div className={styles.expenseCard + ' ' + styles.totalCard}>
+              <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดรวม</span></div>
+              <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดประมาณการ</span><span>{mode === 'edit' ? formatCurrency(totalEstimate) : maskNumberFormat(totalEstimate)}</span></div>
+              <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดที่จ่ายจริง</span><span>{mode === 'edit' ? formatCurrency(totalActualPaid) : maskNumberFormat(totalActualPaid)}</span></div>
+              <div className={styles.cardRow}><span className={styles.cardLabel}>ส่วนต่าง</span><span className={(totalActualPaid - totalEstimate) >= 0 ? styles.totalDiffPositive : styles.totalDiffNegative}>{mode === 'edit' ? formatCurrency(totalActualPaid - totalEstimate) : maskNumberFormat(totalActualPaid - totalEstimate)}</span></div>
+            </div>
           </div>
           {/* ตารางสรุปค่าใช้จ่ายแต่ละบัญชี (อัพเดตเรียลไทม์) */}
           <BankAccountTable accountSummary={getAccountSummary(editExpense)} mode={mode} />

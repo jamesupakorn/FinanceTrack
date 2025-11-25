@@ -202,6 +202,9 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
                     onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
                     onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
                     placeholder="0.00"
+                    aria-label={salaryKeyThaiMapping[key]}
+                    tabIndex={0}
+                    style={{ minHeight: 44 }}
                   />
                 ) : (
                   <span>{getDisplayValue(salaryData[key])}</span>
@@ -229,6 +232,9 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
                     onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
                     onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
                     placeholder="0.00"
+                    aria-label={salaryKeyThaiMapping[key]}
+                    tabIndex={0}
+                    style={{ minHeight: 44 }}
                   />
                 ) : (
                   <span>{getDisplayValue(salaryData[key])}</span>
@@ -251,10 +257,22 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
       {/* ปุ่มจัดการ */}
       {mode === 'edit' && (
         <div className={styles.actionButtons}>
-          <button onClick={saveSalaryData} className={styles.saveBtn}>
+          <button
+            onClick={saveSalaryData}
+            className={styles.saveBtn}
+            aria-label="บันทึกเงินเดือน"
+            tabIndex={0}
+            style={{ minHeight: 44, minWidth: 44, width: '100%' }}
+          >
             บันทึกเงินเดือน
           </button>
-          <button onClick={clearAll} className={styles.clearBtn}>
+          <button
+            onClick={clearAll}
+            className={styles.clearBtn}
+            aria-label="ล้างข้อมูล"
+            tabIndex={0}
+            style={{ minHeight: 44, minWidth: 44, width: '100%' }}
+          >
             ล้างข้อมูล
           </button>
         </div>

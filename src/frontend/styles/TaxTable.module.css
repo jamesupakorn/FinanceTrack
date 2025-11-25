@@ -1,3 +1,65 @@
+/* Mobile Card Styles */
+.mobileCardList {
+  display: none;
+}
+.taxCard {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  margin-bottom: 14px;
+  padding: 14px 12px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cardRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cardLabel {
+  font-size: 1em;
+  min-width: 90px;
+  color: #444;
+}
+.hideOnMobile {
+  display: block;
+}
+.hideOnDesktop {
+  display: none;
+}
+@media (max-width: 700px) {
+  .tableSection,
+  .monthlyTable {
+    display: none !important;
+  }
+  .mobileCardList {
+    display: block;
+    margin-top: 8px;
+  }
+  .hideOnMobile {
+    display: none !important;
+  }
+  .hideOnDesktop {
+    display: block !important;
+  }
+  .taxCard {
+    padding: 12px 8px 8px 8px;
+    margin-bottom: 10px;
+    font-size: 15px;
+  }
+  .cardLabel {
+    font-size: 0.98em;
+    min-width: 80px;
+  }
+  .monthInput {
+    font-size: 15px;
+    padding: 7px 8px;
+    border-radius: 7px;
+    width: 100px;
+  }
+}
 /* TaxTable Component Styles */
 .taxTable {
   padding: 32px;
@@ -380,5 +442,50 @@
 
   .monthInput {
     width: 80px;
+  }
+}
+
+/* Responsive Design (เพิ่มเติม) */
+@media (max-width: 900px) {
+  .monthlyTable {
+    font-size: 12px;
+    min-width: 600px;
+    overflow-x: auto;
+    display: block;
+  }
+  .tableHeaderCell, .tableCell {
+    padding: 10px 6px;
+    font-size: 12px;
+  }
+  .monthInput {
+    font-size: 12px;
+    padding: 6px 8px;
+    width: 80px;
+  }
+}
+
+@media (max-width: 600px) {
+  .tableSection {
+    overflow-x: auto;
+  }
+  .monthlyTable {
+    font-size: 11px;
+    min-width: 480px;
+    overflow-x: auto;
+    display: block;
+  }
+  .tableHeaderCell, .tableCell {
+    padding: 6px 2px;
+    font-size: 11px;
+  }
+  .monthInput {
+    font-size: 11px;
+    padding: 4px 6px;
+    width: 60px;
+  }
+  .saveBtn, .deleteBtn {
+    font-size: 13px;
+    padding: 8px 0;
+    width: 100%;
   }
 }

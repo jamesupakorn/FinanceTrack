@@ -1,3 +1,80 @@
+.mobileCardList {
+  display: none;
+}
+.investmentCard {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  margin-bottom: 14px;
+  padding: 14px 12px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cardRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cardLabel {
+  font-size: 1em;
+  min-width: 90px;
+  color: #444;
+}
+.cardAmount {
+  font-weight: 600;
+  color: #2563eb;
+  font-size: 1em;
+}
+.emptyCard {
+  text-align: center;
+  color: #aaa;
+  margin: 20px 0;
+}
+.hideOnMobile {
+  display: block;
+}
+.hideOnDesktop {
+  display: none;
+}
+@media (max-width: 700px) {
+  .investmentTableWrapper,
+  .investmentTable {
+    display: none !important;
+  }
+  .mobileCardList {
+    display: block;
+    margin-top: 8px;
+  }
+  .hideOnMobile {
+    display: none !important;
+  }
+  .hideOnDesktop {
+    display: block !important;
+  }
+  .investmentCard {
+    padding: 12px 8px 8px 8px;
+    margin-bottom: 10px;
+    font-size: 15px;
+  }
+  .cardLabel {
+    font-size: 0.98em;
+    min-width: 80px;
+  }
+  .inputText, .inputPercent {
+    font-size: 15px;
+    padding: 7px 8px;
+    border-radius: 7px;
+  }
+  .deleteButton {
+    font-size: 15px;
+    padding: 6px 18px;
+    border-radius: 7px;
+    margin-left: auto;
+    margin-right: 0;
+  }
+}
 .investmentContainer {
   margin-top: 24px;
 }
@@ -20,6 +97,11 @@
   background: #fff;
   border-radius: 8px;
   overflow: hidden;
+}
+
+.investmentTableWrapper {
+  width: 100%;
+  overflow-x: auto;
 }
 
 .tableHeaderRow {
@@ -132,4 +214,66 @@
 
 .percentSummaryNormal {
   color: #666;
+}
+
+/* Responsive Design */
+@media (max-width: 900px) {
+  .investmentTable {
+    min-width: 600px;
+    overflow-x: auto;
+    display: block;
+  }
+  .inputText, .inputPercent {
+    font-size: 13px;
+    padding: 3px;
+  }
+  .baseAmountInput {
+    width: 90px;
+    font-size: 13px;
+  }
+  .addButton, .averageButton, .saveButton {
+    padding: 5px 10px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 600px) {
+  .investmentContainer {
+    margin-top: 12px;
+    padding: 0 2px;
+  }
+  .investmentTitle {
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+  }
+  .investmentTable {
+    min-width: 480px;
+    overflow-x: auto;
+    display: block;
+  }
+  .tableHeaderCell, .tableCell {
+    padding: 6px 2px;
+    font-size: 11px;
+  }
+  .inputText, .inputPercent {
+    font-size: 11px;
+    padding: 2px;
+  }
+  .baseAmountInput {
+    width: 70px;
+    font-size: 11px;
+  }
+  .addButton, .averageButton, .saveButton {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+  .actionBar {
+    flex-direction: column;
+    gap: 6px;
+    align-items: stretch;
+  }
+  .deleteButton {
+    font-size: 11px;
+    padding: 2px 6px;
+  }
 }
