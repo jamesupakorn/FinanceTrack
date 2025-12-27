@@ -10,7 +10,7 @@ import MonthManager from '../src/frontend/components/MonthManager';
 import ThemeToggle from '../src/frontend/components/ThemeToggle';
 import ModePasswordModal from '../src/frontend/components/ModePasswordModal';
 import { ENCODED_EDIT_PASSWORD } from '../src/frontend/config/password.enc';
-import { decodePassword } from '../../src/shared/utils/authUtils';
+import { decodePassword } from '../src/shared/utils/authUtils';
 import { Icons } from '../src/frontend/components/Icons';
 import { useTheme } from '../src/frontend/contexts/ThemeContext';
 import { incomeAPI, expenseAPI, savingsAPI, salaryAPI } from '../src/shared/utils/apiUtils';
