@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import IncomeTable from '../src/frontend/components/IncomeTable';
@@ -11,7 +10,7 @@ import MonthManager from '../src/frontend/components/MonthManager';
 import ThemeToggle from '../src/frontend/components/ThemeToggle';
 import ModePasswordModal from '../src/frontend/components/ModePasswordModal';
 import { ENCODED_EDIT_PASSWORD } from '../src/frontend/config/password.enc';
-import { decodePassword } from '../src/frontend/shared/utils/authUtils';
+import { decodePassword } from '../../src/shared/utils/authUtils';
 import { Icons } from '../src/frontend/components/Icons';
 import { useTheme } from '../src/frontend/contexts/ThemeContext';
 import { incomeAPI, expenseAPI, savingsAPI, salaryAPI } from '../src/shared/utils/apiUtils';
@@ -22,13 +21,15 @@ function getCurrentMonth() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+
 const EDIT_PASSWORD = decodePassword(ENCODED_EDIT_PASSWORD);
+const SESSION_KEY = 'edit_last_activity'; // สำหรับ activity
+const SESSION_KEY_PASSWORD = 'edit_password_verified'; // สำหรับ password
 
 export default function EditPage() {
   const router = useRouter();
   // Session timeout: 30 minutes (1800 seconds)
   const SESSION_TIMEOUT = 30 * 60 * 1000;
-  const SESSION_KEY = 'edit_last_activity';
 
   // Update last activity timestamp
   const updateActivity = () => {
@@ -67,11 +68,10 @@ export default function EditPage() {
   const [salaryUpdateTrigger, setSalaryUpdateTrigger] = useState(0);
   const [months, setMonths] = useState([]);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const SESSION_KEY = 'edit_password_verified';
   // ตรวจสอบ session password
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-      const verified = localStorage.getItem(SESSION_KEY);
+      const verified = localStorage.getItem(SESSION_KEY_PASSWORD);
       if (verified !== 'true') {
         setShowPasswordModal(true);
       }
@@ -80,11 +80,11 @@ export default function EditPage() {
 
   const handlePasswordSubmit = (password) => {
     if (password === EDIT_PASSWORD) {
-      localStorage.setItem(SESSION_KEY, 'true');
+      localStorage.setItem(SESSION_KEY_PASSWORD, 'true');
       setShowPasswordModal(false);
     } else {
       alert('รหัสผ่านไม่ถูกต้อง');
-      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(SESSION_KEY_PASSWORD);
       setShowPasswordModal(true);
     }
   };
