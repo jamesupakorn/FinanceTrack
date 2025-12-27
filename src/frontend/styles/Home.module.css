@@ -143,12 +143,12 @@
 .tabContent {
   background: var(--bg-surface);
   border-radius: 20px;
-  padding: 32px;
   box-shadow: 0 6px 24px var(--shadow-sm);
   border: 1px solid var(--border-color);
   transition: all 0.3s ease;
   animation: fadeIn 0.3s ease-in-out;
   min-height: 400px;
+    padding: 32px;
 }
 
 .tabHeader {
