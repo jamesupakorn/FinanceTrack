@@ -65,13 +65,20 @@
 }
 /* IncomeTable Component Styles - ปรับโทนสีใหม่สบายตา */
 
+/* Make table horizontally scrollable if not enough columns, and visually full */
 .incomeContainer {
   position: relative;
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  overflow-x: auto;
 }
 
+
+/* Always visually full, even with 2 columns */
 .incomeTable {
   width: 100%;
-  min-width: 0;
+  min-width: 700px;
   max-width: 100%;
   margin-bottom: 24px;
   border-collapse: collapse;
@@ -81,7 +88,23 @@
   box-shadow: 0 6px 24px var(--shadow-sm);
   border: 2px solid var(--border-light);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  table-layout: fixed;
 }
+
+
+/* Make columns visually balanced and fill parent */
+.headerCell,
+.IncomeTable_headerCell__ihYc0,
+.tableCell,
+.IncomeTable_tableCell__zCkPB,
+/* Right-align value column */
+.inputCell,
+.IncomeTable_inputCell__dkzN_ {
+  width: 50vw;
+  min-width: 350px;
+  text-align: right;
+}
+
 
 .incomeTable:hover {
   transform: translateY(-2px);
@@ -121,13 +144,13 @@
   border-bottom: none;
 }
 
-.tableCell {
-  padding: 16px 20px;
-  font-size: 15px;
-  color: var(--text-primary);
-}
-
-.inputCell {
+/* Left-align label column, right-align value column */
+/* Flush left for label column */
+.inputCell,
+.IncomeTable_inputCell__dkzN_ {
+  width: 50vw;
+  min-width: 350px;
+  text-align: right;
   padding: 12px 20px;
 }
 
@@ -150,6 +173,7 @@
   font-weight: 500;
   margin-top: 4px;
   opacity: 0.8;
+  table-layout: fixed;
 }
 
 .incomeInput {
@@ -186,10 +210,11 @@
   padding: 18px 20px;
   font-weight: 800;
   color: var(--text-primary);
-  font-size: 16px;
-}
+  font-size: 16px;}
 
 .totalValue {
+  padding-left: 16px;
+  width: 50%;
   text-align: right;
   font-weight: 800;
   color: var(--secondary-color);
@@ -198,6 +223,14 @@
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+.tableCell,
+.IncomeTable_tableCell__zCkPB {
+  width: 50vw;
+  min-width: 350px;
+  text-align: left;
+  padding-left: 16px;
 }
 
 .saveButtonContainer {
