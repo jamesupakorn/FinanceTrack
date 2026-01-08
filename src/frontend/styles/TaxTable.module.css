@@ -317,6 +317,11 @@
   font-weight: 700;
   color: var(--text-primary);
   font-size: 15px;
+  text-align: right;
+}
+
+.totalCell.right {
+  text-align: right;
 }
 
 /* Action Buttons */
