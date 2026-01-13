@@ -196,8 +196,15 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
               onClick={() => {
                 setShowAddForm(!showAddForm);
                 if (!showAddForm) {
-                  const currentYearAD = new Date().getFullYear();
-                  setNewYear((currentYearAD + 543).toString());
+                  // หา BE ล่าสุดจาก allYearData แล้ว +1
+                  const currentBE = new Date().getFullYear() + 543;
+                  const years = Object.keys(allYearData).map(y => parseInt(y) + 543);
+                  if (years.length > 0) {
+                    const maxBE = Math.max(...years);
+                    setNewYear((maxBE + 1).toString());
+                  } else {
+                    setNewYear(currentBE.toString());
+                  }
                 }
               }}
               className={styles.addYearBtn}
