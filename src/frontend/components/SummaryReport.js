@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { formatCurrency, maskNumberFormat, parseToNumber } from '../../shared/utils/numberUtils';
-import { incomeAPI, expenseAPI, savingsAPI, taxAPI, salaryAPI } from '../../shared/utils/apiUtils';
-import { getSummaryData, getChartData } from '../../shared/utils/summaryUtils';
+import { formatCurrency, maskNumberFormat, parseToNumber } from '../../shared/utils/frontend/numberUtils';
+import { incomeAPI, expenseAPI, savingsAPI, taxAPI, salaryAPI } from '../../shared/utils/frontend/apiUtils';
+import { getSummaryData, getChartData } from '../../shared/utils/frontend/summaryUtils';
 import styles from '../styles/SummaryReport.module.css';
 
 const SummaryReport = ({ selectedMonth, mode = 'view' }) => {

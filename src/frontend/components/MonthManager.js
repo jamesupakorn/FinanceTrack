@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getNextMonth } from '../../shared/utils/numberUtils';
-import { getMonthData, getPrevMonth, formatMonthLabelTH } from '../../shared/utils/monthUtils';
+import { getNextMonth } from '../../shared/utils/frontend/numberUtils';
+import { getMonthData, getPrevMonth, formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
 import styles from '../styles/MonthManager.module.css';
 
 
@@ -24,7 +24,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
   useEffect(() => {
     let isMounted = true;
     const fetchMonths = async () => {
-      const { expenseAPI, incomeAPI, salaryAPI } = await import('../../shared/utils/apiUtils');
+      const { expenseAPI, incomeAPI, salaryAPI } = await import('../../shared/utils/frontend/apiUtils');
       const [expenseData, incomeData, salaryData] = await Promise.all([
         expenseAPI.getAll(),
         incomeAPI.getAll(),
@@ -54,7 +54,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
   // สร้างเดือนใหม่ (ข้อมูลเปล่า)
   const handleAddNewMonth = async () => {
     const nextMonth = getNextMonth(selectedMonth);
-    const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = await import('../../shared/utils/apiUtils');
+    const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = await import('../../shared/utils/frontend/apiUtils');
     // Save new month data
     await Promise.all([
       expenseAPI.save(nextMonth, {}),
@@ -106,7 +106,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
       return;
     }
     const prevMonth = getPrevMonth(selectedMonth);
-    const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = await import('../../shared/utils/apiUtils');
+    const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = await import('../../shared/utils/frontend/apiUtils');
     const [expenseAll, incomeAll, salaryAll, savingsAll, investmentAll] = await Promise.all([
       expenseAPI.getAll(),
       incomeAPI.getAll(),

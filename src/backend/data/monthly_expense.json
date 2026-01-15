@@ -1,953 +1,1968 @@
-{
-  "items": [
-    "house",
-    "water",
-    "internet",
-    "electricity",
-    "mobile",
-    "credit_kbank",
-    "credit_kungsri",
-    "credit_uob",
-    "credit_ttb",
-    "shopee",
-    "netflix",
-    "youtube",
-    "youtube_membership",
-    "motorcycle",
-    "miscellaneous"
-  ],
-  "months": {
-    "2025-10": {
-      "house": {
-        "estimate": 9000,
-        "actual": 9000,
-        "paid": false
-      },
-      "water": {
-        "estimate": 150,
-        "actual": 150,
-        "paid": false
-      },
-      "internet": {
-        "estimate": 500,
-        "actual": 430,
-        "paid": true
-      },
-      "electricity": {
-        "estimate": 1964.08,
-        "actual": 1247.66,
-        "paid": true
-      },
-      "mobile": {
-        "estimate": 700,
-        "actual": 1080,
-        "paid": true
-      },
-      "credit_kbank": {
-        "estimate": 4786.56,
-        "actual": 4786.56,
-        "paid": false
-      },
-      "credit_kungsri": {
-        "estimate": 0,
-        "actual": 0,
-        "paid": false
-      },
-      "credit_uob": {
-        "estimate": 2817.9,
-        "actual": 2817.9,
-        "paid": true
-      },
-      "credit_ttb": {
-        "estimate": 5756.35,
-        "actual": 5756.35,
-        "paid": false
-      },
-      "shopee": {
-        "estimate": 4915.13,
-        "actual": 4915.13,
-        "paid": false
-      },
-      "netflix": {
-        "estimate": 617,
-        "actual": 617,
-        "paid": false
-      },
-      "youtube": {
-        "estimate": 469,
-        "actual": 469,
-        "paid": false
-      },
-      "youtube_membership": {
-        "estimate": 330,
-        "actual": 330,
-        "paid": false
-      },
-      "motorcycle": {
-        "estimate": 3000,
-        "actual": 3000,
-        "paid": false
-      },
-      "miscellaneous": {
-        "estimate": 0,
-        "actual": 0,
-        "paid": false
-      }
+[
+  {
+    "_id": "7fdc6efd713430c535ddc06c",
+    "month": "2026-02"
+  },
+  {
+    "_id": "695cb6367fe94f535c10bd6d",
+    "month": "2026-01",
+    "accountSummary": {
+      "กรุงศรี": 0,
+      "ttb": 0,
+      "กสิกร": 1086,
+      "UOB": 0
     },
-    "2025-09": {
-      "house": {
-        "estimate": 9000,
-        "actual": 9000,
-        "paid": true
-      },
-      "water": {
-        "estimate": 150,
-        "actual": 150,
-        "paid": true
-      },
-      "internet": {
-        "estimate": 500,
-        "actual": 500,
-        "paid": true
-      },
-      "electricity": {
-        "estimate": 1964.08,
-        "actual": 1964.08,
-        "paid": true
-      },
-      "mobile": {
-        "estimate": 700,
-        "actual": 700,
-        "paid": true
-      },
-      "credit_kbank": {
-        "estimate": 4799.56,
-        "actual": 4799.56,
-        "paid": true
-      },
-      "credit_kungsri": {
-        "estimate": 0,
-        "actual": 0,
-        "paid": true
-      },
-      "credit_uob": {
-        "estimate": 2817.9,
-        "actual": 2817.9,
-        "paid": true
-      },
-      "credit_ttb": {
-        "estimate": 4664.34,
-        "actual": 4664.34,
-        "paid": true
-      },
-      "shopee": {
-        "estimate": 7898.73,
-        "actual": 4953.26,
-        "paid": true
-      },
-      "netflix": {
-        "estimate": 617,
-        "actual": 617,
-        "paid": true
-      },
-      "youtube": {
-        "estimate": 469,
-        "actual": 469,
-        "paid": true
-      },
-      "youtube_membership": {
-        "estimate": 330,
-        "actual": 330,
-        "paid": true
-      },
-      "motorcycle": {
-        "estimate": 3000,
-        "actual": 2000,
-        "paid": true
-      },
-      "miscellaneous": {
-        "estimate": 0,
-        "actual": 0,
-        "paid": true
-      }
+    "credit_kbank": {
+      "estimate": 4263.96,
+      "actual": 0,
+      "paid": false
     },
-    "2025-08": {
-      "house": {
-        "estimate": 9000,
-        "actual": 0
-      },
-      "water": {
-        "estimate": 150,
-        "actual": 0
-      },
-      "internet": {
-        "estimate": 500,
-        "actual": 0
-      },
-      "electricity": {
-        "estimate": 1964.08,
-        "actual": 0
-      },
-      "mobile": {
-        "estimate": 700,
-        "actual": 0
-      },
-      "credit_kbank": {
-        "estimate": 5208.03,
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "estimate": 0,
-        "actual": 0
-      },
-      "credit_uob": {
-        "estimate": 2817.9,
-        "actual": 0
-      },
-      "credit_ttb": {
-        "estimate": 5468.33,
-        "actual": 0
-      },
-      "shopee": {
-        "estimate": 5324.33,
-        "actual": 0
-      },
-      "netflix": {
-        "estimate": 617,
-        "actual": 0
-      },
-      "youtube": {
-        "estimate": 469,
-        "actual": 0
-      },
-      "youtube_membership": {
-        "estimate": 330,
-        "actual": 0
-      },
-      "motorcycle": {
-        "estimate": 4000,
-        "actual": 0
-      },
-      "miscellaneous": {
-        "estimate": 0,
-        "actual": 0
-      }
+    "credit_kungsri": {
+      "estimate": 0,
+      "actual": 0,
+      "paid": false
     },
-    "2025-07": {
-      "house": {
-        "estimate": 9000,
-        "actual": 0
-      },
-      "water": {
-        "estimate": 150,
-        "actual": 0
-      },
-      "internet": {
-        "estimate": 500,
-        "actual": 0
-      },
-      "electricity": {
-        "estimate": 1964.08,
-        "actual": 0
-      },
-      "mobile": {
-        "estimate": 700,
-        "actual": 0
-      },
-      "credit_kbank": {
-        "estimate": 4793.1,
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "estimate": 3590,
-        "actual": 0
-      },
-      "credit_uob": {
-        "estimate": 2817.9,
-        "actual": 0
-      },
-      "credit_ttb": {
-        "estimate": 5468.33,
-        "actual": 0
-      },
-      "shopee": {
-        "estimate": 4039,
-        "actual": 0
-      },
-      "netflix": {
-        "estimate": 617,
-        "actual": 0
-      },
-      "youtube": {
-        "estimate": 469,
-        "actual": 0
-      },
-      "youtube_membership": {
-        "estimate": 330,
-        "actual": 0
-      },
-      "motorcycle": {
-        "estimate": 2000,
-        "actual": 0
-      },
-      "miscellaneous": {
-        "estimate": 0,
-        "actual": 0
-      }
+    "credit_ttb": {
+      "estimate": 1932.43,
+      "actual": 0,
+      "paid": false
     },
-    "2025-06": {
-      "house": {
-        "estimate": 9000,
-        "actual": 0
-      },
-      "water": {
-        "estimate": 150,
-        "actual": 0
-      },
-      "internet": {
-        "estimate": 500,
-        "actual": 0
-      },
-      "electricity": {
-        "estimate": 1964.08,
-        "actual": 0
-      },
-      "mobile": {
-        "estimate": 700,
-        "actual": 0
-      },
-      "credit_kbank": {
-        "estimate": 2534.8,
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "estimate": 3590,
-        "actual": 0
-      },
-      "credit_uob": {
-        "estimate": 2817.9,
-        "actual": 0
-      },
-      "credit_ttb": {
-        "estimate": 5170,
-        "actual": 0
-      },
-      "shopee": {
-        "estimate": 4463,
-        "actual": 0
-      },
-      "netflix": {
-        "estimate": 617,
-        "actual": 0
-      },
-      "youtube": {
-        "estimate": 469,
-        "actual": 0
-      },
-      "youtube_membership": {
-        "estimate": 330,
-        "actual": 0
-      },
-      "motorcycle": {
-        "estimate": 2000,
-        "actual": 0
-      },
-      "miscellaneous": {
-        "estimate": 0,
-        "actual": 0
-      }
+    "credit_uob": {
+      "estimate": 0,
+      "actual": 0,
+      "paid": false
     },
-    "2025-05": {
-      "house": {
-        "estimate": 9000,
-        "actual": 9000
-      },
-      "water": {
-        "estimate": 150,
-        "actual": 0
-      },
-      "internet": {
-        "estimate": 500,
-        "actual": 500
-      },
-      "electricity": {
-        "estimate": 1964.08,
-        "actual": 0
-      },
-      "mobile": {
-        "estimate": 700,
-        "actual": 700
-      },
-      "credit_kbank": {
-        "estimate": 3639,
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "estimate": 5060,
-        "actual": 3590
-      },
-      "credit_uob": {
-        "estimate": 2817.9,
-        "actual": 0
-      },
-      "credit_ttb": {
-        "estimate": 8170.44,
-        "actual": 0
-      },
-      "shopee": {
-        "estimate": 3639.9,
-        "actual": 0
-      },
-      "netflix": {
-        "estimate": 617,
-        "actual": 0
-      },
-      "youtube": {
-        "estimate": 469,
-        "actual": 0
-      },
-      "youtube_membership": {
-        "estimate": 330,
-        "actual": 0
-      },
-      "motorcycle": {
-        "estimate": 2000,
-        "actual": 0
-      },
-      "miscellaneous": {
-        "estimate": 0,
-        "actual": 0
-      }
+    "electricity": {
+      "estimate": 1500,
+      "actual": 0,
+      "paid": false
     },
-    "2025-04": {
-      "house": {
-        "estimate": 9000,
-        "actual": 9000
-      },
-      "water": {
-        "estimate": 150,
-        "actual": 0
-      },
-      "internet": {
-        "estimate": 500,
-        "actual": 500
-      },
-      "electricity": {
-        "estimate": 1964.08,
-        "actual": 0
-      },
-      "mobile": {
-        "estimate": 700,
-        "actual": 700
-      },
-      "credit_kbank": {
-        "estimate": 3639,
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "estimate": 5060,
-        "actual": 3590
-      },
-      "credit_uob": {
-        "estimate": 2817.9,
-        "actual": 0
-      },
-      "credit_ttb": {
-        "estimate": 8170.44,
-        "actual": 0
-      },
-      "shopee": {
-        "estimate": 3639.9,
-        "actual": 0
-      },
-      "netflix": {
-        "estimate": 617,
-        "actual": 0
-      },
-      "youtube": {
-        "estimate": 469,
-        "actual": 0
-      },
-      "youtube_membership": {
-        "estimate": 330,
-        "actual": 0
-      },
-      "motorcycle": {
-        "estimate": 2000,
-        "actual": 0
-      },
-      "miscellaneous": {
-        "estimate": 0,
-        "actual": 0
-      }
+    "house": {
+      "estimate": 8800,
+      "actual": 0,
+      "paid": false
     },
-    "2025-03": {
-      "house": {
-        "estimate": 9000,
-        "actual": 9000
-      },
-      "water": {
-        "estimate": 150,
-        "actual": 0
-      },
-      "internet": {
-        "estimate": 500,
-        "actual": 500
-      },
-      "electricity": {
-        "estimate": 2400,
-        "actual": 2359.44
-      },
-      "mobile": {
-        "estimate": 700,
-        "actual": 700
-      },
-      "credit_kbank": {
-        "estimate": 1776.7,
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "estimate": 3590,
-        "actual": 3590
-      },
-      "credit_uob": {
-        "estimate": 2817.9,
-        "actual": 0
-      },
-      "credit_ttb": {
-        "estimate": 8687.07,
-        "actual": 0
-      },
-      "shopee": {
-        "estimate": 1204,
-        "actual": 0
-      },
-      "netflix": {
-        "estimate": 617,
-        "actual": 0
-      },
-      "youtube": {
-        "estimate": 469,
-        "actual": 0
-      },
-      "youtube_membership": {
-        "estimate": 330,
-        "actual": 0
-      },
-      "motorcycle": {
-        "estimate": 2000,
-        "actual": 0
-      },
-      "miscellaneous": {
-        "estimate": 0,
-        "actual": 0
-      }
+    "internet": {
+      "estimate": 426.93,
+      "actual": 0,
+      "paid": false
     },
-    "2025-02": {
-      "house": {
-        "estimate": 9000,
-        "actual": 10000
-      },
-      "water": {
-        "estimate": 150,
-        "actual": 0
-      },
-      "internet": {
-        "estimate": 500,
-        "actual": 0
-      },
-      "mobile": {
-        "estimate": 700,
-        "actual": 0
-      },
-      "credit_kbank": {
-        "estimate": 1776.7,
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "estimate": 3590,
-        "actual": 3590
-      },
-      "credit_uob": {
-        "estimate": 2817.9,
-        "actual": 0
-      },
-      "credit_ttb": {
-        "estimate": 9735.41,
-        "actual": 0
-      },
-      "shopee": {
-        "estimate": 1162.47,
-        "actual": 0
-      },
-      "netflix": {
-        "estimate": 617,
-        "actual": 0
-      },
-      "youtube": {
-        "estimate": 469,
-        "actual": 0
-      },
-      "youtube_membership": {
-        "estimate": 330,
-        "actual": 0
-      },
-      "motorcycle": {
-        "estimate": 2000,
-        "actual": 0
-      },
-      "miscellaneous": {
-        "estimate": 2330,
-        "actual": 0
-      }
+    "miscellaneous": {
+      "estimate": 0,
+      "actual": 0,
+      "paid": false
     },
-    "2025-01": {
-      "house": {
-        "estimate": 9000,
-        "actual": 10000
-      },
-      "water": {
-        "estimate": 150,
-        "actual": 0
-      },
-      "internet": {
-        "estimate": 500,
-        "actual": 0
-      },
-      "mobile": {
-        "estimate": 700,
-        "actual": 0
-      },
-      "credit_kbank": {
-        "estimate": 1277.8,
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "estimate": 3590,
-        "actual": 3590
-      },
-      "credit_uob": {
-        "estimate": 0,
-        "actual": 0
-      },
-      "credit_ttb": {
-        "estimate": 1927.52,
-        "actual": 0
-      },
-      "shopee": {
-        "estimate": 471.6,
-        "actual": 0
-      },
-      "netflix": {
-        "estimate": 617,
-        "actual": 0
-      },
-      "youtube": {
-        "estimate": 399,
-        "actual": 0
-      },
-      "youtube_membership": {
-        "estimate": 280,
-        "actual": 0
-      },
-      "motorcycle": {
-        "estimate": 2000,
-        "actual": 0
-      },
-      "miscellaneous": {
-        "estimate": 0,
-        "actual": 0
-      }
+    "mobile": {
+      "estimate": 1396.86,
+      "actual": 0,
+      "paid": false
     },
-    "2024-12": {
-      "house": {
-        "estimate": 9000,
-        "actual": 10000
-      },
-      "water": {
-        "estimate": 150,
-        "actual": 0
-      },
-      "internet": {
-        "estimate": 500,
-        "actual": 0
-      },
-      "mobile": {
-        "estimate": 700,
-        "actual": 0
-      },
-      "credit_kbank": {
-        "estimate": 1277.8,
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "estimate": 3590,
-        "actual": 3590
-      },
-      "credit_uob": {
-        "estimate": 0,
-        "actual": 0
-      },
-      "credit_ttb": {
-        "estimate": 1927.52,
-        "actual": 0
-      },
-      "shopee": {
-        "estimate": 471.6,
-        "actual": 0
-      },
-      "netflix": {
-        "estimate": 617,
-        "actual": 0
-      },
-      "youtube": {
-        "estimate": 399,
-        "actual": 0
-      },
-      "youtube_membership": {
-        "estimate": 280,
-        "actual": 0
-      },
-      "motorcycle": {
-        "estimate": 2000,
-        "actual": 0
-      },
-      "miscellaneous": {
-        "estimate": 0,
-        "actual": 0
-      }
+    "motorcycle": {
+      "estimate": 2500,
+      "actual": 0,
+      "paid": false
     },
-    "2024-11": {
-      "house": {
-        "estimate": 9000,
-        "actual": 10000
-      },
-      "water": {
-        "estimate": 150,
-        "actual": 0
-      },
-      "internet": {
-        "estimate": 500,
-        "actual": 0
-      },
-      "mobile": {
-        "estimate": 700,
-        "actual": 0
-      },
-      "credit_kbank": {
-        "estimate": 1277.8,
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "estimate": 3590,
-        "actual": 3590
-      },
-      "credit_uob": {
-        "estimate": 0,
-        "actual": 0
-      },
-      "credit_ttb": {
-        "estimate": 1927.52,
-        "actual": 0
-      },
-      "shopee": {
-        "estimate": 471.6,
-        "actual": 0
-      },
-      "netflix": {
-        "estimate": 617,
-        "actual": 0
-      },
-      "youtube": {
-        "estimate": 399,
-        "actual": 0
-      },
-      "youtube_membership": {
-        "estimate": 280,
-        "actual": 0
-      },
-      "motorcycle": {
-        "estimate": 2000,
-        "actual": 0
-      },
-      "miscellaneous": {
-        "estimate": 0,
-        "actual": 0
-      }
+    "netflix": {
+      "estimate": 617,
+      "actual": 0,
+      "paid": false
     },
-    "2024-10": {
-      "house": {
-        "estimate": 9000,
-        "actual": 10000
-      },
-      "water": {
-        "estimate": 150,
-        "actual": 0
-      },
-      "internet": {
-        "estimate": 500,
-        "actual": 0
-      },
-      "mobile": {
-        "estimate": 700,
-        "actual": 0
-      },
-      "credit_kbank": {
-        "estimate": 1277.8,
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "estimate": 3590,
-        "actual": 3590
-      },
-      "credit_uob": {
-        "estimate": 0,
-        "actual": 0
-      },
-      "credit_ttb": {
-        "estimate": 1927.52,
-        "actual": 0
-      },
-      "shopee": {
-        "estimate": 471.6,
-        "actual": 0
-      },
-      "netflix": {
-        "estimate": 617,
-        "actual": 0
-      },
-      "youtube": {
-        "estimate": 399,
-        "actual": 0
-      },
-      "youtube_membership": {
-        "estimate": 280,
-        "actual": 0
-      },
-      "motorcycle": {
-        "estimate": 2000,
-        "actual": 0
-      },
-      "miscellaneous": {
-        "estimate": 0,
-        "actual": 0
-      }
+    "shopee": {
+      "estimate": 2473.2,
+      "actual": 0,
+      "paid": false
     },
-    "2024-09": {
-      "house": {
-        "estimate": 9000,
-        "actual": 10000
-      },
-      "water": {
-        "estimate": 150,
-        "actual": 0
-      },
-      "internet": {
-        "estimate": 500,
-        "actual": 0
-      },
-      "mobile": {
-        "estimate": 700,
-        "actual": 0
-      },
-      "credit_kbank": {
-        "estimate": 1277.8,
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "estimate": 3590,
-        "actual": 3590
-      },
-      "credit_uob": {
-        "estimate": 0,
-        "actual": 0
-      },
-      "credit_ttb": {
-        "estimate": 1927.52,
-        "actual": 0
-      },
-      "shopee": {
-        "estimate": 471.6,
-        "actual": 0
-      },
-      "netflix": {
-        "estimate": 617,
-        "actual": 0
-      },
-      "youtube": {
-        "estimate": 399,
-        "actual": 0
-      },
-      "youtube_membership": {
-        "estimate": 280,
-        "actual": 0
-      },
-      "motorcycle": {
-        "estimate": 2000,
-        "actual": 0
-      },
-      "miscellaneous": {
-        "estimate": 0,
-        "actual": 0
-      }
+    "water": {
+      "estimate": 150,
+      "actual": 0,
+      "paid": false
     },
-    "2024-08": {
-      "house": {
-        "estimate": 9000,
-        "actual": 10000
+    "youtube": {
+      "estimate": 469,
+      "actual": 0,
+      "paid": false
+    },
+    "youtube_membership": {
+      "estimate": 330,
+      "actual": 330,
+      "paid": false
+    },
+    "custom_1768449226727": {
+      "name": 0,
+      "estimate": 0,
+      "actual": 0,
+      "paid": false
+    },
+    "custom_1768449429908": {
+      "name": 0,
+      "estimate": 0,
+      "actual": 0,
+      "paid": false
+    },
+    "custom_1768449456308": {
+      "name": 0,
+      "estimate": 0,
+      "actual": 0,
+      "paid": false
+    },
+    "custom_1768449576218": {
+      "name": 0,
+      "estimate": 0,
+      "actual": 0,
+      "paid": false
+    },
+    "custom_1768449650629": {
+      "name": "ทดสอบ",
+      "estimate": 0,
+      "actual": 0,
+      "paid": false
+    }
+  },
+  {
+    "_id": "692af54b9ba6da2362d99d25",
+    "month": "2025-12",
+    "accountSummary": {
+      "กรุงศรี": 0,
+      "ttb": 16944.12,
+      "กสิกร": 8208.36,
+      "UOB": 2817.9
+    },
+    "credit_kbank": {
+      "estimate": 4786.56,
+      "actual": 4786.56,
+      "paid": true
+    },
+    "credit_kungsri": {
+      "estimate": 0,
+      "actual": 0,
+      "paid": true
+    },
+    "credit_ttb": {
+      "estimate": 7380,
+      "actual": 7380,
+      "paid": true
+    },
+    "credit_uob": {
+      "estimate": 2817.9,
+      "actual": 2817.9,
+      "paid": true
+    },
+    "electricity": {
+      "estimate": 1500,
+      "actual": 863.45,
+      "paid": true
+    },
+    "house": {
+      "estimate": 8800,
+      "actual": 8800,
+      "paid": true
+    },
+    "internet": {
+      "estimate": 426.93,
+      "actual": 426.93,
+      "paid": true
+    },
+    "miscellaneous": {
+      "estimate": 0,
+      "actual": 0,
+      "paid": false
+    },
+    "mobile": {
+      "estimate": 1396.86,
+      "actual": 1396.86,
+      "paid": true
+    },
+    "motorcycle": {
+      "estimate": 2500,
+      "actual": 2500,
+      "paid": true
+    },
+    "netflix": {
+      "estimate": 617,
+      "actual": 0,
+      "paid": false
+    },
+    "shopee": {
+      "estimate": 6204.86,
+      "actual": 6204.86,
+      "paid": true
+    },
+    "water": {
+      "estimate": 150,
+      "actual": 45.26,
+      "paid": true
+    },
+    "youtube": {
+      "estimate": 469,
+      "actual": 0,
+      "paid": false
+    },
+    "youtube_membership": {
+      "estimate": 330,
+      "actual": 330,
+      "paid": true
+    }
+  },
+  {
+    "_id": "690b1189ddcf877a116097ff",
+    "month": "2025-11",
+    "credit_kbank": {
+      "estimate": 4786.56,
+      "actual": 4786.56,
+      "paid": false
+    },
+    "credit_kungsri": {
+      "estimate": 0,
+      "actual": 0,
+      "paid": false
+    },
+    "credit_ttb": {
+      "estimate": 7944.12,
+      "actual": 0,
+      "paid": false
+    },
+    "credit_uob": {
+      "estimate": 2817.9,
+      "actual": 2817.9,
+      "paid": false
+    },
+    "electricity": {
+      "estimate": 1500,
+      "actual": 1149.27,
+      "paid": false
+    },
+    "house": {
+      "estimate": 9000,
+      "actual": 0,
+      "paid": false
+    },
+    "internet": {
+      "estimate": 426.93,
+      "actual": 426.93,
+      "paid": false
+    },
+    "miscellaneous": {
+      "estimate": 0,
+      "actual": 0,
+      "paid": false
+    },
+    "mobile": {
+      "estimate": 1182.86,
+      "actual": 1182.86,
+      "paid": false
+    },
+    "motorcycle": {
+      "estimate": 2500,
+      "actual": 0,
+      "paid": false
+    },
+    "netflix": {
+      "estimate": 617,
+      "actual": 0,
+      "paid": false
+    },
+    "shopee": {
+      "estimate": 2005.8,
+      "actual": 2005.8,
+      "paid": false
+    },
+    "totalActualPaid": 34599.6,
+    "totalEstimate": 35006.02,
+    "water": {
+      "estimate": 150,
+      "actual": 0,
+      "paid": false
+    },
+    "youtube": {
+      "estimate": 469,
+      "actual": 0,
+      "paid": false
+    },
+    "youtube_membership": {
+      "estimate": 330,
+      "actual": 0,
+      "paid": false
+    }
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d906",
+    "month": "2025-10",
+    "house": {
+      "estimate": 9000,
+      "actual": 9000,
+      "paid": false
+    },
+    "water": {
+      "estimate": 150,
+      "actual": 150,
+      "paid": false
+    },
+    "internet": {
+      "estimate": 500,
+      "actual": 430,
+      "paid": true
+    },
+    "electricity": {
+      "estimate": 1964.08,
+      "actual": 1247.66,
+      "paid": true
+    },
+    "mobile": {
+      "estimate": 700,
+      "actual": 1080,
+      "paid": true
+    },
+    "credit_kbank": {
+      "estimate": 4786.56,
+      "actual": 5135.56,
+      "paid": true
+    },
+    "credit_kungsri": {
+      "estimate": 0,
+      "actual": 0,
+      "paid": false
+    },
+    "credit_uob": {
+      "estimate": 2817.9,
+      "actual": 2817.9,
+      "paid": true
+    },
+    "credit_ttb": {
+      "estimate": 5756.35,
+      "actual": 6678.01,
+      "paid": true
+    },
+    "shopee": {
+      "estimate": 4915.13,
+      "actual": 2833.06,
+      "paid": true
+    },
+    "netflix": {
+      "estimate": 617,
+      "actual": 617,
+      "paid": false
+    },
+    "youtube": {
+      "estimate": 469,
+      "actual": 469,
+      "paid": false
+    },
+    "youtube_membership": {
+      "estimate": 330,
+      "actual": 330,
+      "paid": false
+    },
+    "motorcycle": {
+      "estimate": 3000,
+      "actual": 3000,
+      "paid": false
+    },
+    "miscellaneous": {
+      "estimate": 0,
+      "actual": 0,
+      "paid": false
+    }
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d907",
+    "month": "2025-09",
+    "house": {
+      "estimate": 9000,
+      "actual": 9000,
+      "paid": true
+    },
+    "water": {
+      "estimate": 150,
+      "actual": 150,
+      "paid": true
+    },
+    "internet": {
+      "estimate": 500,
+      "actual": 500,
+      "paid": true
+    },
+    "electricity": {
+      "estimate": 1964.08,
+      "actual": 1964.08,
+      "paid": true
+    },
+    "mobile": {
+      "estimate": 700,
+      "actual": 700,
+      "paid": true
+    },
+    "credit_kbank": {
+      "estimate": 4799.56,
+      "actual": 4799.56,
+      "paid": true
+    },
+    "credit_kungsri": {
+      "estimate": 0,
+      "actual": 0,
+      "paid": true
+    },
+    "credit_uob": {
+      "estimate": 2817.9,
+      "actual": 2817.9,
+      "paid": true
+    },
+    "credit_ttb": {
+      "estimate": 4664.34,
+      "actual": 4664.34,
+      "paid": true
+    },
+    "shopee": {
+      "estimate": 7898.73,
+      "actual": 4953.26,
+      "paid": true
+    },
+    "netflix": {
+      "estimate": 617,
+      "actual": 617,
+      "paid": true
+    },
+    "youtube": {
+      "estimate": 469,
+      "actual": 469,
+      "paid": true
+    },
+    "youtube_membership": {
+      "estimate": 330,
+      "actual": 330,
+      "paid": true
+    },
+    "motorcycle": {
+      "estimate": 3000,
+      "actual": 2000,
+      "paid": true
+    },
+    "miscellaneous": {
+      "estimate": 0,
+      "actual": 0,
+      "paid": true
+    }
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d908",
+    "month": "2025-08",
+    "house": {
+      "estimate": 9000,
+      "actual": 0
+    },
+    "water": {
+      "estimate": 150,
+      "actual": 0
+    },
+    "internet": {
+      "estimate": 500,
+      "actual": 0
+    },
+    "electricity": {
+      "estimate": 1964.08,
+      "actual": 0
+    },
+    "mobile": {
+      "estimate": 700,
+      "actual": 0
+    },
+    "credit_kbank": {
+      "estimate": 5208.03,
+      "actual": 0
+    },
+    "credit_kungsri": {
+      "estimate": 0,
+      "actual": 0
+    },
+    "credit_uob": {
+      "estimate": 2817.9,
+      "actual": 0
+    },
+    "credit_ttb": {
+      "estimate": 5468.33,
+      "actual": 0
+    },
+    "shopee": {
+      "estimate": 5324.33,
+      "actual": 0
+    },
+    "netflix": {
+      "estimate": 617,
+      "actual": 0
+    },
+    "youtube": {
+      "estimate": 469,
+      "actual": 0
+    },
+    "youtube_membership": {
+      "estimate": 330,
+      "actual": 0
+    },
+    "motorcycle": {
+      "estimate": 4000,
+      "actual": 0
+    },
+    "miscellaneous": {
+      "estimate": 0,
+      "actual": 0
+    }
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d909",
+    "month": "2025-07",
+    "house": {
+      "estimate": 9000,
+      "actual": 0
+    },
+    "water": {
+      "estimate": 150,
+      "actual": 0
+    },
+    "internet": {
+      "estimate": 500,
+      "actual": 0
+    },
+    "electricity": {
+      "estimate": 1964.08,
+      "actual": 0
+    },
+    "mobile": {
+      "estimate": 700,
+      "actual": 0
+    },
+    "credit_kbank": {
+      "estimate": 4793.1,
+      "actual": 0
+    },
+    "credit_kungsri": {
+      "estimate": 3590,
+      "actual": 0
+    },
+    "credit_uob": {
+      "estimate": 2817.9,
+      "actual": 0
+    },
+    "credit_ttb": {
+      "estimate": 5468.33,
+      "actual": 0
+    },
+    "shopee": {
+      "estimate": 4039,
+      "actual": 0
+    },
+    "netflix": {
+      "estimate": 617,
+      "actual": 0
+    },
+    "youtube": {
+      "estimate": 469,
+      "actual": 0
+    },
+    "youtube_membership": {
+      "estimate": 330,
+      "actual": 0
+    },
+    "motorcycle": {
+      "estimate": 2000,
+      "actual": 0
+    },
+    "miscellaneous": {
+      "estimate": 0,
+      "actual": 0
+    }
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d90a",
+    "month": "2025-06",
+    "house": {
+      "estimate": 9000,
+      "actual": 0
+    },
+    "water": {
+      "estimate": 150,
+      "actual": 0
+    },
+    "internet": {
+      "estimate": 500,
+      "actual": 0
+    },
+    "electricity": {
+      "estimate": 1964.08,
+      "actual": 0
+    },
+    "mobile": {
+      "estimate": 700,
+      "actual": 0
+    },
+    "credit_kbank": {
+      "estimate": 2534.8,
+      "actual": 0
+    },
+    "credit_kungsri": {
+      "estimate": 3590,
+      "actual": 0
+    },
+    "credit_uob": {
+      "estimate": 2817.9,
+      "actual": 0
+    },
+    "credit_ttb": {
+      "estimate": 5170,
+      "actual": 0
+    },
+    "shopee": {
+      "estimate": 4463,
+      "actual": 0
+    },
+    "netflix": {
+      "estimate": 617,
+      "actual": 0
+    },
+    "youtube": {
+      "estimate": 469,
+      "actual": 0
+    },
+    "youtube_membership": {
+      "estimate": 330,
+      "actual": 0
+    },
+    "motorcycle": {
+      "estimate": 2000,
+      "actual": 0
+    },
+    "miscellaneous": {
+      "estimate": 0,
+      "actual": 0
+    }
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d90b",
+    "month": "2025-05",
+    "house": {
+      "estimate": 9000,
+      "actual": 9000
+    },
+    "water": {
+      "estimate": 150,
+      "actual": 0
+    },
+    "internet": {
+      "estimate": 500,
+      "actual": 500
+    },
+    "electricity": {
+      "estimate": 1964.08,
+      "actual": 0
+    },
+    "mobile": {
+      "estimate": 700,
+      "actual": 700
+    },
+    "credit_kbank": {
+      "estimate": 3639,
+      "actual": 0
+    },
+    "credit_kungsri": {
+      "estimate": 5060,
+      "actual": 3590
+    },
+    "credit_uob": {
+      "estimate": 2817.9,
+      "actual": 0
+    },
+    "credit_ttb": {
+      "estimate": 8170.44,
+      "actual": 0
+    },
+    "shopee": {
+      "estimate": 3639.9,
+      "actual": 0
+    },
+    "netflix": {
+      "estimate": 617,
+      "actual": 0
+    },
+    "youtube": {
+      "estimate": 469,
+      "actual": 0
+    },
+    "youtube_membership": {
+      "estimate": 330,
+      "actual": 0
+    },
+    "motorcycle": {
+      "estimate": 2000,
+      "actual": 0
+    },
+    "miscellaneous": {
+      "estimate": 0,
+      "actual": 0
+    }
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d90c",
+    "month": "2025-04",
+    "house": {
+      "estimate": 9000,
+      "actual": 9000
+    },
+    "water": {
+      "estimate": 150,
+      "actual": 0
+    },
+    "internet": {
+      "estimate": 500,
+      "actual": 500
+    },
+    "electricity": {
+      "estimate": 1964.08,
+      "actual": 0
+    },
+    "mobile": {
+      "estimate": 700,
+      "actual": 700
+    },
+    "credit_kbank": {
+      "estimate": 3639,
+      "actual": 0
+    },
+    "credit_kungsri": {
+      "estimate": 5060,
+      "actual": 3590
+    },
+    "credit_uob": {
+      "estimate": 2817.9,
+      "actual": 0
+    },
+    "credit_ttb": {
+      "estimate": 8170.44,
+      "actual": 0
+    },
+    "shopee": {
+      "estimate": 3639.9,
+      "actual": 0
+    },
+    "netflix": {
+      "estimate": 617,
+      "actual": 0
+    },
+    "youtube": {
+      "estimate": 469,
+      "actual": 0
+    },
+    "youtube_membership": {
+      "estimate": 330,
+      "actual": 0
+    },
+    "motorcycle": {
+      "estimate": 2000,
+      "actual": 0
+    },
+    "miscellaneous": {
+      "estimate": 0,
+      "actual": 0
+    }
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d90d",
+    "month": "2025-03",
+    "house": {
+      "estimate": 9000,
+      "actual": 9000
+    },
+    "water": {
+      "estimate": 150,
+      "actual": 0
+    },
+    "internet": {
+      "estimate": 500,
+      "actual": 500
+    },
+    "electricity": {
+      "estimate": 2400,
+      "actual": 2359.44
+    },
+    "mobile": {
+      "estimate": 700,
+      "actual": 700
+    },
+    "credit_kbank": {
+      "estimate": 1776.7,
+      "actual": 0
+    },
+    "credit_kungsri": {
+      "estimate": 3590,
+      "actual": 3590
+    },
+    "credit_uob": {
+      "estimate": 2817.9,
+      "actual": 0
+    },
+    "credit_ttb": {
+      "estimate": 8687.07,
+      "actual": 0
+    },
+    "shopee": {
+      "estimate": 1204,
+      "actual": 0
+    },
+    "netflix": {
+      "estimate": 617,
+      "actual": 0
+    },
+    "youtube": {
+      "estimate": 469,
+      "actual": 0
+    },
+    "youtube_membership": {
+      "estimate": 330,
+      "actual": 0
+    },
+    "motorcycle": {
+      "estimate": 2000,
+      "actual": 0
+    },
+    "miscellaneous": {
+      "estimate": 0,
+      "actual": 0
+    }
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d90e",
+    "month": "2025-02",
+    "house": {
+      "estimate": 9000,
+      "actual": 10000
+    },
+    "water": {
+      "estimate": 150,
+      "actual": 0
+    },
+    "internet": {
+      "estimate": 500,
+      "actual": 0
+    },
+    "mobile": {
+      "estimate": 700,
+      "actual": 0
+    },
+    "credit_kbank": {
+      "estimate": 1776.7,
+      "actual": 0
+    },
+    "credit_kungsri": {
+      "estimate": 3590,
+      "actual": 3590
+    },
+    "credit_uob": {
+      "estimate": 2817.9,
+      "actual": 0
+    },
+    "credit_ttb": {
+      "estimate": 9735.41,
+      "actual": 0
+    },
+    "shopee": {
+      "estimate": 1162.47,
+      "actual": 0
+    },
+    "netflix": {
+      "estimate": 617,
+      "actual": 0
+    },
+    "youtube": {
+      "estimate": 469,
+      "actual": 0
+    },
+    "youtube_membership": {
+      "estimate": 330,
+      "actual": 0
+    },
+    "motorcycle": {
+      "estimate": 2000,
+      "actual": 0
+    },
+    "miscellaneous": {
+      "estimate": 2330,
+      "actual": 0
+    }
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d90f",
+    "month": "2025-01",
+    "house": {
+      "estimate": 9000,
+      "actual": 10000
+    },
+    "water": {
+      "estimate": 150,
+      "actual": 0
+    },
+    "internet": {
+      "estimate": 500,
+      "actual": 0
+    },
+    "mobile": {
+      "estimate": 700,
+      "actual": 0
+    },
+    "credit_kbank": {
+      "estimate": 1277.8,
+      "actual": 0
+    },
+    "credit_kungsri": {
+      "estimate": 3590,
+      "actual": 3590
+    },
+    "credit_uob": {
+      "estimate": 0,
+      "actual": 0
+    },
+    "credit_ttb": {
+      "estimate": 1927.52,
+      "actual": 0
+    },
+    "shopee": {
+      "estimate": 471.6,
+      "actual": 0
+    },
+    "netflix": {
+      "estimate": 617,
+      "actual": 0
+    },
+    "youtube": {
+      "estimate": 399,
+      "actual": 0
+    },
+    "youtube_membership": {
+      "estimate": 280,
+      "actual": 0
+    },
+    "motorcycle": {
+      "estimate": 2000,
+      "actual": 0
+    },
+    "miscellaneous": {
+      "estimate": 0,
+      "actual": 0
+    }
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d910",
+    "month": "2024-12",
+    "house": {
+      "estimate": 9000,
+      "actual": 10000
+    },
+    "water": {
+      "estimate": 150,
+      "actual": 0
+    },
+    "internet": {
+      "estimate": 500,
+      "actual": 0
+    },
+    "mobile": {
+      "estimate": 700,
+      "actual": 0
+    },
+    "credit_kbank": {
+      "estimate": 1277.8,
+      "actual": 0
+    },
+    "credit_kungsri": {
+      "estimate": 3590,
+      "actual": 3590
+    },
+    "credit_uob": {
+      "estimate": 0,
+      "actual": 0
+    },
+    "credit_ttb": {
+      "estimate": 1927.52,
+      "actual": 0
+    },
+    "shopee": {
+      "estimate": 471.6,
+      "actual": 0
+    },
+    "netflix": {
+      "estimate": 617,
+      "actual": 0
+    },
+    "youtube": {
+      "estimate": 399,
+      "actual": 0
+    },
+    "youtube_membership": {
+      "estimate": 280,
+      "actual": 0
+    },
+    "motorcycle": {
+      "estimate": 2000,
+      "actual": 0
+    },
+    "miscellaneous": {
+      "estimate": 0,
+      "actual": 0
+    }
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d915",
+    "obj": "items",
+    "items": [
+      "house",
+      "water",
+      "internet",
+      "electricity",
+      "mobile",
+      "credit_kbank",
+      "credit_kungsri",
+      "credit_uob",
+      "credit_ttb",
+      "shopee",
+      "netflix",
+      "youtube",
+      "youtube_membership",
+      "motorcycle",
+      "miscellaneous"
+    ]
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d916",
+    "obj": "months",
+    "months": {
+      "2025-10": {
+        "house": {
+          "estimate": 9000,
+          "actual": 9000,
+          "paid": false
+        },
+        "water": {
+          "estimate": 150,
+          "actual": 150,
+          "paid": false
+        },
+        "internet": {
+          "estimate": 500,
+          "actual": 430,
+          "paid": true
+        },
+        "electricity": {
+          "estimate": 1964.08,
+          "actual": 1247.66,
+          "paid": true
+        },
+        "mobile": {
+          "estimate": 700,
+          "actual": 1080,
+          "paid": true
+        },
+        "credit_kbank": {
+          "estimate": 4786.56,
+          "actual": 4786.56,
+          "paid": false
+        },
+        "credit_kungsri": {
+          "estimate": 0,
+          "actual": 0,
+          "paid": false
+        },
+        "credit_uob": {
+          "estimate": 2817.9,
+          "actual": 2817.9,
+          "paid": true
+        },
+        "credit_ttb": {
+          "estimate": 5756.35,
+          "actual": 5756.35,
+          "paid": false
+        },
+        "shopee": {
+          "estimate": 4915.13,
+          "actual": 4915.13,
+          "paid": false
+        },
+        "netflix": {
+          "estimate": 617,
+          "actual": 617,
+          "paid": false
+        },
+        "youtube": {
+          "estimate": 469,
+          "actual": 469,
+          "paid": false
+        },
+        "youtube_membership": {
+          "estimate": 330,
+          "actual": 330,
+          "paid": false
+        },
+        "motorcycle": {
+          "estimate": 3000,
+          "actual": 3000,
+          "paid": false
+        },
+        "miscellaneous": {
+          "estimate": 0,
+          "actual": 0,
+          "paid": false
+        }
       },
-      "water": {
-        "estimate": 150,
-        "actual": 0
+      "2025-09": {
+        "house": {
+          "estimate": 9000,
+          "actual": 9000,
+          "paid": true
+        },
+        "water": {
+          "estimate": 150,
+          "actual": 150,
+          "paid": true
+        },
+        "internet": {
+          "estimate": 500,
+          "actual": 500,
+          "paid": true
+        },
+        "electricity": {
+          "estimate": 1964.08,
+          "actual": 1964.08,
+          "paid": true
+        },
+        "mobile": {
+          "estimate": 700,
+          "actual": 700,
+          "paid": true
+        },
+        "credit_kbank": {
+          "estimate": 4799.56,
+          "actual": 4799.56,
+          "paid": true
+        },
+        "credit_kungsri": {
+          "estimate": 0,
+          "actual": 0,
+          "paid": true
+        },
+        "credit_uob": {
+          "estimate": 2817.9,
+          "actual": 2817.9,
+          "paid": true
+        },
+        "credit_ttb": {
+          "estimate": 4664.34,
+          "actual": 4664.34,
+          "paid": true
+        },
+        "shopee": {
+          "estimate": 7898.73,
+          "actual": 4953.26,
+          "paid": true
+        },
+        "netflix": {
+          "estimate": 617,
+          "actual": 617,
+          "paid": true
+        },
+        "youtube": {
+          "estimate": 469,
+          "actual": 469,
+          "paid": true
+        },
+        "youtube_membership": {
+          "estimate": 330,
+          "actual": 330,
+          "paid": true
+        },
+        "motorcycle": {
+          "estimate": 3000,
+          "actual": 2000,
+          "paid": true
+        },
+        "miscellaneous": {
+          "estimate": 0,
+          "actual": 0,
+          "paid": true
+        }
       },
-      "internet": {
-        "estimate": 500,
-        "actual": 0
+      "2025-08": {
+        "house": {
+          "estimate": 9000,
+          "actual": 0
+        },
+        "water": {
+          "estimate": 150,
+          "actual": 0
+        },
+        "internet": {
+          "estimate": 500,
+          "actual": 0
+        },
+        "electricity": {
+          "estimate": 1964.08,
+          "actual": 0
+        },
+        "mobile": {
+          "estimate": 700,
+          "actual": 0
+        },
+        "credit_kbank": {
+          "estimate": 5208.03,
+          "actual": 0
+        },
+        "credit_kungsri": {
+          "estimate": 0,
+          "actual": 0
+        },
+        "credit_uob": {
+          "estimate": 2817.9,
+          "actual": 0
+        },
+        "credit_ttb": {
+          "estimate": 5468.33,
+          "actual": 0
+        },
+        "shopee": {
+          "estimate": 5324.33,
+          "actual": 0
+        },
+        "netflix": {
+          "estimate": 617,
+          "actual": 0
+        },
+        "youtube": {
+          "estimate": 469,
+          "actual": 0
+        },
+        "youtube_membership": {
+          "estimate": 330,
+          "actual": 0
+        },
+        "motorcycle": {
+          "estimate": 4000,
+          "actual": 0
+        },
+        "miscellaneous": {
+          "estimate": 0,
+          "actual": 0
+        }
       },
-      "mobile": {
-        "estimate": 700,
-        "actual": 0
+      "2025-07": {
+        "house": {
+          "estimate": 9000,
+          "actual": 0
+        },
+        "water": {
+          "estimate": 150,
+          "actual": 0
+        },
+        "internet": {
+          "estimate": 500,
+          "actual": 0
+        },
+        "electricity": {
+          "estimate": 1964.08,
+          "actual": 0
+        },
+        "mobile": {
+          "estimate": 700,
+          "actual": 0
+        },
+        "credit_kbank": {
+          "estimate": 4793.1,
+          "actual": 0
+        },
+        "credit_kungsri": {
+          "estimate": 3590,
+          "actual": 0
+        },
+        "credit_uob": {
+          "estimate": 2817.9,
+          "actual": 0
+        },
+        "credit_ttb": {
+          "estimate": 5468.33,
+          "actual": 0
+        },
+        "shopee": {
+          "estimate": 4039,
+          "actual": 0
+        },
+        "netflix": {
+          "estimate": 617,
+          "actual": 0
+        },
+        "youtube": {
+          "estimate": 469,
+          "actual": 0
+        },
+        "youtube_membership": {
+          "estimate": 330,
+          "actual": 0
+        },
+        "motorcycle": {
+          "estimate": 2000,
+          "actual": 0
+        },
+        "miscellaneous": {
+          "estimate": 0,
+          "actual": 0
+        }
       },
-      "credit_kbank": {
-        "estimate": 1277.8,
-        "actual": 0
+      "2025-06": {
+        "house": {
+          "estimate": 9000,
+          "actual": 0
+        },
+        "water": {
+          "estimate": 150,
+          "actual": 0
+        },
+        "internet": {
+          "estimate": 500,
+          "actual": 0
+        },
+        "electricity": {
+          "estimate": 1964.08,
+          "actual": 0
+        },
+        "mobile": {
+          "estimate": 700,
+          "actual": 0
+        },
+        "credit_kbank": {
+          "estimate": 2534.8,
+          "actual": 0
+        },
+        "credit_kungsri": {
+          "estimate": 3590,
+          "actual": 0
+        },
+        "credit_uob": {
+          "estimate": 2817.9,
+          "actual": 0
+        },
+        "credit_ttb": {
+          "estimate": 5170,
+          "actual": 0
+        },
+        "shopee": {
+          "estimate": 4463,
+          "actual": 0
+        },
+        "netflix": {
+          "estimate": 617,
+          "actual": 0
+        },
+        "youtube": {
+          "estimate": 469,
+          "actual": 0
+        },
+        "youtube_membership": {
+          "estimate": 330,
+          "actual": 0
+        },
+        "motorcycle": {
+          "estimate": 2000,
+          "actual": 0
+        },
+        "miscellaneous": {
+          "estimate": 0,
+          "actual": 0
+        }
       },
-      "credit_kungsri": {
-        "estimate": 3590,
-        "actual": 3590
+      "2025-05": {
+        "house": {
+          "estimate": 9000,
+          "actual": 9000
+        },
+        "water": {
+          "estimate": 150,
+          "actual": 0
+        },
+        "internet": {
+          "estimate": 500,
+          "actual": 500
+        },
+        "electricity": {
+          "estimate": 1964.08,
+          "actual": 0
+        },
+        "mobile": {
+          "estimate": 700,
+          "actual": 700
+        },
+        "credit_kbank": {
+          "estimate": 3639,
+          "actual": 0
+        },
+        "credit_kungsri": {
+          "estimate": 5060,
+          "actual": 3590
+        },
+        "credit_uob": {
+          "estimate": 2817.9,
+          "actual": 0
+        },
+        "credit_ttb": {
+          "estimate": 8170.44,
+          "actual": 0
+        },
+        "shopee": {
+          "estimate": 3639.9,
+          "actual": 0
+        },
+        "netflix": {
+          "estimate": 617,
+          "actual": 0
+        },
+        "youtube": {
+          "estimate": 469,
+          "actual": 0
+        },
+        "youtube_membership": {
+          "estimate": 330,
+          "actual": 0
+        },
+        "motorcycle": {
+          "estimate": 2000,
+          "actual": 0
+        },
+        "miscellaneous": {
+          "estimate": 0,
+          "actual": 0
+        }
       },
-      "credit_uob": {
-        "estimate": 0,
-        "actual": 0
+      "2025-04": {
+        "house": {
+          "estimate": 9000,
+          "actual": 9000
+        },
+        "water": {
+          "estimate": 150,
+          "actual": 0
+        },
+        "internet": {
+          "estimate": 500,
+          "actual": 500
+        },
+        "electricity": {
+          "estimate": 1964.08,
+          "actual": 0
+        },
+        "mobile": {
+          "estimate": 700,
+          "actual": 700
+        },
+        "credit_kbank": {
+          "estimate": 3639,
+          "actual": 0
+        },
+        "credit_kungsri": {
+          "estimate": 5060,
+          "actual": 3590
+        },
+        "credit_uob": {
+          "estimate": 2817.9,
+          "actual": 0
+        },
+        "credit_ttb": {
+          "estimate": 8170.44,
+          "actual": 0
+        },
+        "shopee": {
+          "estimate": 3639.9,
+          "actual": 0
+        },
+        "netflix": {
+          "estimate": 617,
+          "actual": 0
+        },
+        "youtube": {
+          "estimate": 469,
+          "actual": 0
+        },
+        "youtube_membership": {
+          "estimate": 330,
+          "actual": 0
+        },
+        "motorcycle": {
+          "estimate": 2000,
+          "actual": 0
+        },
+        "miscellaneous": {
+          "estimate": 0,
+          "actual": 0
+        }
       },
-      "credit_ttb": {
-        "estimate": 1927.52,
-        "actual": 0
+      "2025-03": {
+        "house": {
+          "estimate": 9000,
+          "actual": 9000
+        },
+        "water": {
+          "estimate": 150,
+          "actual": 0
+        },
+        "internet": {
+          "estimate": 500,
+          "actual": 500
+        },
+        "electricity": {
+          "estimate": 2400,
+          "actual": 2359.44
+        },
+        "mobile": {
+          "estimate": 700,
+          "actual": 700
+        },
+        "credit_kbank": {
+          "estimate": 1776.7,
+          "actual": 0
+        },
+        "credit_kungsri": {
+          "estimate": 3590,
+          "actual": 3590
+        },
+        "credit_uob": {
+          "estimate": 2817.9,
+          "actual": 0
+        },
+        "credit_ttb": {
+          "estimate": 8687.07,
+          "actual": 0
+        },
+        "shopee": {
+          "estimate": 1204,
+          "actual": 0
+        },
+        "netflix": {
+          "estimate": 617,
+          "actual": 0
+        },
+        "youtube": {
+          "estimate": 469,
+          "actual": 0
+        },
+        "youtube_membership": {
+          "estimate": 330,
+          "actual": 0
+        },
+        "motorcycle": {
+          "estimate": 2000,
+          "actual": 0
+        },
+        "miscellaneous": {
+          "estimate": 0,
+          "actual": 0
+        }
       },
-      "shopee": {
-        "estimate": 471.6,
-        "actual": 0
+      "2025-02": {
+        "house": {
+          "estimate": 9000,
+          "actual": 10000
+        },
+        "water": {
+          "estimate": 150,
+          "actual": 0
+        },
+        "internet": {
+          "estimate": 500,
+          "actual": 0
+        },
+        "mobile": {
+          "estimate": 700,
+          "actual": 0
+        },
+        "credit_kbank": {
+          "estimate": 1776.7,
+          "actual": 0
+        },
+        "credit_kungsri": {
+          "estimate": 3590,
+          "actual": 3590
+        },
+        "credit_uob": {
+          "estimate": 2817.9,
+          "actual": 0
+        },
+        "credit_ttb": {
+          "estimate": 9735.41,
+          "actual": 0
+        },
+        "shopee": {
+          "estimate": 1162.47,
+          "actual": 0
+        },
+        "netflix": {
+          "estimate": 617,
+          "actual": 0
+        },
+        "youtube": {
+          "estimate": 469,
+          "actual": 0
+        },
+        "youtube_membership": {
+          "estimate": 330,
+          "actual": 0
+        },
+        "motorcycle": {
+          "estimate": 2000,
+          "actual": 0
+        },
+        "miscellaneous": {
+          "estimate": 2330,
+          "actual": 0
+        }
       },
-      "netflix": {
-        "estimate": 617,
-        "actual": 0
+      "2025-01": {
+        "house": {
+          "estimate": 9000,
+          "actual": 10000
+        },
+        "water": {
+          "estimate": 150,
+          "actual": 0
+        },
+        "internet": {
+          "estimate": 500,
+          "actual": 0
+        },
+        "mobile": {
+          "estimate": 700,
+          "actual": 0
+        },
+        "credit_kbank": {
+          "estimate": 1277.8,
+          "actual": 0
+        },
+        "credit_kungsri": {
+          "estimate": 3590,
+          "actual": 3590
+        },
+        "credit_uob": {
+          "estimate": 0,
+          "actual": 0
+        },
+        "credit_ttb": {
+          "estimate": 1927.52,
+          "actual": 0
+        },
+        "shopee": {
+          "estimate": 471.6,
+          "actual": 0
+        },
+        "netflix": {
+          "estimate": 617,
+          "actual": 0
+        },
+        "youtube": {
+          "estimate": 399,
+          "actual": 0
+        },
+        "youtube_membership": {
+          "estimate": 280,
+          "actual": 0
+        },
+        "motorcycle": {
+          "estimate": 2000,
+          "actual": 0
+        },
+        "miscellaneous": {
+          "estimate": 0,
+          "actual": 0
+        }
       },
-      "youtube": {
-        "estimate": 399,
-        "actual": 0
+      "2024-12": {
+        "house": {
+          "estimate": 9000,
+          "actual": 10000
+        },
+        "water": {
+          "estimate": 150,
+          "actual": 0
+        },
+        "internet": {
+          "estimate": 500,
+          "actual": 0
+        },
+        "mobile": {
+          "estimate": 700,
+          "actual": 0
+        },
+        "credit_kbank": {
+          "estimate": 1277.8,
+          "actual": 0
+        },
+        "credit_kungsri": {
+          "estimate": 3590,
+          "actual": 3590
+        },
+        "credit_uob": {
+          "estimate": 0,
+          "actual": 0
+        },
+        "credit_ttb": {
+          "estimate": 1927.52,
+          "actual": 0
+        },
+        "shopee": {
+          "estimate": 471.6,
+          "actual": 0
+        },
+        "netflix": {
+          "estimate": 617,
+          "actual": 0
+        },
+        "youtube": {
+          "estimate": 399,
+          "actual": 0
+        },
+        "youtube_membership": {
+          "estimate": 280,
+          "actual": 0
+        },
+        "motorcycle": {
+          "estimate": 2000,
+          "actual": 0
+        },
+        "miscellaneous": {
+          "estimate": 0,
+          "actual": 0
+        }
       },
-      "youtube_membership": {
-        "estimate": 280,
-        "actual": 0
+      "2024-11": {
+        "house": {
+          "estimate": 9000,
+          "actual": 10000
+        },
+        "water": {
+          "estimate": 150,
+          "actual": 0
+        },
+        "internet": {
+          "estimate": 500,
+          "actual": 0
+        },
+        "mobile": {
+          "estimate": 700,
+          "actual": 0
+        },
+        "credit_kbank": {
+          "estimate": 1277.8,
+          "actual": 0
+        },
+        "credit_kungsri": {
+          "estimate": 3590,
+          "actual": 3590
+        },
+        "credit_uob": {
+          "estimate": 0,
+          "actual": 0
+        },
+        "credit_ttb": {
+          "estimate": 1927.52,
+          "actual": 0
+        },
+        "shopee": {
+          "estimate": 471.6,
+          "actual": 0
+        },
+        "netflix": {
+          "estimate": 617,
+          "actual": 0
+        },
+        "youtube": {
+          "estimate": 399,
+          "actual": 0
+        },
+        "youtube_membership": {
+          "estimate": 280,
+          "actual": 0
+        },
+        "motorcycle": {
+          "estimate": 2000,
+          "actual": 0
+        },
+        "miscellaneous": {
+          "estimate": 0,
+          "actual": 0
+        }
       },
-      "motorcycle": {
-        "estimate": 2000,
-        "actual": 0
+      "2024-10": {
+        "house": {
+          "estimate": 9000,
+          "actual": 10000
+        },
+        "water": {
+          "estimate": 150,
+          "actual": 0
+        },
+        "internet": {
+          "estimate": 500,
+          "actual": 0
+        },
+        "mobile": {
+          "estimate": 700,
+          "actual": 0
+        },
+        "credit_kbank": {
+          "estimate": 1277.8,
+          "actual": 0
+        },
+        "credit_kungsri": {
+          "estimate": 3590,
+          "actual": 3590
+        },
+        "credit_uob": {
+          "estimate": 0,
+          "actual": 0
+        },
+        "credit_ttb": {
+          "estimate": 1927.52,
+          "actual": 0
+        },
+        "shopee": {
+          "estimate": 471.6,
+          "actual": 0
+        },
+        "netflix": {
+          "estimate": 617,
+          "actual": 0
+        },
+        "youtube": {
+          "estimate": 399,
+          "actual": 0
+        },
+        "youtube_membership": {
+          "estimate": 280,
+          "actual": 0
+        },
+        "motorcycle": {
+          "estimate": 2000,
+          "actual": 0
+        },
+        "miscellaneous": {
+          "estimate": 0,
+          "actual": 0
+        }
       },
-      "miscellaneous": {
-        "estimate": 0,
-        "actual": 0
+      "2024-09": {
+        "house": {
+          "estimate": 9000,
+          "actual": 10000
+        },
+        "water": {
+          "estimate": 150,
+          "actual": 0
+        },
+        "internet": {
+          "estimate": 500,
+          "actual": 0
+        },
+        "mobile": {
+          "estimate": 700,
+          "actual": 0
+        },
+        "credit_kbank": {
+          "estimate": 1277.8,
+          "actual": 0
+        },
+        "credit_kungsri": {
+          "estimate": 3590,
+          "actual": 3590
+        },
+        "credit_uob": {
+          "estimate": 0,
+          "actual": 0
+        },
+        "credit_ttb": {
+          "estimate": 1927.52,
+          "actual": 0
+        },
+        "shopee": {
+          "estimate": 471.6,
+          "actual": 0
+        },
+        "netflix": {
+          "estimate": 617,
+          "actual": 0
+        },
+        "youtube": {
+          "estimate": 399,
+          "actual": 0
+        },
+        "youtube_membership": {
+          "estimate": 280,
+          "actual": 0
+        },
+        "motorcycle": {
+          "estimate": 2000,
+          "actual": 0
+        },
+        "miscellaneous": {
+          "estimate": 0,
+          "actual": 0
+        }
+      },
+      "2024-08": {
+        "house": {
+          "estimate": 9000,
+          "actual": 10000
+        },
+        "water": {
+          "estimate": 150,
+          "actual": 0
+        },
+        "internet": {
+          "estimate": 500,
+          "actual": 0
+        },
+        "mobile": {
+          "estimate": 700,
+          "actual": 0
+        },
+        "credit_kbank": {
+          "estimate": 1277.8,
+          "actual": 0
+        },
+        "credit_kungsri": {
+          "estimate": 3590,
+          "actual": 3590
+        },
+        "credit_uob": {
+          "estimate": 0,
+          "actual": 0
+        },
+        "credit_ttb": {
+          "estimate": 1927.52,
+          "actual": 0
+        },
+        "shopee": {
+          "estimate": 471.6,
+          "actual": 0
+        },
+        "netflix": {
+          "estimate": 617,
+          "actual": 0
+        },
+        "youtube": {
+          "estimate": 399,
+          "actual": 0
+        },
+        "youtube_membership": {
+          "estimate": 280,
+          "actual": 0
+        },
+        "motorcycle": {
+          "estimate": 2000,
+          "actual": 0
+        },
+        "miscellaneous": {
+          "estimate": 0,
+          "actual": 0
+        }
       }
     }
   }
-}
+]

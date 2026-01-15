@@ -17,10 +17,10 @@ const expenseKeyThaiMap = {
   miscellaneous: 'ค่าใช้จ่ายเบ็ดเตล็ด'
 };
 import { useState, useEffect } from 'react';
-import { formatCurrency, parseAndFormat, parseToNumber, formatExpenseData, getAccountSummary, handleNumberInput, handleNumberBlur, maskNumberFormat } from '../../shared/utils/numberUtils';
+import { formatCurrency, parseAndFormat, parseToNumber, formatExpenseData, getAccountSummary, handleNumberInput, handleNumberBlur, maskNumberFormat } from '../../shared/utils/frontend/numberUtils';
 import { formatExpenseForSave, calculateExpenseTotal } from '../../shared/utils/expenseUtils';
 import BankAccountTable from './BankAccountTable';
-import { expenseAPI } from '../../shared/utils/apiUtils';
+import { expenseAPI } from '../../shared/utils/frontend/apiUtils';
 import styles from '../styles/ExpenseTable.module.css';
 
 export default function ExpenseTable({ selectedMonth, mode = 'view' }) {

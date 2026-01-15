@@ -1,9 +1,88 @@
-import dbPromise from '../../lib/mongodb';
-import { calculateTotalSavings } from '../../src/shared/utils/apiUtils';
+import { calculateTotalSavings, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils';
+import {
+  isJsonMode,
+  readJsonCollection,
+  writeJsonCollection,
+  withGeneratedId,
+  enforceJsonLimit,
+  getMongoCollection
+} from '../../lib/dataSource';
+
+const COLLECTION_NAME = 'savings';
+
+function getTotalSavingsInline(list = []) {
+  return list.reduce((sum, item) => sum + (parseFloat(item?.จำนวนเงิน || item?.savings_amount || item?.amount || 0)), 0);
+}
+
+function enforceJsonMonthLimit(docs) {
+  return enforceJsonLimit({
+    docs,
+    limit: 15,
+    selector: (doc) => doc && doc.month
+  });
+}
+
+async function handleJsonSavingsGet(req, res) {
+  const docs = await readJsonCollection(COLLECTION_NAME);
+  const { month } = req.query;
+  if (month) {
+    const doc = docs.find(d => d.month === month);
+    const savingsList = doc && Array.isArray(doc.savings_list) ? doc.savings_list : [];
+    const response = {
+      total_savings: doc && typeof doc.total_savings === 'number' ? doc.total_savings : 0,
+      savings_list: savingsList,
+      รวมเงินเก็บ: getTotalSavingsInline(savingsList)
+    };
+    return res.status(200).json(response);
+  }
+  const data = {};
+  docs.forEach(doc => {
+    if (!doc || !doc.month) return;
+    const savingsList = doc.savings_list || [];
+    const totalSavings = calculateTotalSavings(savingsList);
+    data[doc.month] = {
+      total_savings: doc.total_savings || 0,
+      savings_list: savingsList,
+      totalSavings,
+      รวมเงินเก็บ: getTotalSavingsInline(savingsList)
+    };
+  });
+  return res.status(200).json(data);
+}
+
+async function handleJsonSavingsPost(req, res) {
+  const { month, total_savings, savings_list } = req.body;
+  if (!month) {
+    return res.status(400).json({ error: 'month required' });
+  }
+  const docs = await readJsonCollection(COLLECTION_NAME);
+  const idx = docs.findIndex(doc => doc.month === month);
+  const updateObj = { month, savings_list };
+  if (typeof total_savings !== 'undefined') {
+    updateObj.total_savings = total_savings;
+  }
+  if (idx >= 0) {
+    docs[idx] = { ...docs[idx], ...updateObj };
+  } else {
+    docs.push(withGeneratedId(updateObj));
+  }
+  const limited = enforceJsonMonthLimit(docs);
+  await writeJsonCollection(COLLECTION_NAME, limited);
+  return res.status(201).json({ success: true });
+}
 
 export default async function handler(req, res) {
-  const db = await dbPromise;
-  const collection = db.collection('savings');
+  if (isJsonMode()) {
+    if (req.method === 'GET') {
+      return handleJsonSavingsGet(req, res);
+    }
+    if (req.method === 'POST') {
+      return handleJsonSavingsPost(req, res);
+    }
+    return res.status(405).end();
+  }
+
+  const collection = await getMongoCollection(COLLECTION_NAME);
 
   if (req.method === 'GET') {
     const { month } = req.query;
@@ -71,6 +150,7 @@ export default async function handler(req, res) {
       { $set: updateObj },
       { upsert: true }
     );
+    await enforceMonthLimit(collection, 15);
     return res.status(201).json({ success: true });
   } else {
     res.status(405).end();

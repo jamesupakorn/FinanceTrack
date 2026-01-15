@@ -6,10 +6,10 @@ const incomeKeyThaiMap = {
 };
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { formatCurrency, parseAndFormat, parseToNumber, formatIncomeData, handleNumberInput, handleNumberBlur, maskNumberFormat } from '../../shared/utils/numberUtils';
+import { formatCurrency, parseAndFormat, parseToNumber, formatIncomeData, handleNumberInput, handleNumberBlur, maskNumberFormat } from '../../shared/utils/frontend/numberUtils';
 import { formatIncomeForSave } from '../../shared/utils/incomeUtils';
-import { calculateTotalWithSalary } from '../../shared/utils/numberUtils';
-import { incomeAPI, salaryAPI } from '../../shared/utils/apiUtils';
+import { calculateTotalWithSalary } from '../../shared/utils/frontend/numberUtils';
+import { incomeAPI, salaryAPI } from '../../shared/utils/frontend/apiUtils';
 import { Icons } from './Icons';
 import styles from '../styles/IncomeTable.module.css';
 

@@ -9,8 +9,8 @@ import MonthManager from '../src/frontend/components/MonthManager';
 import ThemeToggle from '../src/frontend/components/ThemeToggle';
 import { Icons } from '../src/frontend/components/Icons';
 import { useTheme } from '../src/frontend/contexts/ThemeContext';
-import { generateMonthOptions } from '../src/shared/utils/numberUtils';
-import { incomeAPI, expenseAPI, savingsAPI, salaryAPI } from '../src/shared/utils/apiUtils';
+import { generateMonthOptions } from '../src/shared/utils/frontend/numberUtils';
+import { incomeAPI, expenseAPI, savingsAPI, salaryAPI } from '../src/shared/utils/frontend/apiUtils';
 import styles from '../src/frontend/styles/Home.module.css';
 
 
