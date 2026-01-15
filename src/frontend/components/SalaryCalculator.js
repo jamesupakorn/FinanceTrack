@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { formatCurrency, parseAndFormat, handleNumberInput, handleNumberBlur, parseToNumber, maskNumberFormat, calculateSalaryTotals } from '../../shared/utils/numberUtils';
+import { formatCurrency, parseAndFormat, handleNumberInput, handleNumberBlur, parseToNumber, maskNumberFormat, calculateSalaryTotals } from '../../shared/utils/frontend/numberUtils';
 import { formatSalaryData, splitSalaryData } from '../../shared/utils/salaryUtils';
-import { salaryAPI, incomeAPI } from '../../shared/utils/apiUtils';
+import { salaryAPI, incomeAPI } from '../../shared/utils/frontend/apiUtils';
 import styles from '../styles/SalaryCalculator.module.css';
 
 // ฟังก์ชันสำหรับแปลงเดือนเป็นชื่อภาษาไทย
@@ -198,7 +198,7 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
                 {mode === 'edit' ? (
                   <input
                     type="text"
-                    value={salaryData[key]}
+                    value={salaryData[key] ?? ''}
                     onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
                     onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
                     placeholder="0.00"
@@ -228,7 +228,7 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
                 {mode === 'edit' ? (
                   <input
                     type="text"
-                    value={salaryData[key]}
+                    value={salaryData[key] ?? ''}
                     onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
                     onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
                     placeholder="0.00"

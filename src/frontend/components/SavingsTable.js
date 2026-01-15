@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { formatCurrency, parseAndFormat, parseToNumber, maskNumberFormat } from '../../shared/utils/numberUtils';
+import { formatCurrency, parseAndFormat, parseToNumber, maskNumberFormat } from '../../shared/utils/frontend/numberUtils';
 import { mapSavingsApiToList, calculateTotalSavings } from '../../shared/utils/savingsUtils';
-import { savingsAPI } from '../../shared/utils/apiUtils';
+import { savingsAPI } from '../../shared/utils/frontend/apiUtils';
 import { Icons } from './Icons';
 import InvestmentTable from './InvestmentTable';
 import styles from '../styles/SavingsTable.module.css';

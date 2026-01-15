@@ -1,5 +1,5 @@
 import React from 'react';
-import { maskNumberFormat, parseToNumber, formatCurrency } from '../../shared/utils/numberUtils';
+import { maskNumberFormat, parseToNumber, formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import styles from '../styles/ExpenseTable.module.css';
 
 export default function BankAccountTable({ accountSummary, mode = 'view' }) {

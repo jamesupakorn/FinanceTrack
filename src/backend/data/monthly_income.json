@@ -1,84 +1,194 @@
-{
-  "items": [
-    "salary",
-    "income2",
-    "other"
-  ],
-  "months": {
-    "2025-10": {
-      "salary": 39000,
-      "income2": 1470,
-      "other": 1277.8
-    },
-    "2025-09": {
-      "salary": 39000,
-      "income2": 1470,
-      "other": 1277.8
-    },
-    "2025-08": {
-      "salary": 39000,
-      "income2": 1470,
-      "other": 1277.8
-    },
-    "2025-07": {
-      "salary": 38000,
-      "income2": 1470,
-      "other": 1277.8
-    },
-    "2025-06": {
-      "salary": 41000,
-      "income2": 1470,
-      "other": 1277.8
-    },
-    "2025-05": {
-      "salary": 38655,
-      "income2": 1470,
-      "other": 1277.8
-    },
-    "2025-04": {
-      "salary": 40000,
-      "income2": 0,
-      "other": 0
-    },
-    "2025-03": {
-      "salary": 40000,
-      "income2": 0,
-      "other": 0
-    },
-    "2025-02": {
-      "salary": 40000,
-      "income2": 0,
-      "other": 0
-    },
-    "2025-01": {
-      "salary": 37000,
-      "income2": 0,
-      "other": 0
-    },
-    "2024-12": {
-      "salary": 38500,
-      "income2": 1200,
-      "other": 600
-    },
-    "2024-11": {
-      "salary": 38200,
-      "income2": 900,
-      "other": 400
-    },
-    "2024-10": {
-      "salary": 38200,
-      "income2": 800,
-      "other": 250
-    },
-    "2024-09": {
-      "salary": 38000,
-      "income2": 650,
-      "other": 150
-    },
-    "2024-08": {
-      "salary": 38000,
-      "income2": 750,
-      "other": 300
+[
+  {
+    "_id": "265ee4fc3fc4e5a401d44f97",
+    "month": "2026-02"
+  },
+  {
+    "_id": "695cb6367fe94f535c10bd6f",
+    "month": "2026-01",
+    "income2": 0,
+    "other": 0,
+    "salary": 37960
+  },
+  {
+    "_id": "692af54b9ba6da2362d99d27",
+    "month": "2025-12",
+    "income2": 1470,
+    "other": 1277.8,
+    "salary": 38085
+  },
+  {
+    "_id": "690b0f78ddcf877a116097cf",
+    "month": "2025-11",
+    "income2": 1470,
+    "other": 1277.8,
+    "salary": 38085
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d8f5",
+    "month": "2025-10",
+    "salary": 39000,
+    "income2": 1470,
+    "other": 1277.8
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d8f6",
+    "month": "2025-09",
+    "salary": 39000,
+    "income2": 1470,
+    "other": 1277.8
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d8f7",
+    "month": "2025-08",
+    "salary": 39000,
+    "income2": 1470,
+    "other": 1277.8
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d8f8",
+    "month": "2025-07",
+    "salary": 38000,
+    "income2": 1470,
+    "other": 1277.8
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d8f9",
+    "month": "2025-06",
+    "salary": 41000,
+    "income2": 1470,
+    "other": 1277.8
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d8fa",
+    "month": "2025-05",
+    "salary": 38655,
+    "income2": 1470,
+    "other": 1277.8
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d8fb",
+    "month": "2025-04",
+    "salary": 40000,
+    "income2": 0,
+    "other": 0
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d8fc",
+    "month": "2025-03",
+    "salary": 40000,
+    "income2": 0,
+    "other": 0
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d8fd",
+    "month": "2025-02",
+    "salary": 40000,
+    "income2": 0,
+    "other": 0
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d8fe",
+    "month": "2025-01",
+    "salary": 37000,
+    "income2": 0,
+    "other": 0
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d8ff",
+    "month": "2024-12",
+    "salary": 38500,
+    "income2": 1200,
+    "other": 600
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d905",
+    "obj": "months",
+    "months": {
+      "2025-10": {
+        "salary": 39000,
+        "income2": 1470,
+        "other": 1277.8
+      },
+      "2025-09": {
+        "salary": 39000,
+        "income2": 1470,
+        "other": 1277.8
+      },
+      "2025-08": {
+        "salary": 39000,
+        "income2": 1470,
+        "other": 1277.8
+      },
+      "2025-07": {
+        "salary": 38000,
+        "income2": 1470,
+        "other": 1277.8
+      },
+      "2025-06": {
+        "salary": 41000,
+        "income2": 1470,
+        "other": 1277.8
+      },
+      "2025-05": {
+        "salary": 38655,
+        "income2": 1470,
+        "other": 1277.8
+      },
+      "2025-04": {
+        "salary": 40000,
+        "income2": 0,
+        "other": 0
+      },
+      "2025-03": {
+        "salary": 40000,
+        "income2": 0,
+        "other": 0
+      },
+      "2025-02": {
+        "salary": 40000,
+        "income2": 0,
+        "other": 0
+      },
+      "2025-01": {
+        "salary": 37000,
+        "income2": 0,
+        "other": 0
+      },
+      "2024-12": {
+        "salary": 38500,
+        "income2": 1200,
+        "other": 600
+      },
+      "2024-11": {
+        "salary": 38200,
+        "income2": 900,
+        "other": 400
+      },
+      "2024-10": {
+        "salary": 38200,
+        "income2": 800,
+        "other": 250
+      },
+      "2024-09": {
+        "salary": 38000,
+        "income2": 650,
+        "other": 150
+      },
+      "2024-08": {
+        "salary": 38000,
+        "income2": 750,
+        "other": 300
+      }
     }
+  },
+  {
+    "_id": "6907800e7c0b4ba9b3c2d904",
+    "obj": "items",
+    "items": [
+      "salary",
+      "income2",
+      "other"
+    ]
   }
-}
+]

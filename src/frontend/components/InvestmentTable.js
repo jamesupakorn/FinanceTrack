@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { investmentAPI } from '../../shared/utils/apiUtils';
-import { maskNumberFormat, parseToNumber, formatCurrency } from '../../shared/utils/numberUtils';
+import { investmentAPI } from '../../shared/utils/frontend/apiUtils';
+import { maskNumberFormat, parseToNumber, formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import styles from '../styles/InvestmentTable.module.css';
 import { averagePercent, calcAmountFromPercent, sumPercent, mapInvestmentData } from '../../shared/utils/investmentUtils';
 

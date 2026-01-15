@@ -1,15 +1,53 @@
-{
-  "total_savings": {
-    "2025-09": 0,
-    "2025-08": 15500
+[
+  {
+    "_id": "d7062995dbbfe05c10df5d10",
+    "month": "2026-02",
+    "savings_list": []
   },
-  "savings_list": {
-    "2025-09": [],
-    "2025-08": [
+  {
+    "_id": "695cb6367fe94f535c10bd70",
+    "month": "2026-01",
+    "savings_list": []
+  },
+  {
+    "_id": "692af54b9ba6da2362d99d26",
+    "month": "2025-12",
+    "savings_list": []
+  },
+  {
+    "_id": "690b0f78ddcf877a116097d0",
+    "month": "2025-11",
+    "savings_list": [],
+    "total_savings": null
+  },
+  {
+    "_id": "690795e922c5922500dafbcd",
+    "month": "2025-10",
+    "savings_list": [
       {
-  "date": "2025-08-05",
-  "amount": 8000,
-  "note": "เงินเดือนส่วนเกิน"
+        "รายการ": "",
+        "จำนวนเงิน": 0,
+        "savings_type": "Test",
+        "savings_amount": "10.00"
+      }
+    ],
+    "total_savings": null
+  },
+  {
+    "_id": "690780107c0b4ba9b3c2d923",
+    "month": "2025-09",
+    "total_savings": 0,
+    "savings_list": []
+  },
+  {
+    "_id": "690780107c0b4ba9b3c2d924",
+    "month": "2025-08",
+    "total_savings": 15500,
+    "savings_list": [
+      {
+        "date": "2025-08-05",
+        "amount": 8000,
+        "note": "เงินเดือนส่วนเกิน"
       },
       {
         "date": "2025-08-15",
@@ -23,4 +61,4 @@
       }
     ]
   }
-}
+]

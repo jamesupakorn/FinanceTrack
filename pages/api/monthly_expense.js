@@ -1,11 +1,117 @@
-import dbPromise from '../../lib/mongodb';
-import { mapDocToFlatItemObjectWithTotals, removeSummaryFields } from '../../src/shared/utils/apiUtils';
+import { mapDocToFlatItemObjectWithTotals, removeSummaryFields, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils';
+import {
+  isJsonMode,
+  readJsonCollection,
+  writeJsonCollection,
+  withGeneratedId,
+  enforceJsonLimit,
+  getMongoCollection
+} from '../../lib/dataSource';
+
+const COLLECTION_NAME = 'monthly_expense';
+
+function getExpenseTotals(expenseData) {
+  let totalEstimate = 0;
+  let totalActualPaid = 0;
+  Object.values(expenseData || {}).forEach(item => {
+    if (item && typeof item === 'object') {
+      totalEstimate += parseFloat(item.estimate || 0);
+      totalActualPaid += parseFloat(item.actual || 0);
+    }
+  });
+  return {
+    totalEstimate: Math.round(totalEstimate * 100) / 100,
+    totalActualPaid: Math.round(totalActualPaid * 100) / 100
+  };
+}
+
+function getAccountSummary(expenseData) {
+  const mapping = {
+    "กรุงศรี": ["credit_kungsri"],
+    "ttb": ["house", "credit_ttb"],
+    "กสิกร": ["credit_kbank", "shopee", "netflix", "youtube", "youtube_membership"],
+    "UOB": ["credit_uob"]
+  };
+  const summary = {};
+  Object.entries(mapping).forEach(([account, items]) => {
+    let sum = 0;
+    items.forEach(item => {
+      const paid = expenseData[item]?.paid;
+      if (paid !== true && paid !== 'true') {
+        sum += parseFloat(expenseData[item]?.estimate || 0);
+      }
+    });
+    summary[account] = sum;
+  });
+  return summary;
+}
+
+function enforceJsonMonthLimit(docs) {
+  return enforceJsonLimit({
+    docs,
+    limit: 15,
+    selector: (doc) => doc && doc.month
+  });
+}
+
+async function handleJsonExpenseGet(req, res) {
+  const docs = await readJsonCollection(COLLECTION_NAME);
+  const { month } = req.query;
+  if (month) {
+    const doc = docs.find(d => d.month === month);
+    if (!doc) return res.status(200).json({});
+    let flat = mapDocToFlatItemObjectWithTotals(doc);
+    flat.accountSummary = getAccountSummary(flat);
+    const totals = getExpenseTotals(flat);
+    flat.totalEstimate = totals.totalEstimate;
+    flat.totalActualPaid = totals.totalActualPaid;
+    return res.status(200).json(flat);
+  }
+  const withTotals = {};
+  docs.forEach(doc => {
+    if (!doc || !doc.month) return;
+    let flat = mapDocToFlatItemObjectWithTotals(doc);
+    flat.accountSummary = getAccountSummary(flat);
+    const totals = getExpenseTotals(flat);
+    flat.totalEstimate = totals.totalEstimate;
+    flat.totalActualPaid = totals.totalActualPaid;
+    withTotals[doc.month] = flat;
+  });
+  return res.status(200).json(withTotals);
+}
+
+async function handleJsonExpensePost(req, res) {
+  const { month, expense_data } = req.body;
+  if (!month || !expense_data) {
+    return res.status(400).json({ error: 'month and expense_data required' });
+  }
+  const cleanData = removeSummaryFields(expense_data);
+  const docs = await readJsonCollection(COLLECTION_NAME);
+  const idx = docs.findIndex(doc => doc.month === month);
+  if (idx >= 0) {
+    docs[idx] = { ...docs[idx], ...cleanData, month };
+  } else {
+    docs.push(withGeneratedId({ ...cleanData, month }));
+  }
+  const limited = enforceJsonMonthLimit(docs);
+  await writeJsonCollection(COLLECTION_NAME, limited);
+  return res.status(200).json({ success: true });
+}
 
 export default async function handler(req, res) {
-  let db, collection;
+  if (isJsonMode()) {
+    if (req.method === 'GET') {
+      return handleJsonExpenseGet(req, res);
+    }
+    if (req.method === 'POST') {
+      return handleJsonExpensePost(req, res);
+    }
+    return res.status(405).end();
+  }
+
+  let collection;
   try {
-    db = await dbPromise;
-    collection = db.collection('monthly_expense');
+    collection = await getMongoCollection(COLLECTION_NAME);
   } catch (err) {
     console.error('DB connection or collection error:', err);
     return res.status(500).json({ error: 'Database connection error' });
@@ -14,44 +120,6 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const { month } = req.query;
-      // Helper: calculate totalEstimate and totalActualPaid
-      function getExpenseTotals(expenseData) {
-        let totalEstimate = 0;
-        let totalActualPaid = 0;
-        Object.values(expenseData).forEach(item => {
-          if (item && typeof item === 'object') {
-            totalEstimate += parseFloat(item.estimate || 0);
-            totalActualPaid += parseFloat(item.actual || 0);
-          }
-        });
-        return {
-          totalEstimate: Math.round(totalEstimate * 100) / 100,
-          totalActualPaid: Math.round(totalActualPaid * 100) / 100
-        };
-      }
-
-      // Helper: calculate account summary (bank transfer) from expense data
-      function getAccountSummary(expenseData) {
-        const mapping = {
-          "กรุงศรี": ["credit_kungsri"],
-          "ttb": ["house", "credit_ttb"],
-          "กสิกร": ["credit_kbank", "shopee", "netflix", "youtube", "youtube_membership"],
-          "UOB": ["credit_uob"]
-        };
-        const summary = {};
-        Object.entries(mapping).forEach(([account, items]) => {
-          let sum = 0;
-          items.forEach(item => {
-            // รวมเฉพาะยอดที่ยังไม่จ่าย
-            const paid = expenseData[item]?.paid;
-            if (paid !== true && paid !== 'true') {
-              sum += parseFloat(expenseData[item]?.estimate || 0);
-            }
-          });
-          summary[account] = sum;
-        });
-        return summary;
-      }
 
       if (month) {
         let doc;
@@ -140,6 +208,7 @@ export default async function handler(req, res) {
           { $set: { ...cleanData, month } },
           { upsert: true }
         );
+        await enforceMonthLimit(collection, 15);
         res.status(200).json({ success: true });
       } else {
         res.status(400).json({ error: 'month and expense_data required' });

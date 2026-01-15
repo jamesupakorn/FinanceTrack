@@ -9,14 +9,14 @@ import MonthManager from '../components/MonthManager';
 import ThemeToggle from '../components/ThemeToggle';
 import { Icons } from '../components/Icons';
 import { useTheme } from '../contexts/ThemeContext';
-import { generateMonthOptions } from '../../shared/utils/numberUtils';
+import { generateMonthOptions } from '../../shared/utils/frontend/numberUtils';
 
 // Utility: get current month in YYYY-MM
 function getCurrentMonth() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
-import { incomeAPI, expenseAPI, savingsAPI, salaryAPI } from '../../shared/utils/apiUtils';
+import { incomeAPI, expenseAPI, savingsAPI, salaryAPI } from '../../shared/utils/frontend/apiUtils';
 import styles from '../styles/Home.module.css';
 
 
