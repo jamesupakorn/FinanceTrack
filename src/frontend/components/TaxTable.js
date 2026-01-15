@@ -1,9 +1,9 @@
 
 // ...imports and component definition...
 import { useState, useEffect } from 'react';
-import { formatCurrency, handleNumberInput, handleNumberBlur, parseToNumber, maskNumberFormat } from '../../shared/utils/numberUtils';
+import { formatCurrency, handleNumberInput, handleNumberBlur, parseToNumber, maskNumberFormat } from '../../shared/utils/frontend/numberUtils';
 import { createDefault12MonthsObject, sumAccumulated, sumYearly, getSortedYears } from '../../shared/utils/taxUtils';
-import { taxAPI, incomeAPI } from '../../shared/utils/apiUtils';
+import { taxAPI, incomeAPI } from '../../shared/utils/frontend/apiUtils';
 import styles from '../styles/TaxTable.module.css';
 
 export default function TaxTable({ selectedMonth, mode = 'view' }) {

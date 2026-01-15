@@ -13,7 +13,7 @@ import { ENCODED_EDIT_PASSWORD } from '../src/frontend/config/password.enc';
 import { decodePassword } from '../src/shared/utils/authUtils';
 import { Icons } from '../src/frontend/components/Icons';
 import { useTheme } from '../src/frontend/contexts/ThemeContext';
-import { incomeAPI, expenseAPI, savingsAPI, salaryAPI } from '../src/shared/utils/apiUtils';
+import { incomeAPI, expenseAPI, savingsAPI, salaryAPI } from '../src/shared/utils/frontend/apiUtils';
 import styles from '../src/frontend/styles/Home.module.css';
 
 function getCurrentMonth() {
@@ -27,9 +27,12 @@ const SESSION_KEY = 'edit_last_activity'; // สำหรับ activity
 const SESSION_KEY_PASSWORD = 'edit_password_verified'; // สำหรับ password
 
 export default function EditPage() {
+    // สำหรับ LINE แจ้งเตือน
+    const [lineMessage, setLineMessage] = useState('');
+    const [lineStatus, setLineStatus] = useState('');
   const router = useRouter();
-  // Session timeout: 30 minutes (1800 seconds)
-  const SESSION_TIMEOUT = 30 * 60 * 1000;
+  // Session timeout: 1 hour (3600 seconds)
+  const SESSION_TIMEOUT = 60 * 60 * 1000;
 
   // Update last activity timestamp
   const updateActivity = () => {
@@ -52,6 +55,7 @@ export default function EditPage() {
       const last = parseInt(localStorage.getItem(SESSION_KEY), 10);
       if (!last || Date.now() - last > SESSION_TIMEOUT) {
         localStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(SESSION_KEY_PASSWORD); // เคลียร์ password ด้วย
         router.replace('/');
       }
     };
@@ -72,6 +76,20 @@ export default function EditPage() {
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       const verified = localStorage.getItem(SESSION_KEY_PASSWORD);
+      // เช็ค password จาก query string
+      const urlParams = new URLSearchParams(window.location.search);
+      const passwordFromQuery = urlParams.get('pass');
+      if (passwordFromQuery) {
+        if (passwordFromQuery === EDIT_PASSWORD) {
+          localStorage.setItem(SESSION_KEY_PASSWORD, 'true');
+          setShowPasswordModal(false);
+          return;
+        } else {
+          localStorage.removeItem(SESSION_KEY_PASSWORD);
+          setShowPasswordModal(true);
+          return;
+        }
+      }
       if (verified !== 'true') {
         setShowPasswordModal(true);
       }
@@ -204,7 +222,8 @@ export default function EditPage() {
         {[{ id: 'income', label: 'รายรับ', icon: <Icons.TrendingUp size={20} /> },
           { id: 'expense', label: 'รายจ่าย', icon: <Icons.CreditCard size={20} /> },
           { id: 'savings', label: 'เงินออม', icon: <Icons.PiggyBank size={20} /> },
-          { id: 'tax', label: 'ภาษี', icon: <Icons.BarChart size={20} /> }
+          { id: 'tax', label: 'ภาษี', icon: <Icons.BarChart size={20} /> },
+          { id: 'line', label: 'LINE แจ้งเตือน', icon: <Icons.Message size={20} /> }
         ].map(tab => (
           <button 
             key={tab.id}
@@ -277,6 +296,41 @@ export default function EditPage() {
               key={`tax-${refreshTrigger}`}
               mode={mode}
             />
+          </div>
+        )}
+        {activeTab === 'line' && (
+          <div style={{ maxWidth: 500, margin: '40px auto', background: '#fff', borderRadius: 12, boxShadow: '0 2px 12px #eee', padding: 32 }}>
+            <h3 style={{ marginBottom: 16 }}>ส่งข้อความไป LINE</h3>
+            <input
+              type="text"
+              value={lineMessage}
+              onChange={e => setLineMessage(e.target.value)}
+              placeholder="ข้อความที่ต้องการส่ง"
+              style={{ width: '100%', padding: 12, fontSize: 16, borderRadius: 8, border: '1px solid #ccc', marginBottom: 16 }}
+            />
+            <button
+              style={{ padding: '10px 24px', borderRadius: 8, background: '#218bff', color: '#fff', fontWeight: 600, border: 'none', fontSize: 16 }}
+              onClick={async () => {
+                setLineStatus('');
+                try {
+                  const res = await fetch('/api/line_notify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: lineMessage })
+                  });
+                  const data = await res.json();
+                  if (data.success) {
+                    setLineStatus('ส่งข้อความสำเร็จ');
+                  } else {
+                    setLineStatus('ส่งข้อความไม่สำเร็จ: ' + (data.error || ''));
+                  }
+                } catch (err) {
+                  setLineStatus('เกิดข้อผิดพลาดในการส่งข้อความ');
+                }
+              }}
+              disabled={!lineMessage}
+            >ส่งข้อความ</button>
+            {lineStatus && <div style={{ marginTop: 16, color: lineStatus.includes('สำเร็จ') ? '#1a7f37' : '#cf222e' }}>{lineStatus}</div>}
           </div>
         )}
       </div>
