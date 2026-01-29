@@ -1,98 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap');
+
 /* Global Styles - FinanceTrack */
 
-/* CSS Variables สำหรับ Theme System */
-/* CSS Variables สำหรับธีม - ปรับสีให้สบายตา */
+/* Midnight glass palette */
 :root {
-  /* ธีมสว่าง - โทนสว่างอ่อนนุ่ม */
-  --bg-color: #fafbfc;
-  --bg-primary: #fafbfc;
-  --bg-surface: #ffffff;
-  --bg-surface-alt: #f6f8fa;
-  --surface-color: #ffffff;
-  --surface-alt-color: #f6f8fa;
-  
-  --text-primary: #24292f;
-  --text-secondary: #656d76;
-  --text-light: #8c959f;
-  
-  --border-color: #d0d7de;
-  --border-light: #e6eaef;
-  
-  --color-primary: #0969da;
-  --primary-color: #0969da;
-  --secondary-color: #1a7f37;
-  --danger-color: #cf222e;
-  --warning-color: #d1242f;
-  --info-color: #218bff;
-  
-  --gradient-primary: linear-gradient(135deg, #0969da 0%, #218bff 100%);
-  --gradient-secondary: linear-gradient(135deg, #1a7f37 0%, #2da44e 100%);
-  
-  --shadow-color: rgba(27, 31, 35, 0.04);
-  --shadow-sm: rgba(27, 31, 35, 0.04);
-  --shadow-medium: rgba(27, 31, 35, 0.08);
-  --shadow-md: rgba(27, 31, 35, 0.08);
-  --shadow-strong: rgba(27, 31, 35, 0.12);
+  --bg-color: #03081a;
+  --bg-primary: #03081a;
+  --bg-surface: rgba(15, 18, 40, 0.92);
+  --bg-surface-alt: rgba(21, 26, 56, 0.88);
+  --surface-color: rgba(15, 18, 40, 0.92);
+  --surface-alt-color: rgba(21, 26, 56, 0.88);
+
+  --text-primary: #f8fbff;
+  --text-secondary: #c7cffc;
+  --text-light: #8e96c9;
+
+  --border-color: rgba(255, 255, 255, 0.16);
+  --border-light: rgba(255, 255, 255, 0.08);
+
+  --color-primary: #5d5bff;
+  --primary-color: #5d5bff;
+  --secondary-color: #4df0c3;
+  --danger-color: #ff7aa2;
+  --warning-color: #facc6b;
+  --info-color: #4ecbff;
+
+  --gradient-primary: linear-gradient(135deg, #5d5bff 0%, #00d4ff 100%);
+  --gradient-secondary: linear-gradient(135deg, #4df0c3 0%, #4ecbff 100%);
+
+  --shadow-color: rgba(2, 6, 23, 0.55);
+  --shadow-sm: rgba(2, 6, 23, 0.45);
+  --shadow-medium: rgba(2, 6, 23, 0.55);
+  --shadow-md: rgba(2, 6, 23, 0.6);
+  --shadow-strong: rgba(2, 6, 23, 0.72);
 }
 
-/* Dark Theme - ธีมมืดทึบ */
-[data-theme="dark"] {
-  --bg-primary: #0d1117;
-  --bg-surface: #161b22;
-  --bg-surface-alt: #21262d;
-  
-  --text-primary: #f0f6fc;
-  --text-secondary: #8b949e;
-  --text-light: #6e7681;
-  
-  --border-color: #30363d;
-  --border-light: #21262d;
-  
-  --color-primary: #4493f8;
-  --primary-color: #4493f8;
-  --secondary-color: #3fb950;
-  --danger-color: #f85149;
-  --warning-color: #d29922;
-  --info-color: #79c0ff;
-  
-  --gradient-primary: linear-gradient(135deg, #4493f8 0%, #79c0ff 100%);
-  --gradient-secondary: linear-gradient(135deg, #3fb950 0%, #56d364 100%);
-  
-  --shadow-color: rgba(1, 4, 9, 0.8);
-  --shadow-sm: rgba(1, 4, 9, 0.8);
-  --shadow-medium: rgba(1, 4, 9, 0.85);
-  --shadow-md: rgba(1, 4, 9, 0.85);
-  --shadow-strong: rgba(1, 4, 9, 0.9);
-}
+[data-theme="midnight"] {
+  --bg-color: #03081a;
+  --bg-primary: #03081a;
+  --bg-surface: rgba(15, 18, 40, 0.92);
+  --bg-surface-alt: rgba(21, 26, 56, 0.88);
+  --surface-color: rgba(15, 18, 40, 0.92);
+  --surface-alt-color: rgba(21, 26, 56, 0.88);
 
-/* Financial Theme - ธีมไฟแนนโปร สีน้ำเงิน */
-[data-theme="financial"] {
-  --bg-primary: #f0f4ff;
-  --bg-surface: #ffffff;
-  --bg-surface-alt: #f6f8ff;
-  
-  --text-primary: #0f1c3f;
-  --text-secondary: #1f2937;
-  --text-light: #6b7280;
-  
-  --border-color: #bfdbfe;
-  --border-light: #dbeafe;
-  
-  --color-primary: #1d4ed8;
-  --primary-color: #1d4ed8;
-  --secondary-color: #0ea5e9;
-  --danger-color: #dc2626;
-  --warning-color: #d97706;
-  --info-color: #2563eb;
-  
-  --gradient-primary: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
-  --gradient-secondary: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
-  
-  --shadow-color: rgba(29, 78, 216, 0.08);
-  --shadow-sm: rgba(29, 78, 216, 0.08);
-  --shadow-medium: rgba(29, 78, 216, 0.12);
-  --shadow-md: rgba(29, 78, 216, 0.12);
-  --shadow-strong: rgba(29, 78, 216, 0.16);
+  --text-primary: #f8fbff;
+  --text-secondary: #c7cffc;
+  --text-light: #8e96c9;
+
+  --border-color: rgba(255, 255, 255, 0.16);
+  --border-light: rgba(255, 255, 255, 0.08);
+
+  --color-primary: #5d5bff;
+  --primary-color: #5d5bff;
+  --secondary-color: #4df0c3;
+  --danger-color: #ff7aa2;
+  --warning-color: #facc6b;
+  --info-color: #4ecbff;
+
+  --gradient-primary: linear-gradient(135deg, #5d5bff 0%, #00d4ff 100%);
+  --gradient-secondary: linear-gradient(135deg, #4df0c3 0%, #4ecbff 100%);
+
+  --shadow-color: rgba(2, 6, 23, 0.55);
+  --shadow-sm: rgba(2, 6, 23, 0.45);
+  --shadow-medium: rgba(2, 6, 23, 0.55);
+  --shadow-md: rgba(2, 6, 23, 0.6);
+  --shadow-strong: rgba(2, 6, 23, 0.72);
 }
 
 /* Global Reset */
@@ -104,15 +76,21 @@
 
 /* Body และ HTML */
 html, body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  font-family: 'Prompt', 'Sarabun', 'Noto Sans Thai', 'Segoe UI', sans-serif;
   line-height: 1.6;
   scroll-behavior: smooth;
 }
 
 body {
   background-color: var(--bg-primary);
+  background-image: radial-gradient(circle at 20% 20%, rgba(25, 53, 121, 0.35), transparent 55%),
+    radial-gradient(circle at 80% 0%, rgba(0, 212, 255, 0.18), transparent 45%),
+    radial-gradient(circle at 50% 100%, rgba(93, 91, 255, 0.25), transparent 55%),
+    linear-gradient(160deg, #050913 0%, #03081a 55%, #020510 100%);
   color: var(--text-primary);
+  min-height: 100vh;
   transition: background-color 0.3s ease, color 0.3s ease;
+  background-attachment: fixed;
 }
 
 /* Utility Classes */
@@ -124,95 +102,104 @@ body {
 
 .card {
   background: var(--bg-surface);
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 4px 20px var(--shadow-sm);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 0 30px 80px var(--shadow-color);
   border: 1px solid var(--border-color);
+  backdrop-filter: blur(18px);
   transition: all 0.3s ease;
 }
 
 .card:hover {
-  box-shadow: 0 8px 32px var(--shadow-md);
-  transform: translateY(-2px);
+  box-shadow: 0 40px 120px var(--shadow-strong);
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 8px;
+  padding: 14px 28px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   cursor: pointer;
   font-size: 15px;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  font-weight: 600;
+  transition: all 0.25s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .btn-primary {
-  background-color: var(--color-primary);
-  color: white;
+  background-image: var(--gradient-primary);
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(93, 91, 255, 0.45);
 }
 
 .btn-primary:hover {
-  opacity: 0.9;
-  transform: scale(1.02);
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 18px 46px rgba(93, 91, 255, 0.6);
 }
 
 .btn-secondary {
-  background-color: var(--color-secondary);
-  color: white;
+  background-image: var(--gradient-secondary);
+  color: #021210;
+  box-shadow: 0 12px 30px rgba(77, 240, 195, 0.35);
 }
 
 .btn-secondary:hover {
-  opacity: 0.9;
-  transform: scale(1.02);
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 18px 46px rgba(77, 240, 195, 0.55);
 }
 
 .btn-danger {
-  background-color: var(--color-danger);
-  color: white;
+  background: linear-gradient(135deg, #ff7aa2 0%, #ff4f73 100%);
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(255, 79, 115, 0.35);
 }
 
 .btn-danger:hover {
-  opacity: 0.9;
-  transform: scale(1.02);
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 18px 46px rgba(255, 79, 115, 0.55);
 }
 
 /* Input Styles */
 .form-input {
-  padding: 12px 16px;
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
+  padding: 14px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
   font-size: 16px;
-  background-color: var(--bg-surface);
+  background-color: rgba(12, 16, 34, 0.8);
   color: var(--text-primary);
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
   width: 100%;
+  backdrop-filter: blur(14px);
 }
 
 .form-input:focus {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+  border-color: rgba(93, 91, 255, 0.85);
+  box-shadow: 0 0 0 4px rgba(93, 91, 255, 0.25);
 }
 
 .form-select {
-  padding: 12px 16px;
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
+  padding: 14px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
   font-size: 16px;
-  background-color: var(--bg-surface);
+  background-color: rgba(12, 16, 34, 0.85);
   color: var(--text-primary);
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
   cursor: pointer;
+  backdrop-filter: blur(14px);
 }
 
 .form-select:focus {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+  border-color: rgba(93, 91, 255, 0.85);
+  box-shadow: 0 0 0 4px rgba(93, 91, 255, 0.25);
 }
 
 /* Table Styles */
@@ -220,23 +207,30 @@ body {
   width: 100%;
   border-collapse: collapse;
   margin-top: 16px;
+  background: rgba(15, 20, 48, 0.85);
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  box-shadow: 0 20px 60px var(--shadow-sm);
 }
 
 .table th,
 .table td {
-  padding: 12px 16px;
+  padding: 16px 20px;
   text-align: left;
   border-bottom: 1px solid var(--border-color);
 }
 
 .table th {
-  background-color: var(--bg-surface-alt);
+  background-image: var(--gradient-primary);
   font-weight: 600;
-  color: var(--text-secondary);
+  color: #fff;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .table tbody tr:hover {
-  background-color: var(--bg-surface-alt);
+  background-color: rgba(255, 255, 255, 0.04);
 }
 
 /* Text Utilities - สีใหม่สบายตา */
@@ -246,32 +240,32 @@ body {
 
 /* สีเฉพาะสำหรับการเงิน - ปรับใหม่ให้สบายตา */
 .text-income { 
-  color: #059669; 
+  color: #4df0c3; 
   font-weight: 600;
 }
 
 .text-expense { 
-  color: #dc2626; 
+  color: #ff7aa2; 
   font-weight: 600;
 }
 
 .text-savings { 
-  color: #0369a1; 
+  color: #4ecbff; 
   font-weight: 600;
 }
 
 .text-tax { 
-  color: #7c3aed; 
+  color: #facc6b; 
   font-weight: 600;
 }
 
 .text-profit { 
-  color: #16a34a; 
+  color: #4df0c3; 
   font-weight: 700;
 }
 
 .text-loss { 
-  color: #dc2626; 
+  color: #ff7aa2; 
   font-weight: 700;
 }
 
@@ -283,34 +277,36 @@ body {
 .financial-table {
   width: 100%;
   border-collapse: collapse;
-  background: var(--bg-surface);
-  border-radius: 16px;
+  background: rgba(15, 20, 48, 0.9);
+  border-radius: 24px;
   overflow: hidden;
-  box-shadow: 0 6px 24px var(--shadow-sm);
-  margin-top: 20px;
+  box-shadow: 0 30px 90px var(--shadow-color);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(18px);
+  margin-top: 32px;
 }
 
 .financial-table th {
   background: var(--gradient-primary);
   color: white;
-  padding: 18px 20px;
+  padding: 22px 24px;
   font-weight: 600;
   text-align: left;
-  font-size: 14px;
-  letter-spacing: 0.5px;
+  font-size: 13px;
+  letter-spacing: 0.4em;
   text-transform: uppercase;
 }
 
 .financial-table td {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-light);
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   color: var(--text-primary);
   font-size: 15px;
   transition: background-color 0.2s ease;
 }
 
 .financial-table tr:hover {
-  background-color: var(--bg-surface-alt);
+  background-color: rgba(255, 255, 255, 0.03);
 }
 
 .financial-table tr:last-child td {
@@ -319,14 +315,15 @@ body {
 
 /* การ์ดแสดงข้อมูลทางการเงิน */
 .financial-card {
-  background: var(--bg-surface);
-  border: 2px solid var(--border-light);
-  border-radius: 20px;
-  padding: 28px;
-  box-shadow: 0 8px 32px var(--shadow-sm);
+  background: rgba(15, 20, 48, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 28px;
+  padding: 32px;
+  box-shadow: 0 35px 100px var(--shadow-color);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  backdrop-filter: blur(18px);
 }
 
 .financial-card::before {
@@ -340,22 +337,23 @@ body {
 }
 
 .financial-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 16px 48px var(--shadow-md);
-  border-color: var(--primary-color);
+  transform: translateY(-8px);
+  box-shadow: 0 45px 120px var(--shadow-strong);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 /* สถิติและการแสดงผล */
 .stat-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-light);
-  border-radius: 20px;
-  padding: 32px;
+  background: rgba(21, 28, 56, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  padding: 36px;
   text-align: center;
-  box-shadow: 0 6px 24px var(--shadow-sm);
+  box-shadow: 0 30px 90px var(--shadow-sm);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  backdrop-filter: blur(20px);
 }
 
 .stat-card::before {
@@ -369,8 +367,8 @@ body {
 }
 
 .stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 40px var(--shadow-md);
+  transform: translateY(-6px);
+  box-shadow: 0 40px 120px var(--shadow-strong);
 }
 
 .stat-value {
@@ -396,38 +394,40 @@ body {
   background: var(--gradient-primary);
   color: white;
   border: none;
-  padding: 14px 28px;
-  border-radius: 16px;
-  font-weight: 600;
+  padding: 16px 32px;
+  border-radius: 999px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 6px 20px rgba(9, 105, 218, 0.25);
-  font-size: 16px;
-  letter-spacing: 0.5px;
+  box-shadow: 0 25px 60px rgba(93, 91, 255, 0.45);
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
 }
 
 .btn-financial:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 40px rgba(9, 105, 218, 0.4);
+  transform: translateY(-4px);
+  box-shadow: 0 40px 100px rgba(93, 91, 255, 0.6);
 }
 
 .btn-financial-secondary {
   background: var(--gradient-secondary);
-  color: white;
+  color: #021210;
   border: none;
-  padding: 14px 28px;
-  border-radius: 16px;
-  font-weight: 600;
+  padding: 16px 32px;
+  border-radius: 999px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 6px 20px rgba(26, 127, 55, 0.25);
-  font-size: 16px;
-  letter-spacing: 0.5px;
+  box-shadow: 0 25px 60px rgba(77, 240, 195, 0.35);
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
 }
 
 .btn-financial-secondary:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 40px rgba(26, 127, 55, 0.4);
+  transform: translateY(-4px);
+  box-shadow: 0 40px 100px rgba(77, 240, 195, 0.55);
 }
 
 /* Background Utilities */

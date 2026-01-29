@@ -1,8 +1,8 @@
 import React from 'react';
-import { maskNumberFormat, parseToNumber, formatCurrency } from '../../shared/utils/frontend/numberUtils';
+import { parseToNumber, formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import styles from '../styles/ExpenseTable.module.css';
 
-export default function BankAccountTable({ accountSummary, mode = 'view' }) {
+export default function BankAccountTable({ accountSummary }) {
   return (
     <div className={styles.tableContainer}>
       <table className={styles.table}>
@@ -16,11 +16,9 @@ export default function BankAccountTable({ accountSummary, mode = 'view' }) {
           {Object.entries(accountSummary).map(([account, sum]) => (
             <tr key={account} className={styles.tableRow}>
               <td className={styles.tableCell}>{account}</td>
-              <td className={`${styles.tableCell} ${styles.right}`}>{(() => {
-                const value = parseToNumber(sum);
-                if (value === 0) return '0';
-                return mode === 'edit' ? formatCurrency(value) : maskNumberFormat(value);
-              })()}</td>
+              <td className={`${styles.tableCell} ${styles.right}`}>
+                {formatCurrency(parseToNumber(sum) || 0)}
+              </td>
             </tr>
           ))}
         </tbody>

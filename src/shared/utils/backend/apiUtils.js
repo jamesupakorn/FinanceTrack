@@ -53,6 +53,49 @@ export function calculateTotalSavings(savingsList) {
   return savingsList.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 }
 
+export async function enforceMonthLimit(collection, limit = 15, options = {}) {
+  if (!collection || typeof collection.find !== 'function') {
+    return { retainedMonths: [] };
+  }
+
+  const {
+    filter = {},
+    additionalMonths = [],
+    sortComparator,
+  } = options || {};
+
+  const baseFilter = { ...filter, month: { $exists: true } };
+  const monthDocs = await collection
+    .find(baseFilter, { projection: { month: 1 } })
+    .toArray();
+
+  const monthSet = new Set();
+  monthDocs.forEach(doc => {
+    if (doc && typeof doc.month === 'string' && doc.month.length > 0) {
+      monthSet.add(doc.month);
+    }
+  });
+  additionalMonths.forEach(monthKey => {
+    if (typeof monthKey === 'string' && monthKey.length > 0) {
+      monthSet.add(monthKey);
+    }
+  });
+
+  const comparator = typeof sortComparator === 'function'
+    ? sortComparator
+    : (a, b) => b.localeCompare(a);
+  const orderedMonths = Array.from(monthSet).sort(comparator);
+  const retainedMonths = orderedMonths.slice(0, limit);
+  const monthsToDelete = orderedMonths.slice(limit);
+
+  if (monthsToDelete.length > 0) {
+    const deleteFilter = { ...filter, month: { $in: monthsToDelete } };
+    await collection.deleteMany(deleteFilter);
+  }
+
+  return { retainedMonths };
+}
+
 // Investment: map doc to month-data object
 export function mapInvestmentDoc(doc) {
   return doc && doc.investments ? doc.investments : [];
@@ -75,10 +118,12 @@ export function mapDocToFlatItemObjectWithTotals(doc) {
   if (!doc) return {};
   if (doc.months) return doc;
   let out = {};
+  const summaryFields = new Set(['month', '_id', 'accountSummary', 'totalEstimate', 'totalActualPaid']);
   if (doc.estimate && doc.actual) {
     const items = Array.from(new Set([...Object.keys(doc.estimate), ...Object.keys(doc.actual)]));
     items.forEach(key => {
       out[key] = {
+        name: typeof doc[key]?.name === 'string' ? doc[key].name : '',
         estimate: doc.estimate[key] ?? 0,
         actual: doc.actual[key] ?? 0,
         paid: false
@@ -86,10 +131,11 @@ export function mapDocToFlatItemObjectWithTotals(doc) {
     });
   } else {
     Object.keys(doc).forEach(key => {
-      if (key === 'month' || key === '_id') return;
+      if (summaryFields.has(key)) return;
       const val = doc[key];
       if (val && typeof val === 'object') {
         out[key] = {
+          name: typeof val.name === 'string' ? val.name : '',
           estimate: val.estimate ?? 0,
           actual: val.actual ?? 0,
           paid: typeof val.paid === 'boolean' ? val.paid : false

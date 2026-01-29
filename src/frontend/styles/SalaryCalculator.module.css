@@ -1,38 +1,36 @@
 /* SalaryCalculator Component Styles - ปรับโทนสีใหม่สบายตา */
 
 .salaryCalculator {
-  background: var(--bg-surface);
-  border-radius: 20px;
-  padding: 32px;
-  margin: 24px 0;
-  box-shadow: 0 8px 32px var(--shadow-sm);
-  border: 2px solid var(--border-light);
+  background: rgba(6, 9, 27, 0.85);
+  border-radius: 32px;
+  padding: 44px;
+  margin: 36px 0;
+  box-shadow: 0 45px 140px rgba(2, 6, 23, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  backdrop-filter: blur(26px);
 }
 
 .salaryCalculator::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: var(--gradient-primary);
+  inset: 0;
+  background: radial-gradient(circle at 20% 20%, rgba(77, 240, 195, 0.18), transparent 45%),
+    radial-gradient(circle at 80% 0%, rgba(93, 91, 255, 0.2), transparent 40%);
+  pointer-events: none;
 }
 
 .salaryCalculator:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 16px 48px var(--shadow-md);
-  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 22px 60px rgba(2, 6, 23, 0.75);
 }
 
 .title {
-  font-size: 1.75rem;
+  font-size: 2rem;
   font-weight: 800;
-  margin-bottom: 28px;
-  color: var(--text-primary);
+  margin-bottom: 32px;
   text-align: center;
   letter-spacing: -0.02em;
   background: var(--gradient-primary);
@@ -44,47 +42,68 @@
 .salaryContent {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 40px;
-  margin-bottom: 32px;
+  gap: 44px;
+  margin-bottom: 36px;
 }
 
-.incomeSection {
-  position: relative;
-}
-
+.incomeSection,
 .deductionSection {
   position: relative;
+  padding: 32px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(9, 12, 32, 0.82);
+  box-shadow: 0 28px 90px rgba(2, 6, 23, 0.55);
+  backdrop-filter: blur(18px);
+  overflow: hidden;
+}
+
+.incomeSection::after,
+.deductionSection::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.incomeSection::after {
+  background: radial-gradient(circle at 10% -20%, rgba(34, 197, 94, 0.25), transparent 50%);
+}
+
+.deductionSection::after {
+  background: radial-gradient(circle at 90% 0%, rgba(239, 68, 68, 0.25), transparent 50%);
 }
 
 .sectionTitle {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 700;
   margin-bottom: 20px;
-  padding: 16px 20px;
-  border-radius: 16px;
+  padding: 18px;
+  border-radius: 18px;
   text-align: center;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
   text-transform: uppercase;
-  font-size: 0.95rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
+  box-shadow: 0 14px 40px rgba(2, 6, 23, 0.4);
+  backdrop-filter: blur(14px);
 }
 
 .incomeTitle {
-  background: linear-gradient(135deg, rgba(26, 127, 55, 0.1) 0%, rgba(34, 197, 94, 0.05) 100%);
+  background: linear-gradient(135deg, rgba(26, 127, 55, 0.15) 0%, rgba(34, 197, 94, 0.05) 100%);
   color: var(--secondary-color);
-  border: 2px solid rgba(26, 127, 55, 0.2);
+  border: 1px solid rgba(26, 127, 55, 0.35);
 }
 
 .deductionTitle {
-  background: linear-gradient(135deg, rgba(207, 34, 46, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+  background: linear-gradient(135deg, rgba(207, 34, 46, 0.15) 0%, rgba(239, 68, 68, 0.05) 100%);
   color: var(--danger-color);
-  border: 2px solid rgba(207, 34, 46, 0.2);
+  border: 1px solid rgba(207, 34, 46, 0.35);
 }
 
 .inputGrid {
   display: grid;
-  gap: 20px;
+  gap: 22px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .inputGroup {
@@ -96,28 +115,29 @@
 .inputGroup label {
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: rgba(255, 255, 255, 0.72);
   letter-spacing: 0.3px;
 }
 
 .inputGroup input {
-  padding: 14px 16px;
-  border: 2px solid var(--border-color);
-  border-radius: 12px;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
   font-size: 15px;
   text-align: right;
-  background: var(--bg-surface);
+  background: rgba(9, 12, 32, 0.88);
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: 600;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   outline: none;
+  min-height: 48px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 
 .inputGroup input:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 4px rgba(9, 105, 218, 0.1);
-  transform: scale(1.02);
-  background: var(--bg-surface-alt);
+  border-color: rgba(93, 91, 255, 0.8);
+  box-shadow: 0 0 0 4px rgba(93, 91, 255, 0.2);
+  background: rgba(9, 12, 32, 0.95);
 }
 
 .inputGroup input:hover {
@@ -130,32 +150,34 @@
 }
 
 .subtotal {
-  margin-top: 24px;
-  padding: 20px;
-  border-radius: 16px;
+  margin-top: 28px;
+  padding: 24px;
+  border-radius: 20px;
   font-weight: 700;
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 1.1rem;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 24px 70px rgba(2, 6, 23, 0.55);
   transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(9, 12, 32, 0.85);
 }
 
 .subtotal:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 34px 90px rgba(2, 6, 23, 0.65);
 }
 
 .incomeSubtotal {
-  background: linear-gradient(135deg, rgba(26, 127, 55, 0.08) 0%, rgba(34, 197, 94, 0.04) 100%);
-  border: 2px solid rgba(26, 127, 55, 0.15);
+  background: linear-gradient(135deg, rgba(26, 127, 55, 0.12) 0%, rgba(34, 197, 94, 0.06) 100%);
+  border-color: rgba(26, 127, 55, 0.35);
   color: var(--secondary-color);
 }
 
 .deductionSubtotal {
-  background: linear-gradient(135deg, rgba(207, 34, 46, 0.08) 0%, rgba(239, 68, 68, 0.04) 100%);
-  border: 2px solid rgba(207, 34, 46, 0.15);
+  background: linear-gradient(135deg, rgba(207, 34, 46, 0.12) 0%, rgba(239, 68, 68, 0.06) 100%);
+  border-color: rgba(207, 34, 46, 0.35);
   color: var(--danger-color);
 }
 
@@ -166,13 +188,13 @@
 }
 
 .netResult {
-  background: var(--gradient-primary);
+  background: linear-gradient(120deg, rgba(9, 105, 218, 0.9), rgba(77, 240, 195, 0.8));
   color: white;
-  padding: 28px;
-  border-radius: 20px;
+  padding: 32px;
+  border-radius: 28px;
   text-align: center;
-  margin-bottom: 32px;
-  box-shadow: 0 8px 32px rgba(9, 105, 218, 0.3);
+  margin-bottom: 34px;
+  box-shadow: 0 35px 120px rgba(9, 105, 218, 0.45);
   position: relative;
   overflow: hidden;
 }
@@ -180,11 +202,8 @@
 .netResult::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(45deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
+  inset: 0;
+  background: radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.25), transparent 60%);
   pointer-events: none;
 }
 
@@ -197,55 +216,67 @@
 }
 
 .netAmount {
-  font-size: 2.25rem;
+  font-size: 2.5rem;
   font-weight: 900;
   margin-top: 8px;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  text-shadow: 0 14px 30px rgba(2, 6, 23, 0.4);
   letter-spacing: -0.02em;
 }
 
 .actionButtons {
   display: flex;
-  gap: 16px;
+  gap: 18px;
   justify-content: center;
+  align-items: stretch;
 }
 
-.saveBtn, .clearBtn {
-  padding: 16px 32px;
+.saveBtn,
+.clearBtn {
+  padding: 18px 32px;
   border: none;
-  border-radius: 16px;
+  border-radius: 18px;
   font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   letter-spacing: 0.5px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 18px 55px rgba(2, 6, 23, 0.45);
   position: relative;
   overflow: hidden;
+  flex: 1;
+  min-height: 48px;
 }
 
 .saveBtn {
-  background: var(--gradient-secondary);
-  color: white;
+  background: linear-gradient(120deg, #31d1ad, #4df0c3);
+  color: #021210;
 }
 
 .saveBtn:hover {
   transform: translateY(-3px);
-  box-shadow: 0 12px 40px rgba(26, 127, 55, 0.4);
+  box-shadow: 0 30px 70px rgba(77, 240, 195, 0.4);
 }
 
 .clearBtn {
-  background: linear-gradient(135deg, var(--text-secondary) 0%, var(--text-light) 100%);
-  color: white;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .clearBtn:hover {
   transform: translateY(-3px);
-  box-shadow: 0 12px 40px rgba(107, 114, 128, 0.4);
-  background: var(--text-primary);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+  background: rgba(255, 255, 255, 0.12);
 }
 
-.saveBtn:active, .clearBtn:active {
+.saveBtn:focus-visible,
+.clearBtn:focus-visible {
+  outline: 2px solid var(--color-primary, #4df0c3);
+  outline-offset: 3px;
+}
+
+.saveBtn:active,
+.clearBtn:active {
   transform: translateY(-1px);
 }
 
@@ -283,6 +314,11 @@
     grid-template-columns: 1fr;
     gap: 24px;
     margin-bottom: 24px;
+  }
+
+  .incomeSection,
+  .deductionSection {
+    padding: 24px;
   }
   
   .incomeSection, .deductionSection {
@@ -329,9 +365,10 @@
     gap: 12px;
   }
   
-  .saveBtn, .clearBtn {
-    padding: 14px 24px;
-    border-radius: 12px;
+  .saveBtn,
+  .clearBtn {
+    padding: 16px 24px;
+    border-radius: 14px;
   }
 }
 
@@ -355,15 +392,10 @@
     gap: 10px;
   }
   
-  .saveBtn, .clearBtn {
+  .saveBtn,
+  .clearBtn {
     width: 100%;
-    min-height: 44px;
-    min-width: 44px;
-    box-sizing: border-box;
-  }
-  .saveBtn:focus-visible, .clearBtn:focus-visible {
-    outline: 2px solid var(--color-primary, #0969da);
-    outline-offset: 2px;
+    min-width: unset;
   }
 }
 
@@ -385,7 +417,7 @@
   }
   
   .incomeSection, .deductionSection {
-    padding: 16px;
+    padding: 18px;
     border-radius: 10px;
   }
   

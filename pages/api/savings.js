@@ -1,32 +1,37 @@
 import { calculateTotalSavings, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils';
+import { assertUserId } from '../../src/shared/utils/backend/userRequest';
 import {
   isJsonMode,
-  readJsonCollection,
-  writeJsonCollection,
   withGeneratedId,
-  enforceJsonLimit,
   getMongoCollection
 } from '../../lib/dataSource';
 
+const {
+  getUserData,
+  updateUserData,
+  limitUserEntries,
+} = require('../../src/backend/data/userUtils');
+
 const COLLECTION_NAME = 'savings';
+const JSON_FILENAME = 'savings.json';
+const MONTH_LIMIT = 15;
 
 function getTotalSavingsInline(list = []) {
   return list.reduce((sum, item) => sum + (parseFloat(item?.จำนวนเงิน || item?.savings_amount || item?.amount || 0)), 0);
 }
 
-function enforceJsonMonthLimit(docs) {
-  return enforceJsonLimit({
-    docs,
-    limit: 15,
-    selector: (doc) => doc && doc.month
+function enforceUserMonthLimit(bucket = {}) {
+  return limitUserEntries(bucket, {
+    limit: MONTH_LIMIT,
+    keySelector: (_, value) => value?.month || ''
   });
 }
 
-async function handleJsonSavingsGet(req, res) {
-  const docs = await readJsonCollection(COLLECTION_NAME);
+function handleJsonSavingsGet(req, res, userId) {
+  const bucket = getUserData(JSON_FILENAME, userId);
   const { month } = req.query;
   if (month) {
-    const doc = docs.find(d => d.month === month);
+    const doc = bucket[month];
     const savingsList = doc && Array.isArray(doc.savings_list) ? doc.savings_list : [];
     const response = {
       total_savings: doc && typeof doc.total_savings === 'number' ? doc.total_savings : 0,
@@ -36,11 +41,11 @@ async function handleJsonSavingsGet(req, res) {
     return res.status(200).json(response);
   }
   const data = {};
-  docs.forEach(doc => {
+  Object.entries(bucket).forEach(([monthKey, doc]) => {
     if (!doc || !doc.month) return;
     const savingsList = doc.savings_list || [];
     const totalSavings = calculateTotalSavings(savingsList);
-    data[doc.month] = {
+    data[monthKey] = {
       total_savings: doc.total_savings || 0,
       savings_list: savingsList,
       totalSavings,
@@ -50,44 +55,48 @@ async function handleJsonSavingsGet(req, res) {
   return res.status(200).json(data);
 }
 
-async function handleJsonSavingsPost(req, res) {
+function handleJsonSavingsPost(req, res, userId) {
   const { month, total_savings, savings_list } = req.body;
   if (!month) {
     return res.status(400).json({ error: 'month required' });
   }
-  const docs = await readJsonCollection(COLLECTION_NAME);
-  const idx = docs.findIndex(doc => doc.month === month);
   const updateObj = { month, savings_list };
   if (typeof total_savings !== 'undefined') {
     updateObj.total_savings = total_savings;
   }
-  if (idx >= 0) {
-    docs[idx] = { ...docs[idx], ...updateObj };
-  } else {
-    docs.push(withGeneratedId(updateObj));
-  }
-  const limited = enforceJsonMonthLimit(docs);
-  await writeJsonCollection(COLLECTION_NAME, limited);
+  updateUserData(JSON_FILENAME, userId, (bucket) => {
+    const nextBucket = { ...bucket };
+    const existing = nextBucket[month] || {};
+    nextBucket[month] = withGeneratedId({ ...existing, ...updateObj });
+    return enforceUserMonthLimit(nextBucket);
+  });
   return res.status(201).json({ success: true });
 }
 
 export default async function handler(req, res) {
+  const userId = assertUserId(req, res);
+  if (!userId) return;
+
   if (isJsonMode()) {
     if (req.method === 'GET') {
-      return handleJsonSavingsGet(req, res);
+      return handleJsonSavingsGet(req, res, userId);
     }
     if (req.method === 'POST') {
-      return handleJsonSavingsPost(req, res);
+      return handleJsonSavingsPost(req, res, userId);
     }
     return res.status(405).end();
   }
 
   const collection = await getMongoCollection(COLLECTION_NAME);
+  const userFilter = { userId };
 
   if (req.method === 'GET') {
     const { month } = req.query;
       if (month) {
-        const doc = await collection.findOne({ month });
+        let doc = await collection.findOne({ month, ...userFilter });
+        if (!doc) {
+          doc = await collection.findOne({ month, userId: { $exists: false } });
+        }
         // Always return default structure if not found, to match legacy JSON behavior
         const savingsList = doc && Array.isArray(doc.savings_list) ? doc.savings_list : [];
         // คำนวณยอดรวมเงินเก็บ
@@ -104,7 +113,10 @@ export default async function handler(req, res) {
     } else {
       // ดึงข้อมูลทุกเดือน (robust: skip doc ที่ไม่มี month, log error, กัน exception)
       try {
-        const allDocs = await collection.find({}).toArray();
+        let allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
+        if (!allDocs.length) {
+          allDocs = await collection.find({ userId: { $exists: false }, month: { $exists: true } }).toArray();
+        }
         const data = {};
         allDocs.forEach(doc => {
           if (!doc || !doc.month) {
@@ -146,11 +158,11 @@ export default async function handler(req, res) {
       updateObj.total_savings = total_savings;
     }
     await collection.updateOne(
-      { month },
-      { $set: updateObj },
+      { month, ...userFilter },
+      { $set: { ...updateObj, ...userFilter } },
       { upsert: true }
     );
-    await enforceMonthLimit(collection, 15);
+    await enforceMonthLimit(collection, 15, { filter: userFilter });
     return res.status(201).json({ success: true });
   } else {
     res.status(405).end();

@@ -1,12 +1,12 @@
 
 // ...imports and component definition...
 import { useState, useEffect } from 'react';
-import { formatCurrency, handleNumberInput, handleNumberBlur, parseToNumber, maskNumberFormat } from '../../shared/utils/frontend/numberUtils';
+import { formatCurrency, handleNumberInput, handleNumberBlur, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { createDefault12MonthsObject, sumAccumulated, sumYearly, getSortedYears } from '../../shared/utils/taxUtils';
-import { taxAPI, incomeAPI } from '../../shared/utils/frontend/apiUtils';
+import { taxAPI } from '../../shared/utils/frontend/apiUtils';
 import styles from '../styles/TaxTable.module.css';
 
-export default function TaxTable({ selectedMonth, mode = 'view' }) {
+export default function TaxTable({ selectedMonth }) {
   // ...existing code...
   // เพิ่มปีใหม่ (เฉพาะโหมด edit)
   const handleAddNewYear = (yearAD) => {
@@ -28,14 +28,9 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
     if (!yearAD || !allYearData[yearAD]) return;
     // ลบที่ backend ก่อน
     try {
-      const res = await fetch('/api/tax_accumulated', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year: yearAD })
-      });
-      const result = await res.json();
-      if (!result.success) {
-        alert(result.message || 'ลบข้อมูลไม่สำเร็จ');
+      const result = await taxAPI.deleteYear(yearAD);
+      if (!result?.success) {
+        alert(result?.message || 'ลบข้อมูลไม่สำเร็จ');
         return;
       }
     } catch (e) {
@@ -63,8 +58,7 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
   useEffect(() => {
     const fetchAllYears = async () => {
       try {
-        const res = await fetch('/api/tax_accumulated');
-        const data = await res.json();
+        const data = await taxAPI.getAll();
         setAllYearData(data.tax_by_year || {});
       } catch (error) {
         setAllYearData({});
@@ -75,15 +69,10 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
   // Save handler: POST all tax data including provident to backend
   const handleSave = async () => {
     try {
-      await fetch('/api/tax_accumulated', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          year: selectedYear,
-          monthly_tax: monthlyTax,
-          monthly_income: monthlyIncome,
-          monthly_provident: monthlyProvident
-        })
+      await taxAPI.saveYearly(selectedYear, {
+        monthly_tax: monthlyTax,
+        monthly_income: monthlyIncome,
+        monthly_provident: monthlyProvident
       });
       alert('บันทึกข้อมูลภาษีสำเร็จ');
     } catch (e) {
@@ -130,9 +119,9 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
   useEffect(() => {
     const fetchTaxData = async () => {
       try {
-        const res = await fetch(`/api/tax_accumulated?year=${selectedYear}`);
-        const data = await res.json();
-        const yearData = data[selectedYear];
+        const data = await taxAPI.getByYear(selectedYear);
+        const targetYear = data ? (data[selectedYear] ? selectedYear : Object.keys(data)[0]) : undefined;
+        const yearData = targetYear ? data[targetYear] : undefined;
         const default12 = createDefault12MonthsObject('0.00');
         setMonthlyTax((yearData && yearData.monthly_tax) ? yearData.monthly_tax : { ...default12 });
         setMonthlyIncome((yearData && yearData.monthly_income) ? yearData.monthly_income : { ...default12 });
@@ -165,14 +154,9 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
   // ฟังก์ชันคำนวณรายได้สะสมถึงเดือนที่กำหนด
   const calculateAccumulatedIncome = (upToMonth) => sumAccumulated(monthlyIncome, upToMonth, parseToNumber);
 
-  // Helper: format value for display
-  const getDisplayValue = (value) => {
-    const num = parseToNumber(value);
-    return num === 0 ? '0' : maskNumberFormat(num);
-  };
   const getSumDisplay = (obj) => {
     const sum = Object.values(obj).reduce((acc, v) => acc + (parseFloat((v+'').replace(/,/g, '')) || 0), 0);
-    return mode === 'edit' ? formatCurrency(sum) : getDisplayValue(sum);
+    return formatCurrency(sum);
   };
 
   return (
@@ -190,38 +174,36 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
             return <option key={yearAD} value={yearAD}>พ.ศ. {yearBE}</option>;
           })}
         </select>
-        {mode === 'edit' && (
-          <>
-            <button 
-              onClick={() => {
-                setShowAddForm(!showAddForm);
-                if (!showAddForm) {
-                  // หา BE ล่าสุดจาก allYearData แล้ว +1
-                  const currentBE = new Date().getFullYear() + 543;
-                  const years = Object.keys(allYearData).map(y => parseInt(y) + 543);
-                  if (years.length > 0) {
-                    const maxBE = Math.max(...years);
-                    setNewYear((maxBE + 1).toString());
-                  } else {
-                    setNewYear(currentBE.toString());
-                  }
+        <>
+          <button 
+            onClick={() => {
+              setShowAddForm(!showAddForm);
+              if (!showAddForm) {
+                // หา BE ล่าสุดจาก allYearData แล้ว +1
+                const currentBE = new Date().getFullYear() + 543;
+                const years = Object.keys(allYearData).map(y => parseInt(y) + 543);
+                if (years.length > 0) {
+                  const maxBE = Math.max(...years);
+                  setNewYear((maxBE + 1).toString());
+                } else {
+                  setNewYear(currentBE.toString());
                 }
-              }}
-              className={styles.addYearBtn}
-            >
-              + เพิ่มปีใหม่
-            </button>
-            <button 
-              onClick={() => handleDelete(selectedYear)}
-              className={styles.deleteBtn}
-            >
-              ลบข้อมูลปี พ.ศ. {parseInt(selectedYear) + 543}
-            </button>
-          </>
-        )}
+              }
+            }}
+            className={styles.addYearBtn}
+          >
+            + เพิ่มปีใหม่
+          </button>
+          <button 
+            onClick={() => handleDelete(selectedYear)}
+            className={styles.deleteBtn}
+          >
+            ลบข้อมูลปี พ.ศ. {parseInt(selectedYear) + 543}
+          </button>
+        </>
       </div>
 
-      {showAddForm && mode === 'edit' && (
+      {showAddForm && (
         <div className={styles.addForm}>
           <h4 className={styles.addFormTitle}>เพิ่มปีใหม่</h4>
           <div className={styles.addFormControls}>
@@ -277,51 +259,39 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
                 <tr key={month} className={styles.tableRow}>
                   <td className={`${styles.tableCell} ${styles.left}`}>{name}</td>
                   <td className={`${styles.tableCell} ${styles.right}`}>
-                    {mode === 'edit' ? (
-                      <input
-                        type="text"
-                        value={income}
-                        onChange={e => handleNumberInput(e.target.value, setMonthlyIncome, month)}
-                        onBlur={e => handleNumberBlur(e.target.value, setMonthlyIncome, month)}
-                        placeholder="รายรับ"
-                        className={styles.monthInput}
-                      />
-                    ) : (
-                      <span>{getDisplayValue(income)}</span>
-                    )}
+                    <input
+                      type="text"
+                      value={income}
+                      onChange={e => handleNumberInput(e.target.value, setMonthlyIncome, month)}
+                      onBlur={e => handleNumberBlur(e.target.value, setMonthlyIncome, month)}
+                      placeholder="รายรับ"
+                      className={styles.monthInput}
+                    />
                   </td>
                   <td className={`${styles.tableCell} ${styles.right}`}>
-                    <span>{mode === 'edit' ? formatCurrency(accumulatedIncomeVal) : getDisplayValue(accumulatedIncomeVal)}</span>
+                    <span>{formatCurrency(accumulatedIncomeVal)}</span>
                   </td>
                   <td className={`${styles.tableCell} ${styles.right}`}>
-                    {mode === 'edit' ? (
-                      <input
-                        type="text"
-                        value={provident}
-                        onChange={e => handleNumberInput(e.target.value, setMonthlyProvident, month)}
-                        onBlur={e => handleNumberBlur(e.target.value, setMonthlyProvident, month)}
-                        placeholder="กองทุนสำรองเลี้ยงชีพ"
-                        className={styles.monthInput}
-                      />
-                    ) : (
-                      <span>{getDisplayValue(provident)}</span>
-                    )}
+                    <input
+                      type="text"
+                      value={provident}
+                      onChange={e => handleNumberInput(e.target.value, setMonthlyProvident, month)}
+                      onBlur={e => handleNumberBlur(e.target.value, setMonthlyProvident, month)}
+                      placeholder="กองทุนสำรองเลี้ยงชีพ"
+                      className={styles.monthInput}
+                    />
                   </td>
                   <td className={`${styles.tableCell} ${styles.right}`}>
-                    {mode === 'edit' ? (
-                      <input
-                        type="text"
-                        value={monthlyTaxVal}
-                        onChange={e => handleNumberInput(e.target.value, setMonthlyTax, month)}
-                        onBlur={e => handleNumberBlur(e.target.value, setMonthlyTax, month)}
-                        placeholder={taxKeyThaiMapping['monthly_tax']}
-                        className={styles.monthInput}
-                      />
-                    ) : (
-                      <span>{getDisplayValue(monthlyTaxVal)}</span>
-                    )}
+                    <input
+                      type="text"
+                      value={monthlyTaxVal}
+                      onChange={e => handleNumberInput(e.target.value, setMonthlyTax, month)}
+                      onBlur={e => handleNumberBlur(e.target.value, setMonthlyTax, month)}
+                      placeholder={taxKeyThaiMapping['monthly_tax']}
+                      className={styles.monthInput}
+                    />
                   </td>
-                  <td className={`${styles.tableCell} ${styles.right} ${styles.accumulatedCell}`}>{mode === 'edit' ? formatCurrency(accumulatedTaxVal) : getDisplayValue(accumulatedTaxVal)}</td>
+                  <td className={`${styles.tableCell} ${styles.right} ${styles.accumulatedCell}`}>{formatCurrency(accumulatedTaxVal)}</td>
                 </tr>
               );
             })}
@@ -356,67 +326,53 @@ export default function TaxTable({ selectedMonth, mode = 'view' }) {
               <div className={styles.cardRow}><span className={styles.cardLabel}>เดือน</span><span>{name}</span></div>
               <div className={styles.cardRow}>
                 <span className={styles.cardLabel}>รายรับ</span>
-                {mode === 'edit' ? (
-                  <input
-                    type="text"
-                    value={income}
-                    onChange={e => handleNumberInput(e.target.value, setMonthlyIncome, month)}
-                    onBlur={e => handleNumberBlur(e.target.value, setMonthlyIncome, month)}
-                    placeholder="รายรับ"
-                    className={styles.monthInput}
-                  />
-                ) : (
-                  <span>{getDisplayValue(income)}</span>
-                )}
+                <input
+                  type="text"
+                  value={income}
+                  onChange={e => handleNumberInput(e.target.value, setMonthlyIncome, month)}
+                  onBlur={e => handleNumberBlur(e.target.value, setMonthlyIncome, month)}
+                  placeholder="รายรับ"
+                  className={styles.monthInput}
+                />
               </div>
-              <div className={styles.cardRow}><span className={styles.cardLabel}>รายได้สะสม</span><span>{mode === 'edit' ? formatCurrency(accumulatedIncomeVal) : getDisplayValue(accumulatedIncomeVal)}</span></div>
+              <div className={styles.cardRow}><span className={styles.cardLabel}>รายได้สะสม</span><span>{formatCurrency(accumulatedIncomeVal)}</span></div>
               <div className={styles.cardRow}>
                 <span className={styles.cardLabel}>กองทุนสำรองเลี้ยงชีพ</span>
-                {mode === 'edit' ? (
-                  <input
-                    type="text"
-                    value={provident}
-                    onChange={e => handleNumberInput(e.target.value, setMonthlyProvident, month)}
-                    onBlur={e => handleNumberBlur(e.target.value, setMonthlyProvident, month)}
-                    placeholder="กองทุนสำรองเลี้ยงชีพ"
-                    className={styles.monthInput}
-                  />
-                ) : (
-                  <span>{getDisplayValue(provident)}</span>
-                )}
+                <input
+                  type="text"
+                  value={provident}
+                  onChange={e => handleNumberInput(e.target.value, setMonthlyProvident, month)}
+                  onBlur={e => handleNumberBlur(e.target.value, setMonthlyProvident, month)}
+                  placeholder="กองทุนสำรองเลี้ยงชีพ"
+                  className={styles.monthInput}
+                />
               </div>
               <div className={styles.cardRow}>
                 <span className={styles.cardLabel}>{taxKeyThaiMapping['monthly_tax']}</span>
-                {mode === 'edit' ? (
-                  <input
-                    type="text"
-                    value={monthlyTaxVal}
-                    onChange={e => handleNumberInput(e.target.value, setMonthlyTax, month)}
-                    onBlur={e => handleNumberBlur(e.target.value, setMonthlyTax, month)}
-                    placeholder={taxKeyThaiMapping['monthly_tax']}
-                    className={styles.monthInput}
-                  />
-                ) : (
-                  <span>{getDisplayValue(monthlyTaxVal)}</span>
-                )}
+                <input
+                  type="text"
+                  value={monthlyTaxVal}
+                  onChange={e => handleNumberInput(e.target.value, setMonthlyTax, month)}
+                  onBlur={e => handleNumberBlur(e.target.value, setMonthlyTax, month)}
+                  placeholder={taxKeyThaiMapping['monthly_tax']}
+                  className={styles.monthInput}
+                />
               </div>
-              <div className={styles.cardRow}><span className={styles.cardLabel}>{taxKeyThaiMapping['accumulated_tax']}</span><span>{mode === 'edit' ? formatCurrency(accumulatedTaxVal) : getDisplayValue(accumulatedTaxVal)}</span></div>
+              <div className={styles.cardRow}><span className={styles.cardLabel}>{taxKeyThaiMapping['accumulated_tax']}</span><span>{formatCurrency(accumulatedTaxVal)}</span></div>
             </div>
           );
         })}
       </div>
 
       {/* ปุ่มจัดการข้อมูล */}
-      {mode === 'edit' && (
-        <div className={styles.actionButtons}>
-          <button 
-            onClick={handleSave} 
-            className={styles.saveBtn}
-          >
-            บันทึกภาษี
-          </button>
-        </div>
-      )}
+      <div className={styles.actionButtons}>
+        <button 
+          onClick={handleSave} 
+          className={styles.saveBtn}
+        >
+          บันทึกภาษี
+        </button>
+      </div>
     </div>
   );
 }

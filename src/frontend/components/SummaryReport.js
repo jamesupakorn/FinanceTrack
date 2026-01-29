@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { formatCurrency, maskNumberFormat, parseToNumber } from '../../shared/utils/frontend/numberUtils';
+import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { incomeAPI, expenseAPI, savingsAPI, taxAPI, salaryAPI } from '../../shared/utils/frontend/apiUtils';
 import { getSummaryData, getChartData } from '../../shared/utils/frontend/summaryUtils';
 import styles from '../styles/SummaryReport.module.css';
 
-const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
+const SummaryReport = ({ selectedMonth }) => {
 
   const [summaryData, setSummaryData] = useState({
     ยอดรวมรายรับรายเดือน: 0,
@@ -120,7 +120,6 @@ const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
               className={styles.legendItem}
               tabIndex={0}
               aria-label={`รับ : ${รับPercent}%`}
-              style={{ minHeight: 44, minWidth: 44 }}
             >
               <span className={`${styles.legendColor} ${styles.income}`}></span>
               <span>รับ : {รับPercent}%</span>
@@ -129,7 +128,6 @@ const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
               className={styles.legendItem}
               tabIndex={0}
               aria-label={`จ่าย : ${จ่ายPercent}%`}
-              style={{ minHeight: 44, minWidth: 44 }}
             >
               <span className={`${styles.legendColor} ${styles.expense}`}></span>
               <span>จ่าย : {จ่ายPercent}%</span>
@@ -140,11 +138,7 @@ const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
   };
 
   // Helper: format value for display
-  const getDisplayValue = (value) => {
-    const num = parseToNumber(value);
-    return num === 0 ? '0' : maskNumberFormat(num);
-  };
-  const getDisplay = (value) => mode === 'edit' ? formatCurrency(value) : getDisplayValue(value);
+  const getDisplay = (value) => formatCurrency(value);
 
   return (
     <div className={styles.summaryReport}>
@@ -179,7 +173,6 @@ const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
                   className={styles.summaryItem}
                   tabIndex={0}
                   aria-label={`ยอดรวมรายรับรายเดือน: ${getDisplay(summaryData.ยอดรวมรายรับรายเดือน)}`}
-                  style={{ minHeight: 44 }}
                 >
                   <span className={styles.itemLabel}>ยอดรวมรายรับรายเดือน</span>
                   <span className={`${styles.itemValue} ${styles.income}`}>{getDisplay(summaryData.ยอดรวมรายรับรายเดือน)}</span>
@@ -188,7 +181,6 @@ const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
                   className={styles.summaryItem}
                   tabIndex={0}
                   aria-label={`ยอดรวมค่าใช้จ่ายรายเดือน ทั้งหมด: ${getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด)}`}
-                  style={{ minHeight: 44 }}
                 >
                   <span className={styles.itemLabel}>ยอดรวมค่าใช้จ่ายรายเดือน ทั้งหมด</span>
                   <span className={styles.itemValue}>{getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด)}</span>
@@ -197,7 +189,6 @@ const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
                   className={styles.summaryItem}
                   tabIndex={0}
                   aria-label={`ยอดรวมเงินเก็บรายเดือน: ${getDisplay(summaryData.ยอดรวมเงินเก็บรายเดือน)}`}
-                  style={{ minHeight: 44 }}
                 >
                   <span className={styles.itemLabel}>ยอดรวมเงินเก็บรายเดือน</span>
                   <span className={styles.itemValue}>{getDisplay(summaryData.ยอดรวมเงินเก็บรายเดือน)}</span>
@@ -206,7 +197,6 @@ const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
                   className={styles.summaryItem}
                   tabIndex={0}
                   aria-label={`ยอดเงินคงเหลือ ประมาณการ: ${getDisplay(summaryData.ยอดเงินคงเหลือ_ประมาณการ)}`}
-                  style={{ minHeight: 44 }}
                 >
                   <span className={styles.itemLabel}>ยอดเงินคงเหลือ ประมาณการ</span>
                   <span className={`${styles.itemValue} ${styles.remaining}`}>{getDisplay(summaryData.ยอดเงินคงเหลือ_ประมาณการ)}</span>
@@ -221,7 +211,6 @@ const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
                   className={styles.summaryItem}
                   tabIndex={0}
                   aria-label={`ยอดรวมรายรับรายเดือน: ${getDisplay(summaryData.ยอดรวมรายรับรายเดือน)}`}
-                  style={{ minHeight: 44 }}
                 >
                   <span className={styles.itemLabel}>ยอดรวมรายรับรายเดือน</span>
                   <span className={`${styles.itemValue} ${styles.income}`}>{getDisplay(summaryData.ยอดรวมรายรับรายเดือน)}</span>
@@ -230,7 +219,6 @@ const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
                   className={styles.summaryItem}
                   tabIndex={0}
                   aria-label={`ยอดรวมค่าใช้จ่ายรายเดือน จ่ายจริง: ${getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง)}`}
-                  style={{ minHeight: 44 }}
                 >
                   <span className={styles.itemLabel}>ยอดรวมค่าใช้จ่ายรายเดือน จ่ายจริง</span>
                   <span className={styles.itemValue}>{getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง)}</span>
@@ -239,7 +227,6 @@ const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
                   className={styles.summaryItem}
                   tabIndex={0}
                   aria-label={`ยอดรวมเงินเก็บรายเดือน: ${getDisplay(summaryData.ยอดรวมเงินเก็บรายเดือน)}`}
-                  style={{ minHeight: 44 }}
                 >
                   <span className={styles.itemLabel}>ยอดรวมเงินเก็บรายเดือน</span>
                   <span className={styles.itemValue}>{getDisplay(summaryData.ยอดรวมเงินเก็บรายเดือน)}</span>
@@ -248,7 +235,6 @@ const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
                   className={styles.summaryItem}
                   tabIndex={0}
                   aria-label={`ยอดเงินคงเหลือ จริง: ${getDisplay(summaryData.ยอดเงินคงเหลือ_จริง)}`}
-                  style={{ minHeight: 44 }}
                 >
                   <span className={styles.itemLabel}>ยอดเงินคงเหลือ จริง</span>
                   <span className={`${styles.itemValue} ${styles.remaining}`}>{getDisplay(summaryData.ยอดเงินคงเหลือ_จริง)}</span>
@@ -262,7 +248,6 @@ const SummaryReport = ({ selectedMonth, mode = 'view' }) => {
               className={`${styles.summaryItem} ${styles.taxSection}`}
               tabIndex={0}
               aria-label={`ภาษีสะสมตั้งแต่เดือนแรก: ${getDisplay(summaryData.ภาษีสะสมตั้งแต่เดือนแรก)}`}
-              style={{ minHeight: 44 }}
             >
               <span className={styles.itemLabel}>ภาษีสะสมตั้งแต่เดือนแรก</span>
               <span className={`${styles.itemValue} ${styles.tax}`}>{getDisplay(summaryData.ภาษีสะสมตั้งแต่เดือนแรก)}</span>

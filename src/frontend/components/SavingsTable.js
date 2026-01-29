@@ -1,47 +1,84 @@
-import { useState, useEffect } from 'react';
-import { formatCurrency, parseAndFormat, parseToNumber, maskNumberFormat } from '../../shared/utils/frontend/numberUtils';
-import { mapSavingsApiToList, calculateTotalSavings } from '../../shared/utils/savingsUtils';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { formatCurrency, parseAndFormat, parseToNumber } from '../../shared/utils/frontend/numberUtils';
+import { mapSavingsApiToList } from '../../shared/utils/savingsUtils';
 import { savingsAPI } from '../../shared/utils/frontend/apiUtils';
 import { Icons } from './Icons';
 import InvestmentTable from './InvestmentTable';
 import styles from '../styles/SavingsTable.module.css';
 
-export default function SavingsTable({ selectedMonth, mode = 'view' }) {
+export default function SavingsTable({ selectedMonth }) {
 
   const [savingsData, setSavingsData] = useState(null);
   const [รายการเงินออม, setรายการเงินออม] = useState([]);
 
+  const loadSavingsData = useCallback(async (month) => {
+    if (!month) return;
+    try {
+      const data = await savingsAPI.getByMonth(month);
+      setSavingsData(data);
+      const formattedList = mapSavingsApiToList(data).map(item => {
+        const amountValue = item?.savings_amount ?? item?.จำนวนเงิน ?? 0;
+        const formattedAmount = parseAndFormat(amountValue);
+        const nameValue = item?.savings_type ?? item?.รายการ ?? '';
+        return {
+          ...item,
+          savings_type: nameValue,
+          รายการ: nameValue,
+          savings_amount: formattedAmount,
+          จำนวนเงิน: formattedAmount
+        };
+      });
+      setรายการเงินออม(formattedList);
+    } catch (error) {
+      console.error('Error loading savings data:', error);
+    }
+  }, []);
+
   useEffect(() => {
     if (selectedMonth) {
-      savingsAPI.getByMonth(selectedMonth)
-        .then(data => {
-          setSavingsData(data);
-          setรายการเงินออม(mapSavingsApiToList(data));
-        })
-        .catch(error => console.error('Error loading savings data:', error));
+      loadSavingsData(selectedMonth);
+    } else {
+      setSavingsData(null);
+      setรายการเงินออม([]);
     }
-  }, [selectedMonth]);
+  }, [selectedMonth, loadSavingsData]);
 
   const handleAddSavingsItem = () => {
-    setรายการเงินออม([...รายการเงินออม, { รายการ: '', จำนวนเงิน: '0' }]);
+    const defaultAmount = parseAndFormat(0);
+    setรายการเงินออม(prev => ([
+      ...prev,
+      {
+        savings_type: '',
+        รายการ: '',
+        savings_amount: defaultAmount,
+        จำนวนเงิน: defaultAmount
+      }
+    ]));
   };
 
   // ใช้ shared numberUtils สำหรับ input logic
   const handleSavingsItemChange = (index, field, value) => {
     const newList = [...รายการเงินออม];
     newList[index][field] = value;
+    if (field === 'savings_type' || field === 'รายการ') {
+      newList[index].savings_type = value;
+      newList[index].รายการ = value;
+    }
     setรายการเงินออม(newList);
   };
 
   const handleSavingsAmountInput = (value, index) => {
     const newList = [...รายการเงินออม];
-    newList[index]['savings_amount'] = value;
+    newList[index].savings_amount = value;
+    newList[index].จำนวนเงิน = value;
     setรายการเงินออม(newList);
   };
 
   const handleSavingsAmountBlur = (value, index) => {
     const newList = [...รายการเงินออม];
-    newList[index]['savings_amount'] = parseAndFormat(value);
+    const formatted = parseAndFormat(value);
+    newList[index].savings_amount = formatted;
+    newList[index].จำนวนเงิน = formatted;
     setรายการเงินออม(newList);
   };
 
@@ -51,36 +88,53 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
   };
 
   const handleSavingsSave = async () => {
+    if (!selectedMonth) return;
     try {
       // แปลงเป็น number ก่อนบันทึก
-      const numericSavings = รายการเงินออม.map(item => ({
-        ...item,
-        จำนวนเงิน: parseToNumber(item.จำนวนเงิน)
-      }));
-  await savingsAPI.saveList(selectedMonth, numericSavings);
+      const numericSavings = รายการเงินออม.map(item => {
+        const amountSource = item?.savings_amount ?? item?.จำนวนเงิน ?? 0;
+        const nameValue = item?.savings_type ?? item?.รายการ ?? '';
+        const numericAmount = parseToNumber(amountSource);
+        return {
+          ...item,
+          savings_type: nameValue,
+          รายการ: nameValue,
+          savings_amount: numericAmount,
+          จำนวนเงิน: numericAmount
+        };
+      });
+      await savingsAPI.saveList(selectedMonth, numericSavings);
+      await loadSavingsData(selectedMonth);
       alert('บันทึกรายการเงินออมสำเร็จ!');
     } catch (error) {
       console.error('Error saving savings list:', error);
     }
   };
 
-  if (!savingsData) return <div>กำลังโหลด...</div>;
+  // ยอดรวมเงินเก็บคำนวณจากสถานะปัจจุบัน เพื่อสะท้อนผลการแก้ไขทันที
+  const displayedTotalSavings = useMemo(() => {
+    if (!Array.isArray(รายการเงินออม)) return 0;
+    return รายการเงินออม.reduce((sum, item) => {
+      const amount = item?.savings_amount ?? item?.จำนวนเงิน ?? 0;
+      return sum + parseToNumber(amount);
+    }, 0);
+  }, [รายการเงินออม]);
 
-  // ยอดรวมเงินเก็บจาก backend
-  const รวมเงินเก็บ = savingsData && typeof savingsData.รวมเงินเก็บ === 'number' ? savingsData.รวมเงินเก็บ : 0;
+  const hasEditableRows = Array.isArray(รายการเงินออม) && รายการเงินออม.length > 0;
+  const รวมเงินเก็บ = hasEditableRows
+    ? displayedTotalSavings
+    : (typeof savingsData?.รวมเงินเก็บ === 'number' ? savingsData.รวมเงินเก็บ : 0);
+  const isLoading = !savingsData;
   const savingsKeyThaiMapping = {
     savings_type: 'รายการออม',
     savings_amount: 'จำนวนเงินออม'
   };
 
-  // Helper: format value for display
-  const getDisplayValue = (value) => {
-    const num = parseToNumber(value);
-    return num === 0 ? '0' : maskNumberFormat(num);
-  };
-
   return (
     <div className={styles.savingsTable}>
+      {isLoading && (
+        <div className={styles.loadingState}>กำลังโหลด...</div>
+      )}
       {/* รายการเงินออม */}
       <div>
         <div className={styles.sectionTitle}>
@@ -88,15 +142,13 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
             <Icons.Edit size={20} color="var(--text-primary)" />
             รายการเงินออม
           </h3>
-          {mode === 'edit' && (
-            <button 
-              onClick={handleAddSavingsItem}
-              className={styles.addButton}
-            >
-              <Icons.Plus size={16} color="white" />
-              เพิ่มรายการ
-            </button>
-          )}
+          <button 
+            onClick={handleAddSavingsItem}
+            className={styles.addButton}
+          >
+            <Icons.Plus size={16} color="white" />
+            เพิ่มรายการ
+          </button>
         </div>
 
         {/* Desktop Table */}
@@ -113,42 +165,32 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
               {รายการเงินออม.map((item, index) => (
                 <tr key={index} className={styles.tableRow}>
                   <td className={styles.tableCell}>
-                    {mode === 'edit' ? (
-                      <input
-                        type="text"
-                        value={item.savings_type || ''}
-                        onChange={(e) => handleSavingsItemChange(index, 'savings_type', e.target.value)}
-                        placeholder={savingsKeyThaiMapping['savings_type']}
-                        className={styles.savingsInput}
-                      />
-                    ) : (
-                      <span>{item.savings_type}</span>
-                    )}
+                    <input
+                      type="text"
+                      value={item.savings_type || ''}
+                      onChange={(e) => handleSavingsItemChange(index, 'savings_type', e.target.value)}
+                      placeholder={savingsKeyThaiMapping['savings_type']}
+                      className={styles.savingsInput}
+                    />
                   </td>
                   <td className={styles.tableCell}>
-                    {mode === 'edit' ? (
-                      <input
-                        type="text"
-                        value={item.savings_amount || ''}
-                        onChange={e => handleSavingsAmountInput(e.target.value, index)}
-                        onBlur={e => handleSavingsAmountBlur(e.target.value, index)}
-                        placeholder={savingsKeyThaiMapping['savings_amount']}
-                        className={styles.savingsInput}
-                      />
-                    ) : (
-                      <span>{getDisplayValue(item.savings_amount)}</span>
-                    )}
+                    <input
+                      type="text"
+                      value={item.savings_amount || ''}
+                      onChange={e => handleSavingsAmountInput(e.target.value, index)}
+                      onBlur={e => handleSavingsAmountBlur(e.target.value, index)}
+                      placeholder={savingsKeyThaiMapping['savings_amount']}
+                      className={styles.savingsInput}
+                    />
                   </td>
                   <td className={`${styles.tableCell} ${styles.center}`}>
-                    {mode === 'edit' && (
-                      <button 
-                        onClick={() => handleDeleteSavingsItem(index)}
-                        className={styles.deleteButton}
-                      >
-                        <Icons.Trash size={14} color="white" />
-                        ลบ
-                      </button>
-                    )}
+                    <button 
+                      onClick={() => handleDeleteSavingsItem(index)}
+                      className={styles.deleteButton}
+                    >
+                      <Icons.Trash size={14} color="white" />
+                      ลบ
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -165,59 +207,47 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
             <div className={styles.savingsCard} key={index}>
               <div className={styles.cardRow}>
                 <label className={styles.cardLabel}>{savingsKeyThaiMapping['savings_type']}</label>
-                {mode === 'edit' ? (
-                  <input
-                    type="text"
-                    value={item.savings_type || ''}
-                    onChange={e => handleSavingsItemChange(index, 'savings_type', e.target.value)}
-                    placeholder={savingsKeyThaiMapping['savings_type']}
-                    className={styles.savingsInput}
-                  />
-                ) : (
-                  <span>{item.savings_type}</span>
-                )}
+                <input
+                  type="text"
+                  value={item.savings_type || ''}
+                  onChange={e => handleSavingsItemChange(index, 'savings_type', e.target.value)}
+                  placeholder={savingsKeyThaiMapping['savings_type']}
+                  className={styles.savingsInput}
+                />
               </div>
               <div className={styles.cardRow}>
                 <label className={styles.cardLabel}>{savingsKeyThaiMapping['savings_amount']}</label>
-                {mode === 'edit' ? (
-                  <input
-                    type="text"
-                    value={item.savings_amount || ''}
-                    onChange={e => handleSavingsAmountInput(e.target.value, index)}
-                    onBlur={e => handleSavingsAmountBlur(e.target.value, index)}
-                    placeholder={savingsKeyThaiMapping['savings_amount']}
-                    className={styles.savingsInput}
-                  />
-                ) : (
-                  <span>{getDisplayValue(item.savings_amount)}</span>
-                )}
+                <input
+                  type="text"
+                  value={item.savings_amount || ''}
+                  onChange={e => handleSavingsAmountInput(e.target.value, index)}
+                  onBlur={e => handleSavingsAmountBlur(e.target.value, index)}
+                  placeholder={savingsKeyThaiMapping['savings_amount']}
+                  className={styles.savingsInput}
+                />
               </div>
-              {mode === 'edit' && (
-                <div className={styles.cardRow}>
-                  <button 
-                    onClick={() => handleDeleteSavingsItem(index)}
-                    className={styles.deleteButton}
-                  >
-                    <Icons.Trash size={14} color="white" />
-                    ลบ
-                  </button>
-                </div>
-              )}
+              <div className={styles.cardRow}>
+                <button 
+                  onClick={() => handleDeleteSavingsItem(index)}
+                  className={styles.deleteButton}
+                >
+                  <Icons.Trash size={14} color="white" />
+                  ลบ
+                </button>
+              </div>
             </div>
           ))}
         </div>
 
-        {mode === 'edit' && (
-          <div className={styles.saveButtonContainer}>
-            <button 
-              onClick={handleSavingsSave}
-              className={styles.saveButton}
-            >
-              <Icons.Save size={16} color="white" />
-              บันทึกรายการเงินออม
-            </button>
-          </div>
-        )}
+        <div className={styles.saveButtonContainer}>
+          <button 
+            onClick={handleSavingsSave}
+            className={styles.saveButton}
+          >
+            <Icons.Save size={16} color="white" />
+            บันทึกรายการเงินออม
+          </button>
+        </div>
       </div>
 
       {/* สรุป */}
@@ -229,14 +259,14 @@ export default function SavingsTable({ selectedMonth, mode = 'view' }) {
         <div className={styles.summaryContent}>
           <div className={styles.summaryItem}>
             <span className={styles.summaryLabel}>รวมเงินออมเดือนนี้:</span>
-            <span className={styles.summaryValue}>{mode === 'edit' ? formatCurrency(รวมเงินเก็บ) : getDisplayValue(รวมเงินเก็บ)}</span>
+            <span className={styles.summaryValue}>{formatCurrency(รวมเงินเก็บ)}</span>
           </div>
         </div>
       </div>
 
       {/* การลงทุน */}
       <div className={styles.investmentSection}>
-        <InvestmentTable selectedMonth={selectedMonth} mode={mode} />
+        <InvestmentTable selectedMonth={selectedMonth} />
       </div>
     </div>
   );

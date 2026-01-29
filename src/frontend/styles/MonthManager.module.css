@@ -9,25 +9,28 @@
   font-size: 28px;
   background: none;
   border: none;
-  color: #888;
+  color: #f5f7ff;
   cursor: pointer;
   z-index: 10;
   border-radius: 50%;
-  transition: background 0.2s;
+  transition: background 0.2s, color 0.2s;
 }
-.closeModalBtn:active, .closeModalBtn:focus {
-  background: #eee;
+.closeModalBtn:active,
+.closeModalBtn:focus-visible {
+  background: rgba(255,255,255,0.12);
   outline: 2px solid var(--color-primary);
+  color: #fff;
 }
 /* Month Manager Component Styles */
 .monthManager {
   margin-bottom: 48px;
-  padding: 32px;
-  background: var(--bg-surface);
-  border-radius: 20px;
-  box-shadow: 0 6px 24px var(--shadow-sm);
-  border: 1px solid var(--border-light);
+  padding: 36px;
+  background: rgba(6, 9, 27, 0.78);
+  border-radius: 28px;
+  box-shadow: 0 35px 110px rgba(2,6,23,0.6);
+  border: 1px solid rgba(255,255,255,0.08);
   transition: all 0.3s ease;
+  backdrop-filter: blur(24px);
 }
 
 .currentMonthDisplay {
@@ -41,35 +44,37 @@
   gap: 24px;
   margin-bottom: 32px;
   padding: 24px;
-  background: var(--bg-surface-alt);
-  border-radius: 16px;
-  border: 1px solid var(--border-light);
+  background: rgba(255,255,255,0.03);
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.08);
 }
 
 .monthLabel {
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #f5f7ff;
   white-space: nowrap;
 }
 
 .monthSelect {
-  padding: 14px 20px;
-  border: 2px solid var(--border-color);
-  border-radius: 12px;
+  padding: 16px 22px;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 16px;
   font-size: 16px;
-  background: var(--bg-surface);
-  color: var(--text-primary);
+  background: rgba(10, 13, 30, 0.85);
+  color: #f5f7ff;
   min-width: 280px;
+  min-height: 48px;
   cursor: pointer;
   transition: all 0.3s ease;
   outline: none;
+  backdrop-filter: blur(16px);
 }
 
 .monthSelect:focus {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.1);
+  border-color: rgba(93, 91, 255, 0.8);
+  box-shadow: 0 0 0 4px rgba(93, 91, 255, 0.2);
 }
 
 .monthActions {
@@ -91,6 +96,7 @@
   font-weight: 700;
   width: 100%;
   margin-bottom: 12px;
+  min-height: 48px;
   box-shadow: 0 4px 18px 0 rgba(9, 105, 218, 0.18);
   transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
   display: flex;
@@ -122,7 +128,7 @@
   text-align: center;
   margin-top: 24px;
   padding-top: 24px;
-  border-top: 1px solid var(--border-light);
+  border-top: 1px solid rgba(255,255,255,0.08);
 }
 
 .saveAllBtn {
@@ -155,12 +161,12 @@
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(2, 6, 23, 0.75);
   display: flex;
   justify-content: center;
   align-items: flex-start;
   z-index: 1000;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(10px);
   overflow-y: auto;
   padding-top: 10vh;
   box-sizing: border-box;
@@ -170,290 +176,268 @@
 /* Modal Content: รองรับจอเล็ก, padding มากขึ้น, relative สำหรับปุ่มปิด */
 .formContent {
   position: relative;
-  background: var(--bg-surface);
-  padding: 24px 16px 16px 16px;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px var(--shadow-strong);
+  background: rgba(6, 9, 27, 0.9);
+  padding: 32px 24px 24px 24px;
+  border-radius: 20px;
+  box-shadow: 0 40px 120px rgba(2,6,23,0.7);
   text-align: center;
   min-width: 300px;
-  border: 1px solid var(--border-color);
+  border: 1px solid rgba(255,255,255,0.12);
   width: 100%;
-  max-width: 350px;
+  max-width: 380px;
   margin: 0 auto;
+  backdrop-filter: blur(18px);
 }
 
 
 .formContent h4 {
-  margin-bottom: 20px;
-  color: var(--text-primary);
+  margin: 32px 0 20px;
+  color: #f5f7ff;
   font-size: 20px;
   font-weight: 600;
 }
 
 .quickAddBtn {
-  background: var(--color-primary);
-  color: white;
+  background: var(--gradient-primary);
+  color: #fff;
   border: none;
-  padding: 12px 16px;
-  border-radius: 6px;
+  padding: 14px 20px;
+  border-radius: 16px;
   cursor: pointer;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
   width: 100%;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background-color 0.2s;
+  font-size: 16px;
+  font-weight: 600;
+  min-height: 48px;
+  box-shadow: 0 18px 50px rgba(93, 91, 255, 0.35);
+  transition: transform 0.2s, box-shadow 0.2s, filter 0.2s;
 }
 
-.quickAddBtn:hover {
-  background: var(--info-color);
+.quickAddBtn:hover,
+.quickAddBtn:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 25px 70px rgba(93, 91, 255, 0.45);
+  filter: brightness(1.05);
+  outline: none;
+}
+
+.quickAddBtn:active {
+  transform: translateY(0);
+  box-shadow: 0 12px 32px rgba(93, 91, 255, 0.35);
 }
 
 .customMonth {
   display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 12px;
+  width: 100%;
+  margin: 10px 0 20px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
 }
 
 .monthInput {
   flex: 1;
-  padding: 10px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 14px;
-  background: var(--bg-surface);
-  color: var(--text-primary);
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  font-size: 15px;
+  background: rgba(9, 12, 32, 0.85);
+  color: #f5f7ff;
+  min-height: 48px;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .monthInput:focus {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.1);
+  border-color: rgba(93, 91, 255, 0.9);
+  box-shadow: 0 0 0 4px rgba(93, 91, 255, 0.2);
 }
 
 .monthInput::placeholder {
-  color: var(--text-light);
+  color: rgba(255,255,255,0.45);
 }
 
 .customAddBtn {
-  background: var(--secondary-color);
-  color: white;
+  min-width: 96px;
+  background: var(--gradient-secondary);
+  color: #021210;
   border: none;
-  padding: 10px 16px;
-  border-radius: 6px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background-color 0.2s;
+  min-height: 48px;
+  transition: transform 0.2s, box-shadow 0.2s, filter 0.2s;
+  box-shadow: 0 20px 55px rgba(77, 240, 195, 0.3);
 }
 
-.customAddBtn:hover {
-  background: #2da44e;
+.customAddBtn:hover,
+.customAddBtn:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 28px 70px rgba(77, 240, 195, 0.45);
+  filter: brightness(1.05);
+  outline: none;
+}
+
+.customAddBtn:active {
+  transform: translateY(0);
+  box-shadow: 0 12px 28px rgba(77, 240, 195, 0.35);
 }
 
 .cancelBtn {
-  background: var(--text-secondary);
-  color: white;
+  background: rgba(255,255,255,0.08);
+  color: #f5f7ff;
   border: none;
-  padding: 10px 16px;
-  border-radius: 6px;
+  padding: 12px 18px;
+  border-radius: 14px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
-  transition: background-color 0.2s;
+  width: 100%;
+  min-height: 48px;
+  transition: background 0.2s, color 0.2s;
 }
 
-.cancelBtn:hover {
-  background: var(--text-primary);
+.cancelBtn:hover,
+.cancelBtn:focus-visible {
+  background: rgba(255,255,255,0.16);
+  outline: none;
+}
+
+.cancelBtn:active {
+  background: rgba(255,255,255,0.22);
 }
 
 /* Responsive Design */
-/* Large Tablets */
 @media (max-width: 1024px) {
-  .monthSelect {
-    min-width: 220px;
-  }
-  
-  .addMonthBtn, .saveAllBtn {
-    padding: 12px 24px;
-  }
-}
-
-/* Tablets */
-@media (max-width: 768px) {
   .monthManager {
-    margin-bottom: 20px;
+    padding: 28px;
   }
-  
+
   .monthSelectionRow {
     flex-direction: column;
-    gap: 12px;
+    gap: 18px;
   }
-  
-  .monthLabel {
-    font-size: 16px;
-  }
-  
+
   .monthSelect {
     width: 100%;
-    max-width: 300px;
-    padding: 10px 14px;
-    font-size: 15px;
-  }
-  
-  .monthActions {
-    gap: 10px;
-  }
-  
-  .addMonthBtn,
-  .saveAllBtn {
-    padding: 12px 20px;
-    font-size: 15px;
-  }
-  
-  .formContent {
-    margin: 20px;
-    width: calc(100% - 40px);
     min-width: unset;
-    padding: 20px;
-    border-radius: 10px;
   }
-  
-  .formContent h4 {
-    font-size: 18px;
-    margin-bottom: 16px;
+
+  .monthActions {
+    gap: 12px;
   }
-  
-  .quickAddBtn {
-    padding: 10px 14px;
-    font-size: 13px;
-    margin-bottom: 14px;
+
+  .addMonthBtn,
+  .saveAllBtn {
+    padding: 14px 22px;
   }
-  
+
+  .formContent {
+    margin: 24px;
+    width: calc(100% - 48px);
+    padding: 24px;
+  }
+
   .customMonth {
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-  
-  .monthInput {
-    padding: 10px 12px;
-    font-size: 13px;
-  }
-  
-  .customAddBtn, .cancelBtn {
-    padding: 10px 14px;
-    font-size: 13px;
-  }
-  
-  .customAddBtn {
-    min-width: 80px;
+    flex-direction: column;
   }
 }
 
-/* Mobile Large */
 @media (max-width: 640px) {
+  .monthManager {
+    padding: 24px;
+  }
+
+  .monthSelectionRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .monthSelect {
+    width: 100%;
+    min-width: 0;
+  }
+
   .monthActions {
     flex-direction: column;
-    align-items: center;
-    gap: 8px;
   }
-  
+
   .addMonthBtn,
   .saveAllBtn {
     width: 100%;
-    max-width: 280px;
   }
-  
-  .customMonth {
-    flex-direction: column;
-    gap: 8px;
-  }
-  
-  .customAddBtn {
+
+  .customAddBtn,
+  .cancelBtn {
     width: 100%;
+  }
+
+  .formContent {
+    margin: 18px;
+    width: calc(100% - 36px);
   }
 }
 
-/* Mobile Portrait */
 @media (max-width: 480px) {
   .monthManager {
     margin-bottom: 16px;
+    padding: 20px;
   }
-  
+
   .monthSelectionRow {
-    gap: 10px;
+    padding: 12px;
   }
-  
+
+  .monthSelect {
+    width: 100%;
+    min-width: 0;
+  }
+
   .monthLabel {
-    font-size: 15px;
     text-align: center;
   }
-  
-  .monthSelect {
-    max-width: 100%;
-    padding: 8px 12px;
-    font-size: 14px;
-  }
-  
-  .addMonthBtn,
-  .saveAllBtn {
-    padding: 10px 16px;
-    font-size: 14px;
-    max-width: 100%;
-  }
-  
+
   .formContent {
-    margin: 15px;
-    width: calc(100% - 30px);
-    padding: 16px;
-    border-radius: 8px;
+    margin: 16px;
+    width: calc(100% - 32px);
+    padding: 18px;
+    border-radius: 12px;
   }
-  
-  .formContent h4 {
-    font-size: 16px;
-    margin-bottom: 14px;
-  }
-  
+
   .quickAddBtn {
-    padding: 8px 12px;
-    font-size: 12px;
-    margin-bottom: 12px;
+    font-size: 14px;
+    padding: 12px 16px;
   }
-  
-  .monthInput {
-    padding: 8px 10px;
-    font-size: 12px;
-  }
-  
-  .customAddBtn, .cancelBtn {
-    padding: 8px 12px;
-    font-size: 12px;
+
+  .monthInput,
+  .customAddBtn,
+  .cancelBtn {
+    font-size: 14px;
+    padding: 10px 14px;
   }
 }
 
-/* Mobile Small */
 @media (max-width: 375px) {
+  .monthManager {
+    padding: 16px;
+  }
+
   .monthLabel {
     font-size: 14px;
   }
-  
+
   .monthSelect {
-    font-size: 13px;
+    font-size: 14px;
   }
-  
-  .addMonthBtn,
-  .saveAllBtn {
-    font-size: 13px;
-    padding: 8px 14px;
-  }
-  
+
   .formContent {
-    margin: 10px;
-    width: calc(100% - 20px);
-    padding: 12px;
-  }
-  
-  .formContent h4 {
-    font-size: 15px;
+    margin: 12px;
+    width: calc(100% - 24px);
   }
 }
