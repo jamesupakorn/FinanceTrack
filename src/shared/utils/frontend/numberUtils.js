@@ -1,32 +1,3 @@
-// Mask number for view mode: 2,345 → xx,345 | 1,234 → x,234 | 123 → 123 | 45 → 45 | 7 → 7
-export function maskNumberFormat(num) {
-  const original = num;
-  if (typeof num !== 'number') {
-    num = Number(num);
-  }
-  if (isNaN(num) || num === null || num === undefined || num === '') {
-  //
-    return '';
-  }
-  const absNum = Math.abs(num);
-  if (absNum === 0) {
-  //
-    return '0';
-  }
-  if (absNum < 1000) {
-    const resultBelow = num.toLocaleString();
-  //
-    return resultBelow;
-  }
-  // ถ้าเลข >= 1000 ให้แสดง xxx,xxx (x คงที่ 3 ตัว)
-  const last3 = (Math.floor(absNum) % 1000).toString().padStart(3, '0');
-  const resultMask = (num < 0 ? '-' : '') + 'xxx,' + last3;
-  //
-  return resultMask;
-  const result = num.toLocaleString();
-  //
-  return result;
-}
 // สรุปยอดรายจ่ายแต่ละบัญชี (mapping)
 export const getAccountSummary = (editExpense) => {
   const mapping = {
@@ -49,6 +20,34 @@ export const getAccountSummary = (editExpense) => {
   });
   return summary;
 };
+// รายการค่าใช้จ่ายมาตรฐานที่ใช้สำหรับสร้างฟอร์ม
+export const DEFAULT_EXPENSE_ITEMS = [
+  { key: 'house', label: 'ค่าบ้าน' },
+  { key: 'water', label: 'ค่าน้ำ' },
+  { key: 'internet', label: 'ค่าเน็ต' },
+  { key: 'electricity', label: 'ค่าไฟ' },
+  { key: 'mobile', label: 'โทรศัพท์มือถือ' },
+  { key: 'credit_kbank', label: 'บัตรเครดิต KBank' },
+  { key: 'credit_kungsri', label: 'บัตรเครดิต Kungsri' },
+  { key: 'credit_uob', label: 'บัตรเครดิต UOB' },
+  { key: 'credit_ttb', label: 'บัตรเครดิต TTB' },
+  { key: 'shopee', label: 'Shopee' },
+  { key: 'netflix', label: 'Netflix' },
+  { key: 'youtube', label: 'YouTube' },
+  { key: 'youtube_membership', label: 'YouTube Membership' },
+  { key: 'motorcycle', label: 'ค่ารถจักรยานยนต์' },
+  { key: 'miscellaneous', label: 'ค่าใช้จ่ายเบ็ดเตล็ด' }
+];
+
+const DEFAULT_EXPENSE_KEYS = DEFAULT_EXPENSE_ITEMS.map(item => item.key);
+const EXPENSE_IGNORED_FIELDS = new Set([
+  'totalEstimate',
+  'totalActualPaid',
+  'accountSummary',
+  'month',
+  '_id',
+  'id'
+]);
 // Utility functions สำหรับจัดการตัวเลขและเงิน
 
 // จัดรูปแบบตัวเลขเป็นทศนิยม 2 ตำแหน่ง
@@ -146,13 +145,20 @@ export const handleNumberBlur = (value, setState, key = null) => {
   }
 };
 
-// จัดรูปแบบข้อมูลที่โหลดจาก API สำหรับรายรับ
+export const DEFAULT_INCOME_ITEMS = [
+  { key: 'salary', label: 'เงินเดือน' },
+  { key: 'income2', label: 'แหล่งรายรับ 2' },
+  { key: 'other', label: 'อื่นๆ' }
+];
+
+const DEFAULT_INCOME_KEYS = DEFAULT_INCOME_ITEMS.map(item => item.key);
+const INCOME_LABELS_FIELD = '__labels';
+const INCOME_IGNORED_FIELDS = new Set(['month', '_id', 'รวม', INCOME_LABELS_FIELD]);
+
+// จัดรูปแบบข้อมูลที่โหลดจาก API สำหรับรายรับ (รองรับ dynamic rows และ label เสริม)
 export const formatIncomeData = (data, month) => {
-  // Always return all keys (salary, income2, other) for UI
-  const keys = ['salary', 'income2', 'other'];
   const formattedData = {};
   let monthData = {};
-  // Support both { months: { ... } } and flat { salary, ... }
   if (data && typeof data === 'object') {
     if (data.months && typeof data.months === 'object' && data.months[month]) {
       monthData = data.months[month];
@@ -160,24 +166,47 @@ export const formatIncomeData = (data, month) => {
       monthData = data;
     }
   }
-  keys.forEach(key => {
+
+  const storedLabels = (monthData && typeof monthData[INCOME_LABELS_FIELD] === 'object' && !Array.isArray(monthData[INCOME_LABELS_FIELD]))
+    ? { ...monthData[INCOME_LABELS_FIELD] }
+    : {};
+
+  const persistedValueKeys = Object.keys(monthData || {}).filter(key => {
+    if (INCOME_IGNORED_FIELDS.has(key)) return false;
+    const value = monthData[key];
+    if (typeof value === 'number') return true;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed.length) return false;
+      return !Number.isNaN(parseFloat(trimmed));
+    }
+    return false;
+  });
+
+  const hasStoredValues = persistedValueKeys.length > 0;
+  const baselineKeys = hasStoredValues ? persistedValueKeys : DEFAULT_INCOME_KEYS;
+  const keysToFormat = Array.from(new Set(baselineKeys));
+
+  if (!keysToFormat.length && DEFAULT_INCOME_KEYS.length) {
+    keysToFormat.push(...DEFAULT_INCOME_KEYS);
+  }
+
+  keysToFormat.forEach(key => {
     formattedData[key] = parseAndFormat(monthData[key] ?? 0);
   });
-  return formattedData;
+
+  const persistedKeys = Array.from(new Set(persistedValueKeys));
+  return {
+    values: formattedData,
+    labels: storedLabels,
+    persistedKeys
+  };
 };
 
 // จัดรูปแบบข้อมูลที่โหลดจาก API สำหรับรายจ่าย
 export const formatExpenseData = (data, month) => {
-  // Always return all keys for UI
-  const keys = [
-    'house', 'water', 'internet', 'electricity', 'mobile',
-    'credit_kbank', 'credit_kungsri', 'credit_uob', 'credit_ttb',
-    'shopee', 'netflix', 'youtube', 'youtube_membership',
-    'motorcycle', 'miscellaneous'
-  ];
   const formattedData = {};
   let monthData = {};
-  // Support both { months: { ... } } and flat { house, ... }
   if (data && typeof data === 'object') {
     if (data.months && typeof data.months === 'object' && data.months[month]) {
       monthData = data.months[month];
@@ -185,13 +214,31 @@ export const formatExpenseData = (data, month) => {
       monthData = data;
     }
   }
-  keys.forEach(item => {
-    formattedData[item] = {};
-    formattedData[item]['estimate'] = parseAndFormat(monthData[item]?.estimate ?? monthData[item]?.estimate ?? monthData[item]?.['estimate'] ?? monthData[item]?.['actual'] ?? monthData[item] ?? 0);
-    formattedData[item]['actual'] = parseAndFormat(monthData[item]?.actual ?? monthData[item]?.['actual'] ?? 0);
-    formattedData[item]['paid'] = (typeof monthData[item]?.paid === 'boolean') ? monthData[item].paid : false;
+
+  const dynamicKeys = Object.keys(monthData || {}).filter(key => {
+    if (EXPENSE_IGNORED_FIELDS.has(key)) return false;
+    return typeof monthData[key] === 'object';
   });
-  return formattedData;
+
+  const allKeys = Array.from(new Set([...DEFAULT_EXPENSE_KEYS, ...dynamicKeys]));
+
+  allKeys.forEach(item => {
+    const source = (monthData && monthData[item]) ? monthData[item] : {};
+    const defaultLabel = DEFAULT_EXPENSE_ITEMS.find(expense => expense.key === item)?.label;
+    formattedData[item] = {
+      name: (typeof source.name === 'string' && source.name.trim().length > 0)
+        ? source.name
+        : (defaultLabel || 'รายการใหม่'),
+      estimate: parseAndFormat(source?.estimate ?? 0),
+      actual: parseAndFormat(source?.actual ?? 0),
+      paid: (typeof source?.paid === 'boolean') ? source.paid : false
+    };
+  });
+
+  return {
+    values: formattedData,
+    persistedKeys: dynamicKeys,
+  };
 };
 
 // จัดรูปแบบข้อมูลเงินออม

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { investmentAPI } from '../../shared/utils/frontend/apiUtils';
-import { maskNumberFormat, parseToNumber, formatCurrency } from '../../shared/utils/frontend/numberUtils';
+import { parseToNumber, formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import styles from '../styles/InvestmentTable.module.css';
 import { averagePercent, calcAmountFromPercent, sumPercent, mapInvestmentData } from '../../shared/utils/investmentUtils';
 
 // InvestmentTable: แสดงและแก้ไขรายการลงทุนในแต่ละเดือน
-export default function InvestmentTable({ selectedMonth, mode = 'view', onDataChange }) {
+export default function InvestmentTable({ selectedMonth, onDataChange }) {
   const [baseAmount, setBaseAmount] = useState('');
   const [investments, setInvestments] = useState([]);
 
@@ -100,24 +100,19 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
   return (
     <div className={styles.investmentContainer}>
       <h3 className={styles.investmentTitle}>การลงทุนประจำเดือน {selectedMonth || ''}</h3>
-      <div>
+      <div className={styles.baseAmountRow}>
         <label>
           จำนวนเงินลงทุนรวม (บาท):
-          {mode === 'edit' ? (
-            <input
-              type="number"
-              min="0"
-              value={baseAmount}
-              onChange={e => {
-                setBaseAmount(e.target.value);
-                setInvestments(prev => recalcAmounts(e.target.value, prev));
-              }}
-              className={styles.baseAmountInput}
-              disabled={mode !== 'edit'}
-            />
-          ) : (
-            <span className={styles.baseAmountDisplay}>{maskNumberFormat(parseToNumber(baseAmount))}</span>
-          )}
+          <input
+            type="number"
+            min="0"
+            value={baseAmount}
+            onChange={e => {
+              setBaseAmount(e.target.value);
+              setInvestments(prev => recalcAmounts(e.target.value, prev));
+            }}
+            className={styles.baseAmountInput}
+          />
         </label>
       </div>
       {/* Desktop Table */}
@@ -128,7 +123,7 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
               <th className={styles.tableHeaderCell}>ชื่อหุ้น/กองทุน</th>
               <th className={styles.tableHeaderCell}>เปอร์เซ็นการลงทุน (%)</th>
               <th className={styles.tableHeaderCell}>จำนวนเงิน (บาท)</th>
-              {mode === 'edit' && <th className={styles.tableHeaderCell}>ลบ</th>}
+              <th className={styles.tableHeaderCell}>ลบ</th>
             </tr>
           </thead>
           <tbody>
@@ -140,7 +135,6 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
                     value={item.name}
                     onChange={e => updateField(idx, 'name', e.target.value)}
                     className={styles.inputText}
-                    disabled={mode !== 'edit'}
                   />
                 </td>
                 <td className={styles.tableCell}>
@@ -151,19 +145,14 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
                     value={item.percent}
                     onChange={e => updateField(idx, 'percent', e.target.value)}
                     className={styles.inputPercent}
-                    disabled={mode !== 'edit'}
                   />
                 </td>
                 <td className={`${styles.tableCell} ${styles.amountCell}`}>
-                  {mode === 'edit'
-                    ? formatCurrency(item.amount)
-                    : maskNumberFormat(parseToNumber(item.amount))}
+                  {formatCurrency(item.amount)}
                 </td>
-                {mode === 'edit' && (
-                  <td className={`${styles.tableCell} ${styles.deleteCell}`}>
-                    <button type="button" onClick={() => removeInvestment(idx)} className={styles.deleteButton}>ลบ</button>
-                  </td>
-                )}
+                <td className={`${styles.tableCell} ${styles.deleteCell}`}>
+                  <button type="button" onClick={() => removeInvestment(idx)} className={styles.deleteButton}>ลบ</button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -184,7 +173,6 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
                 value={item.name}
                 onChange={e => updateField(idx, 'name', e.target.value)}
                 className={styles.inputText}
-                disabled={mode !== 'edit'}
               />
             </div>
             <div className={styles.cardRow}>
@@ -196,56 +184,49 @@ export default function InvestmentTable({ selectedMonth, mode = 'view', onDataCh
                 value={item.percent}
                 onChange={e => updateField(idx, 'percent', e.target.value)}
                 className={styles.inputPercent}
-                disabled={mode !== 'edit'}
               />
             </div>
             <div className={styles.cardRow}>
               <label className={styles.cardLabel}>จำนวนเงิน (บาท)</label>
               <span className={styles.cardAmount}>
-                {mode === 'edit'
-                  ? formatCurrency(item.amount)
-                  : maskNumberFormat(parseToNumber(item.amount))}
+                {formatCurrency(item.amount)}
               </span>
             </div>
-            {mode === 'edit' && (
-              <div className={styles.cardRow}>
-                <button type="button" onClick={() => removeInvestment(idx)} className={styles.deleteButton}>ลบ</button>
-              </div>
-            )}
+            <div className={styles.cardRow}>
+              <button type="button" onClick={() => removeInvestment(idx)} className={styles.deleteButton}>ลบ</button>
+            </div>
           </div>
         ))}
       </div>
-      {mode === 'edit' && (
-        <div className={styles.actionBar}>
-          <button type="button" onClick={addInvestment} className={styles.addButton}>+ เพิ่มรายการลงทุน</button>
-          <button
-            type="button"
-            onClick={() => {
-              if (investments.length === 0) return;
-              const avgPercents = averagePercent(investments.length);
-              setInvestments(investments.map((item, idx) => ({
-                ...item,
-                percent: avgPercents[idx]
-              })));
-            }}
-            className={styles.averageButton}
-            disabled={investments.length === 0}
-          >
-            เฉลี่ยเปอร์เซ็น
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className={styles.saveButton}
-            disabled={totalPercent !== 100}
-          >
-            บันทึก
-          </button>
-          {saveStatus === 'saving' && <span className={styles.statusSaving}>กำลังบันทึก...</span>}
-          {saveStatus === 'success' && <span className={styles.statusSuccess}>บันทึกสำเร็จ</span>}
-          {saveStatus === 'error' && <span className={styles.statusError}>บันทึกผิดพลาด</span>}
-        </div>
-      )}
+      <div className={styles.actionBar}>
+        <button type="button" onClick={addInvestment} className={styles.addButton}>+ เพิ่มรายการลงทุน</button>
+        <button
+          type="button"
+          onClick={() => {
+            if (investments.length === 0) return;
+            const avgPercents = averagePercent(investments.length);
+            setInvestments(investments.map((item, idx) => ({
+              ...item,
+              percent: avgPercents[idx]
+            })));
+          }}
+          className={styles.averageButton}
+          disabled={investments.length === 0}
+        >
+          เฉลี่ยเปอร์เซ็น
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          className={styles.saveButton}
+          disabled={totalPercent !== 100}
+        >
+          บันทึก
+        </button>
+        {saveStatus === 'saving' && <span className={styles.statusSaving}>กำลังบันทึก...</span>}
+        {saveStatus === 'success' && <span className={styles.statusSuccess}>บันทึกสำเร็จ</span>}
+        {saveStatus === 'error' && <span className={styles.statusError}>บันทึกผิดพลาด</span>}
+      </div>
       <div className={`${styles.percentSummary} ${totalPercent !== 100 ? styles.percentSummaryError : styles.percentSummaryNormal}`}>
         รวมเปอร์เซ็น: {totalPercent}% {totalPercent > 100 && '(เกิน 100%)'}{totalPercent < 100 && '(ต้องครบ 100%)'}
       </div>

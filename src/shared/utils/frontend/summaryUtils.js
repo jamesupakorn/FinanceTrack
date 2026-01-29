@@ -2,7 +2,12 @@
 // รวมฟังก์ชันคำนวณ summary และ chart สำหรับ SummaryReport
 
 export function getSummaryData({ incomeData, expenseData, savingsData, taxData, salaryData, currentMonth, currentYear }) {
-  const totalIncome = parseFloat(incomeData.รวม || 0);
+  const incomeTotalRaw = parseFloat(incomeData?.รวม || 0);
+  const incomeSalaryRaw = parseFloat(incomeData?.salary || 0);
+  const salaryNetIncome = parseFloat(salaryData?.summary?.net_income || salaryData?.สรุป?.เงินได้สุทธิ || 0);
+  const nonSalaryIncome = incomeTotalRaw - (Number.isFinite(incomeSalaryRaw) ? incomeSalaryRaw : 0);
+  const totalIncome = (Number.isFinite(salaryNetIncome) && salaryNetIncome > 0 ? salaryNetIncome : incomeSalaryRaw || 0)
+    + (Number.isFinite(nonSalaryIncome) ? nonSalaryIncome : 0);
   const totalExpenseAll = parseFloat(expenseData.totalEstimate || 0);
   const totalExpenseActual = parseFloat(expenseData.totalActualPaid || 0);
   const totalSavings = parseFloat(savingsData.รวมเงินเก็บ || 0);

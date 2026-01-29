@@ -1,13 +1,18 @@
 import { ensureMonthlyProvident } from '../../src/shared/utils/backend/apiUtils';
+import { assertUserId } from '../../src/shared/utils/backend/userRequest';
 import {
 	isJsonMode,
-	readJsonCollection,
-	writeJsonCollection,
 	withGeneratedId,
 	getMongoCollection
 } from '../../lib/dataSource';
 
+const {
+	getUserData,
+	updateUserData,
+} = require('../../src/backend/data/userUtils');
+
 const COLLECTION_NAME = 'tax_accumulated';
+const JSON_FILENAME = 'tax_accumulated.json';
 
 function buildDefaultYearDoc(year) {
 	return {
@@ -19,86 +24,113 @@ function buildDefaultYearDoc(year) {
 	};
 }
 
-async function handleJsonTaxGet(req, res) {
-	const docs = await readJsonCollection(COLLECTION_NAME);
+function handleJsonTaxGet(req, res, userId) {
+	const bucket = getUserData(JSON_FILENAME, userId);
 	const { year } = req.query;
 	if (year) {
-		const doc = docs.find(d => d.year === year);
+		const doc = bucket[year];
 		const response = ensureMonthlyProvident(doc ? { ...doc } : buildDefaultYearDoc(year));
 		return res.status(200).json({ [year]: response });
 	}
 	const data = { tax_by_year: {} };
-	docs.forEach(doc => {
+	Object.entries(bucket).forEach(([yearKey, doc]) => {
 		if (!doc || !doc.year) return;
-		data.tax_by_year[doc.year] = ensureMonthlyProvident({ ...doc });
+		data.tax_by_year[yearKey] = ensureMonthlyProvident({ ...doc });
 	});
 	return res.status(200).json(data);
 }
 
-async function handleJsonTaxPost(req, res) {
+function handleJsonTaxPost(req, res, userId) {
 	const { year, accumulated_tax, monthly_tax, monthly_income, monthly_provident } = req.body;
 	if (!year) {
 		return res.status(400).json({ error: 'year required' });
 	}
-	const docs = await readJsonCollection(COLLECTION_NAME);
-	const idx = docs.findIndex(doc => doc.year === year);
 	const update = { year };
 	if (accumulated_tax !== undefined) update.accumulated_tax = accumulated_tax;
 	if (monthly_tax !== undefined) update.monthly_tax = monthly_tax;
 	if (monthly_income !== undefined) update.monthly_income = monthly_income;
 	if (monthly_provident !== undefined) update.monthly_provident = monthly_provident;
-	if (idx >= 0) {
-		docs[idx] = { ...docs[idx], ...update };
-	} else {
-		docs.push(withGeneratedId({ ...buildDefaultYearDoc(year), ...update }));
-	}
-	await writeJsonCollection(COLLECTION_NAME, docs);
+	updateUserData(JSON_FILENAME, userId, (bucket) => {
+		const nextBucket = { ...bucket };
+		const baseDoc = nextBucket[year] || buildDefaultYearDoc(year);
+		const merged = { ...baseDoc, ...update };
+		nextBucket[year] = baseDoc._id ? { ...merged, _id: baseDoc._id } : withGeneratedId(merged);
+		return nextBucket;
+	});
 	return res.status(201).json({ success: true });
 }
 
-async function handleJsonTaxDelete(req, res) {
+function handleJsonTaxDelete(req, res, userId) {
 	const { year } = req.body;
 	if (!year) {
 		return res.status(400).json({ success: false, message: 'กรุณาระบุปีที่ต้องการลบ' });
 	}
-	const docs = await readJsonCollection(COLLECTION_NAME);
-	const filtered = docs.filter(doc => doc.year !== year);
-	if (filtered.length === docs.length) {
+	const bucket = getUserData(JSON_FILENAME, userId);
+	if (!bucket[year]) {
 		return res.status(404).json({ success: false, message: `ไม่พบข้อมูลภาษีปี ${year}` });
 	}
-	await writeJsonCollection(COLLECTION_NAME, filtered);
+	updateUserData(JSON_FILENAME, userId, (existing) => {
+		const nextBucket = { ...existing };
+		delete nextBucket[year];
+		return nextBucket;
+	});
 	return res.status(200).json({ success: true, message: `ลบข้อมูลภาษีปี ${year} เรียบร้อยแล้ว` });
 }
 
 export default async function handler(req, res) {
+	const userId = assertUserId(req, res);
+	if (!userId) return;
+
 	if (isJsonMode()) {
 		if (req.method === 'GET') {
-			return handleJsonTaxGet(req, res);
+			return handleJsonTaxGet(req, res, userId);
 		}
 		if (req.method === 'POST') {
-			return handleJsonTaxPost(req, res);
+			return handleJsonTaxPost(req, res, userId);
 		}
 		if (req.method === 'DELETE') {
-			return handleJsonTaxDelete(req, res);
+			return handleJsonTaxDelete(req, res, userId);
 		}
 		return res.status(405).end();
 	}
 
 	const collection = await getMongoCollection(COLLECTION_NAME);
+	const userFilter = { userId };
 
 	if (req.method === 'GET') {
 		const { year } = req.query;
 		if (year) {
-			const doc = await collection.findOne({ year });
+			let doc = await collection.findOne({ year, ...userFilter });
+			if (!doc) {
+				const legacyDoc = await collection.findOne({ year, userId: { $exists: false } });
+				if (legacyDoc) {
+					const { _id, userId: legacyUser, ...rest } = legacyDoc;
+					await collection.updateOne(
+						{ year, ...userFilter },
+						{ $set: { ...rest, year, ...userFilter } },
+						{ upsert: true }
+					);
+					doc = { ...rest, year, ...userFilter };
+				}
+			}
 			if (!doc) {
 				return res.status(200).json({ [year]: { accumulated_tax: 0, monthly_tax: {}, monthly_income: {}, monthly_provident: {} } });
 			}
-			return res.status(200).json({ [year]: ensureMonthlyProvident(doc) });
+			const sanitized = ensureMonthlyProvident({ ...doc });
+			delete sanitized._id;
+			delete sanitized.userId;
+			return res.status(200).json({ [year]: sanitized });
 		}
-		const allDocs = await collection.find({}).toArray();
+		let allDocs = await collection.find({ ...userFilter }).toArray();
+		if (!allDocs.length) {
+			allDocs = await collection.find({ userId: { $exists: false } }).toArray();
+		}
 		const data = { tax_by_year: {} };
 		allDocs.forEach(doc => {
-			data.tax_by_year[doc.year] = ensureMonthlyProvident(doc);
+			const sanitized = ensureMonthlyProvident({ ...doc });
+			delete sanitized._id;
+			delete sanitized.userId;
+			data.tax_by_year[doc.year] = sanitized;
 		});
 		return res.status(200).json(data);
 	} else if (req.method === 'POST') {
@@ -112,8 +144,8 @@ export default async function handler(req, res) {
 		if (monthly_income !== undefined) update.monthly_income = monthly_income;
 		if (monthly_provident !== undefined) update.monthly_provident = monthly_provident;
 		await collection.updateOne(
-			{ year },
-			{ $set: { year, ...update } },
+			{ year, ...userFilter },
+			{ $set: { year, ...update, ...userFilter } },
 			{ upsert: true }
 		);
 		return res.status(201).json({ success: true });
@@ -122,7 +154,7 @@ export default async function handler(req, res) {
 		if (!year) {
 			return res.status(400).json({ success: false, message: 'กรุณาระบุปีที่ต้องการลบ' });
 		}
-		const result = await collection.deleteOne({ year });
+		const result = await collection.deleteOne({ year, ...userFilter });
 		if (result.deletedCount > 0) {
 			return res.status(200).json({ success: true, message: `ลบข้อมูลภาษีปี ${year} เรียบร้อยแล้ว` });
 		}
@@ -132,65 +164,76 @@ export default async function handler(req, res) {
 }
 /**
  * อัพเดตข้อมูลภาษีรายเดือนในปีและเดือนที่ระบุ
+ * @param {string} userId - รหัสผู้ใช้
  * @param {string} year - ปี พ.ศ. เช่น "2568"
  * @param {string} month - เดือน เช่น "09"
  * @param {string|number} value - ยอดภาษีใหม่
  */
-async function mutateTaxYear(year, mutator) {
+async function mutateTaxYear(userId, year, mutator) {
 	if (!year || typeof mutator !== 'function') return;
 	if (isJsonMode()) {
-		const docs = await readJsonCollection(COLLECTION_NAME);
-		const idx = docs.findIndex(doc => doc.year === year);
-		let doc;
-		if (idx === -1) {
-			doc = withGeneratedId(buildDefaultYearDoc(year));
-			docs.push(doc);
-		} else {
-			doc = docs[idx];
-		}
-		mutator(doc);
-		await writeJsonCollection(COLLECTION_NAME, docs);
+		updateUserData(JSON_FILENAME, userId, (bucket) => {
+			const nextBucket = { ...bucket };
+			const baseDoc = nextBucket[year] || withGeneratedId(buildDefaultYearDoc(year));
+			const clone = { ...baseDoc };
+			mutator(clone);
+			nextBucket[year] = clone;
+			return nextBucket;
+		});
 		return;
 	}
 	const collection = await getMongoCollection(COLLECTION_NAME);
-	const data = (await collection.findOne({ year })) || buildDefaultYearDoc(year);
+	const userFilter = { userId };
+	const filter = { year, ...userFilter };
+	let data = await collection.findOne(filter);
+	if (!data) {
+		const legacyDoc = await collection.findOne({ year, userId: { $exists: false } });
+		if (legacyDoc) {
+			const { _id, userId: legacyUser, ...rest } = legacyDoc;
+			data = { ...rest, year, ...userFilter };
+		} else {
+			data = buildDefaultYearDoc(year);
+		}
+	}
 	mutator(data);
 	const { _id, ...payload } = data;
 	await collection.updateOne(
-		{ year },
-		{ $set: { year, ...payload } },
+		filter,
+		{ $set: { year, ...payload, ...userFilter } },
 		{ upsert: true }
 	);
 }
 
-export async function updateMonthlyTax(year, month, value) {
-	await mutateTaxYear(year, (doc) => {
+export async function updateMonthlyTax(userId, year, month, value) {
+	await mutateTaxYear(userId, year, (doc) => {
 		if (!doc.monthly_tax) doc.monthly_tax = {};
 		doc.monthly_tax[month] = value.toString();
 	});
 }
 
 /**
- * อัพเดตข้อมูลรายรับรายเดือนในปีและเดือนที่ระบุ
+ * อัพเดตรายรับรายเดือนในปีและเดือนที่ระบุ
+ * @param {string} userId - รหัสผู้ใช้
  * @param {string} year - ปี พ.ศ. เช่น "2568"
  * @param {string} month - เดือน เช่น "09"
  * @param {string|number} value - ยอดรายรับใหม่
  */
-export async function updateMonthlyIncome(year, month, value) {
-	await mutateTaxYear(year, (doc) => {
+export async function updateMonthlyIncome(userId, year, month, value) {
+	await mutateTaxYear(userId, year, (doc) => {
 		if (!doc.monthly_income) doc.monthly_income = {};
 		doc.monthly_income[month] = value.toString();
 	});
 }
 
 /**
- * อัพเดตข้อมูลกองทุนสำรองเลี้ยงชีพรายเดือนในปีและเดือนที่ระบุ
+ * อัพเดตกองทุนสำรองเลี้ยงชีพรายเดือนในปีและเดือนที่ระบุ
+ * @param {string} userId - รหัสผู้ใช้
  * @param {string} year - ปี พ.ศ. เช่น "2568"
  * @param {string} month - เดือน เช่น "09"
  * @param {string|number} value - ยอดกองทุนใหม่
  */
-export async function updateMonthlyProvident(year, month, value) {
-	await mutateTaxYear(year, (doc) => {
+export async function updateMonthlyProvident(userId, year, month, value) {
+	await mutateTaxYear(userId, year, (doc) => {
 		if (!doc.monthly_provident) doc.monthly_provident = {};
 		doc.monthly_provident[month] = value.toString();
 	});

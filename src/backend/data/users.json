@@ -1,0 +1,14 @@
+[
+  {
+    "id": "u001",
+    "displayName": "JAME",
+    "avatar": "/avatars/u001.jpg",
+    "passwordHash": "$2a$10$B5KBN7T4DkYgqmg33beZi.x7b3Gzt8jaEHSOgSvlN8LKnsMv87z3W"
+  },
+  {
+    "id": "u002",
+    "displayName": "MUHAM",
+    "avatar": "/avatars/u002.jpeg",
+    "passwordHash": "$2a$10$LOXxLTyAOtrmYwAdDVA3BulvGrqpBKPtYXgpIN4FT942G0ajKYrOq"
+  }
+]

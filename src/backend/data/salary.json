@@ -1,325 +1,396 @@
-[
-  {
-    "_id": "690786970cf7da9cad063c5a",
-    "income": {
-      "salary": 0,
-      "overtime_1x": 0,
-      "overtime_1_5x": 0,
-      "overtime_2x": 0,
-      "overtime_3x": 0,
-      "overtime_other": 0,
-      "bonus": 0,
-      "other_income": 0
+{
+  "u001": {
+    "months": {
+      "_id": "690786970cf7da9cad063c5a",
+      "income": {
+        "salary": 0,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 0
+      },
+      "deduct": {
+        "provident_fund": 0,
+        "social_security": 0,
+        "tax": 0
+      },
+      "summary": {
+        "total_income": 0,
+        "total_deduct": 0,
+        "net_income": 0
+      },
+      "saved_at": "2025-11-02T16:28:07.178Z",
+      "note": "",
+      "month": "months"
     },
-    "deduct": {
-      "provident_fund": 0,
-      "social_security": 0,
-      "tax": 0
+    "2026-02": {
+      "_id": "d525a18f3be22bb256ace73c",
+      "income": {
+        "salary": 40560,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 1000
+      },
+      "deduct": {
+        "provident_fund": 2028,
+        "social_security": 875,
+        "tax": 641
+      },
+      "note": "",
+      "saved_at": "2026-01-29T04:55:05.113Z",
+      "summary": {
+        "total_income": 41560,
+        "total_deduct": 3544,
+        "net_income": 38016
+      },
+      "month": "2026-02"
     },
-    "summary": {
-      "total_income": 0,
-      "total_deduct": 0,
-      "net_income": 0
+    "2026-01": {
+      "_id": "69571bbc85b9fdffc0750241",
+      "income": {
+        "salary": 40560,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 1000
+      },
+      "deduct": {
+        "provident_fund": 2028,
+        "social_security": 875,
+        "tax": 641
+      },
+      "summary": {
+        "total_income": 41560,
+        "total_deduct": 3544,
+        "net_income": 38016
+      },
+      "saved_at": "2026-01-29T05:00:49.424Z",
+      "note": "",
+      "month": "2026-01"
     },
-    "saved_at": "2025-11-02T16:28:07.178Z",
-    "note": "",
-    "month": "months"
-  },
-  {
-    "_id": "d525a18f3be22bb256ace73c",
-    "income": {},
-    "deduct": {},
-    "note": "",
-    "saved_at": "2026-01-15T06:57:47.362Z",
-    "summary": {
-      "total_income": 0,
-      "total_deduct": 0,
-      "net_income": 0
+    "2025-12": {
+      "_id": "692af54b9ba6da2362d99d28",
+      "month": "2025-12",
+      "deduct": {
+        "provident_fund": 2028,
+        "social_security": 750,
+        "tax": 697
+      },
+      "income": {
+        "salary": 40560,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 1000
+      },
+      "note": "",
+      "saved_at": "2025-11-29T13:30:32.225Z",
+      "summary": {
+        "total_income": 41560,
+        "total_deduct": 3475,
+        "net_income": 38085
+      }
     },
-    "month": "2026-02"
-  },
-  {
-    "_id": "69571bbc85b9fdffc0750241",
-    "income": {
-      "salary": 40560,
-      "overtime_1x": 0,
-      "overtime_1_5x": 0,
-      "overtime_2x": 0,
-      "overtime_3x": 0,
-      "overtime_other": 0,
-      "bonus": 0,
-      "other_income": 1000
+    "2025-11": {
+      "_id": "69078028fd5baf448ef56b15",
+      "income": {
+        "salary": 40560,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 1000
+      },
+      "deduct": {
+        "provident_fund": 2028,
+        "social_security": 750,
+        "tax": 697
+      },
+      "summary": {
+        "total_income": 41560,
+        "total_deduct": 3475,
+        "net_income": 38085
+      },
+      "saved_at": "2025-11-06T02:52:00.837Z",
+      "note": "",
+      "month": "2025-11"
     },
-    "deduct": {
-      "provident_fund": 2028,
-      "social_security": 875,
-      "tax": 697
+    "2025-10": {
+      "_id": "6907800f7c0b4ba9b3c2d922",
+      "income": {
+        "salary": 40560,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 1000
+      },
+      "deduct": {
+        "provident_fund": 2028,
+        "social_security": 750,
+        "tax": 697
+      },
+      "note": "",
+      "saved_at": "2025-09-25T08:56:46.386Z",
+      "summary": {
+        "total_income": 41560,
+        "total_deduct": 3475,
+        "net_income": 38085
+      },
+      "month": "2025-10"
     },
-    "summary": {
-      "total_income": 41560,
-      "total_deduct": 3600,
-      "net_income": 37960
+    "2025-09": {
+      "_id": "6907800f7c0b4ba9b3c2d921",
+      "income": {
+        "salary": 40560,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 1000
+      },
+      "deduct": {
+        "provident_fund": 2028,
+        "social_security": 750,
+        "tax": 697
+      },
+      "note": "",
+      "saved_at": "2025-09-25T08:56:46.386Z",
+      "summary": {
+        "total_income": 41560,
+        "total_deduct": 3475,
+        "net_income": 38085
+      },
+      "month": "2025-09"
     },
-    "saved_at": "2026-01-06T07:16:56.670Z",
-    "note": "",
-    "month": "2026-01"
-  },
-  {
-    "_id": "692af54b9ba6da2362d99d28",
-    "month": "2025-12",
-    "deduct": {
-      "provident_fund": 2028,
-      "social_security": 750,
-      "tax": 697
+    "2025-08": {
+      "_id": "6907800f7c0b4ba9b3c2d920",
+      "income": {
+        "salary": 39000,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 0
+      },
+      "deduct": {
+        "provident_fund": 0,
+        "social_security": 0,
+        "tax": 850
+      },
+      "month": "2025-08"
     },
-    "income": {
-      "salary": 40560,
-      "overtime_1x": 0,
-      "overtime_1_5x": 0,
-      "overtime_2x": 0,
-      "overtime_3x": 0,
-      "overtime_other": 0,
-      "bonus": 0,
-      "other_income": 1000
+    "2025-07": {
+      "_id": "6907800f7c0b4ba9b3c2d91f",
+      "income": {
+        "salary": 38000,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 0
+      },
+      "deduct": {
+        "provident_fund": 0,
+        "social_security": 0,
+        "tax": 697
+      },
+      "month": "2025-07"
     },
-    "note": "",
-    "saved_at": "2025-11-29T13:30:32.225Z",
-    "summary": {
-      "total_income": 41560,
-      "total_deduct": 3475,
-      "net_income": 38085
+    "2025-06": {
+      "_id": "6907800f7c0b4ba9b3c2d91e",
+      "income": {
+        "salary": 41000,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 0
+      },
+      "deduct": {
+        "provident_fund": 0,
+        "social_security": 0,
+        "tax": 1255
+      },
+      "month": "2025-06"
+    },
+    "2025-05": {
+      "_id": "6907800f7c0b4ba9b3c2d91d",
+      "income": {
+        "salary": 38655,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 0
+      },
+      "deduct": {
+        "provident_fund": 0,
+        "social_security": 0,
+        "tax": 761
+      },
+      "month": "2025-05"
+    },
+    "2025-04": {
+      "_id": "6907800f7c0b4ba9b3c2d91c",
+      "income": {
+        "salary": 40000,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 0
+      },
+      "deduct": {
+        "provident_fund": 0,
+        "social_security": 0,
+        "tax": 697
+      },
+      "month": "2025-04"
+    },
+    "2025-03": {
+      "_id": "6907800f7c0b4ba9b3c2d91b",
+      "income": {
+        "salary": 40000,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 0
+      },
+      "deduct": {
+        "provident_fund": 0,
+        "social_security": 0,
+        "tax": 1509
+      },
+      "month": "2025-03"
+    },
+    "2025-02": {
+      "_id": "6907800f7c0b4ba9b3c2d91a",
+      "income": {
+        "salary": 40000,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 0
+      },
+      "deduct": {
+        "provident_fund": 0,
+        "social_security": 0,
+        "tax": 9100
+      },
+      "month": "2025-02"
+    },
+    "2025-01": {
+      "_id": "6907800f7c0b4ba9b3c2d919",
+      "income": {
+        "salary": 38000,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 0
+      },
+      "deduct": {
+        "provident_fund": 0,
+        "social_security": 0,
+        "tax": 5100
+      },
+      "note": "",
+      "recorded_at": "2025-09-23T07:07:53.197Z",
+      "month": "2025-01"
     }
   },
-  {
-    "_id": "69078028fd5baf448ef56b15",
-    "income": {
-      "salary": 40560,
-      "overtime_1x": 0,
-      "overtime_1_5x": 0,
-      "overtime_2x": 0,
-      "overtime_3x": 0,
-      "overtime_other": 0,
-      "bonus": 0,
-      "other_income": 1000
-    },
-    "deduct": {
-      "provident_fund": 2028,
-      "social_security": 750,
-      "tax": 697
-    },
-    "summary": {
-      "total_income": 41560,
-      "total_deduct": 3475,
-      "net_income": 38085
-    },
-    "saved_at": "2025-11-06T02:52:00.837Z",
-    "note": "",
-    "month": "2025-11"
+  "u002": {
+    "2026-01": {
+      "_id": "2845eb9036e32bb6244f1c12",
+      "income": {
+        "salary": 0,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 0
+      },
+      "deduct": {
+        "provident_fund": 0,
+        "social_security": 0,
+        "tax": 0
+      },
+      "summary": {
+        "total_income": 0,
+        "total_deduct": 0,
+        "net_income": 0
+      },
+      "saved_at": "2026-01-28T07:08:28.044Z",
+      "note": "",
+      "month": "2026-01"
+    }
   },
-  {
-    "_id": "6907800f7c0b4ba9b3c2d922",
-    "income": {
-      "salary": 40560,
-      "overtime_1x": 0,
-      "overtime_1_5x": 0,
-      "overtime_2x": 0,
-      "overtime_3x": 0,
-      "overtime_other": 0,
-      "bonus": 0,
-      "other_income": 1000
-    },
-    "deduct": {
-      "provident_fund": 2028,
-      "social_security": 750,
-      "tax": 697
-    },
-    "note": "",
-    "saved_at": "2025-09-25T08:56:46.386Z",
-    "summary": {
-      "total_income": 41560,
-      "total_deduct": 3475,
-      "net_income": 38085
-    },
-    "month": "2025-10"
-  },
-  {
-    "_id": "6907800f7c0b4ba9b3c2d921",
-    "income": {
-      "salary": 40560,
-      "overtime_1x": 0,
-      "overtime_1_5x": 0,
-      "overtime_2x": 0,
-      "overtime_3x": 0,
-      "overtime_other": 0,
-      "bonus": 0,
-      "other_income": 1000
-    },
-    "deduct": {
-      "provident_fund": 2028,
-      "social_security": 750,
-      "tax": 697
-    },
-    "note": "",
-    "saved_at": "2025-09-25T08:56:46.386Z",
-    "summary": {
-      "total_income": 41560,
-      "total_deduct": 3475,
-      "net_income": 38085
-    },
-    "month": "2025-09"
-  },
-  {
-    "_id": "6907800f7c0b4ba9b3c2d920",
-    "income": {
-      "salary": 39000,
-      "overtime_1x": 0,
-      "overtime_1_5x": 0,
-      "overtime_2x": 0,
-      "overtime_3x": 0,
-      "overtime_other": 0,
-      "bonus": 0,
-      "other_income": 0
-    },
-    "deduct": {
-      "provident_fund": 0,
-      "social_security": 0,
-      "tax": 850
-    },
-    "month": "2025-08"
-  },
-  {
-    "_id": "6907800f7c0b4ba9b3c2d91f",
-    "income": {
-      "salary": 38000,
-      "overtime_1x": 0,
-      "overtime_1_5x": 0,
-      "overtime_2x": 0,
-      "overtime_3x": 0,
-      "overtime_other": 0,
-      "bonus": 0,
-      "other_income": 0
-    },
-    "deduct": {
-      "provident_fund": 0,
-      "social_security": 0,
-      "tax": 697
-    },
-    "month": "2025-07"
-  },
-  {
-    "_id": "6907800f7c0b4ba9b3c2d91e",
-    "income": {
-      "salary": 41000,
-      "overtime_1x": 0,
-      "overtime_1_5x": 0,
-      "overtime_2x": 0,
-      "overtime_3x": 0,
-      "overtime_other": 0,
-      "bonus": 0,
-      "other_income": 0
-    },
-    "deduct": {
-      "provident_fund": 0,
-      "social_security": 0,
-      "tax": 1255
-    },
-    "month": "2025-06"
-  },
-  {
-    "_id": "6907800f7c0b4ba9b3c2d91d",
-    "income": {
-      "salary": 38655,
-      "overtime_1x": 0,
-      "overtime_1_5x": 0,
-      "overtime_2x": 0,
-      "overtime_3x": 0,
-      "overtime_other": 0,
-      "bonus": 0,
-      "other_income": 0
-    },
-    "deduct": {
-      "provident_fund": 0,
-      "social_security": 0,
-      "tax": 761
-    },
-    "month": "2025-05"
-  },
-  {
-    "_id": "6907800f7c0b4ba9b3c2d91c",
-    "income": {
-      "salary": 40000,
-      "overtime_1x": 0,
-      "overtime_1_5x": 0,
-      "overtime_2x": 0,
-      "overtime_3x": 0,
-      "overtime_other": 0,
-      "bonus": 0,
-      "other_income": 0
-    },
-    "deduct": {
-      "provident_fund": 0,
-      "social_security": 0,
-      "tax": 697
-    },
-    "month": "2025-04"
-  },
-  {
-    "_id": "6907800f7c0b4ba9b3c2d91b",
-    "income": {
-      "salary": 40000,
-      "overtime_1x": 0,
-      "overtime_1_5x": 0,
-      "overtime_2x": 0,
-      "overtime_3x": 0,
-      "overtime_other": 0,
-      "bonus": 0,
-      "other_income": 0
-    },
-    "deduct": {
-      "provident_fund": 0,
-      "social_security": 0,
-      "tax": 1509
-    },
-    "month": "2025-03"
-  },
-  {
-    "_id": "6907800f7c0b4ba9b3c2d91a",
-    "income": {
-      "salary": 40000,
-      "overtime_1x": 0,
-      "overtime_1_5x": 0,
-      "overtime_2x": 0,
-      "overtime_3x": 0,
-      "overtime_other": 0,
-      "bonus": 0,
-      "other_income": 0
-    },
-    "deduct": {
-      "provident_fund": 0,
-      "social_security": 0,
-      "tax": 9100
-    },
-    "month": "2025-02"
-  },
-  {
-    "_id": "6907800f7c0b4ba9b3c2d919",
-    "income": {
-      "salary": 38000,
-      "overtime_1x": 0,
-      "overtime_1_5x": 0,
-      "overtime_2x": 0,
-      "overtime_3x": 0,
-      "overtime_other": 0,
-      "bonus": 0,
-      "other_income": 0
-    },
-    "deduct": {
-      "provident_fund": 0,
-      "social_security": 0,
-      "tax": 5100
-    },
-    "note": "",
-    "recorded_at": "2025-09-23T07:07:53.197Z",
-    "month": "2025-01"
+  "demo": {
+    "2026-01": {
+      "_id": "demo-salary-2026-01",
+      "income": {
+        "salary": 32500,
+        "overtime_1x": 2200,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 1300,
+        "other_income": 1800
+      },
+      "deduct": {
+        "provident_fund": 1450,
+        "social_security": 750,
+        "tax": 940
+      },
+      "summary": {
+        "total_income": 37800,
+        "total_deduct": 3140,
+        "net_income": 34660
+      },
+      "saved_at": "2026-01-05T09:00:00.000Z",
+      "note": "บัญชีสาธิต - มกราคม",
+      "month": "2026-01"
+    }
   }
-]
+}
