@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { formatCurrency, parseAndFormat, handleNumberInput, handleNumberBlur, parseToNumber, maskNumberFormat, calculateSalaryTotals } from '../../shared/utils/frontend/numberUtils';
+import { formatCurrency, parseAndFormat, handleNumberInput, handleNumberBlur, parseToNumber, calculateSalaryTotals } from '../../shared/utils/frontend/numberUtils';
 import { formatSalaryData, splitSalaryData } from '../../shared/utils/salaryUtils';
-import { salaryAPI, incomeAPI } from '../../shared/utils/frontend/apiUtils';
+import { salaryAPI, incomeAPI, taxAPI } from '../../shared/utils/frontend/apiUtils';
 import styles from '../styles/SalaryCalculator.module.css';
 
 // ฟังก์ชันสำหรับแปลงเดือนเป็นชื่อภาษาไทย
@@ -30,7 +30,7 @@ const salaryKeyThaiMapping = {
   tax: 'หักภาษี'
 };
 
-const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
+const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
 
   const [salaryData, setSalaryData] = useState({
     // รายได้
@@ -105,6 +105,8 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
 
   const saveSalaryData = async () => {
     try {
+      const totals = calculateSalaryTotals(salaryData);
+      const netIncomeValue = totals.เงินได้สุทธิ;
       // แยกข้อมูลรายได้และหักด้วยฟังก์ชันกลาง
       const { income, deduction } = splitSalaryData(salaryData, parseToNumber);
 
@@ -114,38 +116,20 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
       if (result.success) {
         // อัพเดตข้อมูลภาษีรายเดือนใน tax_accumulated
         try {
-          // แปลง selectedMonth เป็นปี พ.ศ. และเลขเดือน
+          // แปลง selectedMonth เป็นปี พ.ศ. และเลขเดือน (helper จะ normalize เป็น ค.ศ.)
           const [yearStr, monthStr] = selectedMonth.split('-');
-          const year = (parseInt(yearStr) + 543).toString();
+          const year = (parseInt(yearStr, 10) + 543).toString();
           const month = monthStr.padStart(2, '0');
           const taxValue = deduction.tax || 0;
-          await fetch('/api/tax_accumulated', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              year,
-              ภาษีรายเดือน: { [month]: taxValue }
-            })
-          });
+          await taxAPI.updateMonthlyTax(year, month, taxValue);
         } catch (e) {
           // ไม่ต้องแจ้ง error ให้ user
         }
         // อัพเดต monthly_income.json ด้วยเงินได้สุทธิ
         try {
-          await fetch('/api/monthly_income', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              month: selectedMonth,
-              values: {
-                salary: calculatedResults.เงินได้สุทธิ,
-                income2: 0,
-                other: 0
-              }
-            })
-          });
+          await incomeAPI.save(selectedMonth, { salary: netIncomeValue });
         } catch (e) {
-          // ไม่ต้องแจ้ง error ให้ user
+          console.error('Failed to sync monthly income salary value:', e);
         }
         // เรียก callback เพื่อให้ parent component อัพเดต
         if (onSalaryUpdate) {
@@ -177,12 +161,6 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
     });
   };
 
-  // Helper: format value for display
-  const getDisplayValue = (value) => {
-    const num = parseToNumber(value);
-    return num === 0 ? '0' : maskNumberFormat(num);
-  };
-
   return (
     <div className={styles.salaryCalculator}>
       <h2 className={styles.title}>คำนวณเงินเดือน - {selectedMonth ? getThaiMonthName(selectedMonth) : 'กรุณาเลือกเดือน'}</h2>
@@ -195,26 +173,21 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
             {['salary', 'overtime_1x', 'overtime_1_5x', 'overtime_2x', 'overtime_3x', 'overtime_other', 'bonus', 'other_income'].map((key) => (
               <div className={styles.inputGroup} key={key}>
                 <label>{salaryKeyThaiMapping[key]}</label>
-                {mode === 'edit' ? (
-                  <input
-                    type="text"
-                    value={salaryData[key] ?? ''}
-                    onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
-                    onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
-                    placeholder="0.00"
-                    aria-label={salaryKeyThaiMapping[key]}
-                    tabIndex={0}
-                    style={{ minHeight: 44 }}
-                  />
-                ) : (
-                  <span>{getDisplayValue(salaryData[key])}</span>
-                )}
+                <input
+                  type="text"
+                  value={salaryData[key] ?? ''}
+                  onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
+                  onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
+                  placeholder="0.00"
+                  aria-label={salaryKeyThaiMapping[key]}
+                  tabIndex={0}
+                />
               </div>
             ))}
           </div>
           <div className={`${styles.subtotal} ${styles.incomeSubtotal}`}>
             <span>รวมรายได้: </span>
-            <span className={styles.amount}>{mode === 'edit' ? formatCurrency(calculatedResults.รวมรายได้) : getDisplayValue(calculatedResults.รวมรายได้)}</span>
+            <span className={styles.amount}>{formatCurrency(calculatedResults.รวมรายได้)}</span>
           </div>
         </div>
 
@@ -225,58 +198,49 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, mode = 'view' }) => {
             {['provident_fund', 'social_security', 'tax'].map((key) => (
               <div className={styles.inputGroup} key={key}>
                 <label>{salaryKeyThaiMapping[key]}</label>
-                {mode === 'edit' ? (
-                  <input
-                    type="text"
-                    value={salaryData[key] ?? ''}
-                    onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
-                    onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
-                    placeholder="0.00"
-                    aria-label={salaryKeyThaiMapping[key]}
-                    tabIndex={0}
-                    style={{ minHeight: 44 }}
-                  />
-                ) : (
-                  <span>{getDisplayValue(salaryData[key])}</span>
-                )}
+                <input
+                  type="text"
+                  value={salaryData[key] ?? ''}
+                  onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
+                  onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
+                  placeholder="0.00"
+                  aria-label={salaryKeyThaiMapping[key]}
+                  tabIndex={0}
+                />
               </div>
             ))}
           </div>
           <div className={`${styles.subtotal} ${styles.deductionSubtotal}`}>
             <span>รวมหัก: </span>
-            <span className={styles.amount}>{mode === 'edit' ? formatCurrency(calculatedResults.รวมหัก) : getDisplayValue(calculatedResults.รวมหัก)}</span>
+            <span className={styles.amount}>{formatCurrency(calculatedResults.รวมหัก)}</span>
           </div>
         </div>
       </div>
 
       {/* ผลลัพธ์สุทธิ */}
       <div className={styles.netResult}>
-  <h3>เงินได้สุทธิ: <span className={styles.netAmount}>{mode === 'edit' ? formatCurrency(calculatedResults.เงินได้สุทธิ) : getDisplayValue(calculatedResults.เงินได้สุทธิ)}</span></h3>
+  <h3>เงินได้สุทธิ: <span className={styles.netAmount}>{formatCurrency(calculatedResults.เงินได้สุทธิ)}</span></h3>
       </div>
 
       {/* ปุ่มจัดการ */}
-      {mode === 'edit' && (
-        <div className={styles.actionButtons}>
-          <button
-            onClick={saveSalaryData}
-            className={styles.saveBtn}
-            aria-label="บันทึกเงินเดือน"
-            tabIndex={0}
-            style={{ minHeight: 44, minWidth: 44, width: '100%' }}
-          >
-            บันทึกเงินเดือน
-          </button>
-          <button
-            onClick={clearAll}
-            className={styles.clearBtn}
-            aria-label="ล้างข้อมูล"
-            tabIndex={0}
-            style={{ minHeight: 44, minWidth: 44, width: '100%' }}
-          >
-            ล้างข้อมูล
-          </button>
-        </div>
-      )}
+      <div className={styles.actionButtons}>
+        <button
+          onClick={saveSalaryData}
+          className={styles.saveBtn}
+          aria-label="บันทึกเงินเดือน"
+          tabIndex={0}
+        >
+          บันทึกเงินเดือน
+        </button>
+        <button
+          onClick={clearAll}
+          className={styles.clearBtn}
+          aria-label="ล้างข้อมูล"
+          tabIndex={0}
+        >
+          ล้างข้อมูล
+        </button>
+      </div>
     </div>
   );
 };

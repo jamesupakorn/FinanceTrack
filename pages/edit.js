@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import IncomeTable from '../src/frontend/components/IncomeTable';
 import ExpenseTable from '../src/frontend/components/ExpenseTable';
@@ -7,12 +7,9 @@ import TaxTable from '../src/frontend/components/TaxTable';
 import SummaryReport from '../src/frontend/components/SummaryReport';
 import SalaryCalculator from '../src/frontend/components/SalaryCalculator';
 import MonthManager from '../src/frontend/components/MonthManager';
-import ThemeToggle from '../src/frontend/components/ThemeToggle';
-import ModePasswordModal from '../src/frontend/components/ModePasswordModal';
-import { ENCODED_EDIT_PASSWORD } from '../src/frontend/config/password.enc';
-import { decodePassword } from '../src/shared/utils/authUtils';
 import { Icons } from '../src/frontend/components/Icons';
 import { useTheme } from '../src/frontend/contexts/ThemeContext';
+import { useSession } from '../src/frontend/contexts/SessionContext';
 import { incomeAPI, expenseAPI, savingsAPI, salaryAPI } from '../src/shared/utils/frontend/apiUtils';
 import styles from '../src/frontend/styles/Home.module.css';
 
@@ -22,90 +19,61 @@ function getCurrentMonth() {
 }
 
 
-const EDIT_PASSWORD = decodePassword(ENCODED_EDIT_PASSWORD);
-const SESSION_KEY = 'edit_last_activity'; // สำหรับ activity
-const SESSION_KEY_PASSWORD = 'edit_password_verified'; // สำหรับ password
+const SESSION_KEY = 'edit_last_activity';
 
 export default function EditPage() {
-    // สำหรับ LINE แจ้งเตือน
-    const [lineMessage, setLineMessage] = useState('');
-    const [lineStatus, setLineStatus] = useState('');
   const router = useRouter();
   // Session timeout: 1 hour (3600 seconds)
   const SESSION_TIMEOUT = 60 * 60 * 1000;
+  const { currentUser, isReady, logout } = useSession();
+  const sessionKey = useMemo(() => currentUser ? `${SESSION_KEY}_${currentUser.id}` : SESSION_KEY, [currentUser?.id]);
+  const isLocked = !isReady || !currentUser;
 
   // Update last activity timestamp
   const updateActivity = () => {
-    localStorage.setItem(SESSION_KEY, Date.now().toString());
+    if (!currentUser) return;
+    localStorage.setItem(sessionKey, Date.now().toString());
   };
 
   // Set up event listeners for user activity
   React.useEffect(() => {
+    if (!currentUser) return undefined;
     updateActivity();
     const events = ['mousemove', 'keydown', 'click', 'scroll'];
     events.forEach(event => window.addEventListener(event, updateActivity));
     return () => {
       events.forEach(event => window.removeEventListener(event, updateActivity));
     };
-  }, []);
+  }, [currentUser, sessionKey]);
 
   // Check for session timeout every 1 minute
   React.useEffect(() => {
+    if (!currentUser) return undefined;
     const checkTimeout = () => {
-      const last = parseInt(localStorage.getItem(SESSION_KEY), 10);
+      const last = parseInt(localStorage.getItem(sessionKey), 10);
       if (!last || Date.now() - last > SESSION_TIMEOUT) {
-        localStorage.removeItem(SESSION_KEY);
-        localStorage.removeItem(SESSION_KEY_PASSWORD); // เคลียร์ password ด้วย
-        router.replace('/');
+        localStorage.removeItem(sessionKey);
+        logout();
+        router.replace('/profiles');
       }
     };
     const interval = setInterval(checkTimeout, 60 * 1000);
     // Also check immediately on mount
     checkTimeout();
     return () => clearInterval(interval);
-  }, [router]);
+  }, [router, currentUser, sessionKey, logout]);
   const { theme } = useTheme();
-  const [mode] = useState('edit');
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [activeTab, setActiveTab] = useState('income');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [salaryUpdateTrigger, setSalaryUpdateTrigger] = useState(0);
   const [months, setMonths] = useState([]);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  // ตรวจสอบ session password
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const verified = localStorage.getItem(SESSION_KEY_PASSWORD);
-      // เช็ค password จาก query string
-      const urlParams = new URLSearchParams(window.location.search);
-      const passwordFromQuery = urlParams.get('pass');
-      if (passwordFromQuery) {
-        if (passwordFromQuery === EDIT_PASSWORD) {
-          localStorage.setItem(SESSION_KEY_PASSWORD, 'true');
-          setShowPasswordModal(false);
-          return;
-        } else {
-          localStorage.removeItem(SESSION_KEY_PASSWORD);
-          setShowPasswordModal(true);
-          return;
-        }
-      }
-      if (verified !== 'true') {
-        setShowPasswordModal(true);
-      }
+    if (isReady && !currentUser) {
+      router.replace('/profiles');
     }
-  }, []);
-
-  const handlePasswordSubmit = (password) => {
-    if (password === EDIT_PASSWORD) {
-      localStorage.setItem(SESSION_KEY_PASSWORD, 'true');
-      setShowPasswordModal(false);
-    } else {
-      alert('รหัสผ่านไม่ถูกต้อง');
-      localStorage.removeItem(SESSION_KEY_PASSWORD);
-      setShowPasswordModal(true);
-    }
-  };
+  }, [isReady, currentUser, router]);
 
   // ดึงเดือนทั้งหมดจาก expense, income, salary แล้วรวม key
   const fetchMonths = async () => {
@@ -115,9 +83,9 @@ export default function EditPage() {
         savingsAPI.getAll(),
         salaryAPI.getAll()
       ]);
-      const expenseMonths = expenseRes ? Object.keys(expenseRes) : [];
-      const savingsMonths = savingsRes ? Object.keys(savingsRes) : [];
-      const salaryMonths = salaryRes ? Object.keys(salaryRes) : [];
+      const expenseMonths = expenseRes?.months ? Object.keys(expenseRes.months) : [];
+      const savingsMonths = savingsRes?.months ? Object.keys(savingsRes.months) : [];
+      const salaryMonths = salaryRes?.months ? Object.keys(salaryRes.months) : [];
       const allMonths = Array.from(new Set([...expenseMonths, ...savingsMonths, ...salaryMonths])).sort().reverse();
       setMonths(allMonths);
       const currentMonth = getCurrentMonth();
@@ -133,8 +101,10 @@ export default function EditPage() {
 
 
   React.useEffect(() => {
-    fetchMonths();
-  }, [refreshTrigger]);
+    if (currentUser) {
+      fetchMonths();
+    }
+  }, [refreshTrigger, currentUser]);
 
   // เซต selectedMonth เป็นเดือนปัจจุบันทันทีเมื่อ mount ถ้ายังไม่ได้เซต
   React.useEffect(() => {
@@ -162,14 +132,46 @@ export default function EditPage() {
     setSelectedMonth(month);
   };
 
-  if (showPasswordModal) {
+  const handleSwitchProfile = () => {
+    setUserMenuOpen(false);
+    logout();
+    router.replace('/profiles');
+  };
+
+  const handleLogoutClick = () => {
+    setUserMenuOpen(false);
+    logout();
+    router.replace('/profiles');
+  };
+
+  const userMenuRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!userMenuOpen) return undefined;
+    const handleClickOutside = (event) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setUserMenuOpen(false);
+      }
+    };
+    const handleEsc = (event) => {
+      if (event.key === 'Escape') {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [userMenuOpen]);
+
+  if (isLocked) {
     return (
-      <ModePasswordModal
-        open={true}
-        onClose={() => {}}
-        onSubmit={handlePasswordSubmit}
-        forceOpen
-      />
+      <div className={styles.guardContainer}>
+        <Icons.Lock size={48} color="var(--color-primary)" />
+        <p>กำลังตรวจสอบสิทธิ์ผู้ใช้...</p>
+      </div>
     );
   }
 
@@ -177,19 +179,57 @@ export default function EditPage() {
   <div className={styles.homeContainer} onClick={updateActivity} onKeyDown={updateActivity} onMouseMove={updateActivity}>
       <div className={styles.mainContent}>
         <header className={styles.pageHeader}>
-          <div className={styles.headerAction}>
-            <button
-              className={styles.normalModeButton}
-              onClick={() => router.push('/')}
-              type="button"
-            >
-              กลับโหมดปกติ
-            </button>
+          <div className={styles.headerTopRow}>
+            <div className={styles.headerIntro}>
+              <div className={styles.headerIcon}>
+                <Icons.Wallet size={36} color="#0b2155" />
+              </div>
+              <div className={styles.headerCopy}>
+                <p className={styles.headerEyebrow}>Finance Workspace</p>
+                <h1 className={styles.pageTitle}>โหมดแก้ไขข้อมูล</h1>
+                <p className={styles.pageLead}>
+                  บริหารข้อมูลรายรับรายจ่ายและเงินออมแบบเรียลไทม์ในที่เดียว
+                </p>
+              </div>
+            </div>
+            <div className={styles.headerUserControls}>
+              <div className={styles.userMenuWrapper} ref={userMenuRef}>
+                <button
+                  type="button"
+                  className={styles.userMenuButton}
+                  onClick={() => setUserMenuOpen(prev => !prev)}
+                  aria-haspopup="true"
+                  aria-expanded={userMenuOpen}
+                  data-open={userMenuOpen}
+                >
+                  จัดการผู้ใช้
+                  <Icons.ChevronDown size={16} />
+                </button>
+                {userMenuOpen && (
+                  <div className={styles.userDropdown} role="menu">
+                    <button type="button" className={styles.userMenuItem} onClick={handleSwitchProfile}>
+                      <Icons.Settings size={16} />
+                      <div>
+                        <p>สลับผู้ใช้</p>
+                        <span>กลับไปหน้าเลือกโปรไฟล์</span>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.userMenuItem} ${styles.userMenuDanger}`}
+                      onClick={handleLogoutClick}
+                    >
+                      <Icons.Lock size={16} />
+                      <div>
+                        <p>ออกจากระบบ</p>
+                        <span>ปิดเซสชันและล็อกระบบ</span>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-          <h1 className={styles.pageTitle}>
-            <Icons.Wallet size={40} color="white" />
-            โหมดแก้ไขข้อมูล
-          </h1>
         </header>
 
       <MonthManager 
@@ -197,7 +237,6 @@ export default function EditPage() {
         onMonthSelected={handleMonthSelected}
         onDataRefresh={handleDataRefresh}
         months={months}
-        mode={mode}
       />
 
 
@@ -206,7 +245,6 @@ export default function EditPage() {
           selectedMonth={selectedMonth}
           onSalaryUpdate={handleSalaryUpdate}
           key={refreshTrigger}
-          mode={mode}
         />
       </div>
 
@@ -214,7 +252,6 @@ export default function EditPage() {
         <SummaryReport 
           selectedMonth={selectedMonth}
           key={`summary-${refreshTrigger}`}
-          mode={mode}
         />
       </div>
 
@@ -222,8 +259,7 @@ export default function EditPage() {
         {[{ id: 'income', label: 'รายรับ', icon: <Icons.TrendingUp size={20} /> },
           { id: 'expense', label: 'รายจ่าย', icon: <Icons.CreditCard size={20} /> },
           { id: 'savings', label: 'เงินออม', icon: <Icons.PiggyBank size={20} /> },
-          { id: 'tax', label: 'ภาษี', icon: <Icons.BarChart size={20} /> },
-          { id: 'line', label: 'LINE แจ้งเตือน', icon: <Icons.Message size={20} /> }
+          { id: 'tax', label: 'ภาษี', icon: <Icons.BarChart size={20} /> }
         ].map(tab => (
           <button 
             key={tab.id}
@@ -249,7 +285,6 @@ export default function EditPage() {
               selectedMonth={selectedMonth}
               salaryUpdateTrigger={salaryUpdateTrigger}
               key={`income-${refreshTrigger}`}
-              mode={mode}
             />
           </div>
         )}
@@ -264,7 +299,6 @@ export default function EditPage() {
             <ExpenseTable 
               selectedMonth={selectedMonth}
               key={`expense-${refreshTrigger}`}
-              mode={mode}
             />
           </div>
         )}
@@ -279,7 +313,6 @@ export default function EditPage() {
             <SavingsTable 
               selectedMonth={selectedMonth}
               key={`savings-${refreshTrigger}`}
-              mode={mode}
             />
           </div>
         )}
@@ -294,43 +327,7 @@ export default function EditPage() {
             <TaxTable 
               selectedMonth={selectedMonth}
               key={`tax-${refreshTrigger}`}
-              mode={mode}
             />
-          </div>
-        )}
-        {activeTab === 'line' && (
-          <div style={{ maxWidth: 500, margin: '40px auto', background: '#fff', borderRadius: 12, boxShadow: '0 2px 12px #eee', padding: 32 }}>
-            <h3 style={{ marginBottom: 16 }}>ส่งข้อความไป LINE</h3>
-            <input
-              type="text"
-              value={lineMessage}
-              onChange={e => setLineMessage(e.target.value)}
-              placeholder="ข้อความที่ต้องการส่ง"
-              style={{ width: '100%', padding: 12, fontSize: 16, borderRadius: 8, border: '1px solid #ccc', marginBottom: 16 }}
-            />
-            <button
-              style={{ padding: '10px 24px', borderRadius: 8, background: '#218bff', color: '#fff', fontWeight: 600, border: 'none', fontSize: 16 }}
-              onClick={async () => {
-                setLineStatus('');
-                try {
-                  const res = await fetch('/api/line_notify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: lineMessage })
-                  });
-                  const data = await res.json();
-                  if (data.success) {
-                    setLineStatus('ส่งข้อความสำเร็จ');
-                  } else {
-                    setLineStatus('ส่งข้อความไม่สำเร็จ: ' + (data.error || ''));
-                  }
-                } catch (err) {
-                  setLineStatus('เกิดข้อผิดพลาดในการส่งข้อความ');
-                }
-              }}
-              disabled={!lineMessage}
-            >ส่งข้อความ</button>
-            {lineStatus && <div style={{ marginTop: 16, color: lineStatus.includes('สำเร็จ') ? '#1a7f37' : '#cf222e' }}>{lineStatus}</div>}
           </div>
         )}
       </div>

@@ -1,14 +1,48 @@
 import { sumValues, removeSummaryFields, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils';
+import { assertUserId } from '../../src/shared/utils/backend/userRequest';
 import {
   isJsonMode,
-  readJsonCollection,
-  writeJsonCollection,
   withGeneratedId,
-  enforceJsonLimit,
   getMongoCollection
 } from '../../lib/dataSource';
 
-const MONTH_KEY_REGEX = /^\d{4}-\d{2}$/;
+const {
+  getUserData,
+  updateUserData,
+  limitUserEntries,
+} = require('../../src/backend/data/userUtils');
+
+const MONTH_LIMIT = 15;
+const JSON_FILENAME = 'monthly_income.json';
+
+function extractRemovalKeys(payload = {}) {
+  const raw = payload?.__removeKeys;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(key => typeof key === 'string' && key.length > 0);
+}
+
+function extractLabelUpdates(payload = {}) {
+  const raw = payload?.__labels;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return Object.entries(raw).reduce((acc, [key, value]) => {
+    if (typeof key !== 'string') return acc;
+    const cleanValue = typeof value === 'string' ? value.trim() : value;
+    if (typeof cleanValue === 'string' && cleanValue.length > 0) {
+      acc[key] = cleanValue;
+    }
+    return acc;
+  }, {});
+}
+
+function sanitizeIncomePayload(values = {}) {
+  const cleaned = removeSummaryFields(values, ['รวม']);
+  delete cleaned.__removeKeys;
+  delete cleaned.__labels;
+  delete cleaned.month;
+  delete cleaned._id;
+  delete cleaned.userId;
+  return cleaned;
+}
 
 function getTotalIncome(data) {
   let sum = 0;
@@ -18,34 +52,30 @@ function getTotalIncome(data) {
   return Math.round(sum * 100) / 100;
 }
 
-function buildJsonAllMonthsResponse(docs) {
+function buildJsonAllMonthsResponse(bucket = {}) {
   const data = {};
-  docs.forEach(doc => {
+  Object.entries(bucket).forEach(([monthKey, doc]) => {
     if (!doc || !doc.month) return;
     const monthData = { ...doc };
     delete monthData._id;
     const รวม = getTotalIncome(monthData);
-    data[doc.month] = {
-      ...monthData,
-      รวม
-    };
+    data[monthKey] = { ...monthData, รวม };
   });
   return data;
 }
 
-function enforceJsonMonthLimit(docs) {
-  return enforceJsonLimit({
-    docs,
-    limit: 15,
-    selector: (doc) => (doc && MONTH_KEY_REGEX.test(doc.month) ? doc.month : undefined)
+function enforceUserMonthLimit(bucket = {}) {
+  return limitUserEntries(bucket, {
+    limit: MONTH_LIMIT,
+    keySelector: (_, value) => value?.month || ''
   });
 }
 
-async function handleJsonGet(req, res) {
-  const docs = await readJsonCollection('monthly_income');
+function handleJsonGet(req, res, userId) {
+  const bucket = getUserData(JSON_FILENAME, userId);
   const { month } = req.query;
   if (month) {
-    const doc = docs.find(item => item.month === month);
+    const doc = bucket[month];
     if (!doc) {
       return res.status(200).json({});
     }
@@ -54,52 +84,77 @@ async function handleJsonGet(req, res) {
     const รวม = getTotalIncome(monthData);
     return res.status(200).json({ month, ...monthData, รวม });
   }
-  return res.status(200).json(buildJsonAllMonthsResponse(docs));
+  return res.status(200).json(buildJsonAllMonthsResponse(bucket));
 }
 
-async function handleJsonPost(req, res) {
+function handleJsonPost(req, res, userId) {
   const { month, values } = req.body;
   if (!month || !values) {
     return res.status(400).json({ error: 'month and values required' });
   }
-  const cleanValues = removeSummaryFields(values, ['รวม']);
-  const docs = await readJsonCollection('monthly_income');
-  const idx = docs.findIndex(doc => doc.month === month);
-  if (idx >= 0) {
-    docs[idx] = { ...docs[idx], ...cleanValues, month };
-  } else {
-    docs.push(withGeneratedId({ ...cleanValues, month }));
-  }
-  const limitedDocs = enforceJsonMonthLimit(docs);
-  await writeJsonCollection('monthly_income', limitedDocs);
+  const removalList = extractRemovalKeys(values);
+  const labelUpdates = extractLabelUpdates(values);
+  const cleanValues = sanitizeIncomePayload(values);
+  updateUserData(JSON_FILENAME, userId, (bucket) => {
+    const nextBucket = { ...bucket };
+    const existing = nextBucket[month] || {};
+    const existingLabels = (existing.__labels && typeof existing.__labels === 'object' && !Array.isArray(existing.__labels))
+      ? { ...existing.__labels }
+      : {};
+    let mergedLabels = { ...existingLabels };
+    const merged = { ...existing, ...cleanValues, month };
+    removalList.forEach(key => {
+      if (key in merged) delete merged[key];
+      if (key in mergedLabels) delete mergedLabels[key];
+    });
+    if (Object.keys(labelUpdates).length) {
+      mergedLabels = { ...mergedLabels, ...labelUpdates };
+    }
+    if (Object.keys(mergedLabels).length) {
+      merged.__labels = mergedLabels;
+    } else {
+      delete merged.__labels;
+    }
+    nextBucket[month] = withGeneratedId(merged);
+    return enforceUserMonthLimit(nextBucket);
+  });
   return res.status(201).json({ success: true });
 }
 
 export default async function handler(req, res) {
+  const userId = assertUserId(req, res);
+  if (!userId) return;
+
   if (isJsonMode()) {
     if (req.method === 'GET') {
-      return handleJsonGet(req, res);
+      return handleJsonGet(req, res, userId);
     }
     if (req.method === 'POST') {
-      return handleJsonPost(req, res);
+      return handleJsonPost(req, res, userId);
     }
     return res.status(405).end();
   }
 
   const collection = await getMongoCollection('monthly_income');
+  const userFilter = { userId };
 
   if (req.method === 'GET') {
     const { month } = req.query;
     if (month) {
-      let doc = await collection.findOne({ month });
+      let doc = await collection.findOne({ month, ...userFilter });
       if (!doc) {
-        const monthsDoc = await collection.findOne({ obj: 'months' });
+        const monthsDoc = await collection.findOne({ obj: 'months', ...userFilter })
+          || await collection.findOne({ obj: 'months', userId: { $exists: false } });
         if (monthsDoc && monthsDoc.months && monthsDoc.months[month]) {
           doc = { month, ...monthsDoc.months[month] };
+        }
+        if (!doc) {
+          doc = await collection.findOne({ month, userId: { $exists: false } });
         }
       }
       const monthData = doc ? { ...doc } : {};
       delete monthData._id;
+      delete monthData.userId;
         // คำนวณยอดรวมรายรับ
         function getTotalIncome(data) {
           let sum = 0;
@@ -116,11 +171,15 @@ export default async function handler(req, res) {
       };
       return res.status(200).json(response);
     } else {
-      const allDocs = await collection.find({ month: { $exists: true } }).toArray();
+      let allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
+      if (!allDocs.length) {
+        allDocs = await collection.find({ userId: { $exists: false }, month: { $exists: true } }).toArray();
+      }
       const data = {};
       allDocs.forEach(doc => {
         const monthData = { ...doc };
         delete monthData._id;
+        delete monthData.userId;
           function getTotalIncome(data) {
             let sum = 0;
             Object.values(data).forEach(v => {
@@ -134,7 +193,8 @@ export default async function handler(req, res) {
           รวม
         };
       });
-      const monthsDoc = await collection.findOne({ obj: 'months' });
+      const monthsDoc = await collection.findOne({ obj: 'months', ...userFilter })
+        || await collection.findOne({ obj: 'months', userId: { $exists: false } });
       if (monthsDoc && monthsDoc.months) {
         for (const [m, values] of Object.entries(monthsDoc.months)) {
           if (!data[m]) {
@@ -150,15 +210,37 @@ export default async function handler(req, res) {
     if (!month || !values) {
       return res.status(400).json({ error: 'month and values required' });
     }
-    const cleanValues = removeSummaryFields(values, ['รวม']);
+    const removalList = extractRemovalKeys(values);
+    const labelUpdates = extractLabelUpdates(values);
+    const cleanValues = sanitizeIncomePayload(values);
     await collection.updateOne(
-      { month },
-      { $set: { ...cleanValues, month } },
+      { month, ...userFilter },
+      (() => {
+        const updateOps = {
+          $set: { ...cleanValues, month, ...userFilter }
+        };
+        if (Object.keys(labelUpdates).length) {
+          Object.entries(labelUpdates).forEach(([key, value]) => {
+            updateOps.$set[`__labels.${key}`] = value;
+          });
+        }
+        if (removalList.length) {
+          updateOps.$unset = removalList.reduce((acc, key) => {
+            acc[key] = '';
+            acc[`__labels.${key}`] = '';
+            return acc;
+          }, {});
+        }
+        return updateOps;
+      })(),
       { upsert: true }
     );
-    const monthsDoc = await collection.findOne({ obj: 'months' });
+    const monthsDoc = await collection.findOne({ obj: 'months', ...userFilter });
     const additionalMonths = monthsDoc && monthsDoc.months ? Object.keys(monthsDoc.months) : [];
-    const { retainedMonths } = await enforceMonthLimit(collection, 15, { additionalMonths });
+    const { retainedMonths } = await enforceMonthLimit(collection, 15, {
+      filter: userFilter,
+      additionalMonths,
+    });
     if (monthsDoc && monthsDoc.months) {
       const prunedMonths = {};
       retainedMonths.forEach(m => {
@@ -167,8 +249,8 @@ export default async function handler(req, res) {
         }
       });
       await collection.updateOne(
-        { obj: 'months' },
-        { $set: { months: prunedMonths } },
+        { obj: 'months', ...userFilter },
+        { $set: { months: prunedMonths, obj: 'months', ...userFilter } },
         { upsert: true }
       );
     }

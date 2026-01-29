@@ -1,151 +1,222 @@
-[
-  {
-    "_id": "a66bf3e6afe9c3b329835c0d",
-    "month": "2026-02",
-    "investments": []
-  },
-  {
-    "_id": "695cb6367fe94f535c10bd6e",
-    "month": "2026-01",
-    "investments": [
-      {
-        "name": "S&P 500",
-        "percent": "25",
-        "amount": "1750.00"
-      },
-      {
-        "name": "GOOG",
-        "percent": "18",
-        "amount": "1260.00"
-      },
-      {
-        "name": "NVDA",
-        "percent": "16",
-        "amount": "1120.00"
-      },
-      {
-        "name": "TSM",
-        "percent": "12",
-        "amount": "840.00"
-      },
-      {
-        "name": "CEG",
-        "percent": "12",
-        "amount": "840.00"
-      },
-      {
-        "name": "LEU",
-        "percent": "10",
-        "amount": "700.00"
-      },
-      {
-        "name": "NXE",
-        "percent": "7",
-        "amount": "490.00"
-      }
-    ]
-  },
-  {
-    "_id": "692af54b9ba6da2362d99d24",
-    "month": "2025-12",
-    "investments": [
-      {
-        "name": "S&P 500",
-        "percent": "25",
-        "amount": "1750.00"
-      },
-      {
-        "name": "GOOG",
-        "percent": "18",
-        "amount": "1260.00"
-      },
-      {
-        "name": "NVDA",
-        "percent": "16",
-        "amount": "1120.00"
-      },
-      {
-        "name": "TSM",
-        "percent": "12",
-        "amount": "840.00"
-      },
-      {
-        "name": "CEG",
-        "percent": "12",
-        "amount": "840.00"
-      },
-      {
-        "name": "LEU",
-        "percent": "10",
-        "amount": "700.00"
-      },
-      {
-        "name": "NXE",
-        "percent": "7",
-        "amount": "490.00"
-      }
-    ]
-  },
-  {
-    "_id": "690b0f78ddcf877a116097d1",
-    "month": "2025-11",
-    "investments": [
-      {
-        "name": "S&P 500",
-        "percent": "25",
-        "amount": "1750.00"
-      },
-      {
-        "name": "GOOG",
-        "percent": "18",
-        "amount": "1260.00"
-      },
-      {
-        "name": "NVDA",
-        "percent": "16",
-        "amount": "1120.00"
-      },
-      {
-        "name": "TSM",
-        "percent": "12",
-        "amount": "840.00"
-      },
-      {
-        "name": "CEG",
-        "percent": "12",
-        "amount": "840.00"
-      },
-      {
-        "name": "LEU",
-        "percent": "10",
-        "amount": "700.00"
-      },
-      {
-        "name": "NXE",
-        "percent": "7",
-        "amount": "490.00"
-      }
-    ]
-  },
-  {
-    "0": {
-      "name": "S&P500",
-      "percent": 50,
-      "amount": 1000
+{
+  "u001": {
+    "2026-02": {
+      "_id": "a66bf3e6afe9c3b329835c0d",
+      "month": "2026-02",
+      "investments": [
+        {
+          "name": "S&P 500",
+          "percent": "25",
+          "amount": ""
+        },
+        {
+          "name": "GOOG",
+          "percent": "18",
+          "amount": ""
+        },
+        {
+          "name": "NVDA",
+          "percent": "16",
+          "amount": ""
+        },
+        {
+          "name": "TSM",
+          "percent": "12",
+          "amount": ""
+        },
+        {
+          "name": "CEG",
+          "percent": "12",
+          "amount": ""
+        },
+        {
+          "name": "LEU",
+          "percent": "10",
+          "amount": ""
+        },
+        {
+          "name": "NXE",
+          "percent": "7",
+          "amount": ""
+        }
+      ]
     },
-    "1": {
-      "name": "Bualuang RMF",
-      "percent": 50,
-      "amount": 1000
+    "2026-01": {
+      "_id": "695cb6367fe94f535c10bd6e",
+      "month": "2026-01",
+      "investments": [
+        {
+          "name": "S&P 500",
+          "percent": "25",
+          "amount": ""
+        },
+        {
+          "name": "GOOG",
+          "percent": "18",
+          "amount": ""
+        },
+        {
+          "name": "NVDA",
+          "percent": "16",
+          "amount": ""
+        },
+        {
+          "name": "TSM",
+          "percent": "12",
+          "amount": ""
+        },
+        {
+          "name": "CEG",
+          "percent": "12",
+          "amount": ""
+        },
+        {
+          "name": "LEU",
+          "percent": "10",
+          "amount": ""
+        },
+        {
+          "name": "NXE",
+          "percent": "7",
+          "amount": ""
+        }
+      ]
     },
-    "_id": "690780117c0b4ba9b3c2d927",
-    "month": "2025-10",
-    "investments": [
-      {
-        "name": "test",
-        "percent": 100,
-        "amount": 0
-      }
-    ]
+    "2025-12": {
+      "_id": "692af54b9ba6da2362d99d24",
+      "month": "2025-12",
+      "investments": [
+        {
+          "name": "S&P 500",
+          "percent": "25",
+          "amount": "1750.00"
+        },
+        {
+          "name": "GOOG",
+          "percent": "18",
+          "amount": "1260.00"
+        },
+        {
+          "name": "NVDA",
+          "percent": "16",
+          "amount": "1120.00"
+        },
+        {
+          "name": "TSM",
+          "percent": "12",
+          "amount": "840.00"
+        },
+        {
+          "name": "CEG",
+          "percent": "12",
+          "amount": "840.00"
+        },
+        {
+          "name": "LEU",
+          "percent": "10",
+          "amount": "700.00"
+        },
+        {
+          "name": "NXE",
+          "percent": "7",
+          "amount": "490.00"
+        }
+      ]
+    },
+    "2025-11": {
+      "_id": "690b0f78ddcf877a116097d1",
+      "month": "2025-11",
+      "investments": [
+        {
+          "name": "S&P 500",
+          "percent": "25",
+          "amount": "1750.00"
+        },
+        {
+          "name": "GOOG",
+          "percent": "18",
+          "amount": "1260.00"
+        },
+        {
+          "name": "NVDA",
+          "percent": "16",
+          "amount": "1120.00"
+        },
+        {
+          "name": "TSM",
+          "percent": "12",
+          "amount": "840.00"
+        },
+        {
+          "name": "CEG",
+          "percent": "12",
+          "amount": "840.00"
+        },
+        {
+          "name": "LEU",
+          "percent": "10",
+          "amount": "700.00"
+        },
+        {
+          "name": "NXE",
+          "percent": "7",
+          "amount": "490.00"
+        }
+      ]
+    },
+    "2025-10": {
+      "0": {
+        "name": "S&P500",
+        "percent": 50,
+        "amount": 1000
+      },
+      "1": {
+        "name": "Bualuang RMF",
+        "percent": 50,
+        "amount": 1000
+      },
+      "_id": "690780117c0b4ba9b3c2d927",
+      "month": "2025-10",
+      "investments": [
+        {
+          "name": "test",
+          "percent": 100,
+          "amount": 0
+        }
+      ]
+    }
+  },
+  "demo": {
+    "2026-01": {
+      "_id": "demo-invest-2026-01",
+      "month": "2026-01",
+      "investments": [
+        {
+          "name": "SET50",
+          "percent": "30",
+          "amount": "1500.00"
+        },
+        {
+          "name": "US Tech ETF",
+          "percent": "25",
+          "amount": "1250.00"
+        },
+        {
+          "name": "Healthcare",
+          "percent": "15",
+          "amount": "750.00"
+        },
+        {
+          "name": "ทองคำ",
+          "percent": "10",
+          "amount": "500.00"
+        },
+        {
+          "name": "ตราสารหนี้",
+          "percent": "20",
+          "amount": "1000.00"
+        }
+      ]
+    }
   }
-]
+}

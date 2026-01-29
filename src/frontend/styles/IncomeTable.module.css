@@ -3,63 +3,81 @@
   display: none;
 }
 .incomeCard {
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-  margin-bottom: 14px;
-  padding: 14px 12px 10px 12px;
+  background: rgba(9, 12, 32, 0.9);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 18px 55px rgba(2, 6, 23, 0.55);
+  margin-bottom: 16px;
+  padding: 16px 14px 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  backdrop-filter: blur(18px);
 }
 .totalCard {
-  background: #f3f4f6;
+  background: linear-gradient(135deg, rgba(93, 91, 255, 0.18) 0%, rgba(0, 212, 255, 0.12) 100%);
   font-weight: 700;
+  border: 1px solid rgba(93,91,255,0.35);
 }
-.cardRow {
-  display: flex;
+.saveButton {
+  padding: 16px 32px;
+  background: var(--gradient-secondary);
+  color: #021210;
+  border: none;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 16px;
+  font-weight: 700;
+  box-shadow: 0 25px 60px rgba(77, 240, 195, 0.35);
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
+  letter-spacing: 0.5px;
+  min-height: 56px;
+  min-width: 200px;
+  justify-content: center;
 }
-.cardLabel {
-  font-size: 1em;
-  min-width: 90px;
-  color: #444;
+
+.saveButton:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 35px 90px rgba(77, 240, 195, 0.45);
 }
-.hideOnMobile {
-  display: block;
+
+.saveButton:active {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 40px rgba(77, 240, 195, 0.35);
 }
-.hideOnDesktop {
-  display: none;
-}
+
 @media (max-width: 700px) {
-  .incomeTable {
-    display: none !important;
-  }
   .mobileCardList {
     display: block;
     margin-top: 8px;
   }
+
   .hideOnMobile {
     display: none !important;
   }
+
   .hideOnDesktop {
     display: block !important;
   }
+
   .incomeCard {
-    padding: 12px 8px 8px 8px;
-    margin-bottom: 10px;
+    padding: 14px 12px 10px 12px;
+    margin-bottom: 12px;
     font-size: 15px;
   }
+
   .cardLabel {
     font-size: 0.98em;
     min-width: 80px;
   }
+
   .incomeInput {
     font-size: 15px;
-    padding: 7px 8px;
-    border-radius: 7px;
+    padding: 8px 10px;
+    border-radius: 10px;
     min-width: 100px;
   }
 }
@@ -70,25 +88,91 @@
   position: relative;
   width: 100%;
   max-width: none;
-  padding: 0;
-  overflow-x: auto;
+  padding: 32px;
+  overflow-x: visible;
+  border-radius: 28px;
+  background: linear-gradient(135deg, rgba(11, 15, 41, 0.92) 0%, rgba(4, 7, 22, 0.92) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 45px 120px rgba(2, 6, 23, 0.75);
+  backdrop-filter: blur(28px);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.incomeContainer:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 55px 140px rgba(2, 6, 23, 0.85);
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.sectionTitle {
+  font-size: 1.25rem;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.sectionSubtitle {
+  color: var(--text-light);
+  font-size: 0.95rem;
+}
+
+.addItemButton {
+  background: var(--gradient-primary);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 22px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  box-shadow: 0 18px 40px rgba(93, 91, 255, 0.45);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.addItemButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 25px 60px rgba(93, 91, 255, 0.55);
+}
+
+.addItemButton:active {
+  transform: translateY(0);
 }
 
 
 /* Always visually full, even with 2 columns */
 .incomeTable {
   width: 100%;
-  min-width: 700px;
+  min-width: 640px;
   max-width: 100%;
   margin-bottom: 24px;
   border-collapse: collapse;
-  background: var(--bg-surface);
-  border-radius: 16px;
+  background: rgba(6, 9, 27, 0.9);
+  border-radius: 24px;
   overflow: hidden;
-  box-shadow: 0 6px 24px var(--shadow-sm);
-  border: 2px solid var(--border-light);
+  box-shadow: 0 35px 110px rgba(2, 6, 23, 0.65);
+  border: 1px solid rgba(255,255,255,0.08);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   table-layout: fixed;
+  backdrop-filter: blur(18px);
+  position: relative;
+}
+
+.incomeTable::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  pointer-events: none;
 }
 
 
@@ -100,8 +184,8 @@
 /* Right-align value column */
 .inputCell,
 .IncomeTable_inputCell__dkzN_ {
-  width: 50vw;
-  min-width: 350px;
+  width: 50%;
+  min-width: 240px;
   text-align: right;
 }
 
@@ -132,16 +216,27 @@
 }
 
 .tableRow {
-  border-bottom: 1px solid var(--border-light);
-  transition: background-color 0.2s ease;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tableRow:nth-child(even) {
+  background: rgba(12, 16, 44, 0.45);
 }
 
 .tableRow:hover {
-  background-color: var(--bg-surface-alt);
+  background-color: rgba(21, 26, 56, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(93, 91, 255, 0.15);
 }
 
 .tableRow:last-child {
   border-bottom: none;
+}
+
+.tableRow:focus-within {
+  outline: none;
+  background: rgba(93, 91, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(93, 91, 255, 0.25);
 }
 
 /* Left-align label column, right-align value column */
@@ -155,15 +250,16 @@
 }
 
 .salaryCell {
-  background: linear-gradient(135deg, rgba(26, 127, 55, 0.05) 0%, rgba(26, 127, 55, 0.02) 100%);
-  border: 1px solid rgba(26, 127, 55, 0.1);
-  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(77, 240, 195, 0.15) 0%, rgba(0, 212, 255, 0.12) 100%);
+  border: 1px solid rgba(77, 240, 195, 0.35);
+  border-radius: 16px;
   text-align: right;
   font-weight: 700;
   color: var(--secondary-color);
   position: relative;
-  padding: 16px;
-  margin: 4px 0;
+  padding: 18px;
+  margin: 6px 0;
+  box-shadow: 0 20px 60px rgba(77, 240, 195, 0.25);
 }
 
 .salarySource {
@@ -188,6 +284,7 @@
   background: var(--bg-surface);
   color: var(--text-primary);
   font-weight: 500;
+  font-feature-settings: 'tnum' 1;
 }
 
 .incomeInput:focus {
@@ -204,6 +301,7 @@
   background: var(--bg-surface-alt);
   border-top: 3px solid var(--primary-color);
   font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .totalCell {
@@ -227,10 +325,65 @@
 
 .tableCell,
 .IncomeTable_tableCell__zCkPB {
-  width: 50vw;
-  min-width: 350px;
+  width: 50%;
+  min-width: 240px;
   text-align: left;
-  padding-left: 16px;
+  padding: 14px 20px;
+}
+
+.nameCell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.nameInput {
+  flex: 1;
+  padding: 10px 14px;
+  background: rgba(9, 12, 32, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.nameInput:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(93, 91, 255, 0.22);
+}
+
+.rowDeleteButton {
+  border: none;
+  background: rgba(255, 122, 162, 0.18);
+  color: #ff7aa2;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rowDeleteButton:hover {
+  background: rgba(255, 122, 162, 0.32);
+}
+
+.salaryLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.salaryBadge {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(77, 240, 195, 0.16);
+  color: var(--secondary-color);
+  width: fit-content;
 }
 
 .saveButtonContainer {
@@ -297,9 +450,8 @@
     white-space: nowrap;
   }
   
-  .incomeTable table {
-    width: 100%;
-    min-width: 600px;
+  .incomeTable {
+    min-width: 520px;
   }
 
   .headerCell {
@@ -342,10 +494,7 @@
 @media (max-width: 640px) {
   .incomeTable {
     border-radius: 10px;
-  }
-  
-  .incomeTable table {
-    min-width: 550px;
+    min-width: 480px;
   }
   
   .headerCell {
@@ -370,10 +519,7 @@
   .incomeTable {
     border-radius: 8px;
     margin-bottom: 16px;
-  }
-  
-  .incomeTable table {
-    min-width: 500px;
+    min-width: 420px;
   }
 
   .headerCell {
@@ -415,10 +561,36 @@
   }
 }
 
+.cardRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.cardLabel {
+  font-size: 0.9rem;
+  color: var(--text-light);
+}
+
+.cardActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--text-light);
+  background: rgba(9, 12, 32, 0.6);
+  border-radius: 20px;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+}
+
 /* Mobile Small */
 @media (max-width: 375px) {
-  .incomeTable table {
-    min-width: 450px;
+  .incomeTable {
+    min-width: 360px;
   }
   
   .headerCell,
@@ -427,12 +599,28 @@
   }
   
   .incomeInput {
-    min-width: 80px;
-    font-size: 11px;
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 14px;
+    font-size: 15px;
+    text-align: right;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    outline: none;
+    background: rgba(9, 12, 32, 0.85);
+    color: var(--text-primary);
+    font-weight: 500;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    min-height: 48px;
   }
-  
-  .saveButton {
-    padding: 10px 14px;
-    font-size: 13px;
+
+  .incomeInput:focus {
+    border-color: rgba(93, 91, 255, 0.8);
+    box-shadow: 0 0 0 4px rgba(93, 91, 255, 0.2);
+    transform: translateY(-1px);
+  }
+
+  .incomeInput:hover {
+    border-color: rgba(93, 91, 255, 0.6);
   }
 }
