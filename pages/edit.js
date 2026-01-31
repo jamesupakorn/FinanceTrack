@@ -20,6 +20,7 @@ function getCurrentMonth() {
 
 
 const SESSION_KEY = 'edit_last_activity';
+const SELECTED_MONTH_KEY = 'edit_selected_month';
 
 export default function EditPage() {
   const router = useRouter();
@@ -27,6 +28,11 @@ export default function EditPage() {
   const SESSION_TIMEOUT = 60 * 60 * 1000;
   const { currentUser, isReady, logout } = useSession();
   const sessionKey = useMemo(() => currentUser ? `${SESSION_KEY}_${currentUser.id}` : SESSION_KEY, [currentUser?.id]);
+  const selectedMonthKey = useMemo(() => currentUser ? `${SELECTED_MONTH_KEY}_${currentUser.id}` : SELECTED_MONTH_KEY, [currentUser?.id]);
+  const clearStoredMonth = React.useCallback(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem(selectedMonthKey);
+  }, [selectedMonthKey]);
   const isLocked = !isReady || !currentUser;
 
   // Update last activity timestamp
@@ -53,6 +59,7 @@ export default function EditPage() {
       const last = parseInt(localStorage.getItem(sessionKey), 10);
       if (!last || Date.now() - last > SESSION_TIMEOUT) {
         localStorage.removeItem(sessionKey);
+        clearStoredMonth();
         logout();
         router.replace('/profiles');
       }
@@ -61,7 +68,7 @@ export default function EditPage() {
     // Also check immediately on mount
     checkTimeout();
     return () => clearInterval(interval);
-  }, [router, currentUser, sessionKey, logout]);
+  }, [router, currentUser, sessionKey, logout, clearStoredMonth]);
   const { theme } = useTheme();
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [activeTab, setActiveTab] = useState('income');
@@ -89,7 +96,10 @@ export default function EditPage() {
       const allMonths = Array.from(new Set([...expenseMonths, ...savingsMonths, ...salaryMonths])).sort().reverse();
       setMonths(allMonths);
       const currentMonth = getCurrentMonth();
-      if (allMonths.includes(currentMonth)) {
+      const storedMonth = typeof window !== 'undefined' ? localStorage.getItem(selectedMonthKey) : null;
+      if (storedMonth && allMonths.includes(storedMonth)) {
+        setSelectedMonth(storedMonth);
+      } else if (allMonths.includes(currentMonth)) {
         setSelectedMonth(currentMonth);
       } else if (allMonths.length && !allMonths.includes(selectedMonth)) {
         setSelectedMonth(allMonths[0]);
@@ -104,7 +114,7 @@ export default function EditPage() {
     if (currentUser) {
       fetchMonths();
     }
-  }, [refreshTrigger, currentUser]);
+  }, [refreshTrigger, currentUser, selectedMonthKey]);
 
   // เซต selectedMonth เป็นเดือนปัจจุบันทันทีเมื่อ mount ถ้ายังไม่ได้เซต
   React.useEffect(() => {
@@ -112,11 +122,17 @@ export default function EditPage() {
       const currentMonth = getCurrentMonth();
       if (months.includes(currentMonth)) {
         setSelectedMonth(currentMonth);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(selectedMonthKey, currentMonth);
+        }
       } else {
         setSelectedMonth(months[0]);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(selectedMonthKey, months[0]);
+        }
       }
     }
-  }, [months, selectedMonth]);
+  }, [months, selectedMonth, selectedMonthKey]);
 
 
   const handleDataRefresh = () => {
@@ -130,16 +146,23 @@ export default function EditPage() {
 
   const handleMonthSelected = (month) => {
     setSelectedMonth(month);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(selectedMonthKey, month);
+    }
   };
 
   const handleSwitchProfile = () => {
     setUserMenuOpen(false);
+    clearStoredMonth();
+    setSelectedMonth(null);
     logout();
     router.replace('/profiles');
   };
 
   const handleLogoutClick = () => {
     setUserMenuOpen(false);
+    clearStoredMonth();
+    setSelectedMonth(null);
     logout();
     router.replace('/profiles');
   };

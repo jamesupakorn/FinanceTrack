@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { formatCurrency, parseAndFormat, handleNumberInput, handleNumberBlur, parseToNumber, calculateSalaryTotals } from '../../shared/utils/frontend/numberUtils';
-import { formatSalaryData, splitSalaryData } from '../../shared/utils/salaryUtils';
+import { formatCurrency, parseAndFormat, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { salaryAPI, incomeAPI, taxAPI } from '../../shared/utils/frontend/apiUtils';
 import styles from '../styles/SalaryCalculator.module.css';
 
@@ -15,7 +14,6 @@ const getThaiMonthName = (monthStr) => {
   return `${monthNames[parseInt(month) - 1]} ${year}`;
 };
 
-// Mapping English salary keys to Thai labels
 const salaryKeyThaiMapping = {
   salary: 'เงินเดือน',
   overtime_1x: 'ค่าล่วงเวลา 1 เท่า',
@@ -30,102 +28,211 @@ const salaryKeyThaiMapping = {
   tax: 'หักภาษี'
 };
 
-const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
+const LABELS_META_KEY = '__labels';
+const incomePresetKeys = [
+  'salary',
+  'overtime_1x',
+  'overtime_1_5x',
+  'overtime_2x',
+  'overtime_3x',
+  'overtime_other',
+  'bonus',
+  'other_income'
+];
+const deductionPresetKeys = ['provident_fund', 'social_security', 'tax'];
 
-  const [salaryData, setSalaryData] = useState({
-    // รายได้
-    salary: '',
-    overtime_1x: '',
-    overtime_1_5x: '',
-    overtime_2x: '',
-    overtime_3x: '',
-    overtime_other: '',
-    bonus: '',
-    other_income: '',
+const buildPresetItems = (keys) =>
+  keys.map((key) => ({
+    id: key,
+    key,
+    label: salaryKeyThaiMapping[key] || 'รายการใหม่',
+    value: ''
+  }));
 
-    // หัก
-    provident_fund: '',
-    social_security: '750',
-    tax: ''
+const generateItemId = (prefix) => {
+  const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+  return `${prefix}_${stamp}`;
+};
+
+const createNewItem = (type) => {
+  const id = generateItemId(type);
+  return {
+    id,
+    key: id,
+    label: type === 'income' ? 'รายได้ใหม่' : 'รายการหักใหม่',
+    value: ''
+  };
+};
+
+const formatIncomingValue = (rawValue) => {
+  if (rawValue === undefined || rawValue === null || rawValue === '') {
+    return '';
+  }
+  return parseAndFormat(rawValue);
+};
+
+const isNumericValue = (value) => {
+  if (typeof value === 'number') return true;
+  if (typeof value === 'string') {
+    return value.trim().length > 0;
+  }
+  return false;
+};
+
+const buildItemsFromSource = (sectionData, presetKeys, type) => {
+  if (!sectionData || typeof sectionData !== 'object') {
+    return buildPresetItems(presetKeys);
+  }
+
+  const labelsMap =
+    sectionData[LABELS_META_KEY] && typeof sectionData[LABELS_META_KEY] === 'object'
+      ? sectionData[LABELS_META_KEY]
+      : {};
+
+  const items = [];
+  const seenKeys = new Set();
+
+  presetKeys.forEach((key) => {
+    seenKeys.add(key);
+    const hasValue = Object.prototype.hasOwnProperty.call(sectionData, key);
+    items.push({
+      id: key,
+      key,
+      label: labelsMap[key] || salaryKeyThaiMapping[key] || 'รายการใหม่',
+      value: hasValue ? formatIncomingValue(sectionData[key]) : ''
+    });
   });
 
+  Object.entries(sectionData)
+    .filter(([key, value]) => key !== LABELS_META_KEY && !seenKeys.has(key) && isNumericValue(value))
+    .forEach(([key, value]) => {
+      items.push({
+        id: key,
+        key,
+        label: labelsMap[key] || 'รายการใหม่',
+        value: formatIncomingValue(value)
+      });
+      seenKeys.add(key);
+    });
+
+  return items.length ? items : [createNewItem(type)];
+};
+
+const serializeItemsForSave = (items) => {
+  const values = {};
+  const labels = {};
+  items.forEach((item) => {
+    values[item.key] = parseToNumber(item.value);
+    labels[item.key] = item.label?.trim() || 'รายการใหม่';
+  });
+  values[LABELS_META_KEY] = labels;
+  return values;
+};
+
+const sumItems = (items) => items.reduce((sum, item) => sum + parseToNumber(item.value), 0);
+
+const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
+  const [incomeItems, setIncomeItems] = useState(() => buildPresetItems(incomePresetKeys));
+  const [deductionItems, setDeductionItems] = useState(() => buildPresetItems(deductionPresetKeys));
   const [calculatedResults, setCalculatedResults] = useState({
     รวมรายได้: 0,
     รวมหัก: 0,
     เงินได้สุทธิ: 0
   });
 
-  // คำนวณยอดรวมเมื่อข้อมูลเปลี่ยน
   useEffect(() => {
-    calculateTotals();
-  }, [salaryData]);
+    const totalIncome = sumItems(incomeItems);
+    const totalDeduction = sumItems(deductionItems);
+    setCalculatedResults({
+      รวมรายได้: totalIncome,
+      รวมหัก: totalDeduction,
+      เงินได้สุทธิ: totalIncome - totalDeduction
+    });
+  }, [incomeItems, deductionItems]);
 
-  // โหลดข้อมูลเมื่อเปลี่ยนเดือน
   useEffect(() => {
-    if (selectedMonth) {
-      loadSalaryData();
+    if (!selectedMonth) {
+      setIncomeItems(buildPresetItems(incomePresetKeys));
+      setDeductionItems(buildPresetItems(deductionPresetKeys));
+      return;
     }
+    loadSalaryData(selectedMonth);
   }, [selectedMonth]);
 
-  const loadSalaryData = async () => {
+  const loadSalaryData = async (month) => {
     try {
-      const data = await salaryAPI.getByMonth(selectedMonth);
-      if (data && data.income && data.deduct) {
-        // รวมข้อมูลและ format ด้วยฟังก์ชันกลาง
-        const rawData = { ...data.income, ...data.deduct };
-        setSalaryData(formatSalaryData(rawData, parseAndFormat));
-      }
+      const data = await salaryAPI.getByMonth(month);
+      setIncomeItems(buildItemsFromSource(data?.income, incomePresetKeys, 'income'));
+      setDeductionItems(buildItemsFromSource(data?.deduct, deductionPresetKeys, 'deduction'));
     } catch (error) {
       console.error('Error loading salary data:', error);
+      setIncomeItems(buildPresetItems(incomePresetKeys));
+      setDeductionItems(buildPresetItems(deductionPresetKeys));
     }
   };
 
-  const calculateTotals = () => {
-    // ใช้ summary จาก backend ถ้ามี
-    if (salaryData && salaryData.summary) {
-      setCalculatedResults({
-        รวมรายได้: salaryData.summary.total_income || 0,
-        รวมหัก: salaryData.summary.total_deduct || 0,
-        เงินได้สุทธิ: salaryData.summary.net_income || 0
-      });
-    } else {
-      setCalculatedResults(calculateSalaryTotals(salaryData));
+  const updateItems = (type, updater) => {
+    if (type === 'income') {
+      setIncomeItems((prev) => updater(prev));
+      return;
     }
+    setDeductionItems((prev) => updater(prev));
   };
 
-  const handleInputChange = (field, value) => {
-    // เก็บค่าแบบ raw ไว้ระหว่างการพิมพ์
-    handleNumberInput(value, setSalaryData, field);
+  const handleLabelChange = (type, id, nextLabel) => {
+    updateItems(type, (prev) => prev.map((item) => (item.id === id ? { ...item, label: nextLabel } : item)));
   };
 
-  const handleInputBlur = (field, value) => {
-    // Format เฉพาะเมื่อออกจาก input
-    handleNumberInput(value, setSalaryData, field);
+  const handleValueChange = (type, id, value) => {
+    updateItems(type, (prev) => prev.map((item) => (item.id === id ? { ...item, value } : item)));
+  };
+
+  const handleValueBlur = (type, id, value) => {
+    updateItems(type, (prev) =>
+      prev.map((item) => (item.id === id ? { ...item, value: formatIncomingValue(value) } : item))
+    );
+  };
+
+  const handleAddItem = (type) => {
+    updateItems(type, (prev) => [...prev, createNewItem(type)]);
+  };
+
+  const handleRemoveItem = (type, id) => {
+    updateItems(type, (prev) => {
+      const filtered = prev.filter((item) => item.id !== id);
+      if (filtered.length === 0) {
+        return [createNewItem(type)];
+      }
+      return filtered;
+    });
   };
 
   const saveSalaryData = async () => {
     try {
-      const totals = calculateSalaryTotals(salaryData);
-      const netIncomeValue = totals.เงินได้สุทธิ;
-      // แยกข้อมูลรายได้และหักด้วยฟังก์ชันกลาง
-      const { income, deduction } = splitSalaryData(salaryData, parseToNumber);
+      if (!selectedMonth) {
+        alert('กรุณาเลือกเดือนที่ต้องการก่อน');
+        return;
+      }
 
-      // บันทึกข้อมูลเงินเดือนเฉพาะ salary.json
-      const result = await salaryAPI.save(selectedMonth, income, deduction);
+      const incomePayload = serializeItemsForSave(incomeItems);
+      const deductionPayload = serializeItemsForSave(deductionItems);
+      const totalIncome = sumItems(incomeItems);
+      const totalDeduct = sumItems(deductionItems);
+      const netIncomeValue = totalIncome - totalDeduct;
+
+      const result = await salaryAPI.save(selectedMonth, incomePayload, deductionPayload);
 
       if (result.success) {
-        // อัพเดตข้อมูลภาษีรายเดือนใน tax_accumulated
         try {
-          // แปลง selectedMonth เป็นปี พ.ศ. และเลขเดือน (helper จะ normalize เป็น ค.ศ.)
           const [yearStr, monthStr] = selectedMonth.split('-');
           const year = (parseInt(yearStr, 10) + 543).toString();
           const month = monthStr.padStart(2, '0');
-          const taxValue = deduction.tax || 0;
+          const taxItem = deductionItems.find((item) => item.key === 'tax');
+          const taxValue = taxItem ? parseToNumber(taxItem.value) : 0;
           await taxAPI.updateMonthlyTax(year, month, taxValue);
         } catch (e) {
           // ไม่ต้องแจ้ง error ให้ user
         }
-        // อัพเดต monthly_income.json ด้วยเงินได้สุทธิ
         try {
           await incomeAPI.save(selectedMonth, { salary: netIncomeValue });
         } catch (e) {
@@ -146,19 +253,8 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
   };
 
   const clearAll = () => {
-    setSalaryData({
-      salary: '',
-      overtime_1x: '',
-      overtime_1_5x: '',
-      overtime_2x: '',
-      overtime_3x: '',
-      overtime_other: '',
-      bonus: '',
-      other_income: '',
-      provident_fund: '',
-      social_security: '750',
-      tax: ''
-    });
+    setIncomeItems((prev) => prev.map((item) => ({ ...item, value: '' })));
+    setDeductionItems((prev) => prev.map((item) => ({ ...item, value: '' })));
   };
 
   return (
@@ -166,22 +262,54 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
       <h2 className={styles.title}>คำนวณเงินเดือน - {selectedMonth ? getThaiMonthName(selectedMonth) : 'กรุณาเลือกเดือน'}</h2>
 
       <div className={styles.salaryContent}>
-        {/* ส่วนรายได้ */}
         <div className={styles.incomeSection}>
-          <h3 className={`${styles.sectionTitle} ${styles.incomeTitle}`}>รายได้</h3>
-          <div className={styles.inputGrid}>
-            {['salary', 'overtime_1x', 'overtime_1_5x', 'overtime_2x', 'overtime_3x', 'overtime_other', 'bonus', 'other_income'].map((key) => (
-              <div className={styles.inputGroup} key={key}>
-                <label>{salaryKeyThaiMapping[key]}</label>
-                <input
-                  type="text"
-                  value={salaryData[key] ?? ''}
-                  onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
-                  onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
-                  placeholder="0.00"
-                  aria-label={salaryKeyThaiMapping[key]}
-                  tabIndex={0}
-                />
+          <div className={styles.sectionHeader}>
+            <h3 className={`${styles.sectionTitle} ${styles.incomeTitle}`}>รายได้</h3>
+            <button
+              type="button"
+              className={`${styles.addRowBtn} ${styles.addIncomeBtn}`}
+              onClick={() => handleAddItem('income')}
+            >
+              + เพิ่มรายการ
+            </button>
+          </div>
+          <div className={styles.dynamicList}>
+            {incomeItems.map((item) => (
+              <div key={item.id} className={`${styles.dynamicRow} ${styles.incomeRow}`}>
+                <div className={styles.rowField}>
+                  <span className={styles.fieldLabel}>ชื่อรายการ</span>
+                  <input
+                    type="text"
+                    value={item.label}
+                    onChange={(e) => handleLabelChange('income', item.id, e.target.value)}
+                    placeholder="เช่น ค่า OT พิเศษ"
+                    className={styles.labelInput}
+                    aria-label="แก้ไขชื่อรายการรายได้"
+                  />
+                </div>
+                <div className={styles.rowField}>
+                  <span className={styles.fieldLabel}>จำนวนเงิน</span>
+                  <input
+                    type="text"
+                    value={item.value}
+                    onChange={(e) => handleValueChange('income', item.id, e.target.value)}
+                    onBlur={(e) => handleValueBlur('income', item.id, e.target.value)}
+                    placeholder="0.00"
+                    className={`${styles.labelInput} ${styles.amountInput}`}
+                    aria-label="จำนวนเงินรายได้"
+                    inputMode="decimal"
+                  />
+                </div>
+                <div className={styles.rowActions}>
+                  <button
+                    type="button"
+                    className={styles.removeRowBtn}
+                    onClick={() => handleRemoveItem('income', item.id)}
+                    aria-label="ลบรายการรายได้นี้"
+                  >
+                    ลบ
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -191,22 +319,56 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
           </div>
         </div>
 
-        {/* ส่วนหัก */}
         <div className={styles.deductionSection}>
-          <h3 className={`${styles.sectionTitle} ${styles.deductionTitle}`}>หัก</h3>
-          <div className={styles.inputGrid}>
-            {['provident_fund', 'social_security', 'tax'].map((key) => (
-              <div className={styles.inputGroup} key={key}>
-                <label>{salaryKeyThaiMapping[key]}</label>
-                <input
-                  type="text"
-                  value={salaryData[key] ?? ''}
-                  onChange={e => handleNumberInput(e.target.value, setSalaryData, key)}
-                  onBlur={e => handleNumberBlur(e.target.value, setSalaryData, key)}
-                  placeholder="0.00"
-                  aria-label={salaryKeyThaiMapping[key]}
-                  tabIndex={0}
-                />
+          <div className={styles.sectionHeader}>
+            <h3 className={`${styles.sectionTitle} ${styles.deductionTitle}`}>
+              ค่าใช้จ่ายหักออก
+            </h3>
+            <button
+              type="button"
+              className={`${styles.addRowBtn} ${styles.addDeductionBtn}`}
+              onClick={() => handleAddItem('deduction')}
+            >
+              + เพิ่มรายการ
+            </button>
+          </div>
+          <div className={styles.dynamicList}>
+            {deductionItems.map((item) => (
+              <div key={item.id} className={`${styles.dynamicRow} ${styles.deductionRow}`}>
+                <div className={styles.rowField}>
+                  <span className={styles.fieldLabel}>ชื่อรายการ</span>
+                  <input
+                    type="text"
+                    value={item.label}
+                    onChange={(e) => handleLabelChange('deduction', item.id, e.target.value)}
+                    placeholder="เช่น เงินกู้กยศ"
+                    className={styles.labelInput}
+                    aria-label="แก้ไขชื่อรายการค่าใช้จ่ายหักออก"
+                  />
+                </div>
+                <div className={styles.rowField}>
+                  <span className={styles.fieldLabel}>จำนวนเงิน</span>
+                  <input
+                    type="text"
+                    value={item.value}
+                    onChange={(e) => handleValueChange('deduction', item.id, e.target.value)}
+                    onBlur={(e) => handleValueBlur('deduction', item.id, e.target.value)}
+                    placeholder="0.00"
+                    className={`${styles.labelInput} ${styles.amountInput}`}
+                    aria-label="จำนวนเงินรายการค่าใช้จ่ายหักออก"
+                    inputMode="decimal"
+                  />
+                </div>
+                <div className={styles.rowActions}>
+                  <button
+                    type="button"
+                    className={styles.removeRowBtn}
+                    onClick={() => handleRemoveItem('deduction', item.id)}
+                    aria-label="ลบรายการค่าใช้จ่ายหักออกนี้"
+                  >
+                    ลบ
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -219,7 +381,9 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
 
       {/* ผลลัพธ์สุทธิ */}
       <div className={styles.netResult}>
-  <h3>เงินได้สุทธิ: <span className={styles.netAmount}>{formatCurrency(calculatedResults.เงินได้สุทธิ)}</span></h3>
+        <h3>
+          เงินได้สุทธิ: <span className={styles.netAmount}>{formatCurrency(calculatedResults.เงินได้สุทธิ)}</span>
+        </h3>
       </div>
 
       {/* ปุ่มจัดการ */}
