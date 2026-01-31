@@ -156,38 +156,54 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
       {/* แสดงเดือนปัจจุบันและ dropdown เลือกเดือน */}
       <div className={styles.currentMonthDisplay}>
         <div className={styles.monthSelectionRow}>
-          <label className={styles.monthLabel}>เดือนปัจจุบัน: </label>
-          <select 
-            value={selectedMonth ?? ''} 
-            onChange={(e) => onMonthSelected(e.target.value)}
-            className={styles.monthSelect}
-          >
-            {monthOptions.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <div className={styles.monthLabelGroup}>
+            <span className={styles.monthLabel}>เดือนที่กำลังดู</span>
+            <span className={styles.monthHint}>บันทึกไว้ตามบัญชีของคุณ</span>
+          </div>
+          <div className={styles.monthSelectWrapper}>
+            <div className={styles.monthDisplayValue}>
+              {selectedMonth ? formatMonthLabelTH(selectedMonth) : 'เลือกเดือน'}
+            </div>
+            <select 
+              value={selectedMonth ?? ''} 
+              onChange={(e) => onMonthSelected(e.target.value)}
+              className={styles.monthSelect}
+            >
+              {monthOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
       <div className={styles.monthActions}>
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className={styles.addMonthBtn}
-          aria-label="เพิ่มเดือนใหม่"
-          tabIndex={0}
-        >
-          + เพิ่มเดือนใหม่
-        </button>
-        <button
-          onClick={handleCopyPrevMonth}
-          className={`${styles.addMonthBtn} ${styles.addMonthBtnMargin}`}
-          aria-label="คัดลอกข้อมูลจากเดือนก่อนหน้า"
-          tabIndex={0}
-        >
-          ดึงข้อมูลจากเดือนก่อนหน้า
-        </button>
+        <div className={styles.monthLabelGroup}>
+          <span className={styles.monthLabel}>การจัดการเดือน</span>
+          <span className={styles.monthHint}>เตรียมข้อมูลก่อนเริ่มบันทึกหรือแก้ไขรายการ</span>
+        </div>
+        <div className={styles.monthActionButtons}>
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className={`${styles.addMonthBtn} ${styles.actionButton}`}
+            aria-label="เพิ่มเดือนใหม่"
+            tabIndex={0}
+          >
+            <span className={styles.actionButtonTitle}>+ เพิ่มเดือนใหม่</span>
+            <span className={styles.actionButtonHint}>สร้างเดือนถัดไปพร้อมหน้ากระดาษว่าง</span>
+          </button>
+          <button
+            onClick={handleCopyPrevMonth}
+            className={`${styles.addMonthBtn} ${styles.addMonthBtnMargin} ${styles.actionButton}`}
+            aria-label="คัดลอกข้อมูลจากเดือนก่อนหน้า"
+            tabIndex={0}
+          >
+            <span className={styles.actionButtonTitle}>ดึงข้อมูลจากเดือนก่อนหน้า</span>
+            <span className={styles.actionButtonHint}>คัดลอกทุกรายการมาแก้ไขต่อได้ทันที</span>
+          </button>
+        </div>
       </div>
 
       {showAddForm && (
