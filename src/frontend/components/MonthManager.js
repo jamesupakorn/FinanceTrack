@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { getNextMonth } from '../../shared/utils/numberUtils';
-import { getMonthData, getPrevMonth, formatMonthLabelTH } from '../../shared/utils/monthUtils';
+import { getNextMonth } from '../../shared/utils/frontend/numberUtils';
+import { getMonthData, getPrevMonth, formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
 import styles from '../styles/MonthManager.module.css';
 
 
-const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'view' }) => {
+const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newMonthName, setNewMonthName] = useState('');
   const [monthOptions, setMonthOptions] = useState([]);
@@ -24,7 +24,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
   useEffect(() => {
     let isMounted = true;
     const fetchMonths = async () => {
-      const { expenseAPI, incomeAPI, salaryAPI } = await import('../../shared/utils/apiUtils');
+      const { expenseAPI, incomeAPI, salaryAPI } = await import('../../shared/utils/frontend/apiUtils');
       const [expenseData, incomeData, salaryData] = await Promise.all([
         expenseAPI.getAll(),
         incomeAPI.getAll(),
@@ -54,7 +54,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
   // สร้างเดือนใหม่ (ข้อมูลเปล่า)
   const handleAddNewMonth = async () => {
     const nextMonth = getNextMonth(selectedMonth);
-    const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = await import('../../shared/utils/apiUtils');
+    const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = await import('../../shared/utils/frontend/apiUtils');
     // Save new month data
     await Promise.all([
       expenseAPI.save(nextMonth, {}),
@@ -106,7 +106,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
       return;
     }
     const prevMonth = getPrevMonth(selectedMonth);
-    const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = await import('../../shared/utils/apiUtils');
+    const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = await import('../../shared/utils/frontend/apiUtils');
     const [expenseAll, incomeAll, salaryAll, savingsAll, investmentAll] = await Promise.all([
       expenseAPI.getAll(),
       incomeAPI.getAll(),
@@ -156,45 +156,57 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
       {/* แสดงเดือนปัจจุบันและ dropdown เลือกเดือน */}
       <div className={styles.currentMonthDisplay}>
         <div className={styles.monthSelectionRow}>
-          <label className={styles.monthLabel}>เดือนปัจจุบัน: </label>
-          <select 
-            value={selectedMonth ?? ''} 
-            onChange={(e) => onMonthSelected(e.target.value)}
-            className={styles.monthSelect}
-          >
-            {monthOptions.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <div className={styles.monthLabelGroup}>
+            <span className={styles.monthLabel}>เดือนที่กำลังดู</span>
+            <span className={styles.monthHint}>บันทึกไว้ตามบัญชีของคุณ</span>
+          </div>
+          <div className={styles.monthSelectWrapper}>
+            <div className={styles.monthDisplayValue}>
+              {selectedMonth ? formatMonthLabelTH(selectedMonth) : 'เลือกเดือน'}
+            </div>
+            <select 
+              value={selectedMonth ?? ''} 
+              onChange={(e) => onMonthSelected(e.target.value)}
+              className={styles.monthSelect}
+            >
+              {monthOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      {mode === 'edit' && (
-        <div className={styles.monthActions}>
+      <div className={styles.monthActions}>
+        <div className={styles.monthLabelGroup}>
+          <span className={styles.monthLabel}>การจัดการเดือน</span>
+          <span className={styles.monthHint}>เตรียมข้อมูลก่อนเริ่มบันทึกหรือแก้ไขรายการ</span>
+        </div>
+        <div className={styles.monthActionButtons}>
           <button
             onClick={() => setShowAddForm(!showAddForm)}
-            className={styles.addMonthBtn}
+            className={`${styles.addMonthBtn} ${styles.actionButton}`}
             aria-label="เพิ่มเดือนใหม่"
             tabIndex={0}
-            style={{ minHeight: 44, minWidth: 44 }}
           >
-            + เพิ่มเดือนใหม่
+            <span className={styles.actionButtonTitle}>+ เพิ่มเดือนใหม่</span>
+            <span className={styles.actionButtonHint}>สร้างเดือนถัดไปพร้อมหน้ากระดาษว่าง</span>
           </button>
           <button
             onClick={handleCopyPrevMonth}
-            className={`${styles.addMonthBtn} ${styles.addMonthBtnMargin}`}
+            className={`${styles.addMonthBtn} ${styles.addMonthBtnMargin} ${styles.actionButton}`}
             aria-label="คัดลอกข้อมูลจากเดือนก่อนหน้า"
             tabIndex={0}
-            style={{ minHeight: 44, minWidth: 44 }}
           >
-            ดึงข้อมูลจากเดือนก่อนหน้า
+            <span className={styles.actionButtonTitle}>ดึงข้อมูลจากเดือนก่อนหน้า</span>
+            <span className={styles.actionButtonHint}>คัดลอกทุกรายการมาแก้ไขต่อได้ทันที</span>
           </button>
         </div>
-      )}
+      </div>
 
-      {showAddForm && mode === 'edit' && (
+      {showAddForm && (
         <div className={styles.addMonthForm} tabIndex={-1} aria-modal="true" role="dialog">
           <div className={styles.formContent}>
             <button
@@ -202,17 +214,15 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
               aria-label="ปิดหน้าต่าง"
               onClick={() => setShowAddForm(false)}
               tabIndex={0}
-              style={{ position: 'absolute', top: 8, right: 8, minWidth: 44, minHeight: 44, fontSize: 28, background: 'none', border: 'none', color: '#888', cursor: 'pointer' }}
             >
               ×
             </button>
-            <h4 style={{ marginTop: 32 }}>เพิ่มเดือนใหม่</h4>
+            <h4>เพิ่มเดือนใหม่</h4>
             <button
               onClick={handleAddNewMonth}
               className={styles.quickAddBtn}
               aria-label={`เพิ่มเดือนถัดไป (${getNextMonth(selectedMonth)})`}
               tabIndex={0}
-              style={{ minHeight: 44 }}
             >
               เดือนถัดไป ({getNextMonth(selectedMonth)})
             </button>
@@ -225,14 +235,12 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
                 className={styles.monthInput}
                 aria-label="กรอกเดือนใหม่ (YYYY-MM)"
                 tabIndex={0}
-                style={{ minHeight: 44 }}
               />
               <button
                 onClick={handleCustomMonth}
                 className={styles.customAddBtn}
                 aria-label="เพิ่มเดือนที่กรอกเอง"
                 tabIndex={0}
-                style={{ minHeight: 44 }}
               >
                 เพิ่ม
               </button>
@@ -242,7 +250,6 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, mode = 'v
               className={styles.cancelBtn}
               aria-label="ยกเลิก"
               tabIndex={0}
-              style={{ minHeight: 44 }}
             >
               ยกเลิก
             </button>

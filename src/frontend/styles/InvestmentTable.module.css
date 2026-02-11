@@ -2,14 +2,16 @@
   display: none;
 }
 .investmentCard {
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-  margin-bottom: 14px;
-  padding: 14px 12px 10px 12px;
+  background: rgba(9, 12, 32, 0.9);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 18px 55px rgba(2, 6, 23, 0.55);
+  margin-bottom: 16px;
+  padding: 16px 14px 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  backdrop-filter: blur(18px);
 }
 .cardRow {
   display: flex;
@@ -18,14 +20,14 @@
   gap: 10px;
 }
 .cardLabel {
-  font-size: 1em;
+  font-size: 1rem;
   min-width: 90px;
-  color: #444;
+  color: var(--text-secondary);
 }
 .cardAmount {
   font-weight: 600;
-  color: #2563eb;
-  font-size: 1em;
+  color: var(--secondary-color);
+  font-size: 1rem;
 }
 .emptyCard {
   text-align: center;
@@ -54,8 +56,8 @@
     display: block !important;
   }
   .investmentCard {
-    padding: 12px 8px 8px 8px;
-    margin-bottom: 10px;
+    padding: 14px 12px 10px 12px;
+    margin-bottom: 12px;
     font-size: 15px;
   }
   .cardLabel {
@@ -64,39 +66,78 @@
   }
   .inputText, .inputPercent {
     font-size: 15px;
-    padding: 7px 8px;
-    border-radius: 7px;
+    padding: 10px 12px;
+    border-radius: 12px;
   }
   .deleteButton {
     font-size: 15px;
-    padding: 6px 18px;
-    border-radius: 7px;
+    padding: 10px 18px;
+    border-radius: 12px;
     margin-left: auto;
     margin-right: 0;
   }
 }
 .investmentContainer {
-  margin-top: 24px;
+  margin-top: 32px;
+  padding: 32px;
+  background: rgba(6, 9, 27, 0.85);
+  border-radius: 28px;
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 35px 110px rgba(2, 6, 23, 0.65);
+  backdrop-filter: blur(18px);
 }
 
 .investmentTitle {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.baseAmountRow {
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.baseAmountRow label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .baseAmountInput {
-  margin-left: 8px;
-  padding: 4px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  width: 120px;
+  margin-left: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.18);
+  width: 180px;
+  max-width: 220px;
+  background: rgba(9,12,32,0.85);
+  color: var(--text-primary);
+  min-height: 44px;
+}
+
+.baseAmountInput:focus {
+  border-color: rgba(93,91,255,0.8);
+  box-shadow: 0 0 0 3px rgba(93,91,255,0.15);
+  outline: none;
 }
 
 .investmentTable {
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
-  border-radius: 8px;
+  background: rgba(9, 12, 32, 0.9);
+  border-radius: 24px;
   overflow: hidden;
+  box-shadow: 0 28px 90px rgba(2, 6, 23, 0.6);
+  border: 1px solid rgba(255,255,255,0.1);
+  backdrop-filter: blur(16px);
 }
 
 .investmentTableWrapper {
@@ -105,31 +146,45 @@
 }
 
 .tableHeaderRow {
-  background: #f3f4f6;
+  background: var(--gradient-primary);
+  color: #050914;
 }
 
 .tableHeaderCell {
-  padding: 8px;
-  border: 1px solid #e5e7eb;
+  padding: 16px 20px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .tableCell {
-  padding: 8px;
-  border: 1px solid #e5e7eb;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  color: var(--text-primary);
 }
 
-.inputText {
+.inputText,
+.inputPercent {
   width: 100%;
-  padding: 4px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(9, 12, 32, 0.85);
+  color: var(--text-primary);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  min-height: 44px;
 }
 
 .inputPercent {
-  width: 80px;
-  padding: 4px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
+  width: 100px;
+  max-width: 110px;
+}
+
+.inputText:focus,
+.inputPercent:focus {
+  border-color: rgba(93,91,255,0.8);
+  box-shadow: 0 0 0 3px rgba(93,91,255,0.15);
+  outline: none;
 }
 
 .amountCell {
@@ -141,48 +196,74 @@
 }
 
 .deleteButton {
-  color: #dc2626;
-  background: none;
-  border: none;
+  padding: 10px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 122, 162, 0.55);
+  background: rgba(255, 122, 162, 0.12);
+  color: #ff9bb9;
   font-weight: 600;
   cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+  box-shadow: none;
+}
+
+.deleteButton:hover {
+  background: rgba(255, 122, 162, 0.22);
+  transform: translateY(-1px);
 }
 
 .actionBar {
-  margin-top: 12px;
+  margin-top: 20px;
   display: flex;
-  gap: 12px;
+  gap: 16px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .addButton {
-  padding: 6px 16px;
-  border-radius: 6px;
+  padding: 14px 24px;
+  border-radius: 16px;
   border: none;
-  background: #1a7f37;
-  color: white;
-  font-weight: 600;
+  background: var(--gradient-secondary);
+  color: #021210;
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 25px 70px rgba(77, 240, 195, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  min-width: 180px;
 }
 
 .averageButton {
-  padding: 6px 16px;
-  border-radius: 6px;
+  padding: 14px 24px;
+  border-radius: 16px;
   border: none;
-  background: #f59e42;
-  color: white;
-  font-weight: 600;
+  background: linear-gradient(135deg, #facc6b 0%, #ff9f43 100%);
+  color: #241200;
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 25px 70px rgba(250, 204, 107, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  min-width: 180px;
 }
 
 .saveButton {
-  padding: 6px 24px;
-  border-radius: 6px;
+  padding: 14px 28px;
+  border-radius: 18px;
   border: none;
-  background: #2563eb;
-  color: white;
-  font-weight: 600;
+  background: var(--gradient-primary);
+  color: #050914;
+  font-weight: 800;
   cursor: pointer;
+  box-shadow: 0 28px 85px rgba(93, 91, 255, 0.4);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  min-width: 200px;
+}
+
+.addButton:hover,
+.averageButton:hover,
+.saveButton:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 35px 110px rgba(93, 91, 255, 0.45);
 }
 
 .saveButton:disabled,
@@ -192,15 +273,15 @@
 }
 
 .statusSaving {
-  color: #2563eb;
+  color: var(--info-color);
 }
 
 .statusSuccess {
-  color: #16a34a;
+  color: var(--secondary-color);
 }
 
 .statusError {
-  color: #dc2626;
+  color: var(--danger-color);
 }
 
 .percentSummary {
@@ -209,14 +290,33 @@
 }
 
 .percentSummaryError {
-  color: red;
+  color: var(--danger-color);
 }
 
 .percentSummaryNormal {
-  color: #666;
+  color: var(--text-light);
 }
 
 /* Responsive Design */
+@media (max-width: 640px) {
+  .baseAmountRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .baseAmountRow label {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .baseAmountInput {
+    width: 100%;
+    max-width: none;
+  }
+}
+
 @media (max-width: 900px) {
   .investmentTable {
     min-width: 600px;

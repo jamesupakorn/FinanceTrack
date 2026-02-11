@@ -1,13 +1,14 @@
 /* SummaryReport Component Styles - ปรับโทนสีใหม่สบายตา */
 
 .summaryReport {
-  background: var(--bg-surface);
-  border-radius: 24px;
-  padding: 40px;
-  margin: 32px 0;
-  box-shadow: 0 12px 40px var(--shadow-sm);
-  border: 1px solid var(--border-light);
+  background: rgba(6, 9, 27, 0.85);
+  border-radius: 32px;
+  padding: 44px;
+  margin: 36px 0;
+  box-shadow: 0 50px 140px rgba(2,6,23,0.65);
+  border: 1px solid rgba(255,255,255,0.12);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(24px);
 }
 
 .summaryReport:hover {
@@ -39,11 +40,12 @@
 /* Charts Section */
 .chartsSection {
   text-align: center;
-  background: var(--bg-surface-alt);
-  border-radius: 24px;
+  background: rgba(9,12,32,0.85);
+  border-radius: 28px;
   padding: 40px;
-  border: 1px solid var(--border-light);
-  box-shadow: 0 4px 16px var(--shadow-sm);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 24px 80px rgba(2,6,23,0.55);
+  backdrop-filter: blur(18px);
 }
 
 .chartsGrid {
@@ -73,12 +75,13 @@
 }
 
 .pieChartContainer {
-  background: var(--bg-surface-alt);
-  border-radius: 20px;
-  padding: 24px;
-  box-shadow: 0 6px 20px var(--shadow-sm);
-  border: 1px solid var(--border-light);
+  background: rgba(9, 12, 32, 0.9);
+  border-radius: 24px;
+  padding: 28px;
+  box-shadow: 0 30px 100px rgba(2,6,23,0.6);
+  border: 1px solid rgba(255,255,255,0.08);
   transition: all 0.3s ease;
+  backdrop-filter: blur(16px);
 }
 
 .pieChartContainer:hover {
@@ -143,11 +146,12 @@
 /* Tables Section */
 .summaryTablesSection {
   position: relative;
-  background: var(--bg-surface);
-  border-radius: 24px;
-  padding: 40px;
-  border: 1px solid var(--border-light);
-  box-shadow: 0 4px 16px var(--shadow-sm);
+  background: rgba(9,12,32,0.85);
+  border-radius: 32px;
+  padding: 44px;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 30px 100px rgba(2,6,23,0.6);
+  backdrop-filter: blur(20px);
 }
 
 .tablesGrid {
@@ -158,17 +162,18 @@
 }
 
 .summaryTable {
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  padding: 36px;
-  background: var(--bg-surface);
-  box-shadow: 0 6px 24px var(--shadow-sm);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 24px;
+  padding: 38px;
+  background: rgba(6, 9, 27, 0.92);
+  box-shadow: 0 26px 90px rgba(2,6,23,0.65);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
-  min-height: 300px;
+  min-height: 320px;
   display: flex;
   flex-direction: column;
+  backdrop-filter: blur(18px);
 }
 
 .summaryTable::before {
