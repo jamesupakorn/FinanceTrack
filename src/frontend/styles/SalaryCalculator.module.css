@@ -1,41 +1,49 @@
-/* SalaryCalculator Component Styles - ปรับโทนสีใหม่สบายตา */
+/* SalaryCalculator Component Styles - Neon glassmorphic UI */
 
 .salaryCalculator {
-  background: var(--bg-surface);
-  border-radius: 20px;
-  padding: 32px;
-  margin: 24px 0;
-  box-shadow: 0 8px 32px var(--shadow-sm);
-  border: 2px solid var(--border-light);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(145deg, rgba(3, 9, 24, 0.95), rgba(7, 14, 34, 0.92));
+  border-radius: 38px;
+  padding: 48px;
+  margin: 40px 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 60px 180px rgba(2, 6, 23, 0.75);
   position: relative;
   overflow: hidden;
+  isolation: isolate;
+  backdrop-filter: blur(30px);
+  transition: transform 0.35s ease, box-shadow 0.35s ease;
+}
+
+.salaryCalculator::before,
+.salaryCalculator::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
 }
 
 .salaryCalculator::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: var(--gradient-primary);
+  background: radial-gradient(circle at 15% 10%, rgba(93, 91, 255, 0.35), transparent 55%);
+  filter: blur(6px);
+}
+
+.salaryCalculator::after {
+  background: radial-gradient(circle at 85% -10%, rgba(77, 240, 195, 0.22), transparent 55%);
 }
 
 .salaryCalculator:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 16px 48px var(--shadow-md);
-  border-color: var(--primary-color);
+  transform: translateY(-4px);
+  box-shadow: 0 45px 160px rgba(2, 6, 23, 0.9);
 }
 
 .title {
-  font-size: 1.75rem;
+  font-size: 2.1rem;
   font-weight: 800;
-  margin-bottom: 28px;
-  color: var(--text-primary);
+  margin-bottom: 40px;
   text-align: center;
-  letter-spacing: -0.02em;
-  background: var(--gradient-primary);
+  letter-spacing: -0.01em;
+  background: linear-gradient(135deg, #5d5bff 0%, #4df0c3 100%);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -43,136 +51,266 @@
 
 .salaryContent {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 40px;
-  margin-bottom: 32px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 44px;
+  margin-bottom: 42px;
 }
 
-.incomeSection {
-  position: relative;
-}
-
+.incomeSection,
 .deductionSection {
   position: relative;
+  padding: 34px 32px 40px;
+  border-radius: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(5, 10, 27, 0.92);
+  box-shadow: 0 40px 110px rgba(2, 6, 23, 0.65);
+  overflow: hidden;
+  backdrop-filter: blur(22px);
+}
+
+.incomeSection::before,
+.deductionSection::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.incomeSection::before {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.25), rgba(15, 53, 40, 0.25));
+}
+
+.deductionSection::before {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(67, 16, 32, 0.25));
+}
+
+.incomeSection > *,
+.deductionSection > * {
+  position: relative;
+  z-index: 1;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 28px;
 }
 
 .sectionTitle {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   font-weight: 700;
-  margin-bottom: 20px;
-  padding: 16px 20px;
-  border-radius: 16px;
+  padding: 14px 26px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 160px;
   text-align: center;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  font-size: 0.95rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
+  text-transform: none;
+  box-shadow: inset 0 0 25px rgba(255, 255, 255, 0.05), 0 15px 40px rgba(2, 6, 23, 0.45);
 }
 
 .incomeTitle {
-  background: linear-gradient(135deg, rgba(26, 127, 55, 0.1) 0%, rgba(34, 197, 94, 0.05) 100%);
+  background: radial-gradient(circle at 25% 35%, rgba(77, 240, 195, 0.35), rgba(6, 28, 28, 0.85));
+  border: 1px solid rgba(77, 240, 195, 0.7);
   color: var(--secondary-color);
-  border: 2px solid rgba(26, 127, 55, 0.2);
 }
 
 .deductionTitle {
-  background: linear-gradient(135deg, rgba(207, 34, 46, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+  background: radial-gradient(circle at 25% 35%, rgba(255, 122, 162, 0.35), rgba(32, 8, 18, 0.85));
+  border: 1px solid rgba(255, 122, 162, 0.7);
   color: var(--danger-color);
-  border: 2px solid rgba(207, 34, 46, 0.2);
 }
 
-.inputGrid {
-  display: grid;
-  gap: 20px;
-}
-
-.inputGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.inputGroup label {
-  font-size: 0.95rem;
-  font-weight: 600;
+.addRowBtn {
+  border: 1px dashed rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.02);
   color: var(--text-secondary);
-  letter-spacing: 0.3px;
+  padding: 12px 26px;
+  border-radius: 18px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  backdrop-filter: blur(6px);
 }
 
-.inputGroup input {
-  padding: 14px 16px;
-  border: 2px solid var(--border-color);
-  border-radius: 12px;
-  font-size: 15px;
-  text-align: right;
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  font-weight: 500;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.addRowBtn:hover,
+.addRowBtn:focus-visible {
+  transform: translateY(-2px);
   outline: none;
 }
 
-.inputGroup input:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 4px rgba(9, 105, 218, 0.1);
-  transform: scale(1.02);
-  background: var(--bg-surface-alt);
+.addIncomeBtn {
+  border-color: rgba(77, 240, 195, 0.75);
+  color: var(--secondary-color);
+  box-shadow: 0 10px 30px rgba(77, 240, 195, 0.3);
 }
 
-.inputGroup input:hover {
-  border-color: var(--primary-color);
+.addDeductionBtn {
+  border-color: rgba(255, 122, 162, 0.75);
+  color: var(--danger-color);
+  box-shadow: 0 10px 30px rgba(255, 122, 162, 0.3);
 }
 
-.inputGroup input::placeholder {
-  color: var(--text-light);
-  font-weight: 400;
+.dynamicList {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.dynamicRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-end;
+  padding: 22px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(4, 7, 22, 0.95);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 28px 70px rgba(2, 6, 23, 0.55);
+  position: relative;
+  overflow: hidden;
+}
+
+.dynamicRow::before {
+  content: '';
+  position: absolute;
+  inset: 14px;
+  border-radius: 16px;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.incomeRow::before {
+  background: radial-gradient(circle at 0% 0%, rgba(77, 240, 195, 0.55), transparent 70%);
+}
+
+.deductionRow::before {
+  background: radial-gradient(circle at 0% 0%, rgba(255, 122, 162, 0.55), transparent 70%);
+}
+
+.dynamicRow > * {
+  position: relative;
+  z-index: 1;
+}
+
+.rowField {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fieldLabel {
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+  font-weight: 600;
+}
+
+.labelInput {
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(6, 9, 27, 0.92);
+  color: var(--text-primary);
+  font-weight: 600;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  min-height: 52px;
+}
+
+.labelInput:focus {
+  outline: none;
+  border-color: rgba(93, 91, 255, 0.95);
+  box-shadow: 0 0 0 4px rgba(93, 91, 255, 0.25);
+  background: rgba(6, 9, 27, 0.98);
+}
+
+.amountInput {
+  text-align: right;
+  font-size: 1.05rem;
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.removeRowBtn {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  padding: 12px 22px;
+  border-radius: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+  min-width: 90px;
+}
+
+.removeRowBtn:hover,
+.removeRowBtn:focus-visible {
+  outline: none;
+  border-color: rgba(255, 122, 162, 0.85);
+  color: #ff7aa2;
+  background: rgba(255, 122, 162, 0.2);
+  transform: translateY(-1px);
 }
 
 .subtotal {
-  margin-top: 24px;
-  padding: 20px;
-  border-radius: 16px;
+  margin-top: 28px;
+  padding: 24px;
+  border-radius: 22px;
   font-weight: 700;
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 1.1rem;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(9, 12, 32, 0.85);
+  box-shadow: 0 26px 80px rgba(2, 6, 23, 0.55);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .subtotal:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 34px 100px rgba(2, 6, 23, 0.65);
 }
 
 .incomeSubtotal {
-  background: linear-gradient(135deg, rgba(26, 127, 55, 0.08) 0%, rgba(34, 197, 94, 0.04) 100%);
-  border: 2px solid rgba(26, 127, 55, 0.15);
+  border-color: rgba(77, 240, 195, 0.4);
   color: var(--secondary-color);
+  background: linear-gradient(135deg, rgba(26, 127, 55, 0.12), rgba(34, 197, 94, 0.06));
 }
 
 .deductionSubtotal {
-  background: linear-gradient(135deg, rgba(207, 34, 46, 0.08) 0%, rgba(239, 68, 68, 0.04) 100%);
-  border: 2px solid rgba(207, 34, 46, 0.15);
+  border-color: rgba(255, 122, 162, 0.4);
   color: var(--danger-color);
+  background: linear-gradient(135deg, rgba(207, 34, 46, 0.12), rgba(239, 68, 68, 0.06));
 }
 
 .amount {
   font-size: 1.25rem;
   font-weight: 800;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.04em;
 }
 
 .netResult {
-  background: var(--gradient-primary);
-  color: white;
-  padding: 28px;
-  border-radius: 20px;
+  background: linear-gradient(120deg, rgba(9, 105, 218, 0.9), rgba(77, 240, 195, 0.82));
+  color: #fff;
+  padding: 32px;
+  border-radius: 30px;
   text-align: center;
-  margin-bottom: 32px;
-  box-shadow: 0 8px 32px rgba(9, 105, 218, 0.3);
+  margin-bottom: 36px;
+  box-shadow: 0 40px 120px rgba(9, 105, 218, 0.45);
   position: relative;
   overflow: hidden;
 }
@@ -180,11 +318,8 @@
 .netResult::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(45deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
+  inset: 0;
+  background: radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.25), transparent 60%);
   pointer-events: none;
 }
 
@@ -197,277 +332,250 @@
 }
 
 .netAmount {
-  font-size: 2.25rem;
+  font-size: 2.5rem;
   font-weight: 900;
   margin-top: 8px;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  text-shadow: 0 14px 30px rgba(2, 6, 23, 0.4);
   letter-spacing: -0.02em;
 }
 
 .actionButtons {
   display: flex;
-  gap: 16px;
+  gap: 18px;
   justify-content: center;
+  align-items: stretch;
 }
 
-.saveBtn, .clearBtn {
-  padding: 16px 32px;
+.saveBtn,
+.clearBtn {
+  padding: 18px 32px;
   border: none;
-  border-radius: 16px;
+  border-radius: 18px;
   font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   letter-spacing: 0.5px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 18px 55px rgba(2, 6, 23, 0.45);
   position: relative;
   overflow: hidden;
+  flex: 1;
+  min-height: 48px;
 }
 
 .saveBtn {
-  background: var(--gradient-secondary);
-  color: white;
+  background: linear-gradient(120deg, #31d1ad, #4df0c3);
+  color: #021210;
 }
 
 .saveBtn:hover {
   transform: translateY(-3px);
-  box-shadow: 0 12px 40px rgba(26, 127, 55, 0.4);
+  box-shadow: 0 30px 70px rgba(77, 240, 195, 0.4);
 }
 
 .clearBtn {
-  background: linear-gradient(135deg, var(--text-secondary) 0%, var(--text-light) 100%);
-  color: white;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .clearBtn:hover {
   transform: translateY(-3px);
-  box-shadow: 0 12px 40px rgba(107, 114, 128, 0.4);
-  background: var(--text-primary);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+  background: rgba(255, 255, 255, 0.12);
 }
 
-.saveBtn:active, .clearBtn:active {
+.saveBtn:focus-visible,
+.clearBtn:focus-visible {
+  outline: 2px solid var(--color-primary, #4df0c3);
+  outline-offset: 3px;
+}
+
+.saveBtn:active,
+.clearBtn:active {
   transform: translateY(-1px);
 }
 
 /* Responsive Design */
-/* Large Tablets */
 @media (max-width: 1024px) {
   .salaryCalculator {
-    padding: 28px;
-    border-radius: 14px;
+    padding: 32px;
+    border-radius: 28px;
   }
-  
+
   .title {
-    font-size: 1.75rem;
+    font-size: 1.85rem;
   }
-  
+
   .salaryContent {
     gap: 28px;
   }
+
+  .dynamicRow {
+    padding: 18px;
+  }
 }
 
-/* Tablets */
 @media (max-width: 768px) {
   .salaryCalculator {
-    padding: 24px;
-    margin: 16px 0;
-    border-radius: 12px;
+    padding: 26px;
+    margin: 24px 0;
   }
 
   .title {
-    font-size: 1.5rem;
-    margin-bottom: 24px;
+    font-size: 1.6rem;
+    margin-bottom: 28px;
   }
 
   .salaryContent {
     grid-template-columns: 1fr;
     gap: 24px;
-    margin-bottom: 24px;
-  }
-  
-  .incomeSection, .deductionSection {
-    padding: 20px;
-    border-radius: 12px;
-  }
-  
-  .sectionTitle {
-    font-size: 1rem;
-    margin-bottom: 16px;
   }
 
-  .inputGrid {
-    gap: 16px;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  .incomeSection,
+  .deductionSection {
+    padding: 26px;
   }
 
-  .inputGroup input {
-    padding: 12px 14px;
-    font-size: 14px;
+  .sectionHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .addRowBtn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .dynamicRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rowActions {
+    justify-content: flex-end;
   }
 
   .subtotal {
-    padding: 16px;
+    padding: 18px;
     font-size: 1rem;
-    border-radius: 10px;
   }
 
   .netResult {
-    padding: 20px;
-    margin-bottom: 20px;
-    border-radius: 12px;
-  }
-
-  .netResult h3 {
-    font-size: 1.25rem;
+    padding: 24px;
   }
 
   .netAmount {
-    font-size: 1.875rem;
+    font-size: 2rem;
   }
-  
+
   .actionButtons {
     gap: 12px;
   }
-  
-  .saveBtn, .clearBtn {
-    padding: 14px 24px;
-    border-radius: 12px;
-  }
 }
 
-/* Mobile Large */
 @media (max-width: 640px) {
   .salaryCalculator {
-    padding: 20px;
+    padding: 22px;
   }
-  
+
   .title {
-    font-size: 1.4rem;
+    font-size: 1.45rem;
   }
-  
-  .inputGrid {
-    grid-template-columns: 1fr;
+
+  .rowField {
+    min-width: 100%;
+  }
+
+  .dynamicRow {
     gap: 14px;
   }
-  
+
+  .rowActions {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .removeRowBtn {
+    width: 100%;
+  }
+
   .actionButtons {
     flex-direction: column;
-    gap: 10px;
   }
-  
-  .saveBtn, .clearBtn {
+
+  .saveBtn,
+  .clearBtn {
     width: 100%;
-    min-height: 44px;
-    min-width: 44px;
-    box-sizing: border-box;
-  }
-  .saveBtn:focus-visible, .clearBtn:focus-visible {
-    outline: 2px solid var(--color-primary, #0969da);
-    outline-offset: 2px;
   }
 }
 
-/* Mobile Portrait */
 @media (max-width: 480px) {
   .salaryCalculator {
-    padding: 16px;
-    border-radius: 8px;
+    padding: 18px;
+    border-radius: 18px;
   }
 
   .title {
-    font-size: 1.25rem;
-    margin-bottom: 20px;
+    font-size: 1.3rem;
   }
-  
-  .salaryContent {
-    gap: 20px;
-    margin-bottom: 20px;
+
+  .incomeSection,
+  .deductionSection {
+    padding: 20px;
+    border-radius: 18px;
   }
-  
-  .incomeSection, .deductionSection {
-    padding: 16px;
-    border-radius: 10px;
-  }
-  
+
   .sectionTitle {
-    font-size: 0.95rem;
-    margin-bottom: 14px;
+    width: 100%;
   }
 
-  .inputGroup label {
-    font-size: 0.875rem;
-    margin-bottom: 4px;
+  .labelInput {
+    padding: 12px 14px;
+    border-radius: 12px;
   }
 
-  .inputGroup input {
-    padding: 10px 12px;
-    font-size: 13px;
-    border-radius: 6px;
-  }
-  
   .subtotal {
-    padding: 14px;
+    padding: 16px;
     font-size: 0.95rem;
-    border-radius: 8px;
   }
 
   .amount {
     font-size: 1.1rem;
   }
-  
+
   .netResult {
-    padding: 16px;
-    margin-bottom: 16px;
-    border-radius: 10px;
-  }
-  
-  .netResult h3 {
-    font-size: 1.1rem;
+    padding: 18px;
+    border-radius: 16px;
   }
 
   .netAmount {
-    font-size: 1.5rem;
-  }
-  
-  .actionButtons {
-    gap: 8px;
-  }
-  
-  .saveBtn, .clearBtn {
-    padding: 12px 20px;
-    font-size: 0.9rem;
-    border-radius: 8px;
+    font-size: 1.65rem;
   }
 }
 
-/* Mobile Small */
 @media (max-width: 375px) {
   .salaryCalculator {
-    padding: 12px;
+    padding: 14px;
   }
-  
+
   .title {
-    font-size: 1.1rem;
+    font-size: 1.15rem;
   }
-  
-  .incomeSection, .deductionSection {
-    padding: 12px;
+
+  .sectionTitle {
+    font-size: 1rem;
   }
-  
-  .inputGroup label {
-    font-size: 0.8rem;
+
+  .labelInput {
+    min-height: 46px;
   }
-  
-  .inputGroup input {
-    padding: 8px 10px;
-    font-size: 12px;
-  }
-  
+
   .netResult {
-    padding: 12px;
+    padding: 14px;
   }
-  
+
   .netAmount {
-    font-size: 1.3rem;
+    font-size: 1.4rem;
   }
 }

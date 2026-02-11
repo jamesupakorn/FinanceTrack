@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import IncomeTable from '../src/frontend/components/IncomeTable';
 import ExpenseTable from '../src/frontend/components/ExpenseTable';
@@ -7,13 +7,11 @@ import TaxTable from '../src/frontend/components/TaxTable';
 import SummaryReport from '../src/frontend/components/SummaryReport';
 import SalaryCalculator from '../src/frontend/components/SalaryCalculator';
 import MonthManager from '../src/frontend/components/MonthManager';
-import ThemeToggle from '../src/frontend/components/ThemeToggle';
-import ModePasswordModal from '../src/frontend/components/ModePasswordModal';
-import { ENCODED_EDIT_PASSWORD } from '../src/frontend/config/password.enc';
-import { decodePassword } from '../src/shared/utils/authUtils';
 import { Icons } from '../src/frontend/components/Icons';
+import ChangePasswordModal from '../src/frontend/components/ChangePasswordModal';
 import { useTheme } from '../src/frontend/contexts/ThemeContext';
-import { incomeAPI, expenseAPI, savingsAPI, salaryAPI } from '../src/shared/utils/apiUtils';
+import { useSession } from '../src/frontend/contexts/SessionContext';
+import { incomeAPI, expenseAPI, savingsAPI, salaryAPI } from '../src/shared/utils/frontend/apiUtils';
 import styles from '../src/frontend/styles/Home.module.css';
 
 function getCurrentMonth() {
@@ -22,72 +20,78 @@ function getCurrentMonth() {
 }
 
 
-const EDIT_PASSWORD = decodePassword(ENCODED_EDIT_PASSWORD);
-const SESSION_KEY = 'edit_last_activity'; // สำหรับ activity
-const SESSION_KEY_PASSWORD = 'edit_password_verified'; // สำหรับ password
+const SESSION_KEY = 'edit_last_activity';
+const SELECTED_MONTH_KEY = 'edit_selected_month';
 
 export default function EditPage() {
   const router = useRouter();
-  // Session timeout: 30 minutes (1800 seconds)
-  const SESSION_TIMEOUT = 30 * 60 * 1000;
+  // Session timeout: 1 hour (3600 seconds)
+  const SESSION_TIMEOUT = 60 * 60 * 1000;
+  const { currentUser, isReady, logout } = useSession();
+  const sessionKey = useMemo(() => currentUser ? `${SESSION_KEY}_${currentUser.id}` : SESSION_KEY, [currentUser?.id]);
+  const selectedMonthKey = useMemo(() => currentUser ? `${SELECTED_MONTH_KEY}_${currentUser.id}` : SELECTED_MONTH_KEY, [currentUser?.id]);
+  const clearStoredMonth = React.useCallback(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem(selectedMonthKey);
+  }, [selectedMonthKey]);
+  const isLocked = !isReady || !currentUser;
 
   // Update last activity timestamp
   const updateActivity = () => {
-    localStorage.setItem(SESSION_KEY, Date.now().toString());
+    if (!currentUser) return;
+    localStorage.setItem(sessionKey, Date.now().toString());
   };
 
   // Set up event listeners for user activity
   React.useEffect(() => {
+    if (!currentUser) return undefined;
     updateActivity();
     const events = ['mousemove', 'keydown', 'click', 'scroll'];
     events.forEach(event => window.addEventListener(event, updateActivity));
     return () => {
       events.forEach(event => window.removeEventListener(event, updateActivity));
     };
-  }, []);
+  }, [currentUser, sessionKey]);
 
   // Check for session timeout every 1 minute
   React.useEffect(() => {
+    if (!currentUser) return undefined;
     const checkTimeout = () => {
-      const last = parseInt(localStorage.getItem(SESSION_KEY), 10);
+      const last = parseInt(localStorage.getItem(sessionKey), 10);
       if (!last || Date.now() - last > SESSION_TIMEOUT) {
-        localStorage.removeItem(SESSION_KEY);
-        router.replace('/');
+        localStorage.removeItem(sessionKey);
+        clearStoredMonth();
+        logout();
+        router.replace('/profiles');
       }
     };
     const interval = setInterval(checkTimeout, 60 * 1000);
     // Also check immediately on mount
     checkTimeout();
     return () => clearInterval(interval);
-  }, [router]);
+  }, [router, currentUser, sessionKey, logout, clearStoredMonth]);
   const { theme } = useTheme();
-  const [mode] = useState('edit');
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [activeTab, setActiveTab] = useState('income');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [salaryUpdateTrigger, setSalaryUpdateTrigger] = useState(0);
   const [months, setMonths] = useState([]);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  // ตรวจสอบ session password
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [changePasswordError, setChangePasswordError] = useState('');
+  const [changePasswordSubmitting, setChangePasswordSubmitting] = useState(false);
+  const [passwordToast, setPasswordToast] = useState(null);
   React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const verified = localStorage.getItem(SESSION_KEY_PASSWORD);
-      if (verified !== 'true') {
-        setShowPasswordModal(true);
-      }
+    if (isReady && !currentUser) {
+      router.replace('/profiles');
     }
-  }, []);
+  }, [isReady, currentUser, router]);
 
-  const handlePasswordSubmit = (password) => {
-    if (password === EDIT_PASSWORD) {
-      localStorage.setItem(SESSION_KEY_PASSWORD, 'true');
-      setShowPasswordModal(false);
-    } else {
-      alert('รหัสผ่านไม่ถูกต้อง');
-      localStorage.removeItem(SESSION_KEY_PASSWORD);
-      setShowPasswordModal(true);
-    }
-  };
+  React.useEffect(() => {
+    if (!passwordToast) return undefined;
+    const timer = setTimeout(() => setPasswordToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [passwordToast]);
 
   // ดึงเดือนทั้งหมดจาก expense, income, salary แล้วรวม key
   const fetchMonths = async () => {
@@ -97,13 +101,16 @@ export default function EditPage() {
         savingsAPI.getAll(),
         salaryAPI.getAll()
       ]);
-      const expenseMonths = expenseRes ? Object.keys(expenseRes) : [];
-      const savingsMonths = savingsRes ? Object.keys(savingsRes) : [];
-      const salaryMonths = salaryRes ? Object.keys(salaryRes) : [];
+      const expenseMonths = expenseRes?.months ? Object.keys(expenseRes.months) : [];
+      const savingsMonths = savingsRes?.months ? Object.keys(savingsRes.months) : [];
+      const salaryMonths = salaryRes?.months ? Object.keys(salaryRes.months) : [];
       const allMonths = Array.from(new Set([...expenseMonths, ...savingsMonths, ...salaryMonths])).sort().reverse();
       setMonths(allMonths);
       const currentMonth = getCurrentMonth();
-      if (allMonths.includes(currentMonth)) {
+      const storedMonth = typeof window !== 'undefined' ? localStorage.getItem(selectedMonthKey) : null;
+      if (storedMonth && allMonths.includes(storedMonth)) {
+        setSelectedMonth(storedMonth);
+      } else if (allMonths.includes(currentMonth)) {
         setSelectedMonth(currentMonth);
       } else if (allMonths.length && !allMonths.includes(selectedMonth)) {
         setSelectedMonth(allMonths[0]);
@@ -115,8 +122,10 @@ export default function EditPage() {
 
 
   React.useEffect(() => {
-    fetchMonths();
-  }, [refreshTrigger]);
+    if (currentUser) {
+      fetchMonths();
+    }
+  }, [refreshTrigger, currentUser, selectedMonthKey]);
 
   // เซต selectedMonth เป็นเดือนปัจจุบันทันทีเมื่อ mount ถ้ายังไม่ได้เซต
   React.useEffect(() => {
@@ -124,11 +133,17 @@ export default function EditPage() {
       const currentMonth = getCurrentMonth();
       if (months.includes(currentMonth)) {
         setSelectedMonth(currentMonth);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(selectedMonthKey, currentMonth);
+        }
       } else {
         setSelectedMonth(months[0]);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(selectedMonthKey, months[0]);
+        }
       }
     }
-  }, [months, selectedMonth]);
+  }, [months, selectedMonth, selectedMonthKey]);
 
 
   const handleDataRefresh = () => {
@@ -142,36 +157,161 @@ export default function EditPage() {
 
   const handleMonthSelected = (month) => {
     setSelectedMonth(month);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(selectedMonthKey, month);
+    }
   };
 
-  if (showPasswordModal) {
+  const handleSwitchProfile = () => {
+    setUserMenuOpen(false);
+    clearStoredMonth();
+    setSelectedMonth(null);
+    logout();
+    router.replace('/profiles');
+  };
+
+  const handleLogoutClick = () => {
+    setUserMenuOpen(false);
+    clearStoredMonth();
+    setSelectedMonth(null);
+    logout();
+    router.replace('/profiles');
+  };
+
+  const handleOpenChangePassword = () => {
+    setUserMenuOpen(false);
+    setChangePasswordError('');
+    setChangePasswordOpen(true);
+  };
+
+  const handleCloseChangePassword = () => {
+    setChangePasswordError('');
+    setChangePasswordOpen(false);
+  };
+
+  const handleChangePasswordSubmit = async ({ currentPassword, newPassword }) => {
+    setChangePasswordSubmitting(true);
+    setChangePasswordError('');
+    try {
+      const response = await fetch('/api/change_password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword, userId: currentUser?.id })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setChangePasswordError(data?.error || 'ไม่สามารถเปลี่ยนรหัสได้');
+        return;
+      }
+      setChangePasswordOpen(false);
+      setPasswordToast({ type: 'success', message: 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว' });
+    } catch (error) {
+      setChangePasswordError('เกิดข้อผิดพลาด กรุณาลองใหม่');
+    } finally {
+      setChangePasswordSubmitting(false);
+    }
+  };
+
+  const userMenuRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!userMenuOpen) return undefined;
+    const handleClickOutside = (event) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setUserMenuOpen(false);
+      }
+    };
+    const handleEsc = (event) => {
+      if (event.key === 'Escape') {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [userMenuOpen]);
+
+  if (isLocked) {
     return (
-      <ModePasswordModal
-        open={true}
-        onClose={() => {}}
-        onSubmit={handlePasswordSubmit}
-        forceOpen
-      />
+      <div className={styles.guardContainer}>
+        <Icons.Lock size={48} color="var(--color-primary)" />
+        <p>กำลังตรวจสอบสิทธิ์ผู้ใช้...</p>
+      </div>
     );
   }
 
   return (
-  <div className={styles.homeContainer} onClick={updateActivity} onKeyDown={updateActivity} onMouseMove={updateActivity}>
+  <>
+    {passwordToast && (
+      <div className={`${styles.actionToast} ${passwordToast.type === 'success' ? styles.actionToastSuccess : ''}`}>
+        <Icons.Check size={20} />
+        <span>{passwordToast.message}</span>
+      </div>
+    )}
+    <div className={styles.homeContainer} onClick={updateActivity} onKeyDown={updateActivity} onMouseMove={updateActivity}>
       <div className={styles.mainContent}>
         <header className={styles.pageHeader}>
-          <div className={styles.headerAction}>
-            <button
-              className={styles.normalModeButton}
-              onClick={() => router.push('/')}
-              type="button"
-            >
-              กลับโหมดปกติ
-            </button>
+          <div className={styles.headerTopRow}>
+            <div className={styles.headerIntro}>
+              <div className={styles.headerIcon}>
+                <Icons.Wallet size={36} color="#0b2155" />
+              </div>
+              <div className={styles.headerCopy}>
+                <p className={styles.headerEyebrow}>Finance Workspace</p>
+                <h1 className={styles.pageTitle}>โหมดแก้ไขข้อมูล</h1>
+                <p className={styles.pageLead}>
+                  บริหารข้อมูลรายรับรายจ่ายและเงินออมแบบเรียลไทม์ในที่เดียว
+                </p>
+              </div>
+            </div>
+            <div className={styles.headerUserControls}>
+              <div className={styles.userMenuWrapper} ref={userMenuRef}>
+                <button
+                  type="button"
+                  className={styles.userMenuButton}
+                  onClick={() => setUserMenuOpen(prev => !prev)}
+                  aria-haspopup="true"
+                  aria-expanded={userMenuOpen}
+                  data-open={userMenuOpen}
+                >
+                  จัดการผู้ใช้
+                  <Icons.ChevronDown size={16} />
+                </button>
+                {userMenuOpen && (
+                  <div className={styles.userDropdown} role="menu">
+                    <button type="button" className={`${styles.userMenuItem} ${styles.userMenuAccent}`} onClick={handleOpenChangePassword}>
+                      <Icons.Edit size={16} />
+                      <div>
+                        <p>เปลี่ยนรหัสผ่าน</p>
+                        <span>อัปเดตรหัสเพื่อความปลอดภัย</span>
+                      </div>
+                    </button>
+                    <button type="button" className={styles.userMenuItem} onClick={handleSwitchProfile}>
+                      <Icons.Settings size={16} />
+                      <div>
+                        <p>สลับผู้ใช้</p>
+                        <span>กลับไปหน้าเลือกโปรไฟล์</span>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.userMenuItem} ${styles.userMenuDanger}`}
+                      onClick={handleLogoutClick}
+                    >
+                      <Icons.Lock size={16} />
+                      <div>
+                        <p>ออกจากระบบ</p>
+                        <span>ปิดเซสชันและล็อกระบบ</span>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-          <h1 className={styles.pageTitle}>
-            <Icons.Wallet size={40} color="white" />
-            โหมดแก้ไขข้อมูล
-          </h1>
         </header>
 
       <MonthManager 
@@ -179,7 +319,6 @@ export default function EditPage() {
         onMonthSelected={handleMonthSelected}
         onDataRefresh={handleDataRefresh}
         months={months}
-        mode={mode}
       />
 
 
@@ -188,7 +327,6 @@ export default function EditPage() {
           selectedMonth={selectedMonth}
           onSalaryUpdate={handleSalaryUpdate}
           key={refreshTrigger}
-          mode={mode}
         />
       </div>
 
@@ -196,7 +334,6 @@ export default function EditPage() {
         <SummaryReport 
           selectedMonth={selectedMonth}
           key={`summary-${refreshTrigger}`}
-          mode={mode}
         />
       </div>
 
@@ -230,7 +367,6 @@ export default function EditPage() {
               selectedMonth={selectedMonth}
               salaryUpdateTrigger={salaryUpdateTrigger}
               key={`income-${refreshTrigger}`}
-              mode={mode}
             />
           </div>
         )}
@@ -245,7 +381,6 @@ export default function EditPage() {
             <ExpenseTable 
               selectedMonth={selectedMonth}
               key={`expense-${refreshTrigger}`}
-              mode={mode}
             />
           </div>
         )}
@@ -260,7 +395,6 @@ export default function EditPage() {
             <SavingsTable 
               selectedMonth={selectedMonth}
               key={`savings-${refreshTrigger}`}
-              mode={mode}
             />
           </div>
         )}
@@ -275,12 +409,19 @@ export default function EditPage() {
             <TaxTable 
               selectedMonth={selectedMonth}
               key={`tax-${refreshTrigger}`}
-              mode={mode}
             />
           </div>
         )}
       </div>
       </div>
     </div>
+    <ChangePasswordModal
+      open={changePasswordOpen}
+      onClose={handleCloseChangePassword}
+      onSubmit={handleChangePasswordSubmit}
+      errorMessage={changePasswordError}
+      isSubmitting={changePasswordSubmitting}
+    />
+  </>
   );
 }
