@@ -20,6 +20,86 @@ const DEFAULT_EXPENSE_LABEL_MAP = DEFAULT_EXPENSE_ITEMS.reduce((acc, item) => {
   return acc;
 }, {});
 
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const DUE_SOON_THRESHOLD_DAYS = 5;
+
+const getStartOfToday = () => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const parseDueDateValue = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  parsed.setHours(0, 0, 0, 0);
+  return parsed;
+};
+
+const formatDueDateLabel = (date, options = { day: 'numeric', month: 'short' }) => {
+  if (!date) return '';
+  return date.toLocaleDateString('th-TH', options);
+};
+
+const describeDueTiming = (dueDateValue, paid) => {
+  const parsedDate = parseDueDateValue(dueDateValue);
+  if (paid) {
+    return {
+      status: 'done',
+      badge: 'ชำระแล้ว',
+      helper: parsedDate ? `ครบกำหนด ${formatDueDateLabel(parsedDate)}` : '',
+      date: parsedDate,
+      diffDays: null
+    };
+  }
+  if (!parsedDate) {
+    return {
+      status: 'none',
+      badge: 'ยังไม่กำหนด',
+      helper: '',
+      date: null,
+      diffDays: null
+    };
+  }
+  const today = getStartOfToday();
+  const diffDays = Math.ceil((parsedDate - today) / DAY_IN_MS);
+  if (diffDays < 0) {
+    return {
+      status: 'overdue',
+      badge: `เกินกำหนด ${Math.abs(diffDays)} วัน`,
+      helper: formatDueDateLabel(parsedDate),
+      date: parsedDate,
+      diffDays
+    };
+  }
+  if (diffDays === 0) {
+    return {
+      status: 'dueToday',
+      badge: 'ครบกำหนดวันนี้',
+      helper: '',
+      date: parsedDate,
+      diffDays
+    };
+  }
+  if (diffDays <= DUE_SOON_THRESHOLD_DAYS) {
+    return {
+      status: 'dueSoon',
+      badge: `อีก ${diffDays} วัน`,
+      helper: formatDueDateLabel(parsedDate),
+      date: parsedDate,
+      diffDays
+    };
+  }
+  return {
+    status: 'future',
+    badge: formatDueDateLabel(parsedDate),
+    helper: 'ครบกำหนด',
+    date: parsedDate,
+    diffDays
+  };
+};
+
 const describeExpenseDifference = (estimateValue = 0, actualValue = 0) => {
   const diffValue = estimateValue - actualValue;
   if (Math.abs(diffValue) < 0.01) {
@@ -78,7 +158,8 @@ export default function ExpenseTable({ selectedMonth }) {
         name: DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการใหม่',
         estimate: '0.00',
         actual: '0.00',
-        paid: false
+        paid: false,
+        dueDate: ''
       };
       return {
         ...prev,
@@ -88,7 +169,7 @@ export default function ExpenseTable({ selectedMonth }) {
   };
 
   const handleExpenseChange = (item, field, value) => {
-    if (field === 'paid' || field === 'name') {
+    if (field === 'paid' || field === 'name' || field === 'dueDate') {
       updateExpenseField(item, field, value);
       return;
     }
@@ -107,6 +188,11 @@ export default function ExpenseTable({ selectedMonth }) {
       updateExpenseField(item, field, cleanName);
       return;
     }
+    if (field === 'dueDate') {
+      const cleanDate = typeof value === 'string' ? value.trim() : '';
+      updateExpenseField(item, field, cleanDate);
+      return;
+    }
     updateExpenseField(item, field, value);
   };
 
@@ -118,7 +204,8 @@ export default function ExpenseTable({ selectedMonth }) {
         name: 'รายการใหม่',
         estimate: '0.00',
         actual: '0.00',
-        paid: false
+        paid: false,
+        dueDate: ''
       }
     }));
   };
@@ -157,11 +244,55 @@ export default function ExpenseTable({ selectedMonth }) {
     return [...defaultKeys, ...customKeys];
   }, [editExpense]);
 
+  const dueInsights = useMemo(() => {
+    const today = getStartOfToday();
+    const upcoming = [];
+    sortedExpenseKeys.forEach(item => {
+      const row = editExpense[item];
+      if (!row) return;
+      const paid = row.paid === true || row.paid === 'true';
+      if (paid) return;
+      const parsedDate = parseDueDateValue(row.dueDate);
+      if (!parsedDate) return;
+      const diffDays = Math.ceil((parsedDate - today) / DAY_IN_MS);
+      upcoming.push({
+        key: item,
+        name: row.name || DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการ',
+        date: parsedDate,
+        diffDays
+      });
+    });
+    upcoming.sort((a, b) => a.date - b.date);
+    const urgentCount = upcoming.filter(item => item.diffDays >= 0 && item.diffDays <= DUE_SOON_THRESHOLD_DAYS).length;
+    const overdueCount = upcoming.filter(item => item.diffDays < 0).length;
+    const nextDue = upcoming[0];
+    return {
+      upcomingCount: upcoming.length,
+      urgentCount,
+      overdueCount,
+      nextDueLabel: nextDue ? formatDueDateLabel(nextDue.date, { day: 'numeric', month: 'short' }) : 'ยังไม่กำหนด',
+      nextDueName: nextDue ? nextDue.name : 'ไม่มีรายการ',
+    };
+  }, [editExpense, sortedExpenseKeys]);
+
   const hasExpenseRows = sortedExpenseKeys.length > 0;
   const totalEstimateValue = useMemo(() => calculateExpenseTotal(editExpense, 'estimate', parseToNumber), [editExpense]);
   const totalActualValue = useMemo(() => calculateExpenseTotal(editExpense, 'actual', parseToNumber), [editExpense]);
   const totalDiffInfo = useMemo(() => describeExpenseDifference(totalEstimateValue, totalActualValue), [totalEstimateValue, totalActualValue]);
   const accountSummary = useMemo(() => getAccountSummary(editExpense), [editExpense]);
+  const diffChipClass = totalDiffInfo.tone === 'positive'
+    ? styles.diffChipPositive
+    : totalDiffInfo.tone === 'negative'
+      ? styles.diffChipNegative
+      : styles.diffChipNeutral;
+  const diffChipText = totalDiffInfo.tone === 'positive'
+    ? `เหลืองบ ${formatCurrency(totalDiffInfo.value)}`
+    : totalDiffInfo.tone === 'negative'
+      ? `เกินงบ ${formatCurrency(Math.abs(totalDiffInfo.value))}`
+      : 'ใช้ตรงตามงบ';
+  const upcomingSummaryText = dueInsights.upcomingCount > 0
+    ? `${dueInsights.upcomingCount} รายการยังไม่จ่าย`
+    : 'ยังไม่มีรายการค้างชำระ';
 
   return (
     <div className={styles.expenseTable}>
@@ -174,6 +305,34 @@ export default function ExpenseTable({ selectedMonth }) {
           + เพิ่มรายการค่าใช้จ่าย
         </button>
       </div>
+      {hasExpenseRows && (
+        <div className={styles.overviewRow}>
+          <div className={styles.overviewCard}>
+            <p className={styles.overviewLabel}>งบประมาณรวม</p>
+            <p className={styles.overviewValue}>{formatCurrency(totalEstimateValue)}</p>
+            <span className={styles.overviewHint}>ตั้งงบทั้งหมดในเดือนนี้</span>
+          </div>
+          <div className={styles.overviewCard}>
+            <p className={styles.overviewLabel}>ยอดใช้จริง</p>
+            <p className={styles.overviewValue}>{formatCurrency(totalActualValue)}</p>
+            <span className={`${styles.diffChip} ${diffChipClass}`}>{diffChipText}</span>
+          </div>
+          <div className={`${styles.overviewCard} ${styles.overviewAccent}`}>
+            <p className={styles.overviewLabel}>กำหนดชำระถัดไป</p>
+            <p className={`${styles.overviewValue} ${styles.nextDueValue}`}>{dueInsights.nextDueLabel}</p>
+            <span className={styles.overviewHint}>{dueInsights.nextDueName}</span>
+            <div className={styles.overviewMeta}>
+              <span>{upcomingSummaryText}</span>
+              {dueInsights.urgentCount > 0 && (
+                <span className={styles.urgentHighlight}>{`เร่งด่วน ${dueInsights.urgentCount}`}</span>
+              )}
+              {dueInsights.overdueCount > 0 && (
+                <span className={styles.overdueHighlight}>{`เกินกำหนด ${dueInsights.overdueCount}`}</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {isLoading && !hasExpenseRows && (
         <div className={styles.loadingState}>กำลังโหลดข้อมูล...</div>
       )}
@@ -189,6 +348,7 @@ export default function ExpenseTable({ selectedMonth }) {
                   <th className={styles.tableHeaderCell}>รายการค่าใช้จ่าย</th>
                   <th className={`${styles.tableHeaderCell} ${styles.right}`}>ยอดประมาณ (ตั้งงบ)</th>
                   <th className={`${styles.tableHeaderCell} ${styles.right}`}>ยอดจ่ายจริง</th>
+                  <th className={styles.tableHeaderCell}>วันครบกำหนด</th>
                   <th className={`${styles.tableHeaderCell} ${styles.center}`}>สถานะชำระ</th>
                   <th className={`${styles.tableHeaderCell} ${styles.right}`}>ส่วนต่าง (ประมาณ-จริง)</th>
                 </tr>
@@ -206,6 +366,7 @@ export default function ExpenseTable({ selectedMonth }) {
                       ? styles.diffNegative
                       : styles.diffNeutral;
                   const displayName = row.name || DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการใหม่';
+                  const dueInfo = describeDueTiming(row.dueDate, paid);
                   return (
                     <tr key={item} className={styles.tableRow}>
                       <td className={styles.tableCell}>
@@ -245,6 +406,21 @@ export default function ExpenseTable({ selectedMonth }) {
                           className={styles.expenseInput}
                         />
                       </td>
+                      <td className={`${styles.tableCell} ${styles.dateCell}`}>
+                        <div className={styles.dueDateWrapper}>
+                          <input
+                            type="date"
+                            value={row.dueDate || ''}
+                            onChange={e => handleExpenseChange(item, 'dueDate', e.target.value)}
+                            onBlur={e => handleExpenseBlur(item, 'dueDate', e.target.value)}
+                            className={styles.dateInput}
+                          />
+                          <div className={styles.dueMeta}>
+                            <span className={styles.dueBadge} data-status={dueInfo.status}>{dueInfo.badge}</span>
+                            {dueInfo.helper && <span className={styles.dueHelper}>{dueInfo.helper}</span>}
+                          </div>
+                        </div>
+                      </td>
                       <td className={`${styles.tableCell} ${styles.center} ${styles.checkboxCell}`}>
                         <input
                           type="checkbox"
@@ -263,6 +439,7 @@ export default function ExpenseTable({ selectedMonth }) {
                   <td className={styles.totalCell}>ยอดรวม</td>
                   <td className={`${styles.totalCell} ${styles.right}`}>{formatCurrency(totalEstimateValue)}</td>
                   <td className={`${styles.totalCell} ${styles.right}`}>{formatCurrency(totalActualValue)}</td>
+                  <td className={styles.totalCell}></td>
                   <td className={`${styles.totalCell} ${styles.center}`}></td>
                   <td className={`${styles.totalCell} ${styles.right} ${totalDiffInfo.tone === 'positive' ? styles.totalDiffPositive : totalDiffInfo.tone === 'negative' ? styles.totalDiffNegative : styles.totalDiffNeutral}`}>
                     <div className={styles.diffValue}>{formatCurrency(totalDiffInfo.value)}</div>
@@ -288,6 +465,7 @@ export default function ExpenseTable({ selectedMonth }) {
                   ? styles.diffNegative
                   : styles.diffNeutral;
               const displayName = row.name || DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการใหม่';
+              const dueInfo = describeDueTiming(row.dueDate, paid);
               return (
                 <div className={styles.expenseCard} key={item}>
                   <div className={styles.cardRow}>
@@ -320,6 +498,20 @@ export default function ExpenseTable({ selectedMonth }) {
                       onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'actual', val))}
                       className={styles.expenseInput}
                     />
+                  </div>
+                  <div className={styles.cardRow}>
+                    <span className={styles.cardLabel}>วันครบกำหนด</span>
+                    <div className={styles.mobileDueField}>
+                      <input
+                        type="date"
+                        value={row.dueDate || ''}
+                        onChange={e => handleExpenseChange(item, 'dueDate', e.target.value)}
+                        onBlur={e => handleExpenseBlur(item, 'dueDate', e.target.value)}
+                        className={styles.dateInput}
+                      />
+                      <span className={styles.dueBadge} data-status={dueInfo.status}>{dueInfo.badge}</span>
+                      {dueInfo.helper && <span className={styles.dueHelper}>{dueInfo.helper}</span>}
+                    </div>
                   </div>
                   <div className={styles.cardRow}>
                     <span className={styles.cardLabel}>สถานะชำระ</span>
