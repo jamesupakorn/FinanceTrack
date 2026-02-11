@@ -231,7 +231,8 @@ export const formatExpenseData = (data, month) => {
         : (defaultLabel || 'รายการใหม่'),
       estimate: parseAndFormat(source?.estimate ?? 0),
       actual: parseAndFormat(source?.actual ?? 0),
-      paid: (typeof source?.paid === 'boolean') ? source.paid : false
+      paid: source?.paid === true || source?.paid === 'true',
+      dueDate: (typeof source?.dueDate === 'string') ? source.dueDate : ''
     };
   });
 
