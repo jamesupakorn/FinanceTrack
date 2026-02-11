@@ -1,112 +1,40 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 
-// ธีมที่ปรับใหม่ให้สบายตา
+const midnightColors = {
+  bgColor: '#03081a',
+  bgPrimary: '#03081a',
+  bgSurface: 'rgba(15, 18, 40, 0.92)',
+  bgSurfaceAlt: 'rgba(21, 26, 56, 0.88)',
+  surfaceColor: 'rgba(15, 18, 40, 0.92)',
+  surfaceAltColor: 'rgba(21, 26, 56, 0.88)',
+  textPrimary: '#f8fbff',
+  textSecondary: '#c7cffc',
+  textLight: '#8e96c9',
+  borderColor: 'rgba(255, 255, 255, 0.16)',
+  borderLight: 'rgba(255, 255, 255, 0.08)',
+  colorPrimary: '#5d5bff',
+  primaryColor: '#5d5bff',
+  secondaryColor: '#4df0c3',
+  dangerColor: '#ff7aa2',
+  warningColor: '#facc6b',
+  infoColor: '#4ecbff',
+  gradientPrimary: 'linear-gradient(135deg, #5d5bff 0%, #00d4ff 100%)',
+  gradientSecondary: 'linear-gradient(135deg, #4df0c3 0%, #4ecbff 100%)',
+  shadowColor: 'rgba(2, 6, 23, 0.55)',
+  shadowSm: 'rgba(2, 6, 23, 0.45)',
+  shadowMedium: 'rgba(2, 6, 23, 0.55)',
+  shadowMd: 'rgba(2, 6, 23, 0.6)',
+  shadowStrong: 'rgba(2, 6, 23, 0.72)'
+};
+
 const themes = {
-  light: {
-    name: 'สว่าง',
-    colors: {
-      // พื้นฐาน - โทนสว่างอ่อนนุ่ม
-      background: '#fafbfc',
-      surface: '#ffffff',
-      surfaceAlt: '#f6f8fa',
-      
-      // ข้อความ - โทนเทาอ่อน
-      textPrimary: '#24292f',
-      textSecondary: '#656d76',
-      textLight: '#8c959f',
-      
-      // เส้นขอบ - สีอ่อนละมุน
-      border: '#d0d7de',
-      borderLight: '#e6eaef',
-      
-      // สีหลัก - โทนสว่างสบายตา
-      primary: '#0969da',      // น้ำเงินสว่าง
-      secondary: '#1a7f37',    // เขียวสว่าง
-      danger: '#cf222e',       // แดงสว่าง
-      warning: '#d1242f',      // ส้มสว่าง
-      info: '#218bff',         // ฟ้าสว่าง
-      
-      // การไล่สี
-      gradientPrimary: 'linear-gradient(135deg, #0969da 0%, #218bff 100%)',
-      gradientSecondary: 'linear-gradient(135deg, #1a7f37 0%, #2da44e 100%)',
-      
-      // เงา - อ่อนมาก
-      shadow: 'rgba(27, 31, 35, 0.04)',
-      shadowMedium: 'rgba(27, 31, 35, 0.08)',
-      shadowStrong: 'rgba(27, 31, 35, 0.12)',
-    }
-  },
-  
-  dark: {
-    name: 'มืด',
-    colors: {
-      // พื้นฐาน - โทนมืดทึบ
-      background: '#0d1117',
-      surface: '#161b22',
-      surfaceAlt: '#21262d',
-      
-      // ข้อความ - สีขาวนุ่ม
-      textPrimary: '#f0f6fc',
-      textSecondary: '#8b949e',
-      textLight: '#6e7681',
-      
-      // เส้นขอบ - เทาเข้ม
-      border: '#30363d',
-      borderLight: '#21262d',
-      
-      // สีหลัก - โทนมืดนุ่มตา
-      primary: '#4493f8',      // น้ำเงินนุ่ม
-      secondary: '#3fb950',    // เขียวนุ่ม
-      danger: '#f85149',       // แดงนุ่ม
-      warning: '#d29922',      // ส้มนุ่ม
-      info: '#79c0ff',         // ฟ้านุ่ม
-      
-      // การไล่สี
-      gradientPrimary: 'linear-gradient(135deg, #4493f8 0%, #79c0ff 100%)',
-      gradientSecondary: 'linear-gradient(135deg, #3fb950 0%, #56d364 100%)',
-      
-      // เงา - เข้มแต่นุ่ม
-      shadow: 'rgba(1, 4, 9, 0.8)',
-      shadowMedium: 'rgba(1, 4, 9, 0.85)',
-      shadowStrong: 'rgba(1, 4, 9, 0.9)',
-    }
-  },
-  
-  financial: {
-    name: 'ไฟแนนโปร',
-    colors: {
-      // พื้นฐาน - โทนน้ำเงินสบายตา
-      background: '#f0f4ff',
-      surface: '#ffffff',
-      surfaceAlt: '#f6f8ff',
-      
-      // ข้อความ - โทนน้ำเงินเข้ม
-      textPrimary: '#0f1c3f',
-      textSecondary: '#1f2937',
-      textLight: '#6b7280',
-      
-      // เส้นขอบ - น้ำเงินอ่อน
-      border: '#bfdbfe',
-      borderLight: '#dbeafe',
-      
-      // สีหลัก - โทนน้ำเงินหลัก
-      primary: '#1d4ed8',      // น้ำเงินหลัก
-      secondary: '#0ea5e9',    // ฟ้าใส
-      danger: '#dc2626',       // แดงเข้ม
-      warning: '#d97706',      // ส้มเข้ม
-      info: '#2563eb',         // น้ำเงินสว่าง
-      
-      // การไล่สี - โทนน้ำเงิน
-      gradientPrimary: 'linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%)',
-      gradientSecondary: 'linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%)',
-      
-      // เงา - น้ำเงินอ่อน
-      shadow: 'rgba(29, 78, 216, 0.08)',
-      shadowMedium: 'rgba(29, 78, 216, 0.12)',
-      shadowStrong: 'rgba(29, 78, 216, 0.16)',
-    }
+  midnight: {
+    name: 'Midnight Glass',
+    colors: midnightColors
   }
 };
+
+const DEFAULT_THEME = 'midnight';
 
 const ThemeContext = createContext();
 
@@ -119,13 +47,15 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-  const [currentTheme, setCurrentTheme] = useState('light');
+  const [currentTheme, setCurrentTheme] = useState(DEFAULT_THEME);
 
   // โหลดธีมจาก localStorage เมื่อเริ่มต้น
   useEffect(() => {
     const savedTheme = localStorage.getItem('financetrack-theme');
     if (savedTheme && themes[savedTheme]) {
       setCurrentTheme(savedTheme);
+    } else {
+      setCurrentTheme(DEFAULT_THEME);
     }
   }, []);
 

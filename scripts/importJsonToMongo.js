@@ -1,91 +1,113 @@
-// นำเข้า JSON ทั้งหมดใน src/backend/data ลง MongoDB Atlas
-// ใช้: node scripts/importJsonToMongo.js
-
-const { MongoClient } = require('mongodb');
-const fs = require('fs');
+#!/usr/bin/env node
+const fs = require('fs/promises');
 const path = require('path');
+const { MongoClient } = require('mongodb');
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://Vercel-Admin-financetrack:sGXm0Wl35MhD4ANu@financetrack.txujoc6.mongodb.net/financetrack';
-const DB_NAME = 'financetrack';
-const DATA_DIR = path.join(__dirname, '../src/backend/data');
+const DATA_DIR = path.resolve(process.cwd(), 'src/backend/data');
+const DATABASE_NAME = process.env.MONGODB_DB || 'financetrack';
 
-const fileToCollection = {
-  'monthly_income.json': 'monthly_income',
-  'monthly_expense.json': 'monthly_expense',
-  'salary.json': 'salary',
-  'savings.json': 'savings',
-  'tax_accumulated.json': 'tax_accumulated',
-  'investment.json': 'investment',
-};
+const COLLECTION_CONFIGS = [
+  { name: 'monthly_income', file: 'monthly_income.json', keyField: 'month' },
+  { name: 'monthly_expense', file: 'monthly_expense.json', keyField: 'month' },
+  { name: 'salary', file: 'salary.json', keyField: 'month', skipKeys: ['months'] },
+  { name: 'savings', file: 'savings.json', keyField: 'month' },
+  { name: 'investment', file: 'investment.json', keyField: 'month' },
+  { name: 'tax_accumulated', file: 'tax_accumulated.json', keyField: 'year' }
+];
 
-async function importFile(file, collectionName, db) {
-  const filePath = path.join(DATA_DIR, file);
-  if (!fs.existsSync(filePath)) return;
-  const raw = fs.readFileSync(filePath, 'utf8');
-  let data = JSON.parse(raw);
+const shouldDrop = process.argv.includes('--drop');
 
-  // Custom logic for each file type
-  let docs = [];
-  if (collectionName === 'monthly_income' || collectionName === 'monthly_expense') {
-    // Import each month as a separate document, and if key is 'items' or 'months', use obj: ...
-    if (data.months && typeof data.months === 'object') {
-      for (const [month, values] of Object.entries(data.months)) {
-        docs.push({ month, ...values });
-      }
-    }
-    // Also import 'items' and 'months' as obj: ...
-    if (data.items) {
-      docs.push({ obj: 'items', items: data.items });
-    }
-    if (data.months) {
-      docs.push({ obj: 'months', months: data.months });
-    }
-  } else if (collectionName === 'savings') {
-    // total_savings: { month: value }, savings_list: { month: [...] }
-    const months = new Set([
-      ...Object.keys(data.total_savings || {}),
-      ...Object.keys(data.savings_list || {})
-    ]);
-    for (const month of months) {
-      docs.push({
-        month,
-        total_savings: data.total_savings && data.total_savings[month] !== undefined ? data.total_savings[month] : 0,
-        savings_list: data.savings_list && data.savings_list[month] ? data.savings_list[month] : []
-      });
-    }
-  } else if (collectionName === 'tax_accumulated') {
-    // tax_by_year: { year: {...} }
-    if (data.tax_by_year && typeof data.tax_by_year === 'object') {
-      for (const [year, values] of Object.entries(data.tax_by_year)) {
-        docs.push({ year, ...values });
-      }
-    }
-  } else if (Array.isArray(data)) {
-    docs = data;
-  } else if (typeof data === 'object') {
-    // fallback: import each key as a doc
-    docs = Object.keys(data).map(key => ({ ...data[key], [collectionName === 'tax_accumulated' ? 'year' : 'month']: key }));
-  }
-
-  if (docs.length > 0) {
-    await db.collection(collectionName).deleteMany({});
-    await db.collection(collectionName).insertMany(docs);
-    console.log(`Imported ${docs.length} docs to ${collectionName}`);
-  }
-}
-
-async function main() {
-  const client = new MongoClient(MONGODB_URI);
-  await client.connect();
-  const db = client.db(DB_NAME);
-  for (const [file, collection] of Object.entries(fileToCollection)) {
-    await importFile(file, collection, db);
-  }
-  await client.close();
-  console.log('All done!');
-}
-
-main().catch(err => {
-  console.error(err);
+if (!process.env.MONGODB_URI) {
+  console.error('Missing MONGODB_URI. Please set it via environment variable or .env.local');
   process.exit(1);
-});
+}
+
+async function loadJson(filename) {
+  const filePath = path.join(DATA_DIR, filename);
+  try {
+    const raw = await fs.readFile(filePath, 'utf-8');
+    return JSON.parse(raw || '{}');
+  } catch (error) {
+    console.error(`Failed to read ${filename}:`, error.message);
+    return {};
+  }
+}
+
+function flattenDocs(jsonData, { keyField, skipKeys = [] }) {
+  if (!jsonData || typeof jsonData !== 'object') {
+    return [];
+  }
+  const docs = [];
+  Object.entries(jsonData).forEach(([userId, bucket]) => {
+    if (!bucket || typeof bucket !== 'object') return;
+    Object.entries(bucket).forEach(([entryKey, value]) => {
+      if (skipKeys.includes(entryKey)) return;
+      if (!value || typeof value !== 'object') return;
+      const doc = { ...value };
+      if (!doc[keyField]) {
+        doc[keyField] = entryKey;
+      }
+      doc.userId = userId;
+      docs.push(doc);
+    });
+  });
+  return docs;
+}
+
+async function importCollection(db, config) {
+  const data = await loadJson(config.file);
+  const docs = flattenDocs(data, config);
+  if (!docs.length) {
+    console.warn(`No documents found for ${config.file}, skipping.`);
+    return { inserted: 0 };
+  }
+
+  const collection = db.collection(config.name);
+  if (shouldDrop) {
+    await collection.deleteMany({});
+  }
+
+  const operations = docs.map((doc) => ({
+    replaceOne: {
+      filter: {
+        userId: doc.userId,
+        [config.keyField]: doc[config.keyField]
+      },
+      replacement: doc,
+      upsert: true
+    }
+  }));
+
+  const result = await collection.bulkWrite(operations, { ordered: false });
+  const upserts = result.upsertedCount || 0;
+  const modifications = result.modifiedCount || 0;
+  return { inserted: upserts, updated: modifications };
+}
+
+async function run() {
+  const client = new MongoClient(process.env.MONGODB_URI);
+  try {
+    await client.connect();
+    const db = client.db(DATABASE_NAME);
+    console.log(`\nImporting JSON data into MongoDB database "${DATABASE_NAME}"${shouldDrop ? ' (collections cleared before insert)' : ''}`);
+
+    for (const config of COLLECTION_CONFIGS) {
+      process.stdout.write(` - ${config.name} (${config.file}) ... `);
+      const result = await importCollection(db, config);
+      const parts = [`${result.inserted} insert`];
+      if (result.updated) {
+        parts.push(`${result.updated} update`);
+      }
+      console.log(parts.join(', '));
+    }
+
+    console.log('\nImport complete.');
+  } catch (error) {
+    console.error('Import failed:', error);
+    process.exitCode = 1;
+  } finally {
+    await client.close();
+  }
+}
+
+run();
