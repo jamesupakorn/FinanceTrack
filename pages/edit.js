@@ -8,6 +8,7 @@ import SummaryReport from '../src/frontend/components/SummaryReport';
 import SalaryCalculator from '../src/frontend/components/SalaryCalculator';
 import MonthManager from '../src/frontend/components/MonthManager';
 import { Icons } from '../src/frontend/components/Icons';
+import ChangePasswordModal from '../src/frontend/components/ChangePasswordModal';
 import { useTheme } from '../src/frontend/contexts/ThemeContext';
 import { useSession } from '../src/frontend/contexts/SessionContext';
 import { incomeAPI, expenseAPI, savingsAPI, salaryAPI } from '../src/shared/utils/frontend/apiUtils';
@@ -76,11 +77,21 @@ export default function EditPage() {
   const [salaryUpdateTrigger, setSalaryUpdateTrigger] = useState(0);
   const [months, setMonths] = useState([]);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [changePasswordError, setChangePasswordError] = useState('');
+  const [changePasswordSubmitting, setChangePasswordSubmitting] = useState(false);
+  const [passwordToast, setPasswordToast] = useState(null);
   React.useEffect(() => {
     if (isReady && !currentUser) {
       router.replace('/profiles');
     }
   }, [isReady, currentUser, router]);
+
+  React.useEffect(() => {
+    if (!passwordToast) return undefined;
+    const timer = setTimeout(() => setPasswordToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [passwordToast]);
 
   // ดึงเดือนทั้งหมดจาก expense, income, salary แล้วรวม key
   const fetchMonths = async () => {
@@ -167,6 +178,40 @@ export default function EditPage() {
     router.replace('/profiles');
   };
 
+  const handleOpenChangePassword = () => {
+    setUserMenuOpen(false);
+    setChangePasswordError('');
+    setChangePasswordOpen(true);
+  };
+
+  const handleCloseChangePassword = () => {
+    setChangePasswordError('');
+    setChangePasswordOpen(false);
+  };
+
+  const handleChangePasswordSubmit = async ({ currentPassword, newPassword }) => {
+    setChangePasswordSubmitting(true);
+    setChangePasswordError('');
+    try {
+      const response = await fetch('/api/change_password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword, userId: currentUser?.id })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setChangePasswordError(data?.error || 'ไม่สามารถเปลี่ยนรหัสได้');
+        return;
+      }
+      setChangePasswordOpen(false);
+      setPasswordToast({ type: 'success', message: 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว' });
+    } catch (error) {
+      setChangePasswordError('เกิดข้อผิดพลาด กรุณาลองใหม่');
+    } finally {
+      setChangePasswordSubmitting(false);
+    }
+  };
+
   const userMenuRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -199,7 +244,14 @@ export default function EditPage() {
   }
 
   return (
-  <div className={styles.homeContainer} onClick={updateActivity} onKeyDown={updateActivity} onMouseMove={updateActivity}>
+  <>
+    {passwordToast && (
+      <div className={`${styles.actionToast} ${passwordToast.type === 'success' ? styles.actionToastSuccess : ''}`}>
+        <Icons.Check size={20} />
+        <span>{passwordToast.message}</span>
+      </div>
+    )}
+    <div className={styles.homeContainer} onClick={updateActivity} onKeyDown={updateActivity} onMouseMove={updateActivity}>
       <div className={styles.mainContent}>
         <header className={styles.pageHeader}>
           <div className={styles.headerTopRow}>
@@ -230,6 +282,13 @@ export default function EditPage() {
                 </button>
                 {userMenuOpen && (
                   <div className={styles.userDropdown} role="menu">
+                    <button type="button" className={`${styles.userMenuItem} ${styles.userMenuAccent}`} onClick={handleOpenChangePassword}>
+                      <Icons.Edit size={16} />
+                      <div>
+                        <p>เปลี่ยนรหัสผ่าน</p>
+                        <span>อัปเดตรหัสเพื่อความปลอดภัย</span>
+                      </div>
+                    </button>
                     <button type="button" className={styles.userMenuItem} onClick={handleSwitchProfile}>
                       <Icons.Settings size={16} />
                       <div>
@@ -356,5 +415,13 @@ export default function EditPage() {
       </div>
       </div>
     </div>
+    <ChangePasswordModal
+      open={changePasswordOpen}
+      onClose={handleCloseChangePassword}
+      onSubmit={handleChangePasswordSubmit}
+      errorMessage={changePasswordError}
+      isSubmitting={changePasswordSubmitting}
+    />
+  </>
   );
 }

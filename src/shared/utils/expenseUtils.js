@@ -10,6 +10,8 @@ export function formatExpenseForSave(editExpense, parseToNumber) {
         numericExpense[item][field] = !!editExpense[item][field];
       } else if (field === 'name') {
         numericExpense[item][field] = (editExpense[item][field] || '').trim();
+      } else if (field === 'dueDate') {
+        numericExpense[item][field] = (editExpense[item][field] || '').trim();
       } else {
         numericExpense[item][field] = parseToNumber(editExpense[item][field]);
       }

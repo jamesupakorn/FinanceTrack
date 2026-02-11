@@ -31,6 +31,109 @@
   opacity: 0.85;
 }
 
+.overviewRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.overviewCard {
+  background: rgba(11, 15, 40, 0.95);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 18px 20px;
+  box-shadow: 0 20px 60px rgba(3, 8, 32, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.overviewAccent {
+  background: linear-gradient(135deg, rgba(28, 35, 80, 0.95) 0%, rgba(31, 60, 108, 0.8) 100%);
+  border-color: rgba(78, 203, 255, 0.4);
+  box-shadow: 0 28px 70px rgba(12, 32, 84, 0.65);
+}
+
+.overviewLabel {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+
+.overviewValue {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.nextDueValue {
+  letter-spacing: 0.4px;
+}
+
+.overviewHint {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.overviewMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.urgentHighlight,
+.overdueHighlight {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.urgentHighlight {
+  background: rgba(255, 189, 74, 0.15);
+  color: #ffbd4a;
+  border: 1px solid rgba(255, 189, 74, 0.35);
+}
+
+.overdueHighlight {
+  background: rgba(255, 122, 162, 0.15);
+  color: #ff7aa2;
+  border: 1px solid rgba(255, 122, 162, 0.35);
+}
+
+.diffChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.diffChipPositive {
+  background: rgba(77, 240, 195, 0.15);
+  color: #4df0c3;
+  border: 1px solid rgba(77, 240, 195, 0.4);
+}
+
+.diffChipNegative {
+  background: rgba(255, 122, 162, 0.15);
+  color: #ff7aa2;
+  border: 1px solid rgba(255, 122, 162, 0.4);
+}
+
+.diffChipNeutral {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
 .addItemButton {
   padding: 12px 20px;
   border-radius: 16px;
@@ -137,21 +240,29 @@
 
 .tableHeaderCell:first-child,
 .tableCell:first-child {
-  width: 34%;
+  width: 30%;
 }
 
 .tableHeaderCell:nth-child(2),
 .tableHeaderCell:nth-child(3),
-.tableHeaderCell:nth-child(5),
 .tableCell:nth-child(2),
-.tableCell:nth-child(3),
-.tableCell:nth-child(5) {
-  width: 18%;
+.tableCell:nth-child(3) {
+  width: 16%;
 }
 
 .tableHeaderCell:nth-child(4),
 .tableCell:nth-child(4) {
-  width: 12%;
+  width: 14%;
+}
+
+.tableHeaderCell:nth-child(5),
+.tableCell:nth-child(5) {
+  width: 10%;
+}
+
+.tableHeaderCell:nth-child(6),
+.tableCell:nth-child(6) {
+  width: 14%;
 }
 
 .tableHeaderCell.right,
@@ -208,6 +319,104 @@
   transition: all 0.2s ease;
   outline: none;
   min-height: 44px;
+}
+
+.dateCell {
+  min-width: 150px;
+}
+
+.dueDateWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dateInput {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(9, 12, 32, 0.85);
+  color: var(--text-primary);
+  font-size: 14px;
+  min-height: 44px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dateInput:focus {
+  border-color: rgba(77, 240, 195, 0.8);
+  box-shadow: 0 0 0 3px rgba(77, 240, 195, 0.2);
+}
+
+.dateInput::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+  opacity: 0.85;
+}
+
+.dueMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dueBadge {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dueBadge[data-status="overdue"] {
+  border-color: rgba(255, 122, 162, 0.4);
+  background: rgba(255, 122, 162, 0.12);
+  color: #ff7aa2;
+}
+
+.dueBadge[data-status="dueToday"] {
+  border-color: rgba(255, 189, 74, 0.5);
+  background: rgba(255, 189, 74, 0.15);
+  color: #ffbd4a;
+}
+
+.dueBadge[data-status="dueSoon"] {
+  border-color: rgba(78, 203, 255, 0.4);
+  background: rgba(78, 203, 255, 0.14);
+  color: #4ecbff;
+}
+
+.dueBadge[data-status="future"] {
+  border-color: rgba(77, 240, 195, 0.35);
+  background: rgba(77, 240, 195, 0.12);
+  color: #4df0c3;
+}
+
+.dueBadge[data-status="done"] {
+  border-color: rgba(92, 188, 148, 0.4);
+  background: rgba(92, 188, 148, 0.16);
+  color: #72dfb4;
+}
+
+.dueBadge[data-status="none"] {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--text-secondary);
+}
+
+.dueHelper {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.mobileDueField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .expenseInput:focus {

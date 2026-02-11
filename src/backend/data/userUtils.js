@@ -21,6 +21,10 @@ function loadUsers() {
   }
 }
 
+function saveUsers(users = []) {
+  fs.writeFileSync(USERS_PATH, JSON.stringify(users, null, 2));
+}
+
 function getUserById(userId) {
   const users = loadUsers();
   return users.find(u => u.id === userId) || null;
@@ -52,6 +56,28 @@ async function checkUserPassword(userId, password) {
   const user = getUserById(userId);
   if (!user) return false;
   return await bcrypt.compare(password, user.passwordHash);
+}
+
+async function updateUserPassword(userId, nextPassword) {
+  if (!userId || typeof nextPassword !== 'string') {
+    throw new Error('Invalid payload');
+  }
+  const users = loadUsers();
+  const userIndex = users.findIndex(user => user.id === userId);
+  if (userIndex === -1) {
+    throw new Error('User not found');
+  }
+  const passwordHash = await bcrypt.hash(nextPassword, 10);
+  users[userIndex] = {
+    ...users[userIndex],
+    passwordHash
+  };
+  saveUsers(users);
+  return {
+    id: users[userIndex].id,
+    displayName: users[userIndex].displayName,
+    avatar: users[userIndex].avatar
+  };
 }
 
 function resolveDataPath(filename) {
@@ -134,6 +160,7 @@ module.exports = {
   loadUsers,
   getUserById,
   checkUserPassword,
+  updateUserPassword,
   generateUserId,
   resolveDataPath,
   readDataFile,

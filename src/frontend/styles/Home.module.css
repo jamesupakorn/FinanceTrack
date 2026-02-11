@@ -204,6 +204,18 @@
   color: rgba(255,255,255,0.65);
 }
 
+.userMenuAccent svg {
+  color: #4df0c3;
+}
+
+.userMenuAccent span {
+  color: rgba(181, 255, 235, 0.75);
+}
+
+.userMenuAccent:hover {
+  background: rgba(77, 240, 195, 0.12);
+}
+
 .userMenuItem:hover {
   background: rgba(255,255,255,0.08);
   transform: translateX(6px);
@@ -221,6 +233,37 @@
   background: rgba(255, 105, 138, 0.12);
 }
 
+.actionToast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-radius: 20px;
+  background: rgba(6, 9, 27, 0.95);
+  border: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 28px 80px rgba(2,6,23,0.55);
+  color: #f5f7ff;
+  z-index: 60;
+  animation: toastIn 0.25s ease forwards;
+}
+
+.actionToastSuccess {
+  border-color: rgba(77, 240, 195, 0.5);
+  box-shadow: 0 20px 60px rgba(77, 240, 195, 0.35);
+}
+
+.actionToast svg {
+  color: #4df0c3;
+}
+
+.actionToast span {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
 @keyframes dropdownIn {
   from {
     opacity: 0;
@@ -229,6 +272,17 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
   }
 }
 
@@ -363,6 +417,12 @@
     font-size: 2.4rem;
   }
   .tabNavigation {
+
+  .actionToast {
+    left: 16px;
+    right: 16px;
+    top: 16px;
+  }
     gap: 10px;
     flex-wrap: wrap;
     border-radius: 32px;
