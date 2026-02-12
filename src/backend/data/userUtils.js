@@ -80,6 +80,28 @@ async function updateUserPassword(userId, nextPassword) {
   };
 }
 
+function updateUserLineId(userId, lineUserId) {
+  if (!userId || !lineUserId) {
+    throw new Error('Invalid payload');
+  }
+  const users = loadUsers();
+  const userIndex = users.findIndex(user => user.id === userId);
+  if (userIndex === -1) {
+    return null;
+  }
+  users[userIndex] = {
+    ...users[userIndex],
+    LineId: lineUserId
+  };
+  saveUsers(users);
+  return {
+    id: users[userIndex].id,
+    displayName: users[userIndex].displayName,
+    avatar: users[userIndex].avatar,
+    LineId: users[userIndex].LineId
+  };
+}
+
 function resolveDataPath(filename) {
   return path.join(DATA_DIR, filename);
 }
@@ -161,6 +183,7 @@ module.exports = {
   getUserById,
   checkUserPassword,
   updateUserPassword,
+  updateUserLineId,
   generateUserId,
   resolveDataPath,
   readDataFile,
@@ -170,3 +193,4 @@ module.exports = {
   updateUserData,
   limitUserEntries,
 };
+ผห
