@@ -366,6 +366,32 @@
     }
   },
   "demo": {
+    "2026-02": {
+      "_id": "f08592e10b930b28eb06426b",
+      "income": {
+        "salary": 0,
+        "overtime_1x": 0,
+        "overtime_1_5x": 0,
+        "overtime_2x": 0,
+        "overtime_3x": 0,
+        "overtime_other": 0,
+        "bonus": 0,
+        "other_income": 0
+      },
+      "deduct": {
+        "provident_fund": 0,
+        "social_security": 0,
+        "tax": 0
+      },
+      "summary": {
+        "total_income": 0,
+        "total_deduct": 0,
+        "net_income": 0
+      },
+      "saved_at": "2026-02-12T06:43:34.136Z",
+      "note": "",
+      "month": "2026-02"
+    },
     "2026-01": {
       "_id": "demo-salary-2026-01",
       "income": {
