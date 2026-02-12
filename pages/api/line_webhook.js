@@ -1,4 +1,7 @@
 import crypto from 'crypto';
+import { getMongoCollection, isJsonMode } from '../../lib/dataSource';
+
+const { updateUserLineId } = require('../../src/backend/data/userUtils');
 
 export const config = {
   api: {
@@ -19,6 +22,27 @@ function verifySignature(rawBody, signature, secret) {
   if (!signature || !secret) return false;
   const hash = crypto.createHmac('sha256', secret).update(rawBody).digest('base64');
   return hash === signature;
+}
+
+function parseLinkCommand(text = '') {
+  const normalized = String(text || '').trim();
+  if (!normalized) return null;
+  const match = normalized.match(/^(?:link|bind|connect)\s+(u\d+)$/i);
+  return match ? match[1].toLowerCase() : null;
+}
+
+async function updateUserLineIdMongo(userId, lineUserId) {
+  const collection = await getMongoCollection('users');
+  const now = new Date().toISOString();
+  const result = await collection.findOneAndUpdate(
+    { id: userId },
+    {
+      $set: { LineId: lineUserId, updatedAt: now },
+      $setOnInsert: { id: userId, createdAt: now }
+    },
+    { upsert: true, returnDocument: 'after' }
+  );
+  return result?.value || null;
 }
 
 export default async function handler(req, res) {
@@ -50,11 +74,32 @@ export default async function handler(req, res) {
   }
 
   const events = Array.isArray(payload.events) ? payload.events : [];
+  const linked = [];
+  for (const event of events) {
+    if (event?.type !== 'message') continue;
+    if (event?.message?.type !== 'text') continue;
+    const lineUserId = event?.source?.userId;
+    const targetUserId = parseLinkCommand(event?.message?.text);
+    if (!lineUserId || !targetUserId) continue;
+    let updated = null;
+    if (isJsonMode()) {
+      updated = updateUserLineId(targetUserId, lineUserId);
+    } else {
+      updated = await updateUserLineIdMongo(targetUserId, lineUserId);
+    }
+    if (updated) {
+      linked.push({ userId: updated.id, lineUserId: updated.LineId });
+    }
+  }
+
   console.log('LINE webhook events:', events.map(event => ({
     type: event.type,
     source: event.source,
     message: event.message
   })));
+  if (linked.length > 0) {
+    console.log('LINE linked users:', linked);
+  }
 
   return res.status(200).json({ ok: true });
 }
