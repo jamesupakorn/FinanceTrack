@@ -93,30 +93,59 @@ export default function EditPage() {
     return () => clearTimeout(timer);
   }, [passwordToast]);
 
-  // ดึงเดือนทั้งหมดจาก expense, income, salary แล้วรวม key
+  // ดึงเดือนทั้งหมดจากข้อมูลใน DB แล้วรวม key
   const fetchMonths = async () => {
     try {
-      const [expenseRes, savingsRes, salaryRes] = await Promise.all([
+      const [expenseRes, incomeRes, savingsRes, salaryRes, investmentRes] = await Promise.all([
         expenseAPI.getAll(),
+        incomeAPI.getAll(),
         savingsAPI.getAll(),
-        salaryAPI.getAll()
+        salaryAPI.getAll(),
+        (await import('../src/shared/utils/frontend/apiUtils')).investmentAPI.getAll()
       ]);
       const expenseMonths = expenseRes?.months ? Object.keys(expenseRes.months) : [];
+      const incomeMonths = incomeRes?.months ? Object.keys(incomeRes.months) : [];
       const savingsMonths = savingsRes?.months ? Object.keys(savingsRes.months) : [];
-      const salaryMonths = salaryRes?.months ? Object.keys(salaryRes.months) : [];
-      const allMonths = Array.from(new Set([...expenseMonths, ...savingsMonths, ...salaryMonths])).sort().reverse();
-      setMonths(allMonths);
+      const salaryMonths = salaryRes?.months
+        ? Object.entries(salaryRes.months)
+          .filter(([, doc]) => {
+            if (!doc || typeof doc !== 'object') return false;
+            const note = typeof doc.note === 'string' ? doc.note.trim() : '';
+            const summary = doc.summary || {};
+            const hasSummary = [summary.total_income, summary.total_deduct, summary.net_income]
+              .some(value => Number(value) > 0);
+            const income = doc.income || {};
+            const deduct = doc.deduct || {};
+            const hasIncome = Object.values(income).some(value => Number(value) > 0);
+            const hasDeduct = Object.values(deduct).some(value => Number(value) > 0);
+            return hasSummary || hasIncome || hasDeduct || note.length > 0;
+          })
+          .map(([month]) => month)
+        : [];
+      const investmentMonths = investmentRes && typeof investmentRes === 'object'
+        ? Object.keys(investmentRes).filter(key => key !== 'months')
+        : [];
       const currentMonth = getCurrentMonth();
-      const storedMonth = typeof window !== 'undefined' ? localStorage.getItem(selectedMonthKey) : null;
-      if (storedMonth && allMonths.includes(storedMonth)) {
-        setSelectedMonth(storedMonth);
-      } else if (allMonths.includes(currentMonth)) {
-        setSelectedMonth(currentMonth);
-      } else if (allMonths.length && !allMonths.includes(selectedMonth)) {
-        setSelectedMonth(allMonths[0]);
+      const allMonths = Array.from(new Set([
+        ...expenseMonths,
+        ...incomeMonths,
+        ...savingsMonths,
+        ...salaryMonths,
+        ...investmentMonths
+      ])).sort().reverse();
+      const normalizedMonths = allMonths.length ? allMonths : [currentMonth];
+      setMonths(normalizedMonths);
+      const hasMonthFromData = normalizedMonths.length > 0;
+      const monthToSelect = hasMonthFromData ? normalizedMonths[0] : currentMonth;
+      const shouldUpdateSelection = !selectedMonth || (hasMonthFromData && !normalizedMonths.includes(selectedMonth));
+      if (shouldUpdateSelection && monthToSelect) {
+        setSelectedMonth(monthToSelect);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(selectedMonthKey, monthToSelect);
+        }
       }
     } catch (err) {
-      setMonths([]);
+      setMonths([getCurrentMonth()]);
     }
   };
 
@@ -126,25 +155,6 @@ export default function EditPage() {
       fetchMonths();
     }
   }, [refreshTrigger, currentUser, selectedMonthKey]);
-
-  // เซต selectedMonth เป็นเดือนปัจจุบันทันทีเมื่อ mount ถ้ายังไม่ได้เซต
-  React.useEffect(() => {
-    if (!selectedMonth && months.length > 0) {
-      const currentMonth = getCurrentMonth();
-      if (months.includes(currentMonth)) {
-        setSelectedMonth(currentMonth);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(selectedMonthKey, currentMonth);
-        }
-      } else {
-        setSelectedMonth(months[0]);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(selectedMonthKey, months[0]);
-        }
-      }
-    }
-  }, [months, selectedMonth, selectedMonthKey]);
-
 
   const handleDataRefresh = () => {
     setRefreshTrigger(prev => prev + 1);
