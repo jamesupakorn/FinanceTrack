@@ -162,7 +162,6 @@ export default async function handler(req, res) {
           delete docForMapping._id;
           delete docForMapping.userId;
           flat = mapDocToFlatItemObjectWithTotals(docForMapping);
-          console.log('Mapped flat doc for month', month, flat);
         } catch (err) {
           console.error('Error mapping expense doc for month:', month, err, doc);
           return res.status(200).json({});
