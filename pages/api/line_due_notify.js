@@ -7,6 +7,15 @@ import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
 const { loadUsers, getUserData } = require('../../src/backend/data/userUtils');
 
 const JSON_EXPENSE_FILE = 'monthly_expense.json';
+const THAI_MONTH_LABELS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+
+function normalizeMonthPart(value) {
+  return String(value).padStart(2, '0');
+}
+
+function getDaysInMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
 
 function getCurrentDateInfo(dateInput) {
   const date = dateInput ? new Date(dateInput) : new Date();
@@ -14,13 +23,17 @@ function getCurrentDateInfo(dateInput) {
     return null;
   }
   const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
+  const monthIndex = date.getMonth();
+  const mm = normalizeMonthPart(monthIndex + 1);
+  const dd = normalizeMonthPart(date.getDate());
   return {
     date,
+    year: yyyy,
+    monthIndex,
     monthKey: `${yyyy}-${mm}`,
     day: date.getDate(),
-    dateKey: `${yyyy}-${mm}-${dd}`
+    dateKey: `${yyyy}-${mm}-${dd}`,
+    daysInMonth: getDaysInMonth(yyyy, monthIndex)
   };
 }
 
@@ -45,13 +58,16 @@ function extractExpenseItems(doc = {}) {
 
 function isDueToday(item, target) {
   if (!item || !target) return false;
-  if (typeof item.dueDay === 'number') {
-    return item.dueDay === target.day;
+  const dueDay = getDueDayNumber(item);
+  if (!dueDay) return false;
+  if (dueDay < 1 || dueDay > target.daysInMonth) {
+    return false;
   }
-  if (typeof item.dueDay === 'string' && item.dueDay.trim() !== '') {
-    return Number(item.dueDay) === target.day;
-  }
-  return false;
+  const dueDate = new Date(target.year, target.monthIndex, dueDay);
+  if (Number.isNaN(dueDate.getTime())) return false;
+  return dueDate.getFullYear() === target.year
+    && dueDate.getMonth() === target.monthIndex
+    && dueDate.getDate() === target.day;
 }
 
 function formatAmount(value) {
@@ -60,14 +76,104 @@ function formatAmount(value) {
   return numeric.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
-function buildMessage(monthKey, items, target) {
-  const header = `แจ้งเตือนค่าใช้จ่าย (${monthKey})\nวันที่ ${target.dateKey}`;
-  const lines = items.map(item => {
-    const name = item.name || 'รายการไม่มีชื่อ';
-    const amount = formatAmount(item.estimate || item.actual || 0);
-    return `- ${name}: ${amount} บาท`;
-  });
-  return [header, ...lines].join('\n');
+function buildMessage(target, items, notifyMode) {
+  const headerTitle = notifyMode === 'unpaid' ? 'รายการค้างชำระ' : 'ครบกำหนดวันนี้';
+  const monthLabel = formatMonthKeyTH(target.monthKey);
+  const header = [
+    '🔔 FinanceTrack แจ้งเตือนค่าใช้จ่าย',
+    headerTitle,
+    `เดือน ${monthLabel}`,
+    `วันที่ ${formatThaiDate(target)}`,
+    '━━━━━━━━━━━━'
+  ].join('\n');
+  const lines = items.map((item, index) => formatLineItem(item, index, target));
+  const totalAmount = sumItemAmounts(items);
+  const footer = [
+    '━━━━━━━━━━━━',
+    `รวมทั้งหมด: ${formatAmount(totalAmount)} บาท (${items.length} รายการ)`,
+    'อัปเดตสถานะ ➜ https://finance-track-one.vercel.app/ 💼'
+  ].join('\n');
+  return [header, ...lines, footer].join('\n\n');
+}
+
+function formatLineItem(item, index, target) {
+  const name = item.name || 'รายการไม่มีชื่อ';
+  const amount = formatAmount(item.estimate || item.actual || 0);
+  const dueDay = getDueDayNumber(item);
+  const dueDateText = dueDay ? buildDueDateString(target, dueDay) : formatThaiDate(target);
+  const details = [
+    `💰 ${amount} บาท`,
+    `📅 ครบกำหนด ${dueDateText}`,
+    item.account ? `🏦 บัญชี ${item.account}` : null,
+    item.category ? `📌 หมวด ${item.category}` : null
+  ].filter(Boolean);
+  return `${index + 1}. ${name}\n${details.join('\n')}`;
+}
+
+function getDueDayNumber(item = {}) {
+  const rawDay = normalizeDueDayValue(item.dueDay);
+  if (rawDay) return rawDay;
+  if (typeof item.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.dueDate)) {
+    const dayPart = item.dueDate.slice(-2);
+    return normalizeDueDayValue(dayPart);
+  }
+  return null;
+}
+
+function normalizeDueDayValue(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return clampDueDay(Math.floor(value));
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return clampDueDay(Math.floor(parsed));
+    }
+  }
+  return null;
+}
+
+function clampDueDay(num) {
+  if (num >= 1 && num <= 31) {
+    return num;
+  }
+  return null;
+}
+
+function formatMonthKeyTH(monthKey = '') {
+  const [yearStr, monthStr] = monthKey.split('-');
+  const year = Number(yearStr);
+  const monthIndex = Number(monthStr) - 1;
+  if (!Number.isFinite(year) || monthIndex < 0 || monthIndex > 11) {
+    return monthKey;
+  }
+  const thaiYear = year + 543;
+  const monthLabel = THAI_MONTH_LABELS[monthIndex] || monthStr;
+  return `${monthLabel} ${thaiYear}`;
+}
+
+function formatThaiDate(target) {
+  const day = target.day;
+  const monthLabel = THAI_MONTH_LABELS[target.monthIndex] || normalizeMonthPart(target.monthIndex + 1);
+  const thaiYear = target.year + 543;
+  return `${day} ${monthLabel} ${thaiYear}`;
+}
+
+function buildDueDateString(target, dueDay) {
+  const actualDay = Math.min(dueDay, target.daysInMonth);
+  const monthLabel = THAI_MONTH_LABELS[target.monthIndex] || normalizeMonthPart(target.monthIndex + 1);
+  const thaiYear = target.year + 543;
+  return `${actualDay} ${monthLabel} ${thaiYear}`;
+}
+
+function sumItemAmounts(items = []) {
+  return items.reduce((sum, item) => {
+    const raw = Number(item.estimate || item.actual || 0);
+    if (!Number.isNaN(raw) && Number.isFinite(raw)) {
+      return sum + raw;
+    }
+    return sum;
+  }, 0);
 }
 
 async function getUsersForNotify(targetUserId) {
@@ -91,6 +197,14 @@ async function getExpenseDocForMonth(userId, monthKey) {
 }
 
 export default async function handler(req, res) {
+  if (process.env.CRON_SECRET) {
+    const authHeader = req.headers.authorization || '';
+    const expected = `Bearer ${process.env.CRON_SECRET}`;
+    if (authHeader !== expected) {
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -128,7 +242,7 @@ export default async function handler(req, res) {
     }
 
     try {
-      const message = buildMessage(target.monthKey, dueItems, target);
+      const message = buildMessage(target, dueItems, notifyMode);
       await sendLineMessage(message, user.LineId);
       results.push({ userId: user.id, sent: true, count: dueItems.length });
     } catch (error) {
