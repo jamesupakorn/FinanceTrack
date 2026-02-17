@@ -43,7 +43,8 @@
         "name": "ค่าบ้าน",
         "estimate": 8800,
         "actual": 9000,
-        "paid": false
+        "paid": false,
+        "dueDay": 10
       },
       "internet": {
         "name": "ค่าเน็ต",
@@ -1140,91 +1141,113 @@
         "name": "บัตรเครดิต KBank",
         "estimate": 2100.25,
         "actual": 2050.25,
-        "paid": true
+        "paid": true,
+        "dueDay": ""
       },
       "credit_kungsri": {
         "name": "บัตรเครดิต Kungsri",
         "estimate": 0,
         "actual": 0,
-        "paid": true
+        "paid": true,
+        "dueDay": ""
       },
       "credit_ttb": {
         "name": "บัตรเครดิต TTB",
         "estimate": 1850,
         "actual": 1820,
-        "paid": true
+        "paid": true,
+        "dueDay": ""
       },
       "credit_uob": {
         "name": "บัตรเครดิต UOB",
         "estimate": 0,
         "actual": 0,
-        "paid": true
+        "paid": true,
+        "dueDay": ""
       },
       "electricity": {
         "name": "ค่าไฟ",
         "estimate": 1200,
         "actual": 1185,
-        "paid": true
+        "paid": true,
+        "dueDay": ""
       },
       "house": {
         "name": "ค่าบ้าน",
         "estimate": 7200,
         "actual": 7200,
-        "paid": true
+        "paid": true,
+        "dueDay": ""
       },
       "internet": {
         "name": "ค่าเน็ต",
         "estimate": 599,
         "actual": 599,
-        "paid": true
+        "paid": true,
+        "dueDay": ""
       },
       "miscellaneous": {
         "name": "ค่าใช้จ่ายเบ็ดเตล็ด",
         "estimate": 600,
         "actual": 800,
-        "paid": true
+        "paid": true,
+        "dueDay": ""
       },
       "mobile": {
         "name": "โทรศัพท์มือถือ",
         "estimate": 899,
         "actual": 899,
-        "paid": true
+        "paid": true,
+        "dueDay": ""
       },
       "motorcycle": {
         "name": "ค่ารถจักรยานยนต์",
         "estimate": 1500,
         "actual": 1500,
-        "paid": true
+        "paid": true,
+        "dueDay": ""
       },
       "netflix": {
         "name": "Netflix",
         "estimate": 419,
         "actual": 419,
-        "paid": true
+        "paid": true,
+        "dueDay": ""
       },
       "shopee": {
         "name": "Shopee",
         "estimate": 930,
         "actual": 900,
-        "paid": true
+        "paid": true,
+        "dueDay": ""
       },
       "water": {
         "name": "ค่าน้ำ",
         "estimate": 180,
         "actual": 165,
-        "paid": true
+        "paid": true,
+        "dueDay": ""
       },
       "youtube": {
         "name": "YouTube",
         "estimate": 289,
         "actual": 289,
-        "paid": true
+        "paid": true,
+        "dueDay": ""
       },
       "youtube_membership": {
         "name": "YouTube Membership",
         "estimate": 159,
         "actual": 159,
-        "paid": true
+        "paid": true,
+        "dueDay": ""
+      },
+      "custom_1770890184915_254": {
+        "name": "ทดสอบ",
+        "estimate": 0,
+        "actual": 0,
+        "paid": false,
+        "dueDay": ""
       }
     }
   }
