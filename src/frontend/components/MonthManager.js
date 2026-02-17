@@ -3,6 +3,11 @@ import { getNextMonth } from '../../shared/utils/frontend/numberUtils';
 import { getMonthData, getPrevMonth, formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
 import styles from '../styles/MonthManager.module.css';
 
+const getCurrentMonth = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
 
 const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
   const [showAddForm, setShowAddForm] = useState(false);
@@ -24,24 +29,46 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
   useEffect(() => {
     let isMounted = true;
     const fetchMonths = async () => {
-      const { expenseAPI, incomeAPI, salaryAPI } = await import('../../shared/utils/frontend/apiUtils');
-      const [expenseData, incomeData, salaryData] = await Promise.all([
+      const { expenseAPI, incomeAPI, salaryAPI, investmentAPI } = await import('../../shared/utils/frontend/apiUtils');
+      const [expenseData, incomeData, salaryData, investmentData] = await Promise.all([
         expenseAPI.getAll(),
         incomeAPI.getAll(),
-        salaryAPI.getAll()
+        salaryAPI.getAll(),
+        investmentAPI.getAll()
       ]);
       // รวมเดือนจากทุกแหล่ง
       const getMonths = data => (data?.months ? Object.keys(data.months) : []);
+      const getSalaryMonths = data => (data?.months
+        ? Object.entries(data.months)
+          .filter(([, doc]) => {
+            if (!doc || typeof doc !== 'object') return false;
+            const note = typeof doc.note === 'string' ? doc.note.trim() : '';
+            const summary = doc.summary || {};
+            const hasSummary = [summary.total_income, summary.total_deduct, summary.net_income]
+              .some(value => Number(value) > 0);
+            const income = doc.income || {};
+            const deduct = doc.deduct || {};
+            const hasIncome = Object.values(income).some(value => Number(value) > 0);
+            const hasDeduct = Object.values(deduct).some(value => Number(value) > 0);
+            return hasSummary || hasIncome || hasDeduct || note.length > 0;
+          })
+          .map(([month]) => month)
+        : []);
+      const getInvestmentMonths = data => (data && typeof data === 'object'
+        ? Object.keys(data).filter(key => key !== 'months')
+        : []);
       const allMonthsSet = new Set([
         ...getMonths(expenseData),
         ...getMonths(incomeData),
-        ...getMonths(salaryData)
+        ...getSalaryMonths(salaryData),
+        ...getInvestmentMonths(investmentData)
       ]);
       const validMonthRegex = /^\d{4}-\d{2}$/;
       const allMonths = Array.from(allMonthsSet)
         .filter(month => validMonthRegex.test(month))
         .sort((a, b) => b.localeCompare(a));
-      const options = allMonths.map(month => ({
+      const monthsToUse = allMonths.length ? allMonths : [getCurrentMonth()];
+      const options = monthsToUse.map(month => ({
         value: month,
         label: formatMonthLabelTH(month)
       }));
