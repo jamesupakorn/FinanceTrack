@@ -1,10 +1,10 @@
-import { mapDocToFlatItemObjectWithTotals, removeSummaryFields, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils';
-import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { mapDocToFlatItemObjectWithTotals, removeSummaryFields, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils.js';
+import { assertUserId } from '../../src/shared/utils/backend/userRequest.js';
 import {
   isJsonMode,
   withGeneratedId,
   getMongoCollection
-} from '../../lib/dataSource';
+} from '../../lib/dataSource.js';
 
 const {
   getUserData,
@@ -162,7 +162,6 @@ export default async function handler(req, res) {
           delete docForMapping._id;
           delete docForMapping.userId;
           flat = mapDocToFlatItemObjectWithTotals(docForMapping);
-          console.log('Mapped flat doc for month', month, flat);
         } catch (err) {
           console.error('Error mapping expense doc for month:', month, err, doc);
           return res.status(200).json({});

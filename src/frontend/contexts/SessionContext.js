@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { setActiveUserId } from '../../shared/utils/frontend/sessionClient';
 
 const STORAGE_KEY = 'financetrack-current-user';
+const LAST_ACTIVITY_KEY = 'financetrack-last-activity';
+const SESSION_TIMEOUT_MS = 60 * 60 * 1000;
 
 const SessionContext = createContext(null);
 
@@ -25,12 +27,42 @@ export const SessionProvider = ({ children }) => {
         setCurrentUser(parsed);
         setActiveUserId(parsed?.id || null);
       }
+      const lastActivity = parseInt(localStorage.getItem(LAST_ACTIVITY_KEY), 10);
+      if (lastActivity && Date.now() - lastActivity > SESSION_TIMEOUT_MS) {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(LAST_ACTIVITY_KEY);
+        setCurrentUser(null);
+        setActiveUserId(null);
+      }
     } catch (err) {
       console.error('โหลดข้อมูลผู้ใช้จาก localStorage ไม่สำเร็จ', err);
     } finally {
       setIsReady(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) return undefined;
+    const updateActivity = () => {
+      localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString());
+    };
+    updateActivity();
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    events.forEach(event => window.addEventListener(event, updateActivity));
+    const interval = setInterval(() => {
+      const last = parseInt(localStorage.getItem(LAST_ACTIVITY_KEY), 10);
+      if (last && Date.now() - last > SESSION_TIMEOUT_MS) {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(LAST_ACTIVITY_KEY);
+        setCurrentUser(null);
+        setActiveUserId(null);
+      }
+    }, 60 * 1000);
+    return () => {
+      events.forEach(event => window.removeEventListener(event, updateActivity));
+      clearInterval(interval);
+    };
+  }, [currentUser]);
 
   const persistUser = useCallback((user) => {
     if (user) {

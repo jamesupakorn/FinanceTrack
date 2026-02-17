@@ -232,7 +232,18 @@ export const formatExpenseData = (data, month) => {
       estimate: parseAndFormat(source?.estimate ?? 0),
       actual: parseAndFormat(source?.actual ?? 0),
       paid: source?.paid === true || source?.paid === 'true',
-      dueDate: (typeof source?.dueDate === 'string') ? source.dueDate : ''
+      dueDay: (() => {
+        if (typeof source?.dueDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(source.dueDay)) {
+          return String(parseInt(source.dueDay.slice(-2), 10));
+        }
+        if (typeof source?.dueDay === 'number' || typeof source?.dueDay === 'string') {
+          return String(source.dueDay);
+        }
+        if (typeof source?.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(source.dueDate)) {
+          return String(parseInt(source.dueDate.slice(-2), 10));
+        }
+        return '';
+      })()
     };
   });
 
