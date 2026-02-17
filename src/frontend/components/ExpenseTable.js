@@ -29,12 +29,17 @@ const getStartOfToday = () => {
   return date;
 };
 
-const parseDueDateValue = (value) => {
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  parsed.setHours(0, 0, 0, 0);
-  return parsed;
+const getDueDateFromDay = (dayValue) => {
+  const parsed = Number(dayValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  const today = getStartOfToday();
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const safeDay = Math.min(lastDay, Math.max(1, Math.round(parsed)));
+  const date = new Date(year, month, safeDay);
+  date.setHours(0, 0, 0, 0);
+  return date;
 };
 
 const formatDueDateLabel = (date, options = { day: 'numeric', month: 'short' }) => {
@@ -42,13 +47,13 @@ const formatDueDateLabel = (date, options = { day: 'numeric', month: 'short' }) 
   return date.toLocaleDateString('th-TH', options);
 };
 
-const describeDueTiming = (dueDateValue, paid) => {
-  const parsedDate = parseDueDateValue(dueDateValue);
+const describeDueTiming = (dueDayValue, paid) => {
+  const parsedDate = getDueDateFromDay(dueDayValue);
   if (paid) {
     return {
       status: 'done',
       badge: 'ชำระแล้ว',
-      helper: parsedDate ? `ครบกำหนด ${formatDueDateLabel(parsedDate)}` : '',
+      helper: dueDayValue ? `ครบกำหนดทุกวันที่ ${dueDayValue}` : '',
       date: parsedDate,
       diffDays: null
     };
@@ -68,7 +73,7 @@ const describeDueTiming = (dueDateValue, paid) => {
     return {
       status: 'overdue',
       badge: `เกินกำหนด ${Math.abs(diffDays)} วัน`,
-      helper: formatDueDateLabel(parsedDate),
+      helper: `ทุกวันที่ ${dueDayValue}`,
       date: parsedDate,
       diffDays
     };
@@ -86,14 +91,14 @@ const describeDueTiming = (dueDateValue, paid) => {
     return {
       status: 'dueSoon',
       badge: `อีก ${diffDays} วัน`,
-      helper: formatDueDateLabel(parsedDate),
+      helper: `ทุกวันที่ ${dueDayValue}`,
       date: parsedDate,
       diffDays
     };
   }
   return {
     status: 'future',
-    badge: formatDueDateLabel(parsedDate),
+    badge: `ทุกวันที่ ${dueDayValue}`,
     helper: 'ครบกำหนด',
     date: parsedDate,
     diffDays
@@ -159,7 +164,7 @@ export default function ExpenseTable({ selectedMonth }) {
         estimate: '0.00',
         actual: '0.00',
         paid: false,
-        dueDate: ''
+        dueDay: ''
       };
       return {
         ...prev,
@@ -169,7 +174,7 @@ export default function ExpenseTable({ selectedMonth }) {
   };
 
   const handleExpenseChange = (item, field, value) => {
-    if (field === 'paid' || field === 'name' || field === 'dueDate') {
+    if (field === 'paid' || field === 'name' || field === 'dueDay') {
       updateExpenseField(item, field, value);
       return;
     }
@@ -188,9 +193,13 @@ export default function ExpenseTable({ selectedMonth }) {
       updateExpenseField(item, field, cleanName);
       return;
     }
-    if (field === 'dueDate') {
-      const cleanDate = typeof value === 'string' ? value.trim() : '';
-      updateExpenseField(item, field, cleanDate);
+    if (field === 'dueDay') {
+      const parsed = parseInt(value, 10);
+      if (Number.isNaN(parsed)) {
+        updateExpenseField(item, field, '');
+      } else {
+        updateExpenseField(item, field, String(Math.min(31, Math.max(1, parsed))));
+      }
       return;
     }
     updateExpenseField(item, field, value);
@@ -205,7 +214,7 @@ export default function ExpenseTable({ selectedMonth }) {
         estimate: '0.00',
         actual: '0.00',
         paid: false,
-        dueDate: ''
+        dueDay: ''
       }
     }));
   };
@@ -252,14 +261,15 @@ export default function ExpenseTable({ selectedMonth }) {
       if (!row) return;
       const paid = row.paid === true || row.paid === 'true';
       if (paid) return;
-      const parsedDate = parseDueDateValue(row.dueDate);
+      const parsedDate = getDueDateFromDay(row.dueDay);
       if (!parsedDate) return;
       const diffDays = Math.ceil((parsedDate - today) / DAY_IN_MS);
       upcoming.push({
         key: item,
         name: row.name || DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการ',
         date: parsedDate,
-        diffDays
+        diffDays,
+        dueDay: row.dueDay
       });
     });
     upcoming.sort((a, b) => a.date - b.date);
@@ -270,7 +280,9 @@ export default function ExpenseTable({ selectedMonth }) {
       upcomingCount: upcoming.length,
       urgentCount,
       overdueCount,
-      nextDueLabel: nextDue ? formatDueDateLabel(nextDue.date, { day: 'numeric', month: 'short' }) : 'ยังไม่กำหนด',
+      nextDueLabel: nextDue
+        ? (nextDue.dueDay ? `ทุกวันที่ ${nextDue.dueDay}` : formatDueDateLabel(nextDue.date, { day: 'numeric', month: 'short' }))
+        : 'ยังไม่กำหนด',
       nextDueName: nextDue ? nextDue.name : 'ไม่มีรายการ',
     };
   }, [editExpense, sortedExpenseKeys]);
@@ -366,7 +378,7 @@ export default function ExpenseTable({ selectedMonth }) {
                       ? styles.diffNegative
                       : styles.diffNeutral;
                   const displayName = row.name || DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการใหม่';
-                  const dueInfo = describeDueTiming(row.dueDate, paid);
+                  const dueInfo = describeDueTiming(row.dueDay, paid);
                   return (
                     <tr key={item} className={styles.tableRow}>
                       <td className={styles.tableCell}>
@@ -409,10 +421,13 @@ export default function ExpenseTable({ selectedMonth }) {
                       <td className={`${styles.tableCell} ${styles.dateCell}`}>
                         <div className={styles.dueDateWrapper}>
                           <input
-                            type="date"
-                            value={row.dueDate || ''}
-                            onChange={e => handleExpenseChange(item, 'dueDate', e.target.value)}
-                            onBlur={e => handleExpenseBlur(item, 'dueDate', e.target.value)}
+                            type="number"
+                            min="1"
+                            max="31"
+                            placeholder="ทุกวันที่ (เช่น 10)"
+                            value={row.dueDay || ''}
+                            onChange={e => handleExpenseChange(item, 'dueDay', e.target.value)}
+                            onBlur={e => handleExpenseBlur(item, 'dueDay', e.target.value)}
                             className={styles.dateInput}
                           />
                           <div className={styles.dueMeta}>
@@ -465,7 +480,7 @@ export default function ExpenseTable({ selectedMonth }) {
                   ? styles.diffNegative
                   : styles.diffNeutral;
               const displayName = row.name || DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการใหม่';
-              const dueInfo = describeDueTiming(row.dueDate, paid);
+              const dueInfo = describeDueTiming(row.dueDay, paid);
               return (
                 <div className={styles.expenseCard} key={item}>
                   <div className={styles.cardRow}>
@@ -503,10 +518,13 @@ export default function ExpenseTable({ selectedMonth }) {
                     <span className={styles.cardLabel}>วันครบกำหนด</span>
                     <div className={styles.mobileDueField}>
                       <input
-                        type="date"
-                        value={row.dueDate || ''}
-                        onChange={e => handleExpenseChange(item, 'dueDate', e.target.value)}
-                        onBlur={e => handleExpenseBlur(item, 'dueDate', e.target.value)}
+                        type="number"
+                        min="1"
+                        max="31"
+                        placeholder="ทุกวันที่ (เช่น 10)"
+                        value={row.dueDay || ''}
+                        onChange={e => handleExpenseChange(item, 'dueDay', e.target.value)}
+                        onBlur={e => handleExpenseBlur(item, 'dueDay', e.target.value)}
                         className={styles.dateInput}
                       />
                       <span className={styles.dueBadge} data-status={dueInfo.status}>{dueInfo.badge}</span>
