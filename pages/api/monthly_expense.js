@@ -1,10 +1,10 @@
-import { mapDocToFlatItemObjectWithTotals, removeSummaryFields, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils';
-import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { mapDocToFlatItemObjectWithTotals, removeSummaryFields, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils.js';
+import { assertUserId } from '../../src/shared/utils/backend/userRequest.js';
 import {
   isJsonMode,
   withGeneratedId,
   getMongoCollection
-} from '../../lib/dataSource';
+} from '../../lib/dataSource.js';
 
 const {
   getUserData,

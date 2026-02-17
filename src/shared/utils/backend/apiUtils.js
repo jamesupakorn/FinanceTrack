@@ -122,11 +122,13 @@ export function mapDocToFlatItemObjectWithTotals(doc) {
   if (doc.estimate && doc.actual) {
     const items = Array.from(new Set([...Object.keys(doc.estimate), ...Object.keys(doc.actual)]));
     items.forEach(key => {
+      const dueDayValue = doc[key]?.dueDay ?? (typeof doc[key]?.dueDate === 'string' ? doc[key].dueDate : undefined);
       out[key] = {
         name: typeof doc[key]?.name === 'string' ? doc[key].name : '',
         estimate: doc.estimate[key] ?? 0,
         actual: doc.actual[key] ?? 0,
-        paid: false
+        paid: false,
+        ...(dueDayValue !== undefined ? { dueDay: dueDayValue } : {})
       };
     });
   } else {
@@ -134,11 +136,13 @@ export function mapDocToFlatItemObjectWithTotals(doc) {
       if (summaryFields.has(key)) return;
       const val = doc[key];
       if (val && typeof val === 'object') {
+        const dueDayValue = val?.dueDay ?? (typeof val?.dueDate === 'string' ? val.dueDate : undefined);
         out[key] = {
           name: typeof val.name === 'string' ? val.name : '',
           estimate: val.estimate ?? 0,
           actual: val.actual ?? 0,
-          paid: typeof val.paid === 'boolean' ? val.paid : false
+          paid: typeof val.paid === 'boolean' ? val.paid : false,
+          ...(dueDayValue !== undefined ? { dueDay: dueDayValue } : {})
         };
       }
     });

@@ -10,8 +10,16 @@ export function formatExpenseForSave(editExpense, parseToNumber) {
         numericExpense[item][field] = !!editExpense[item][field];
       } else if (field === 'name') {
         numericExpense[item][field] = (editExpense[item][field] || '').trim();
+      } else if (field === 'dueDay') {
+        const raw = String(editExpense[item][field] ?? '').trim();
+        const parsed = parseInt(raw, 10);
+        if (Number.isNaN(parsed)) {
+          numericExpense[item][field] = '';
+        } else {
+          numericExpense[item][field] = Math.min(31, Math.max(1, parsed));
+        }
       } else if (field === 'dueDate') {
-        numericExpense[item][field] = (editExpense[item][field] || '').trim();
+        // เลิกใช้ dueDate แล้ว (ใช้ dueDay แทน)
       } else {
         numericExpense[item][field] = parseToNumber(editExpense[item][field]);
       }
