@@ -1,3 +1,8 @@
+/**
+ * คอมโพเนนต์: Icons
+ * รวมไอคอน SVG ที่ใช้ในระบบการเงิน
+ * ใช้เป็นชุดไอคอนมาตรฐานสำหรับ UI
+ */
 // Modern SVG Icons สำหรับระบบการเงิน
 export const Icons = {
     Message: ({ size = 20, color = "currentColor" }) => (

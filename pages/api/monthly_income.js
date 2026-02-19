@@ -1,16 +1,11 @@
 /**
  * API: pages/api/monthly_income.js
- * 
- * Monthly Income Management API
- * 
- * Handles CRUD operations for monthly income tracking
- * Supports both JSON file mode and MongoDB database mode
- * Features:
- * - GET: Retrieve income data for specific month or all months with totals
- * - POST: Save/update income data with custom labels and item deletion
- * - Supports dynamic custom income items with custom labels
- * - Calculates total income per month
- * - Enforces 15-month data limit per user
+ * จัดการข้อมูลรายรับรายเดือน
+ * รองรับทั้ง JSON และ MongoDB
+ * - GET: อ่านข้อมูลรายเดือนหรือทั้งหมดพร้อมยอดรวม
+ * - POST: บันทึก/อัปเดตข้อมูลพร้อม label แบบกำหนดเองและรายการลบ
+ * - รองรับรายการรายรับแบบ dynamic
+ * - จำกัดข้อมูลย้อนหลังสูงสุด 15 เดือน
  */
 
 import { sumValues, removeSummaryFields, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils';
@@ -28,15 +23,13 @@ const {
   limitUserEntries,
 } = require('../../src/backend/data/userUtils');
 
-const MONTH_LIMIT = 15; // Maximum months of income data to store per user
-const JSON_FILENAME = 'monthly_income.json'; // JSON file name for file-based mode
+const MONTH_LIMIT = 15; // จำกัดข้อมูลย้อนหลังสูงสุด 15 เดือนต่อผู้ใช้
+const JSON_FILENAME = 'monthly_income.json'; // ไฟล์ JSON สำหรับโหมด file-based
 
 /**
- * Extract custom label updates from payload  
- * Validates label format and filters empty values
- * Used to support custom names for income items
- * @param {object} payload - request payload with __labels property
- * @returns {object} clean label updates
+ * ดึงและตรวจสอบ label แบบกำหนดเองจาก payload
+ * @param {object} payload - ข้อมูลที่มี __labels
+ * @returns {object} label ที่ผ่านการกรองแล้ว
  */
 function extractLabelUpdates(payload = {}) {
   const raw = payload?.__labels;
@@ -52,11 +45,10 @@ function extractLabelUpdates(payload = {}) {
 }
 
 /**
- * Sanitize income payload for database storage
- * Removes metadata, labels, and summary fields
- * Ensures only actual income values are stored
- * @param {object} values - income data object
- * @returns {object} cleaned payload ready for save
+ * ทำความสะอาด payload ก่อนบันทึก
+ * ลบ metadata, label และฟิลด์สรุปยอด
+ * @param {object} values - ข้อมูลรายรับ
+ * @returns {object} ข้อมูลที่พร้อมบันทึก
  */
 function sanitizeIncomePayload(values = {}) {
   const cleaned = removeSummaryFields(values, ['รวม']);
@@ -69,10 +61,9 @@ function sanitizeIncomePayload(values = {}) {
 }
 
 /**
- * Calculate total income from all income items in a month
- * Sums up all numeric values and rounds to 2 decimal places
- * @param {object} data - Income data object with key-value pairs
- * @returns {number} Rounded total income amount (2 decimal places)
+ * คำนวณยอดรวมรายรับของเดือน
+ * @param {object} data - ข้อมูลรายรับ
+ * @returns {number} ยอดรวม (ปัดทศนิยม 2 ตำแหน่ง)
  */
 function getTotalIncome(data) {
   let sum = 0;
@@ -83,12 +74,9 @@ function getTotalIncome(data) {
 }
 
 /**
- * Build response object containing all months of income data with totals
- * Generates a response object with monthly income data indexed by month key
- * Calculates and adds the total income (รวม) for each month
- * Removes internal _id field before returning
- * @param {object} bucket - Object containing all months' data indexed by month key
- * @returns {object} Response object with months mapped to income data including totals
+ * สร้างผลลัพธ์รายเดือนทั้งหมดพร้อมยอดรวม
+ * @param {object} bucket - ข้อมูลรายเดือนทั้งหมด
+ * @returns {object} ข้อมูลรายเดือนพร้อมยอดรวม
  */
 function buildJsonAllMonthsResponse(bucket = {}) {
   const data = {};
@@ -103,11 +91,9 @@ function buildJsonAllMonthsResponse(bucket = {}) {
 }
 
 /**
- * Enforce the 15-month data limit per user
- * Removes oldest month entries when user exceeds the MONTH_LIMIT threshold
- * Uses the month field from each entry to determine age and retention priority
- * @param {object} bucket - Object containing all months of user data
- * @returns {object} Limited bucket with maximum MONTH_LIMIT entries per user
+ * จำกัดจำนวนเดือนข้อมูลรายรับต่อผู้ใช้ไว้ที่ 15 เดือน
+ * @param {object} bucket - ข้อมูลรายเดือนของผู้ใช้
+ * @returns {object} bucket ที่ถูกจำกัดจำนวนเดือนแล้ว
  */
 function enforceUserMonthLimit(bucket = {}) {
   return limitUserEntries(bucket, {
@@ -117,14 +103,12 @@ function enforceUserMonthLimit(bucket = {}) {
 }
 
 /**
- * Handle GET requests for income data in JSON file mode
- * Retrieves income data for a specific month or all months
- * If month query parameter provided: returns specific month data with calculated total
- * If no month parameter: returns all months with calculated totals for each
- * @param {object} req - Express request object (query.month optional)
- * @param {object} res - Express response object
- * @param {string} userId - User ID for data retrieval
- * @returns {object} JSON response with income data (200 status)
+ * อ่านข้อมูลรายรับในโหมด JSON
+ * - ถ้ามีเดือน: คืนข้อมูลเดือนนั้นพร้อมยอดรวม
+ * - ถ้าไม่มีเดือน: คืนข้อมูลทุกเดือนพร้อมยอดรวม
+ * @param {object} req - Express request
+ * @param {object} res - Express response
+ * @param {string} userId - รหัสผู้ใช้
  */
 function handleJsonGet(req, res, userId) {
   const bucket = getUserData(JSON_FILENAME, userId);
@@ -143,15 +127,11 @@ function handleJsonGet(req, res, userId) {
 }
 
 /**
- * Handle POST requests to save income data in JSON file mode
- * Validates required month and values parameters
- * Merges new income data with existing month data
- * Supports custom labels via __labels property and item deletion via __removeKeys
- * Enforces the MONTH_LIMIT after update
- * @param {object} req - Express request object (body.month, body.values required)
- * @param {object} res - Express response object
- * @param {string} userId - User ID for data storage
- * @returns {object} JSON response with success status (201 on success, 400 on validation error)
+ * บันทึกข้อมูลรายรับในโหมด JSON
+ * ตรวจสอบ month/values และรองรับ label แบบกำหนดเองกับรายการที่ต้องลบ
+ * @param {object} req - Express request
+ * @param {object} res - Express response
+ * @param {string} userId - รหัสผู้ใช้
  */
 function handleJsonPost(req, res, userId) {
   const { month, values } = req.body;
@@ -188,25 +168,10 @@ function handleJsonPost(req, res, userId) {
 }
 
 /**
- * Main API handler for monthly income management
- * Supports both JSON file mode and MongoDB database mode
- * 
- * GET requests:
- * - Query parameter ?month=YYYY-MM returns income for specific month
- * - No parameters returns all months with totals
- * 
- * POST requests:
- * - Body: { month: string, values: object }
- * - Saves/updates income data for specified month
- * - Supports custom labels and item deletion
- * 
- * @param {object} req - Express request object (GET/POST methods)
- * @param {object} res - Express response object
- * @returns {void} JSON response with data or error status
- * 
- * Example:
- * GET /api/monthly_income?month=2024-01 -> Returns January 2024 income
- * POST /api/monthly_income with {month: '2024-01', values: {salary: 50000}} -> Saves income
+ * ตัวจัดการหลักของ API รายรับรายเดือน
+ * รองรับทั้ง JSON และ MongoDB
+ * @param {object} req - Express request
+ * @param {object} res - Express response
  */
 export default async function handler(req, res) {
   const userId = assertUserId(req, res);

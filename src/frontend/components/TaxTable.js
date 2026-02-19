@@ -1,3 +1,10 @@
+/**
+ * คอมโพเนนต์: TaxTable
+ * จัดการข้อมูลภาษีรายปีและรายเดือน
+ * รองรับการเพิ่ม/ลบปีและบันทึกข้อมูลภาษี
+ * @param {object} props
+ * @param {string} props.selectedMonth - เดือนที่เลือก (YYYY-MM)
+ */
 
 // ...imports and component definition...
 import { useState, useEffect } from 'react';
@@ -6,6 +13,9 @@ import { createDefault12MonthsObject, sumAccumulated, sumYearly, getSortedYears 
 import { taxAPI } from '../../shared/utils/frontend/apiUtils';
 import styles from '../styles/TaxTable.module.css';
 
+/**
+ * ตารางภาษีรายปี
+ */
 export default function TaxTable({ selectedMonth }) {
   // ...existing code...
   // เพิ่มปีใหม่ (เฉพาะโหมด edit)

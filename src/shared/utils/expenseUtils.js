@@ -1,22 +1,19 @@
 /**
  * expenseUtils.js
- * Utility functions for expense data transformation and validation
- * 
- * This module handles:
- * - Converting expense values to numbers (handles strings, currency formatting)
- * - Filtering out empty/invalid custom expense items
- * - Formatting expense data for saving to database
- * - Calculating expense totals
+ * ฟังก์ชันช่วยจัดการข้อมูลค่าใช้จ่าย
+ * - แปลงค่าตัวเลขและลบ comma
+ * - กรองรายการ custom ที่ว่าง
+ * - เตรียมข้อมูลก่อนบันทึกลงฐานข้อมูล
+ * - คำนวณยอดรวมค่าใช้จ่าย
  */
 
 import { isPaidFlag } from './commonUtils';
 
 /**
- * Parse string or number value to numeric format
- * Removes currency formatting (commas) and converts to float
- * Returns 0 for invalid/empty values
- * @param {number|string} value - value to parse
- * @returns {number} parsed numeric value
+ * แปลงค่า string/number ให้เป็นตัวเลข
+ * ลบ comma และคืนค่า 0 หากไม่ถูกต้อง
+ * @param {number|string} value - ค่าที่ต้องการแปลง
+ * @returns {number}
  */
 function parseExpenseNumber(value) {
   // ส่วนตัวเลข: ถ้าหาจำนวนให้โคตมีค่าตรวจสอบ
@@ -31,15 +28,11 @@ function parseExpenseNumber(value) {
 }
 
 /**
- * Check if custom expense item should be skipped during save
- * Filters out empty/placeholder custom items:
- * - Name is empty or "รายการใหม่" (default new item label)
- * - Estimate and actual amounts are both 0
- * - No due day set
- * - Not marked as paid
- * @param {string} key - expense item key
- * @param {object} item - expense item object
- * @returns {boolean} true if item should be skipped/not saved
+ * ตรวจสอบว่าควรข้ามรายการ custom ระหว่างบันทึกหรือไม่
+ * เงื่อนไข: ชื่อว่าง/ชื่อเริ่มต้น, ยอดเป็น 0, ไม่มี dueDay, ยังไม่ชำระ
+ * @param {string} key - key ของรายการ
+ * @param {object} item - ข้อมูลรายการ
+ * @returns {boolean}
  */
 function shouldSkipCustomExpenseItem(key, item = {}) {
   // ตรวจสอบว่า key เริ่มด้วย 'custom_'
@@ -54,17 +47,15 @@ function shouldSkipCustomExpenseItem(key, item = {}) {
 }
 
 /**
- * Format expense data object for saving to database
- * Applies these transformations:
- * - Skips empty custom expense items
- * - Converts amounts to numbers
- * - Normalizes paid flag to boolean
- * - Trims text fields (name)
- * - Validates and clamps due day (1-31)
- * - Removes deprecated dueDate field
- * @param {object} editExpense - flat expense data object from form
- * @param {function} parseToNumber - number parsing function
- * @returns {object} formatted expense data ready for database save
+ * เตรียมข้อมูลค่าใช้จ่ายก่อนบันทึกลงฐานข้อมูล
+ * - ข้ามรายการ custom ที่ว่าง
+ * - แปลงตัวเลข
+ * - แปลง paid ให้เป็น boolean
+ * - ตัดช่องว่างชื่อรายการ
+ * - ตรวจสอบ dueDay ให้อยู่ในช่วง 1-31
+ * @param {object} editExpense - ข้อมูลจากฟอร์ม
+ * @param {function} parseToNumber - ฟังก์ชันแปลงตัวเลข
+ * @returns {object} ข้อมูลที่พร้อมบันทึก
  */
 export function formatExpenseForSave(editExpense, parseToNumber) {
   const numericExpense = {}; // สู่นเก็บ หลายผลดี กอีค custom ยโคกขาด และรวมค่า
@@ -104,13 +95,11 @@ export function formatExpenseForSave(editExpense, parseToNumber) {
 }
 
 /**
- * Calculate total sum of a specific field across all expenses
- * Used to get total estimate, total actual paid, etc.
- * Filters out invalid/NaN values
- * @param {object} editExpense - expense data object
- * @param {string} field - field to sum ('estimate', 'actual', etc.)
- * @param {function} parseToNumber - number parsing function
- * @returns {number} sum of field values across all expenses
+ * คำนวณยอดรวมของฟิลด์ที่ระบุ (estimate/actual)
+ * @param {object} editExpense - ข้อมูลค่าใช้จ่าย
+ * @param {string} field - ชื่อฟิลด์ที่จะรวม
+ * @param {function} parseToNumber - ฟังก์ชันแปลงตัวเลข
+ * @returns {number} ยอดรวมทั้งหมด
  */
 export function calculateExpenseTotal(editExpense, field, parseToNumber) {
   // วษคทุกแต่ละสึ่งที่ชด field ที่รองมา (estimate/actual/etc.)

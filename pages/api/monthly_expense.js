@@ -1,17 +1,11 @@
 /**
  * API: pages/api/monthly_expense.js
- * 
- * Monthly Expense Management API
- * 
- * Handles CRUD operations for monthly expense tracking
- * Supports both JSON file mode and MongoDB database mode
- * Features:
- * - GET: Retrieve expense data for a specific month or all months
- * - POST: Save/update expense data and handle item deletion
- * - Enforces 15-month data limit per user
- * - Calculates account summaries and expense totals
- * 
- * TODO: Implement DELETE method for full month deletion
+ * จัดการข้อมูลค่าใช้จ่ายรายเดือน
+ * รองรับทั้ง JSON และ MongoDB
+ * - GET: อ่านข้อมูลรายเดือนหรือทั้งหมด
+ * - POST: บันทึก/อัปเดตข้อมูลและลบรายการที่ถูกลบ
+ * - จำกัดข้อมูลย้อนหลังสูงสุด 15 เดือน
+ * - คำนวณสรุปยอดตามบัญชีและยอดรวมค่าใช้จ่าย
  */
 
 import { mapDocToFlatItemObjectWithTotals, removeSummaryFields, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils.js';
@@ -29,16 +23,14 @@ const {
   limitUserEntries,
 } = require('../../src/backend/data/userUtils');
 
-const COLLECTION_NAME = 'monthly_expense'; // MongoDB collection name
-const JSON_FILENAME = 'monthly_expense.json'; // JSON file name for file-based mode
-const MONTH_LIMIT = 15; // Maximum months of expense data to store per user
+const COLLECTION_NAME = 'monthly_expense'; // ชื่อ collection ใน MongoDB
+const JSON_FILENAME = 'monthly_expense.json'; // ไฟล์ JSON สำหรับโหมด file-based
+const MONTH_LIMIT = 15; // จำกัดข้อมูลย้อนหลังสูงสุด 15 เดือนต่อผู้ใช้
 
 /**
- * Enforce user-specific month limit
- * Deletes oldest months when limit is exceeded
- * Keeps only 15 most recent months per user
- * @param {object} bucket - expense data bucket for user
- * @returns {object} cleaned bucket with max 15 months
+ * จำกัดจำนวนเดือนข้อมูลต่อผู้ใช้ไว้ที่ 15 เดือน
+ * @param {object} bucket - ข้อมูลรายเดือนของผู้ใช้
+ * @returns {object} bucket ที่ถูกจำกัดจำนวนเดือนแล้ว
  */
 function enforceUserMonthLimit(bucket = {}) {
   return limitUserEntries(bucket, {
@@ -48,12 +40,12 @@ function enforceUserMonthLimit(bucket = {}) {
 }
 
 /**
- * Handle GET request in JSON file mode
- * Retrieves expense data for specific month or all months
- * Returns data with account summary and totals calculated
- * @param {object} req - HTTP request {query: {month?}}
- * @param {object} res - HTTP response
- * @param {string} userId - authenticated user ID
+ * อ่านข้อมูลค่าใช้จ่ายในโหมด JSON
+ * - ถ้ามีเดือน: คืนข้อมูลเดือนนั้นพร้อมสรุปยอด
+ * - ถ้าไม่มีเดือน: คืนข้อมูลทุกเดือน
+ * @param {object} req - Express request
+ * @param {object} res - Express response
+ * @param {string} userId - รหัสผู้ใช้
  */
 function handleJsonExpenseGet(req, res, userId) {
   const bucket = getUserData(JSON_FILENAME, userId);
@@ -82,13 +74,11 @@ function handleJsonExpenseGet(req, res, userId) {
 }
 
 /**
- * Handle POST request in JSON file mode
- * Saves/updates expense data for a month
- * Handles item deletion via __removeKeys in request body
- * Enforces month limit after save
- * @param {object} req - HTTP request {body: {month, expense_data}}
- * @param {object} res - HTTP response
- * @param {string} userId - authenticated user ID
+ * บันทึกข้อมูลค่าใช้จ่ายในโหมด JSON
+ * รองรับรายการที่ต้องลบผ่าน __removeKeys
+ * @param {object} req - Express request
+ * @param {object} res - Express response
+ * @param {string} userId - รหัสผู้ใช้
  */
 function handleJsonExpensePost(req, res, userId) {
   const { month, expense_data } = req.body;
@@ -114,12 +104,10 @@ function handleJsonExpensePost(req, res, userId) {
 }
 
 /**
- * Main API handler supporting both JSON and MongoDB modes
- * Automatically routes to appropriate storage backend
- * Supports GET and POST methods
- * GET /api/monthly_expense?month=2025-02 - Get specific month data
- * GET /api/monthly_expense - Get all months for user
- * POST /api/monthly_expense - Save/update expense data
+ * ตัวจัดการหลักของ API ค่าใช้จ่ายรายเดือน
+ * เลือกเส้นทางตามโหมด (JSON/MongoDB) และ method
+ * @param {object} req - Express request
+ * @param {object} res - Express response
  */
 export default async function handler(req, res) {
   const userId = assertUserId(req, res);

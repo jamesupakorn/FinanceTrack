@@ -205,6 +205,7 @@ async function mutateTaxYear(userId, year, mutator) {
 }
 
 export async function updateMonthlyTax(userId, year, month, value) {
+	// อัปเดตยอดภาษีรายเดือนในปีที่ระบุ
 	await mutateTaxYear(userId, year, (doc) => {
 		if (!doc.monthly_tax) doc.monthly_tax = {};
 		doc.monthly_tax[month] = value.toString();

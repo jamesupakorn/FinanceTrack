@@ -1,12 +1,12 @@
 // dateUtils.js
-// Shared date utility functions for expense tracking and notifications
+// ฟังก์ชันวันที่ที่ใช้ร่วมกันสำหรับค่าใช้จ่ายและการแจ้งเตือน
 
 export const THAI_MONTH_LABELS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Normalize number or string to zero-padded 2-digit string
+ * แปลงตัวเลข/สตริงให้เป็นสตริง 2 หลัก (เติม 0 ด้านหน้า)
  */
 export function normalizeMonthPart(value) {
   // เติม 0 ข้างหน้า เช่น 1 → '01', 12 → '12'
@@ -14,7 +14,7 @@ export function normalizeMonthPart(value) {
 }
 
 /**
- * Get number of days in a specific month
+ * หาจำนวนวันของเดือนที่ระบุ
  */
 export function getDaysInMonth(year, monthIndex) {
   // สร้างวันสุดท้ายของเดือน (ค่า 0) เพื่อหาจำนวนวันในเดือน
@@ -22,7 +22,7 @@ export function getDaysInMonth(year, monthIndex) {
 }
 
 /**
- * Get current date info object with formatted keys
+ * คืนข้อมูลวันที่ปัจจุบันพร้อม key ที่ฟอร์แมตแล้ว
  */
 export function getCurrentDateInfo(dateInput) {
   // ใช้วันที่ที่ส่งมา หรือใช้วันปัจจุบัน
@@ -77,7 +77,7 @@ export function normalizeDueDayValue(value) {
 }
 
 /**
- * Clamp due day to valid range (1-31), returns null if out of range
+ * จำกัดค่าวันครบกำหนดให้อยู่ในช่วง 1-31
  */
 export function clampDueDay(num) {
   // ตรวจสอบว่ามีค่าอยู่ในช่วง 1-31 หรือไม่
@@ -88,7 +88,7 @@ export function clampDueDay(num) {
 }
 
 /**
- * Format month key to Thai format (e.g., "ม.ค. 2567")
+ * ฟอร์แมตเดือนเป็นภาษาไทย เช่น "ม.ค. 2567"
  */
 export function formatMonthKeyTH(monthKey = '') {
   // สตริงตัดแยก YYYY-MM
@@ -107,7 +107,7 @@ export function formatMonthKeyTH(monthKey = '') {
 }
 
 /**
- * Format date to Thai format (e.g., "15 ม.ค. 2567")
+ * ฟอร์แมตวันที่เป็นภาษาไทย เช่น "15 ม.ค. 2567"
  */
 export function formatThaiDate(target) {
   // ดึงข้อมูลวันที่, เดือน, ปี
@@ -120,7 +120,7 @@ export function formatThaiDate(target) {
 }
 
 /**
- * Build due date string with day clamping (e.g., "31 ม.ค. 2567")
+ * สร้างข้อความวันครบกำหนด พร้อมจำกัดวันให้ไม่เกินวันสุดท้ายของเดือน
  */
 export function buildDueDateString(target, dueDay) {
   // ลดคำค่าวันให้อยู่ในช่วงวันสุดท้ายของเดือน เช่น เดือนกุมภาพันธ์มี 28 วัน ถ้า 31 → 28
@@ -132,7 +132,7 @@ export function buildDueDateString(target, dueDay) {
 }
 
 /**
- * Get due date from day value
+ * สร้างวันที่ครบกำหนดจากเลขวัน
  */
 export function getDueDateFromDay(dayValue) {
   // แปลงค่าวันเป็นตัวเลข
@@ -154,7 +154,7 @@ export function getDueDateFromDay(dayValue) {
 }
 
 /**
- * Get start of today (00:00:00)
+ * คืนวันที่ปัจจุบันที่เวลา 00:00:00
  */
 export function getStartOfToday() {
   // สร้าง object วันปัจจุบันโดยตั้งเวลาเวลา 00:00:00
@@ -164,7 +164,7 @@ export function getStartOfToday() {
 }
 
 /**
- * Format date as Thai date label
+ * ฟอร์แมตวันที่เป็นสตริงภาษาไทยสำหรับแสดงผล
  */
 export function formatDueDateLabel(date, options = { day: 'numeric', month: 'short' }) {
   // จัดรูปแบบวันเป็นสตริง ไทย เช่น '19', '19 ก.พ. 568'
@@ -173,7 +173,7 @@ export function formatDueDateLabel(date, options = { day: 'numeric', month: 'sho
 }
 
 /**
- * Calculate difference in days from today to due date
+ * คำนวณจำนวนวันจากวันนี้ถึงวันครบกำหนด
  */
 export function calculateDaysDifference(dueDateFromDay) {
   // คำนวณจำนวนระหว่างจากวันปัจจุบันไปยังวันครบกำหนด

@@ -1,14 +1,28 @@
+/**
+ * คอมโพเนนต์: MonthManager
+ * จัดการการเลือกเดือนและการเพิ่มเดือนใหม่
+ * รวมเดือนจากหลายแหล่งข้อมูล (รายรับ/รายจ่าย/เงินเดือน/ลงทุน)
+ * @param {object} props
+ * @param {string} props.selectedMonth - เดือนที่เลือก (YYYY-MM)
+ * @param {function} props.onMonthSelected - callback เมื่อเลือกเดือน
+ * @param {function} props.onDataRefresh - callback เมื่อข้อมูลเปลี่ยน
+ */
+
 import React, { useState, useEffect } from 'react';
 import { getNextMonth } from '../../shared/utils/frontend/numberUtils';
 import { getMonthData, getPrevMonth, formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
 import styles from '../styles/MonthManager.module.css';
 
+// หาค่าเดือนปัจจุบัน (YYYY-MM)
 const getCurrentMonth = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 };
 
 
+/**
+ * ตัวจัดการเลือกเดือน
+ */
 const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newMonthName, setNewMonthName] = useState('');

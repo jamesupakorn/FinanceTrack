@@ -1,9 +1,19 @@
+/**
+ * คอมโพเนนต์: SummaryReport
+ * แสดงสรุปรายรับ รายจ่าย เงินออม และกราฟภาพรวม
+ * @param {object} props
+ * @param {string} props.selectedMonth - เดือนที่เลือก (YYYY-MM)
+ */
+
 import React, { useState, useEffect } from 'react';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { incomeAPI, expenseAPI, savingsAPI, taxAPI, salaryAPI } from '../../shared/utils/frontend/apiUtils';
 import { getSummaryData, getChartData } from '../../shared/utils/frontend/summaryUtils';
 import styles from '../styles/SummaryReport.module.css';
 
+/**
+ * รายงานสรุปภาพรวมการเงิน
+ */
 const SummaryReport = ({ selectedMonth }) => {
 
   const [summaryData, setSummaryData] = useState({

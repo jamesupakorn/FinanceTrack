@@ -1,3 +1,11 @@
+/**
+ * คอมโพเนนต์: InvestmentTable
+ * จัดการรายการลงทุนรายเดือน (สัดส่วน/จำนวนเงิน)
+ * @param {object} props
+ * @param {string} props.selectedMonth - เดือนที่เลือก (YYYY-MM)
+ * @param {function} props.onDataChange - callback เมื่อบันทึกสำเร็จ
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { investmentAPI } from '../../shared/utils/frontend/apiUtils';
 import { parseToNumber, formatCurrency } from '../../shared/utils/frontend/numberUtils';

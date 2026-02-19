@@ -1,7 +1,17 @@
+/**
+ * คอมโพเนนต์: BankAccountTable
+ * แสดงสรุปยอดโอนตามบัญชีธนาคารจากผลรวมค่าใช้จ่าย
+ * @param {object} props
+ * @param {object} props.accountSummary - ยอดรวมแยกตามบัญชี
+ */
+
 import React from 'react';
 import { parseToNumber, formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import styles from '../styles/ExpenseTable.module.css';
 
+/**
+ * ตารางสรุปยอดโอนรายบัญชี
+ */
 export default function BankAccountTable({ accountSummary }) {
   return (
     <div className={styles.tableContainer}>

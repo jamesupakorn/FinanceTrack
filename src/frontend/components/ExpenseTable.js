@@ -1,32 +1,19 @@
 /**
- * ExpenseTable Component - Main Expense Management UI
- * 
- * Comprehensive expense tracking and management interface
- * Displays and edits monthly expenses with advanced features
- * 
- * Features:
- * - Add/edit/delete custom expense items
- * - Support for estimate and actual amounts
- * - Track payment status and mark items as paid
- * - Monthly recurring due date tracking (1-31 day of month)
- * - Custom item labels with persistent storage
- * - Real-time balance calculations (estimate vs actual difference)
- * - Due date status tracking (overdue/due today/due soon/future)
- * - Bank account summary view (for admin user u001)
- * - Persistent state management across month changes
- * - Bulk save operation with removed items tracking
- * 
- * Props:
- * - selectedMonth {string} - YYYY-MM format month to display
- * 
- * State:
- * - editExpense {object} - Current month's expense data being edited
- * - isLoading {boolean} - Loading indicator for data fetch
- * - persistedKeys {array} - Keys of previously saved expense items
- * 
- * Local Utilities:
- * - describeDueTiming() - Calculates due date status and displays
- * - describeExpenseDifference() - Compares estimate vs actual amounts
+ * คอมโพเนนต์: ExpenseTable
+ * หน้าจอหลักสำหรับจัดการค่าใช้จ่ายรายเดือน
+ *
+ * ฟีเจอร์หลัก:
+ * - เพิ่ม/แก้ไข/ลบรายการค่าใช้จ่ายแบบกำหนดเอง
+ * - รองรับยอดประมาณการและยอดจ่ายจริง
+ * - ติดตามสถานะชำระเงิน
+ * - กำหนดวันครบกำหนดรายเดือน (1-31)
+ * - คำนวณส่วนต่างระหว่างประมาณการและจ่ายจริง
+ * - แสดงสถานะครบกำหนด/ค้างชำระ/ใกล้ถึงกำหนด
+ * - แสดงสรุปยอดตามบัญชีธนาคาร (เฉพาะผู้ดูแล)
+ * - บันทึกแบบครั้งเดียวพร้อมรายการที่ต้องลบ
+ *
+ * พร็อพ:
+ * - selectedMonth {string} เดือนที่เลือก (YYYY-MM)
  */
 
 import { useState, useEffect, useMemo } from 'react';

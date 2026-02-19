@@ -1,16 +1,11 @@
 /**
  * API: pages/api/savings.js
- * 
- * Savings Tracking Management API
- * 
- * Handles CRUD operations for user savings data
- * Supports both JSON file mode and MongoDB database mode
- * Features:
- * - GET: Retrieve savings data for specific month or all months
- * - POST: Save/update savings list and total amounts
- * - Calculates total savings across all items in a month
- * - Enforces 15-month data limit per user
- * - Returns auto-calculated totals (รวมเงินเก็บ) for display
+ * จัดการข้อมูลเงินออมรายเดือน
+ * รองรับทั้ง JSON และ MongoDB
+ * - GET: อ่านข้อมูลรายเดือนหรือทั้งหมด
+ * - POST: บันทึก/อัปเดตรายการเงินออมและยอดรวม
+ * - คำนวณยอดรวมเงินออมอัตโนมัติ
+ * - จำกัดข้อมูลย้อนหลังสูงสุด 15 เดือน
  */
 
 import { calculateTotalSavings, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils';
@@ -46,14 +41,12 @@ function enforceUserMonthLimit(bucket = {}) {
 }
 
 /**
- * Handle GET requests for savings data in JSON file mode
- * Retrieves savings data for a specific month or all months with calculations
- * If month query parameter provided: returns specific month with calculated totals
- * If no month parameter: returns all months with individual totals (รวมเงินเก็บ)
- * @param {object} req - Express request object (query.month optional)
- * @param {object} res - Express response object
- * @param {string} userId - User ID for data retrieval
- * @returns {object} JSON response with savings data and calculated totals (200 status)
+ * อ่านข้อมูลเงินออมในโหมด JSON
+ * - ถ้ามีเดือน: คืนข้อมูลเดือนนั้นพร้อมยอดรวมที่คำนวณแล้ว
+ * - ถ้าไม่มีเดือน: คืนข้อมูลทุกเดือนพร้อมยอดรวม (รวมเงินเก็บ)
+ * @param {object} req - Express request
+ * @param {object} res - Express response
+ * @param {string} userId - รหัสผู้ใช้
  */
 function handleJsonSavingsGet(req, res, userId) {
   const bucket = getUserData(JSON_FILENAME, userId);
@@ -84,14 +77,11 @@ function handleJsonSavingsGet(req, res, userId) {
 }
 
 /**
- * Handle POST requests to save savings data in JSON file mode
- * Validates required month parameter and updates data
- * Stores savings_list array and optional total_savings amount
- * Enforces MONTH_LIMIT after update
- * @param {object} req - Express request object (body.month required, body.total_savings optional, body.savings_list)
- * @param {object} res - Express response object
- * @param {string} userId - User ID for data storage
- * @returns {object} JSON response with success status (201 on success, 400 on validation error)
+ * บันทึกข้อมูลเงินออมในโหมด JSON
+ * ต้องระบุ month และสามารถส่ง savings_list/total_savings ได้
+ * @param {object} req - Express request
+ * @param {object} res - Express response
+ * @param {string} userId - รหัสผู้ใช้
  */
 function handleJsonSavingsPost(req, res, userId) {
   const { month, total_savings, savings_list } = req.body;
@@ -112,26 +102,10 @@ function handleJsonSavingsPost(req, res, userId) {
 }
 
 /**
- * Main API handler for savings management
- * Supports both JSON file mode and MongoDB database mode
- * 
- * GET requests:
- * - Query parameter ?month=YYYY-MM returns savings for specific month
- * - No parameters returns all months with calculated totals
- * - Always includes รวมเงินเก็บ (calculated total) in response
- * 
- * POST requests:
- * - Body: { month: string, total_savings?: number, savings_list: array }
- * - Saves/updates savings data for specified month
- * - Calculates total automatically if not provided
- * 
- * @param {object} req - Express request object (GET/POST methods)
- * @param {object} res - Express response object
- * @returns {void} JSON response with savings data or error status
- * 
- * Example:
- * GET /api/savings?month=2024-01 -> Returns January 2024 savings
- * POST /api/savings with {month: '2024-01', savings_list: [{name: 'Bank', amount: 50000}]} -> Saves savings
+ * ตัวจัดการหลักของ API เงินออม
+ * รองรับทั้ง JSON และ MongoDB
+ * @param {object} req - Express request (GET/POST)
+ * @param {object} res - Express response
  */
 export default async function handler(req, res) {
   const userId = assertUserId(req, res);
