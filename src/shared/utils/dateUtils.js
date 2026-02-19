@@ -43,7 +43,20 @@ export function getCurrentDateInfo(dateInput) {
 }
 
 /**
- * Normalize due day value to number, returns null if invalid
+ * normalizeDueDayValue(value)
+ * ฟังก์ชัน: ตรวจสอบและแปลงค่าวันที่ครบกำหนดให้เป็นตัวเลข ต้องอยู่ในช่วง 1-31
+ * 
+ * ตัวอย่าง:
+ *   normalizeDueDayValue(15)    → 15  (ตัวเลขที่ถูกต้อง)
+ *   normalizeDueDayValue("10")  → 10  (string แปลงเป็นตัวเลข)
+ *   normalizeDueDayValue(0)     → null (ต่ำกว่า 1)
+ *   normalizeDueDayValue(32)    → null (สูงกว่า 31)
+ *   normalizeDueDayValue("")    → null (string ว่าง)
+ * 
+ * ใช้เพื่อให้แน่ใจว่าวันที่ครบกำหนดอยู่ในช่วงที่ถูกต้อง
+ * 
+ * @param {number|string} value - ค่าวันที่ที่ต้องการตรวจสอบ
+ * @returns {number|null} - ตัวเลขวางที่ถูกต้อง (1-31) หรือ null ถ้าไม่ถูกต้อง
  */
 export function normalizeDueDayValue(value) {
   if (typeof value === 'number' && Number.isFinite(value)) {
