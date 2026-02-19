@@ -4,39 +4,21 @@
 import { sendLineMessage } from '../../src/shared/utils/sendLineMessage';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
 import { isPaidFlag } from '../../src/shared/utils/commonUtils.js';
+import {
+  THAI_MONTH_LABELS,
+  normalizeMonthPart,
+  getDaysInMonth,
+  getCurrentDateInfo,
+  normalizeDueDayValue,
+  clampDueDay,
+  formatMonthKeyTH,
+  formatThaiDate,
+  buildDueDateString
+} from '../../src/shared/utils/dateUtils.js';
 
 const { loadUsers, getUserData } = require('../../src/backend/data/userUtils');
 
 const JSON_EXPENSE_FILE = 'monthly_expense.json';
-const THAI_MONTH_LABELS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-
-function normalizeMonthPart(value) {
-  return String(value).padStart(2, '0');
-}
-
-function getDaysInMonth(year, monthIndex) {
-  return new Date(year, monthIndex + 1, 0).getDate();
-}
-
-function getCurrentDateInfo(dateInput) {
-  const date = dateInput ? new Date(dateInput) : new Date();
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-  const yyyy = date.getFullYear();
-  const monthIndex = date.getMonth();
-  const mm = normalizeMonthPart(monthIndex + 1);
-  const dd = normalizeMonthPart(date.getDate());
-  return {
-    date,
-    year: yyyy,
-    monthIndex,
-    monthKey: `${yyyy}-${mm}`,
-    day: date.getDate(),
-    dateKey: `${yyyy}-${mm}-${dd}`,
-    daysInMonth: getDaysInMonth(yyyy, monthIndex)
-  };
-}
 
 function extractExpenseItems(doc = {}) {
   const ignoreKeys = new Set([
@@ -135,52 +117,6 @@ function getDueDayNumber(item = {}) {
     return normalizeDueDayValue(dayPart);
   }
   return null;
-}
-
-function normalizeDueDayValue(value) {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return clampDueDay(Math.floor(value));
-  }
-  if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) {
-      return clampDueDay(Math.floor(parsed));
-    }
-  }
-  return null;
-}
-
-function clampDueDay(num) {
-  if (num >= 1 && num <= 31) {
-    return num;
-  }
-  return null;
-}
-
-function formatMonthKeyTH(monthKey = '') {
-  const [yearStr, monthStr] = monthKey.split('-');
-  const year = Number(yearStr);
-  const monthIndex = Number(monthStr) - 1;
-  if (!Number.isFinite(year) || monthIndex < 0 || monthIndex > 11) {
-    return monthKey;
-  }
-  const thaiYear = year + 543;
-  const monthLabel = THAI_MONTH_LABELS[monthIndex] || monthStr;
-  return `${monthLabel} ${thaiYear}`;
-}
-
-function formatThaiDate(target) {
-  const day = target.day;
-  const monthLabel = THAI_MONTH_LABELS[target.monthIndex] || normalizeMonthPart(target.monthIndex + 1);
-  const thaiYear = target.year + 543;
-  return `${day} ${monthLabel} ${thaiYear}`;
-}
-
-function buildDueDateString(target, dueDay) {
-  const actualDay = Math.min(dueDay, target.daysInMonth);
-  const monthLabel = THAI_MONTH_LABELS[target.monthIndex] || normalizeMonthPart(target.monthIndex + 1);
-  const thaiYear = target.year + 543;
-  return `${actualDay} ${monthLabel} ${thaiYear}`;
 }
 
 function sumItemAmounts(items = []) {
