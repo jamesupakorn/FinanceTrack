@@ -1,9 +1,31 @@
 // expenseUtils.js
 // ฟังก์ชันสำหรับ ExpenseTable
 
+function parseExpenseNumber(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value.replace(/,/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function shouldSkipCustomExpenseItem(key, item = {}) {
+  if (!String(key || '').startsWith('custom_')) return false;
+  const name = typeof item.name === 'string' ? item.name.trim() : '';
+  const estimate = parseExpenseNumber(item.estimate);
+  const actual = parseExpenseNumber(item.actual);
+  const dueDay = item.dueDay == null ? '' : String(item.dueDay).trim();
+  const paid = item.paid === true || item.paid === 'true';
+  return (!name || name === 'รายการใหม่') && estimate === 0 && actual === 0 && dueDay === '' && !paid;
+}
+
 export function formatExpenseForSave(editExpense, parseToNumber) {
   const numericExpense = {};
   Object.keys(editExpense).forEach(item => {
+    if (shouldSkipCustomExpenseItem(item, editExpense[item])) {
+      return;
+    }
     numericExpense[item] = {};
     Object.keys(editExpense[item]).forEach(field => {
       if (field === 'paid') {

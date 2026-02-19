@@ -231,8 +231,8 @@ export default function ExpenseTable({ selectedMonth }) {
     if (!selectedMonth) return;
     try {
       const prepared = formatExpenseForSave(editExpense, parseToNumber);
-      const currentKeys = Object.keys(editExpense || {});
-      const removedKeys = persistedKeys.filter(key => !currentKeys.includes(key));
+      const preparedKeys = Object.keys(prepared || {});
+      const removedKeys = persistedKeys.filter(key => !preparedKeys.includes(key));
       if (removedKeys.length > 0) {
         prepared.__removeKeys = removedKeys;
       }

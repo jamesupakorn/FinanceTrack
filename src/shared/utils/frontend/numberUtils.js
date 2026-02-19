@@ -40,6 +40,8 @@ export const DEFAULT_EXPENSE_ITEMS = [
 ];
 
 const DEFAULT_EXPENSE_KEYS = DEFAULT_EXPENSE_ITEMS.map(item => item.key);
+const CUSTOM_EXPENSE_KEY_PREFIX = 'custom_';
+const DEFAULT_CUSTOM_EXPENSE_NAME = 'รายการใหม่';
 const EXPENSE_IGNORED_FIELDS = new Set([
   'totalEstimate',
   'totalActualPaid',
@@ -48,6 +50,27 @@ const EXPENSE_IGNORED_FIELDS = new Set([
   '_id',
   'id'
 ]);
+
+function parseExpenseNumeric(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value.replace(/,/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function isEffectivelyEmptyCustomExpenseRow(key, source) {
+  if (!String(key || '').startsWith(CUSTOM_EXPENSE_KEY_PREFIX)) return false;
+  if (!source || typeof source !== 'object') return true;
+  const name = typeof source.name === 'string' ? source.name.trim() : '';
+  const estimate = parseExpenseNumeric(source.estimate);
+  const actual = parseExpenseNumeric(source.actual);
+  const dueDay = source.dueDay == null ? '' : String(source.dueDay).trim();
+  const paid = source.paid === true || source.paid === 'true';
+  const isDefaultName = !name || name === DEFAULT_CUSTOM_EXPENSE_NAME;
+  return isDefaultName && estimate === 0 && actual === 0 && dueDay === '' && !paid;
+}
 // Utility functions สำหรับจัดการตัวเลขและเงิน
 
 // จัดรูปแบบตัวเลขเป็นทศนิยม 2 ตำแหน่ง
@@ -215,10 +238,22 @@ export const formatExpenseData = (data, month) => {
     }
   }
 
-  const dynamicKeys = Object.keys(monthData || {}).filter(key => {
+  // เก็บทุกรายการที่ไม่ใช่ metadata ก่อนกรอง
+  const allDynamicKeys = Object.keys(monthData || {}).filter(key => {
     if (EXPENSE_IGNORED_FIELDS.has(key)) return false;
-    return typeof monthData[key] === 'object';
+    if (typeof monthData[key] !== 'object') return false;
+    return true; // เก็บทั้งหมด ก่อนกรอง
   });
+
+  // ระบุรายการว่างเปล่าที่ต้องลบออกจากการแสดงผล
+  const emptyCustomKeys = allDynamicKeys.filter(key =>
+    isEffectivelyEmptyCustomExpenseRow(key, monthData[key])
+  );
+
+  // ระบุรายการที่ใช้งาน (ไม่ใช่ว่าง)
+  const dynamicKeys = allDynamicKeys.filter(key =>
+    !isEffectivelyEmptyCustomExpenseRow(key, monthData[key])
+  );
 
   const allKeys = Array.from(new Set([...DEFAULT_EXPENSE_KEYS, ...dynamicKeys]));
 
@@ -249,7 +284,8 @@ export const formatExpenseData = (data, month) => {
 
   return {
     values: formattedData,
-    persistedKeys: dynamicKeys,
+    persistedKeys: allDynamicKeys, // ← ส่งทั้งหมด รวมรายการว่างด้วย เพื่อให้ระบบรู้ว่าอะไรมาจาก API
+    emptyKeysToDelete: emptyCustomKeys, // ← ส่งรายการว่างเพื่อลบ
   };
 };
 
