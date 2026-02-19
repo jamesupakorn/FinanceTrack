@@ -108,21 +108,6 @@ export const calculateSum = (values) => {
   return values.reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
 };
 
-// คำนวณรวมรายรับ (object of values)
-export const calculateTotalFromObject = (obj) => {
-  return calculateSum(Object.values(obj));
-};
-
-// คำนวณรวมรายรับแบบมีเงินเดือน (object of values, salaryNetIncome)
-export const calculateTotalWithSalary = (obj, salaryNetIncome) => {
-  // ตัด key ที่เป็นเงินเดือนออกก่อน แล้วรวมกับ salaryNetIncome
-  const otherIncomes = Object.entries(obj)
-    .filter(([key]) => key !== 'เงินเดือน')
-    .map(([, value]) => parseToNumber(value));
-  const salaryValue = parseToNumber(salaryNetIncome);
-  return calculateSum([...otherIncomes, salaryValue]);
-};
-
 // คำนวณรวมรายได้/รวมหัก/เงินได้สุทธิ สำหรับ SalaryCalculator
 export const calculateSalaryTotals = (salaryData) => {
   const totalIncome = [
@@ -141,11 +126,6 @@ export const calculateSalaryTotals = (salaryData) => {
     รวมหัก: totalDeduction,
     เงินได้สุทธิ: netIncome
   };
-};
-
-// ตรวจสอบว่าเป็นตัวเลขที่ถูกต้องหรือไม่
-export const isValidNumber = (value) => {
-  return !isNaN(parseFloat(value)) && isFinite(value);
 };
 
 // จัดการ input change event สำหรับตัวเลข

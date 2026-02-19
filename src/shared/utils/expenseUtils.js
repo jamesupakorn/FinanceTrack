@@ -1,6 +1,8 @@
 // expenseUtils.js
 // ฟังก์ชันสำหรับ ExpenseTable
 
+import { isPaidFlag } from './commonUtils';
+
 function parseExpenseNumber(value) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   if (typeof value === 'string') {
@@ -16,7 +18,7 @@ function shouldSkipCustomExpenseItem(key, item = {}) {
   const estimate = parseExpenseNumber(item.estimate);
   const actual = parseExpenseNumber(item.actual);
   const dueDay = item.dueDay == null ? '' : String(item.dueDay).trim();
-  const paid = item.paid === true || item.paid === 'true';
+  const paid = isPaidFlag(item.paid);
   return (!name || name === 'รายการใหม่') && estimate === 0 && actual === 0 && dueDay === '' && !paid;
 }
 

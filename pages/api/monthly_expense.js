@@ -1,5 +1,6 @@
 import { mapDocToFlatItemObjectWithTotals, removeSummaryFields, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils.js';
 import { assertUserId } from '../../src/shared/utils/backend/userRequest.js';
+import { getAccountSummary, getExpenseTotals, extractRemovalKeys } from '../../src/shared/utils/commonUtils.js';
 import {
   isJsonMode,
   withGeneratedId,
@@ -37,26 +38,7 @@ function getExpenseTotals(expenseData) {
   };
 }
 
-function getAccountSummary(expenseData) {
-  const mapping = {
-    "กรุงศรี": ["credit_kungsri"],
-    "ttb": ["house", "credit_ttb"],
-    "กสิกร": ["credit_kbank", "shopee", "netflix", "youtube", "youtube_membership"],
-    "UOB": ["credit_uob"]
-  };
-  const summary = {};
-  Object.entries(mapping).forEach(([account, items]) => {
-    let sum = 0;
-    items.forEach(item => {
-      const paid = expenseData[item]?.paid;
-      if (paid !== true && paid !== 'true') {
-        sum += parseFloat(expenseData[item]?.estimate || 0);
-      }
-    });
-    summary[account] = sum;
-  });
-  return summary;
-}
+// Removed - now imported from commonUtils
 
 function enforceUserMonthLimit(bucket = {}) {
   return limitUserEntries(bucket, {
