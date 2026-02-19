@@ -9,6 +9,7 @@ import {
   DEFAULT_EXPENSE_ITEMS
 } from '../../shared/utils/frontend/numberUtils';
 import { formatExpenseForSave, calculateExpenseTotal } from '../../shared/utils/expenseUtils';
+import { getDueDateFromDay, formatDueDateLabel, getStartOfToday } from '../../shared/utils/dateUtils';
 import BankAccountTable from './BankAccountTable';
 import { expenseAPI } from '../../shared/utils/frontend/apiUtils';
 import { useSession } from '../contexts/SessionContext';
@@ -23,29 +24,6 @@ const DEFAULT_EXPENSE_LABEL_MAP = DEFAULT_EXPENSE_ITEMS.reduce((acc, item) => {
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const DUE_SOON_THRESHOLD_DAYS = 5;
 
-const getStartOfToday = () => {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  return date;
-};
-
-const getDueDateFromDay = (dayValue) => {
-  const parsed = Number(dayValue);
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  const today = getStartOfToday();
-  const year = today.getFullYear();
-  const month = today.getMonth();
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  const safeDay = Math.min(lastDay, Math.max(1, Math.round(parsed)));
-  const date = new Date(year, month, safeDay);
-  date.setHours(0, 0, 0, 0);
-  return date;
-};
-
-const formatDueDateLabel = (date, options = { day: 'numeric', month: 'short' }) => {
-  if (!date) return '';
-  return date.toLocaleDateString('th-TH', options);
-};
 
 const describeDueTiming = (dueDayValue, paid) => {
   const parsedDate = getDueDateFromDay(dueDayValue);
