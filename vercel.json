@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/line_due_notify",
-      "schedule": "30 3 * * *"
+      "schedule": "0 4 * * *"
     }
   ]
 }
