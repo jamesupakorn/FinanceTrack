@@ -1,22 +1,17 @@
 /**
  * API: pages/api/line_due_notify.js
- * 
- * LINE Notification API for Due Expense Reminders
- * 
- * Sends LINE notifications to users about upcoming and overdue expenses
- * Supports both JSON file mode and MongoDB database mode
- * Features:
- * - Notifies users of due expenses matching specific date
- * - Supports monthly recurring due date tracking
- * - Groups notifications by due/overdue/unpaid status
- * - Formats detailed expense information in Thai language
- * - Authenticates via Bearer token (CRON_SECRET environment variable)
- * - Can target specific user or broadcast to all users with LINE ID
- * 
- * Query/Body Parameters:
- * - date: Target date in YYYY-MM-DD format (optional, defaults to today)
- * - userId: Target specific user ID (optional, broadcasts if omitted)
- * - mode: Notification filter - 'due', 'unpaid', or 'both' (default: 'both')
+ * ส่งแจ้งเตือนค่าใช้จ่ายที่ถึงกำหนดผ่าน LINE
+ * รองรับทั้ง JSON และ MongoDB
+ * - แจ้งเตือนรายการครบกำหนด/ค้างชำระตามวันที่ที่ระบุ
+ * - รองรับการกำหนดวันครบกำหนดแบบรายเดือน
+ * - รวมผลตามสถานะ (ครบกำหนด/ค้างชำระ/ยังไม่ถึงกำหนด)
+ * - ใช้ Bearer token (CRON_SECRET) สำหรับการยืนยัน
+ * - เลือกส่งเฉพาะผู้ใช้หรือส่งให้ทุกคนที่มี LINE ID
+ *
+ * พารามิเตอร์:
+ * - date: วันที่เป้าหมายรูปแบบ YYYY-MM-DD (ไม่ระบุจะใช้วันนี้)
+ * - userId: เลือกผู้ใช้เฉพาะ (ไม่ระบุจะส่งทุกคน)
+ * - mode: รูปแบบแจ้งเตือน 'due' | 'unpaid' | 'both'
  */
 
 import { sendLineMessage } from '../../src/shared/utils/sendLineMessage';
@@ -39,10 +34,9 @@ const { loadUsers, getUserData } = require('../../src/backend/data/userUtils');
 const JSON_EXPENSE_FILE = 'monthly_expense.json';
 
 /**
- * Extract individual expense items from document
- * Filters out system/metadata fields and returns only actual expense items
- * @param {object} doc - Expense document object
- * @returns {array} Array of expense items with name, amount, and due information
+ * ดึงรายการค่าใช้จ่ายจากเอกสาร โดยตัด field ระบบออก
+ * @param {object} doc - เอกสารค่าใช้จ่ายของเดือน
+ * @returns {array} รายการค่าใช้จ่ายที่ใช้งานจริง
  */
 function extractExpenseItems(doc = {}) {
   const ignoreKeys = new Set([
@@ -60,12 +54,10 @@ function extractExpenseItems(doc = {}) {
 }
 
 /**
- * Determine due status of an expense item relative to target date
- * Compares item's due day with target date to classify as due/overdue/upcoming
- * Validates due day is within the month's valid range
- * @param {object} item - Expense item with dueDay or dueDate field
- * @param {object} target - Target date object with day, daysInMonth properties
- * @returns {object} Status object with {status: 'invalid'|'due'|'overdue'|'upcoming', dueDay: number|null}
+ * หาสถานะรายการเทียบกับวันเป้าหมาย
+ * @param {object} item - รายการค่าใช้จ่ายที่มี dueDay หรือ dueDate
+ * @param {object} target - ข้อมูลวันเป้าหมาย (day, daysInMonth)
+ * @returns {object} {status, dueDay}
  */
 function getDueStatus(item, target) {
   if (!item || !target) return { status: 'invalid', dueDay: null };
@@ -85,14 +77,11 @@ function formatAmount(value) {
 }
 
 /**
- * Build formatted LINE notification message with expense details
- * Groups items by status (due/overdue/unpaid) and formats with emojis
- * Calculates and displays total amount and item count
- * Includes links to update expense status
- * @param {object} target - Target date information with month, day, year, daysInMonth
- * @param {object} groupedItems - Items grouped by status {due, overdue, otherUnpaid}
- * @param {string} notifyMode - Notification type: 'due', 'unpaid', or 'both'
- * @returns {string} Formatted LINE message with expense breakdown and totals
+ * สร้างข้อความแจ้งเตือนแบบจัดกลุ่มรายการ
+ * @param {object} target - ข้อมูลวันเป้าหมาย
+ * @param {object} groupedItems - รายการที่จัดกลุ่มตามสถานะ
+ * @param {string} notifyMode - โหมดแจ้งเตือน
+ * @returns {string} ข้อความสำหรับส่ง LINE
  */
 function buildMessage(target, groupedItems, notifyMode) {
   const hasDue = groupedItems.due.length > 0;
@@ -152,11 +141,10 @@ function formatLineItem(item, index, target) {
 }
 
 /**
- * Extract due day number from expense item
- * Supports both dueDay and dueDate formats
- * Normalizes day values and validates date format
- * @param {object} item - Expense item with dueDay or dueDate property
- * @returns {number|null} Due day of month (1-31) or null if not found/invalid
+ * ดึงเลขวันที่ครบกำหนดจากรายการ
+ * รองรับทั้ง dueDay และ dueDate
+ * @param {object} item - รายการค่าใช้จ่าย
+ * @returns {number|null} วันครบกำหนด (1-31) หรือ null
  */
 function getDueDayNumber(item = {}) {
   const rawDay = normalizeDueDayValue(item.dueDay);
@@ -169,11 +157,9 @@ function getDueDayNumber(item = {}) {
 }
 
 /**
- * Calculate total amount from array of expense items
- * Sums either estimate or actual values (whichever is available)
- * Safely handles non-numeric values by skipping them
- * @param {array} items - Array of expense item objects
- * @returns {number} Total sum of all item amounts
+ * คำนวณยอดรวมของรายการค่าใช้จ่าย
+ * @param {array} items - รายการค่าใช้จ่าย
+ * @returns {number} ยอดรวมทั้งหมด
  */
 function sumItemAmounts(items = []) {
   return items.reduce((sum, item) => {
@@ -186,12 +172,9 @@ function sumItemAmounts(items = []) {
 }
 
 /**
- * Get list of users eligible for notification
- * Filters users that have a LINE ID configured
- * Optionally targets specific user or broadcasts to all with LINE connection
- * Works in both JSON file mode and MongoDB mode
- * @param {string|null} targetUserId - Specific user ID to notify (null for all users)
- * @returns {array<object>} Array of user objects with LineId property
+ * ดึงรายชื่อผู้ใช้ที่มี LINE ID สำหรับส่งแจ้งเตือน
+ * @param {string|null} targetUserId - ส่งเฉพาะผู้ใช้ หากไม่ระบุจะส่งทุกคน
+ * @returns {array} รายชื่อผู้ใช้ที่มี LineId
  */
 async function getUsersForNotify(targetUserId) {
   if (isJsonMode()) {
@@ -214,27 +197,10 @@ async function getExpenseDocForMonth(userId, monthKey) {
 }
 
 /**
- * Main API handler for LINE expense notifications
- * Processes POST/GET requests to send notification messages via LINE
- * Authenticates requests using CRON_SECRET environment variable
- * 
- * Accepts parameters via query string (GET) or request body (POST):
- * - date: Target date (YYYY-MM-DD format, optional)
- * - userId: Specific user ID to notify (optional, broadcasts to all if omitted)
- * - mode: Filter type - 'due', 'unpaid', or 'both' (default: 'both')
- * 
- * Response includes:
- * - success: Boolean indicating operation completion
- * - results: Array with notification results per user
- *   - userId: User who notification targeted
- *   - sent: Whether message was successfully sent
- *   - count: Number of items in notification
- *   - breakdown: Item counts by status (due, overdue, otherUnpaid)
- *   - reason: Error reason if sent=false
- * 
- * @param {object} req - Express request (POST/GET methods supported)
- * @param {object} res - Express response object
- * @returns {object} JSON with success status and detailed notification results
+ * ตัวจัดการหลักของ API แจ้งเตือนค่าใช้จ่ายผ่าน LINE
+ * ตรวจสอบสิทธิ์ด้วย CRON_SECRET และส่งข้อความตามเงื่อนไข
+ * @param {object} req - Express request (GET/POST)
+ * @param {object} res - Express response
  */
 export default async function handler(req, res) {
   if (process.env.CRON_SECRET) {

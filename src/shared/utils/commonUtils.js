@@ -1,9 +1,9 @@
 // commonUtils.js
-// Shared utility functions used across frontend, backend, and API
+// ฟังก์ชันใช้งานร่วมกันระหว่าง frontend, backend และ API
 
 /**
- * Check if an expense item is marked as paid
- * @param {boolean|string} paid - paid value from expense item
+ * ตรวจสอบว่ารายการถูกทำเครื่องหมายว่าชำระแล้วหรือไม่
+ * @param {boolean|string} paid - ค่าจากฟิลด์ paid
  * @returns {boolean}
  */
 export function isPaidFlag(paid) {
@@ -12,9 +12,9 @@ export function isPaidFlag(paid) {
 }
 
 /**
- * Extract and validate removal keys from API payload
- * @param {object} payload - request payload with __removeKeys
- * @returns {array} array of keys to remove
+ * ดึงรายการ key ที่ต้องลบจาก payload
+ * @param {object} payload - ข้อมูลที่มี __removeKeys
+ * @returns {array} รายการ key ที่ต้องลบ
  */
 export function extractRemovalKeys(payload = {}) {
   // ดึงรายการ key ที่ต้องลบออกจาก payload
@@ -25,7 +25,7 @@ export function extractRemovalKeys(payload = {}) {
 }
 
 /**
- * Account summary mapping for expense tracking
+ * mapping สำหรับสรุปยอดตามบัญชี
  */
 export const ACCOUNT_MAPPING = {
   "กรุงศรี": ["credit_kungsri"],
@@ -35,9 +35,9 @@ export const ACCOUNT_MAPPING = {
 };
 
 /**
- * Calculate account summary from expense data
- * @param {object} expenseData - flat expense data object
- * @returns {object} account summary object {accountName: totalAmount}
+ * คำนวณสรุปยอดตามบัญชีจากข้อมูลค่าใช้จ่าย
+ * @param {object} expenseData - ข้อมูลค่าใช้จ่ายแบบ flat
+ * @returns {object} สรุปยอด {ชื่อบัญชี: ยอดรวม}
  */
 export function getAccountSummary(expenseData) {
   const summary = {}; // เก็บยอดรวมสำหรับแต่ละบัญชี
@@ -58,8 +58,8 @@ export function getAccountSummary(expenseData) {
 }
 
 /**
- * Calculate total amounts from expense data
- * @param {object} expenseData - flat expense data object
+ * คำนวณยอดรวมค่าใช้จ่ายจากข้อมูล
+ * @param {object} expenseData - ข้อมูลค่าใช้จ่ายแบบ flat
  * @returns {object} {totalEstimate, totalActualPaid}
  */
 export function getExpenseTotals(expenseData) {
@@ -80,9 +80,9 @@ export function getExpenseTotals(expenseData) {
 }
 
 /**
- * Remove summary fields from data object
- * @param {object} data - data object
- * @returns {object} cleaned data
+ * ลบฟิลด์สรุปยอด/metadata ออกจากข้อมูล
+ * @param {object} data - ข้อมูลดิบ
+ * @returns {object} ข้อมูลที่ถูกทำความสะอาดแล้ว
  */
 export function removeSummaryFields(data = {}) {
   const cleaned = { ...data }; // คัดลอก data object

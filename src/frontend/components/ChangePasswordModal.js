@@ -1,6 +1,20 @@
+/**
+ * คอมโพเนนต์: ChangePasswordModal
+ * โมดัลสำหรับเปลี่ยนรหัสผ่าน พร้อมตรวจสอบความถูกต้องของฟอร์ม
+ * @param {object} props
+ * @param {boolean} props.open - เปิด/ปิดโมดัล
+ * @param {function} props.onClose - ปิดโมดัล
+ * @param {function} props.onSubmit - ส่งข้อมูลรหัสผ่าน
+ * @param {string} props.errorMessage - ข้อความผิดพลาดจากภายนอก
+ * @param {boolean} props.isSubmitting - สถานะกำลังส่งข้อมูล
+ */
+
 import React, { useEffect, useState } from 'react';
 import styles from '../styles/ModePasswordModal.module.css';
 
+/**
+ * โมดัลเปลี่ยนรหัสผ่าน
+ */
 const ChangePasswordModal = ({
   open,
   onClose,

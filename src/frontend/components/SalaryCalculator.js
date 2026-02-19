@@ -1,3 +1,9 @@
+/**
+ * คอมโพเนนต์: SalaryCalculator
+ * ฟอร์มคำนวณเงินเดือน รายรับ/รายหัก และภาษีรายเดือน
+ * ดึงข้อมูลจาก API และสรุปผลให้ผู้ใช้
+ */
+
 import React, { useState, useEffect } from 'react';
 import { formatCurrency, parseAndFormat, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { salaryAPI, incomeAPI, taxAPI } from '../../shared/utils/frontend/apiUtils';

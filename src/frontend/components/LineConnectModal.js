@@ -1,8 +1,17 @@
-// LineConnectModal.js
-// UI สำหรับกรอกหรือเชื่อมต่อ LINE userId/token
+/**
+ * คอมโพเนนต์: LineConnectModal
+ * โมดัลสำหรับเชื่อมต่อ LINE userId และ token
+ * @param {object} props
+ * @param {boolean} props.open - เปิด/ปิดโมดัล
+ * @param {function} props.onClose - ปิดโมดัล
+ * @param {function} props.onSubmit - ส่งข้อมูลเชื่อมต่อ
+ */
 import { useState } from 'react';
 import styles from '../styles/ModePasswordModal.module.css';
 
+/**
+ * โมดัลเชื่อมต่อ LINE
+ */
 export default function LineConnectModal({ open, onClose, onSubmit }) {
   const [userId, setUserId] = useState('');
   const [token, setToken] = useState('');

@@ -1,3 +1,10 @@
+/**
+ * คอมโพเนนต์: SavingsTable
+ * จัดการรายการเงินออมรายเดือน และแสดงตารางรายการเงินออม
+ * @param {object} props
+ * @param {string} props.selectedMonth - เดือนที่เลือก (YYYY-MM)
+ */
+
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { formatCurrency, parseAndFormat, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { mapSavingsApiToList } from '../../shared/utils/savingsUtils';
@@ -6,6 +13,9 @@ import { Icons } from './Icons';
 import InvestmentTable from './InvestmentTable';
 import styles from '../styles/SavingsTable.module.css';
 
+/**
+ * ตารางเงินออมรายเดือน
+ */
 export default function SavingsTable({ selectedMonth }) {
 
   const [savingsData, setSavingsData] = useState(null);

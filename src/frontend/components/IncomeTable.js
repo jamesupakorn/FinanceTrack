@@ -1,3 +1,11 @@
+/**
+ * คอมโพเนนต์: IncomeTable
+ * จัดการข้อมูลรายรับรายเดือน พร้อมรองรับรายการแบบกำหนดเอง
+ * @param {object} props
+ * @param {string} props.selectedMonth - เดือนที่เลือก (YYYY-MM)
+ * @param {number} props.salaryUpdateTrigger - ตัวกระตุ้นให้รีเฟรชข้อมูลเงินเดือน
+ */
+
 import { useState, useEffect, useMemo } from 'react';
 import {
   formatCurrency,
@@ -15,6 +23,9 @@ import styles from '../styles/IncomeTable.module.css';
 
 const CUSTOM_LABEL_FALLBACK = 'รายรับใหม่';
 
+/**
+ * ตารางแก้ไขรายรับรายเดือน
+ */
 export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
   const [editIncome, setEditIncome] = useState({});
   const [incomeLabels, setIncomeLabels] = useState({});

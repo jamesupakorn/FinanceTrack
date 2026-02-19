@@ -1,8 +1,22 @@
+/**
+ * คอมโพเนนต์: ModePasswordModal
+ * โมดัลสำหรับยืนยันรหัสผ่านก่อนเข้าโหมดแก้ไข
+ * @param {object} props
+ * @param {boolean} props.open - เปิด/ปิดโมดัล
+ * @param {function} props.onClose - ปิดโมดัล
+ * @param {function} props.onSubmit - ส่งรหัสผ่าน
+ * @param {string} props.title - หัวข้อโมดัล
+ * @param {string} props.description - คำอธิบายเพิ่มเติม
+ */
+
 import React, { useEffect, useState } from 'react';
 import styles from '../styles/ModePasswordModal.module.css';
 
 const defaultTitle = 'ใส่รหัสผ่านเพื่อเข้าโหมดแก้ไข';
 
+/**
+ * โมดัลยืนยันรหัสผ่านเพื่อเข้าโหมดแก้ไข
+ */
 const ModePasswordModal = ({
   open,
   onClose,
