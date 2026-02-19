@@ -205,11 +205,12 @@ export default async function handler(req, res) {
     }
   }
 
-  if (req.method !== 'POST') {
+  if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { date, userId, mode } = req.body || {};
+  const source = req.method === 'GET' ? (req.query || {}) : (req.body || {});
+  const { date, userId, mode } = source;
   const target = getCurrentDateInfo(date);
   if (!target) {
     return res.status(400).json({ error: 'invalid date' });
