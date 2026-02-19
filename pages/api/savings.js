@@ -16,10 +16,6 @@ const COLLECTION_NAME = 'savings';
 const JSON_FILENAME = 'savings.json';
 const MONTH_LIMIT = 15;
 
-function getTotalSavingsInline(list = []) {
-  return list.reduce((sum, item) => sum + (parseFloat(item?.จำนวนเงิน || item?.savings_amount || item?.amount || 0)), 0);
-}
-
 function enforceUserMonthLimit(bucket = {}) {
   return limitUserEntries(bucket, {
     limit: MONTH_LIMIT,
@@ -36,7 +32,7 @@ function handleJsonSavingsGet(req, res, userId) {
     const response = {
       total_savings: doc && typeof doc.total_savings === 'number' ? doc.total_savings : 0,
       savings_list: savingsList,
-      รวมเงินเก็บ: getTotalSavingsInline(savingsList)
+      รวมเงินเก็บ: calculateTotalSavings(savingsList)
     };
     return res.status(200).json(response);
   }
@@ -49,7 +45,7 @@ function handleJsonSavingsGet(req, res, userId) {
       total_savings: doc.total_savings || 0,
       savings_list: savingsList,
       totalSavings,
-      รวมเงินเก็บ: getTotalSavingsInline(savingsList)
+      รวมเงินเก็บ: totalSavings
     };
   });
   return res.status(200).json(data);
@@ -99,11 +95,7 @@ export default async function handler(req, res) {
         }
         // Always return default structure if not found, to match legacy JSON behavior
         const savingsList = doc && Array.isArray(doc.savings_list) ? doc.savings_list : [];
-        // คำนวณยอดรวมเงินเก็บ
-        function getTotalSavings(list) {
-          return list.reduce((sum, item) => sum + (parseFloat(item.จำนวนเงิน || item.savings_amount || item.amount || 0)), 0);
-        }
-        const รวมเงินเก็บ = getTotalSavings(savingsList);
+        const รวมเงินเก็บ = calculateTotalSavings(savingsList);
         const response = {
           total_savings: doc && typeof doc.total_savings === 'number' ? doc.total_savings : 0,
           savings_list: savingsList,
@@ -129,14 +121,9 @@ export default async function handler(req, res) {
             data[doc.month] = {
               total_savings: doc.total_savings || 0,
               savings_list: savingsList,
-              totalSavings
+              totalSavings,
+              รวมเงินเก็บ: totalSavings
             };
-              // คำนวณยอดรวมเงินเก็บ
-              function getTotalSavings(list) {
-                return list.reduce((sum, item) => sum + (parseFloat(item.จำนวนเงิน || item.savings_amount || item.amount || 0)), 0);
-              }
-              const รวมเงินเก็บ = getTotalSavings(savingsList);
-              data[doc.month].รวมเงินเก็บ = รวมเงินเก็บ;
           } catch (err) {
             console.error('[savings API] Error processing doc:', doc, err);
           }
