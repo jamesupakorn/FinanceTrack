@@ -17,29 +17,6 @@ const COLLECTION_NAME = 'monthly_expense';
 const JSON_FILENAME = 'monthly_expense.json';
 const MONTH_LIMIT = 15;
 
-function extractRemovalKeys(payload = {}) {
-  const raw = payload?.__removeKeys;
-  if (!Array.isArray(raw)) return [];
-  return raw.filter(key => typeof key === 'string' && key.length > 0);
-}
-
-function getExpenseTotals(expenseData) {
-  let totalEstimate = 0;
-  let totalActualPaid = 0;
-  Object.values(expenseData || {}).forEach(item => {
-    if (item && typeof item === 'object') {
-      totalEstimate += parseFloat(item.estimate || 0);
-      totalActualPaid += parseFloat(item.actual || 0);
-    }
-  });
-  return {
-    totalEstimate: Math.round(totalEstimate * 100) / 100,
-    totalActualPaid: Math.round(totalActualPaid * 100) / 100
-  };
-}
-
-// Removed - now imported from commonUtils
-
 function enforceUserMonthLimit(bucket = {}) {
   return limitUserEntries(bucket, {
     limit: MONTH_LIMIT,

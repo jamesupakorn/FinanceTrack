@@ -1,5 +1,6 @@
 import { sumValues, removeSummaryFields, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils';
 import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { extractRemovalKeys } from '../../src/shared/utils/commonUtils.js';
 import {
   isJsonMode,
   withGeneratedId,
@@ -14,12 +15,6 @@ const {
 
 const MONTH_LIMIT = 15;
 const JSON_FILENAME = 'monthly_income.json';
-
-function extractRemovalKeys(payload = {}) {
-  const raw = payload?.__removeKeys;
-  if (!Array.isArray(raw)) return [];
-  return raw.filter(key => typeof key === 'string' && key.length > 0);
-}
 
 function extractLabelUpdates(payload = {}) {
   const raw = payload?.__labels;

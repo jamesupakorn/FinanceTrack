@@ -3,6 +3,7 @@
 
 import { sendLineMessage } from '../../src/shared/utils/sendLineMessage';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
+import { isPaidFlag } from '../../src/shared/utils/commonUtils.js';
 
 const { loadUsers, getUserData } = require('../../src/backend/data/userUtils');
 
@@ -35,10 +36,6 @@ function getCurrentDateInfo(dateInput) {
     dateKey: `${yyyy}-${mm}-${dd}`,
     daysInMonth: getDaysInMonth(yyyy, monthIndex)
   };
-}
-
-function isPaidFlag(paid) {
-  return paid === true || paid === 'true';
 }
 
 function extractExpenseItems(doc = {}) {
