@@ -1,5 +1,23 @@
-// line_due_notify.js
-// API สำหรับแจ้งเตือนค่าใช้จ่ายที่ถึงกำหนดผ่าน LINE
+/**
+ * API: pages/api/line_due_notify.js
+ * 
+ * LINE Notification API for Due Expense Reminders
+ * 
+ * Sends LINE notifications to users about upcoming and overdue expenses
+ * Supports both JSON file mode and MongoDB database mode
+ * Features:
+ * - Notifies users of due expenses matching specific date
+ * - Supports monthly recurring due date tracking
+ * - Groups notifications by due/overdue/unpaid status
+ * - Formats detailed expense information in Thai language
+ * - Authenticates via Bearer token (CRON_SECRET environment variable)
+ * - Can target specific user or broadcast to all users with LINE ID
+ * 
+ * Query/Body Parameters:
+ * - date: Target date in YYYY-MM-DD format (optional, defaults to today)
+ * - userId: Target specific user ID (optional, broadcasts if omitted)
+ * - mode: Notification filter - 'due', 'unpaid', or 'both' (default: 'both')
+ */
 
 import { sendLineMessage } from '../../src/shared/utils/sendLineMessage';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
@@ -20,6 +38,12 @@ const { loadUsers, getUserData } = require('../../src/backend/data/userUtils');
 
 const JSON_EXPENSE_FILE = 'monthly_expense.json';
 
+/**
+ * Extract individual expense items from document
+ * Filters out system/metadata fields and returns only actual expense items
+ * @param {object} doc - Expense document object
+ * @returns {array} Array of expense items with name, amount, and due information
+ */
 function extractExpenseItems(doc = {}) {
   const ignoreKeys = new Set([
     '_id',
@@ -35,6 +59,14 @@ function extractExpenseItems(doc = {}) {
     .map(([, value]) => value);
 }
 
+/**
+ * Determine due status of an expense item relative to target date
+ * Compares item's due day with target date to classify as due/overdue/upcoming
+ * Validates due day is within the month's valid range
+ * @param {object} item - Expense item with dueDay or dueDate field
+ * @param {object} target - Target date object with day, daysInMonth properties
+ * @returns {object} Status object with {status: 'invalid'|'due'|'overdue'|'upcoming', dueDay: number|null}
+ */
 function getDueStatus(item, target) {
   if (!item || !target) return { status: 'invalid', dueDay: null };
   const dueDay = getDueDayNumber(item);
@@ -52,6 +84,16 @@ function formatAmount(value) {
   return numeric.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
+/**
+ * Build formatted LINE notification message with expense details
+ * Groups items by status (due/overdue/unpaid) and formats with emojis
+ * Calculates and displays total amount and item count
+ * Includes links to update expense status
+ * @param {object} target - Target date information with month, day, year, daysInMonth
+ * @param {object} groupedItems - Items grouped by status {due, overdue, otherUnpaid}
+ * @param {string} notifyMode - Notification type: 'due', 'unpaid', or 'both'
+ * @returns {string} Formatted LINE message with expense breakdown and totals
+ */
 function buildMessage(target, groupedItems, notifyMode) {
   const hasDue = groupedItems.due.length > 0;
   const hasOverdue = groupedItems.overdue.length > 0;
@@ -109,6 +151,13 @@ function formatLineItem(item, index, target) {
   return `${index + 1}. ${name}\n${details.join('\n')}`;
 }
 
+/**
+ * Extract due day number from expense item
+ * Supports both dueDay and dueDate formats
+ * Normalizes day values and validates date format
+ * @param {object} item - Expense item with dueDay or dueDate property
+ * @returns {number|null} Due day of month (1-31) or null if not found/invalid
+ */
 function getDueDayNumber(item = {}) {
   const rawDay = normalizeDueDayValue(item.dueDay);
   if (rawDay) return rawDay;
@@ -119,6 +168,13 @@ function getDueDayNumber(item = {}) {
   return null;
 }
 
+/**
+ * Calculate total amount from array of expense items
+ * Sums either estimate or actual values (whichever is available)
+ * Safely handles non-numeric values by skipping them
+ * @param {array} items - Array of expense item objects
+ * @returns {number} Total sum of all item amounts
+ */
 function sumItemAmounts(items = []) {
   return items.reduce((sum, item) => {
     const raw = Number(item.estimate || item.actual || 0);
@@ -129,6 +185,14 @@ function sumItemAmounts(items = []) {
   }, 0);
 }
 
+/**
+ * Get list of users eligible for notification
+ * Filters users that have a LINE ID configured
+ * Optionally targets specific user or broadcasts to all with LINE connection
+ * Works in both JSON file mode and MongoDB mode
+ * @param {string|null} targetUserId - Specific user ID to notify (null for all users)
+ * @returns {array<object>} Array of user objects with LineId property
+ */
 async function getUsersForNotify(targetUserId) {
   if (isJsonMode()) {
     const users = loadUsers();
@@ -149,6 +213,29 @@ async function getExpenseDocForMonth(userId, monthKey) {
   return collection.findOne({ userId, month: monthKey });
 }
 
+/**
+ * Main API handler for LINE expense notifications
+ * Processes POST/GET requests to send notification messages via LINE
+ * Authenticates requests using CRON_SECRET environment variable
+ * 
+ * Accepts parameters via query string (GET) or request body (POST):
+ * - date: Target date (YYYY-MM-DD format, optional)
+ * - userId: Specific user ID to notify (optional, broadcasts to all if omitted)
+ * - mode: Filter type - 'due', 'unpaid', or 'both' (default: 'both')
+ * 
+ * Response includes:
+ * - success: Boolean indicating operation completion
+ * - results: Array with notification results per user
+ *   - userId: User who notification targeted
+ *   - sent: Whether message was successfully sent
+ *   - count: Number of items in notification
+ *   - breakdown: Item counts by status (due, overdue, otherUnpaid)
+ *   - reason: Error reason if sent=false
+ * 
+ * @param {object} req - Express request (POST/GET methods supported)
+ * @param {object} res - Express response object
+ * @returns {object} JSON with success status and detailed notification results
+ */
 export default async function handler(req, res) {
   if (process.env.CRON_SECRET) {
     const authHeader = req.headers.authorization || '';

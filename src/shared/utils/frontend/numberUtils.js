@@ -1,4 +1,22 @@
-// สรุปยอดรายจ่ายแต่ละบัญชี (mapping)
+/**
+ * numberUtils.js
+ * Frontend utility functions for number formatting, currency conversion, and financial calculations
+ * 
+ * This module provides:
+ * - Currency formatting and number parsing
+ * - Expense/Income data transformation from API
+ * - Financial calculations (salary totals, tax, savings)
+ * - Form input/blur event handlers for numbers
+ * - Month/Year filtering and data cleanup
+ */
+
+/**
+ * Calculate account summary from expense data
+ * Groups expenses by account (Kungsri, TTB, Kbank, UOB) and sums unpaid amounts
+ * Only includes items marked as unpaid in the summary
+ * @param {object} editExpense - expense data object
+ * @returns {object} account summary {accountName: totalUnpaidAmount}
+ */
 export const getAccountSummary = (editExpense) => {
   const mapping = {
     "กรุงศรี": ["credit_kungsri"],
@@ -20,7 +38,8 @@ export const getAccountSummary = (editExpense) => {
   });
   return summary;
 };
-// รายการค่าใช้จ่ายมาตรฐานที่ใช้สำหรับสร้างฟอร์ม
+// Default preset list of expense categories used for form generation
+// These 15 items form the baseline expense tracking structure
 export const DEFAULT_EXPENSE_ITEMS = [
   { key: 'house', label: 'ค่าบ้าน' },
   { key: 'water', label: 'ค่าน้ำ' },
@@ -41,8 +60,9 @@ export const DEFAULT_EXPENSE_ITEMS = [
 
 const DEFAULT_EXPENSE_KEYS = DEFAULT_EXPENSE_ITEMS.map(item => item.key);
 const CUSTOM_EXPENSE_KEY_PREFIX = 'custom_';
-const DEFAULT_CUSTOM_EXPENSE_NAME = 'รายการใหม่';
+const DEFAULT_CUSTOM_EXPENSE_NAME = 'รายการใหม่'; // Default new item placeholder name
 const EXPENSE_IGNORED_FIELDS = new Set([
+  // Metadata fields to exclude from expense item processing
   'totalEstimate',
   'totalActualPaid',
   'accountSummary',
@@ -51,6 +71,13 @@ const EXPENSE_IGNORED_FIELDS = new Set([
   'id'
 ]);
 
+/**
+ * Parse string or number to numeric format for expense amounts
+ * Removes comma currency formatting and converts to float
+ * Returns 0 for invalid/empty values
+ * @param {number|string} value - value to parse (can be formatted with commas)
+ * @returns {number} parsed numeric value or 0 if invalid
+ */
 function parseExpenseNumeric(value) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   if (typeof value === 'string') {
@@ -60,6 +87,18 @@ function parseExpenseNumeric(value) {
   return 0;
 }
 
+/**
+ * Check if a custom expense row is effectively empty/should be hidden
+ * Identifies placeholder rows that were created but never filled in:
+ * - Name is empty or default "รายการใหม่" label
+ * - No estimate amount
+ * - No actual amount
+ * - No due day set
+ * - Not marked as paid
+ * @param {string} key - expense item key
+ * @param {object} source - expense item object from API/state
+ * @returns {boolean} true if row is empty/placeholder
+ */
 function isEffectivelyEmptyCustomExpenseRow(key, source) {
   if (!String(key || '').startsWith(CUSTOM_EXPENSE_KEY_PREFIX)) return false;
   if (!source || typeof source !== 'object') return true;
@@ -73,7 +112,12 @@ function isEffectivelyEmptyCustomExpenseRow(key, source) {
 }
 // Utility functions สำหรับจัดการตัวเลขและเงิน
 
-// จัดรูปแบบตัวเลขเป็นทศนิยม 2 ตำแหน่ง
+/**
+ * Format number to display format with 2 decimal places and thousand separators
+ * Handles input with commas (e.g., "40,560.00" → "40,560.00")
+ * @param {number|string} value - numeric value to format
+ * @returns {string} formatted number with commas and .00 decimals
+ */
 export const formatNumber = (value) => {
   // รองรับ input ที่มี comma เช่น 40,560.00
   let cleaned = typeof value === 'string' ? value.replace(/,/g, '') : value;
@@ -82,12 +126,23 @@ export const formatNumber = (value) => {
   return numValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-// แปลงค่าเป็นตัวเลขและจัดรูปแบบ (สำหรับแสดงผล)
+/**
+ * Parse and format number in one step (parsing + display formatting)
+ * Converts input to readable number format
+ * @param {number|string} value - value to parse and format
+ * @returns {string} formatted number
+ */
 export const parseAndFormat = (value) => {
   return formatNumber(value);
 };
 
-// แปลงค่าเป็น number สำหรับบันทึกข้อมูล
+/**
+ * Parse number for database storage (removes formatting)
+ * Strips commas and converts to plain number
+ * Used when saving to database/API
+ * @param {number|string} value - formatted or plain number
+ * @returns {number} plain numeric value
+ */
 export const parseToNumber = (value) => {
   // Remove comma before parsing
   if (typeof value === 'string') {
@@ -96,19 +151,36 @@ export const parseToNumber = (value) => {
   return parseFloat(value) || 0;
 };
 
-// จัดรูปแบบการแสดงเงิน (แสดงเป็นตัวเลขธรรมดา เช่น 700.00)
+/**
+ * Format number as currency display (Thai format with .00 decimals)
+ * Adds thousand separators for readability
+ * @param {number|string} value - numeric value
+ * @returns {string} formatted currency string
+ */
 export const formatCurrency = (value) => {
   const numValue = parseFloat(value) || 0;
     const num = parseFloat(typeof value === 'string' ? value.replace(/,/g, '') : value) || 0;
     return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-// คำนวณผลรวม
+/**
+ * Sum array of numeric values
+ * Filters out invalid/NaN values
+ * @param {array} values - array of numbers/strings to sum
+ * @returns {number} total sum
+ */
 export const calculateSum = (values) => {
   return values.reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
 };
 
-// คำนวณรวมรายได้/รวมหัก/เงินได้สุทธิ สำหรับ SalaryCalculator
+/**
+ * Calculate salary breakdown totals
+ * Sums income (salary + overtime + bonus + other)
+ * Sums deductions (provident fund + social security + tax)
+ * Calculates net income after deductions
+ * @param {object} salaryData - salary form data
+ * @returns {object} {รวมรายได้, รวมหัก, เงินได้สุทธิ}
+ */
 export const calculateSalaryTotals = (salaryData) => {
   const totalIncome = [
     'salary', 'overtime_1x', 'overtime_1_5x',
@@ -128,7 +200,14 @@ export const calculateSalaryTotals = (salaryData) => {
   };
 };
 
-// จัดการ input change event สำหรับตัวเลข
+/**
+ * Handle number input change event (real-time input)
+ * Stores raw value without formatting to allow multi-digit typing
+ * Formatting happens on blur for better UX
+ * @param {string} value - input value
+ * @param {function} setState - state setter function
+ * @param {string} key - optional object key for setState(prev => ({...}))
+ */
 export const handleNumberInput = (value, setState, key = null) => {
   // ไม่ format ทันที ให้เก็บ raw value เพื่อให้พิมพ์ได้หลายหลัก
   if (key) {
@@ -138,7 +217,14 @@ export const handleNumberInput = (value, setState, key = null) => {
   }
 };
 
-// ใช้สำหรับ onBlur เท่านั้น เพื่อ format เป็นทศนิยม 2 ตำแหน่ง
+/**
+ * Handle number input blur event (on field leave)
+ * Formats value to 2 decimal places when user leaves field
+ * Improves UX by showing formatting only after input complete
+ * @param {string} value - input value to format
+ * @param {function} setState - state setter function
+ * @param {string} key - optional object key for setState(prev => ({...}))
+ */
 export const handleNumberBlur = (value, setState, key = null) => {
   const formattedValue = parseAndFormat(value);
   if (key) {
@@ -148,6 +234,7 @@ export const handleNumberBlur = (value, setState, key = null) => {
   }
 };
 
+// Default preset income categories (3 basic items, expandable with custom rows)
 export const DEFAULT_INCOME_ITEMS = [
   { key: 'salary', label: 'เงินเดือน' },
   { key: 'income2', label: 'แหล่งรายรับ 2' },
@@ -155,10 +242,23 @@ export const DEFAULT_INCOME_ITEMS = [
 ];
 
 const DEFAULT_INCOME_KEYS = DEFAULT_INCOME_ITEMS.map(item => item.key);
-const INCOME_LABELS_FIELD = '__labels';
-const INCOME_IGNORED_FIELDS = new Set(['month', '_id', 'รวม', INCOME_LABELS_FIELD]);
+const INCOME_LABELS_FIELD = '__labels'; // Special field for storing custom labels
+const INCOME_IGNORED_FIELDS = new Set([
+  // Metadata fields to exclude from income item processing
+  'month',
+  '_id',
+  'รวม',  // Thai for 'Total'
+  INCOME_LABELS_FIELD
+]);
 
-// จัดรูปแบบข้อมูลที่โหลดจาก API สำหรับรายรับ (รองรับ dynamic rows และ label เสริม)
+/**
+ * Transform income data from API into form-friendly format
+ * Handles dynamic custom income rows and custom labels
+ * Preserves all persisted keys from API for proper deletion tracking
+ * @param {object} data - raw income data from API
+ * @param {string} month - selected month (format: YYYY-MM)
+ * @returns {object} {values: formatted data, labels: custom labels, persistedKeys: all keys from API}
+ */
 export const formatIncomeData = (data, month) => {
   const formattedData = {};
   let monthData = {};
@@ -206,7 +306,18 @@ export const formatIncomeData = (data, month) => {
   };
 };
 
-// จัดรูปแบบข้อมูลที่โหลดจาก API สำหรับรายจ่าย
+/**
+ * Transform expense data from API into form-friendly format
+ * Handles:
+ * - Dynamic custom expense items (custom_1, custom_2, etc.)
+ * - Filtering out empty placeholder rows
+ * - Converting amounts to display format
+ * - Normalizing due day values
+ * - Preserving all persisted keys for deletion tracking
+ * @param {object} data - raw expense data from API
+ * @param {string} month - selected month (format: YYYY-MM)
+ * @returns {object} {values: formatted data, persistedKeys: all keys from API, emptyKeysToDelete: empty rows}
+ */
 export const formatExpenseData = (data, month) => {
   const formattedData = {};
   let monthData = {};
@@ -269,7 +380,12 @@ export const formatExpenseData = (data, month) => {
   };
 };
 
-// จัดรูปแบบข้อมูลเงินออม
+/**
+ * Transform savings data into form-friendly format
+ * Formats accumulated savings amount and individual savings items
+ * @param {object} data - raw savings data
+ * @returns {object} formatted savings with ยอดออมสะสม and รายการเงินออม
+ */
 export const formatSavingsData = (data) => {
   return {
     ยอดออมสะสม: parseAndFormat(data.ยอดออมสะสม || 0),
@@ -280,7 +396,12 @@ export const formatSavingsData = (data) => {
   };
 };
 
-// จัดรูปแบบข้อมูลภาษี
+/**
+ * Transform tax data into form-friendly format
+ * Formats accumulated tax and monthly tax breakdown
+ * @param {object} data - raw tax data
+ * @returns {object} formatted tax with ภาษีสะสม and ภาษีรายเดือน
+ */
 export const formatTaxData = (data) => {
   const formattedภาษีรายเดือน = {};
   Object.keys(data.ภาษีรายเดือน || {}).forEach(month => {
@@ -293,7 +414,12 @@ export const formatTaxData = (data) => {
   };
 };
 
-// สร้าง options สำหรับ dropdown เลือกเดือน (15 เดือนย้อนหลัง)
+/**
+ * Generate month selection options for 15-month lookback
+ * Creates dropdown list from 15 months ago to current month
+ * Format: YYYY-MM for value, Thai date string for display
+ * @returns {array} [{value: "2025-02", label: "กุมภาพันธ์ 2568"}, ...]
+ */
 export const generateMonthOptions = () => {
   const months = [];
   const currentDate = new Date();
@@ -315,14 +441,27 @@ export const generateMonthOptions = () => {
   return months;
 };
 
-// สร้างเดือนถัดไป
+/**
+ * Calculate next month from current month
+ * Takes YYYY-MM format and returns next month in same format
+ * Handles year rollover (December → January of next year)
+ * @param {string} currentMonth - current month in YYYY-MM format
+ * @returns {string} next month in YYYY-MM format
+ */
 export const getNextMonth = (currentMonth) => {
   const [year, month] = currentMonth.split('-').map(Number);
   const nextDate = new Date(year, month, 1); // month+1 เนื่องจาก Date constructor month เริ่มจาก 0
   return `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
 };
 
-// จัดการการลบข้อมูลเดือนเก่าสุด (เก็บแค่ 15 เดือน)
+/**
+ * Clean up old month data, keeping only 15 recent months
+ * Removes data older than 15 months to prevent unlimited data growth
+ * Used for data size management
+ * @param {object} data - data object with months property
+ * @param {string} newMonth - new month to add (YYYY-MM format)
+ * @returns {object} cleaned data with 15 months max
+ */
 export const cleanOldMonthData = (data, newMonth) => {
   const months = Object.keys(data.months || {});
   
@@ -348,7 +487,12 @@ export const cleanOldMonthData = (data, newMonth) => {
   return cleanedData;
 };
 
-// สร้าง options สำหรับ dropdown เลือกปี (ปีปัจจุบันและปีก่อนหน้า)
+/**
+ * Generate year selection options
+ * Creates dropdown list with current and previous year
+ * Displays in Thai Buddhist year format (Gregorian + 543)
+ * @returns {array} [{value: "2025", label: "พ.ศ. 2568"}, ...]
+ */
 export const generateYearOptions = () => {
   const years = [];
   const currentYear = new Date().getFullYear();
@@ -364,7 +508,13 @@ export const generateYearOptions = () => {
   return years;
 };
 
-// จัดการการลบข้อมูลปีเก่า (เก็บแค่ปีปัจจุบันและปีก่อนหน้า)
+/**
+ * Clean up old year data, keeping only current and previous year
+ * Prevents unlimited data growth for yearly metrics
+ * Removes data from years older than previous year
+ * @param {object} data - data object with ภาษีรายปี property
+ * @returns {object} cleaned data with 2 years max
+ */
 export const cleanOldYearData = (data) => {
   const currentYear = new Date().getFullYear();
   const years = Object.keys(data.ภาษีรายปี || {}).map(Number);

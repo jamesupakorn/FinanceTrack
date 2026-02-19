@@ -1,3 +1,19 @@
+/**
+ * API: pages/api/monthly_expense.js
+ * 
+ * Monthly Expense Management API
+ * 
+ * Handles CRUD operations for monthly expense tracking
+ * Supports both JSON file mode and MongoDB database mode
+ * Features:
+ * - GET: Retrieve expense data for a specific month or all months
+ * - POST: Save/update expense data and handle item deletion
+ * - Enforces 15-month data limit per user
+ * - Calculates account summaries and expense totals
+ * 
+ * TODO: Implement DELETE method for full month deletion
+ */
+
 import { mapDocToFlatItemObjectWithTotals, removeSummaryFields, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils.js';
 import { assertUserId } from '../../src/shared/utils/backend/userRequest.js';
 import { getAccountSummary, getExpenseTotals, extractRemovalKeys } from '../../src/shared/utils/commonUtils.js';
@@ -13,10 +29,17 @@ const {
   limitUserEntries,
 } = require('../../src/backend/data/userUtils');
 
-const COLLECTION_NAME = 'monthly_expense';
-const JSON_FILENAME = 'monthly_expense.json';
-const MONTH_LIMIT = 15;
+const COLLECTION_NAME = 'monthly_expense'; // MongoDB collection name
+const JSON_FILENAME = 'monthly_expense.json'; // JSON file name for file-based mode
+const MONTH_LIMIT = 15; // Maximum months of expense data to store per user
 
+/**
+ * Enforce user-specific month limit
+ * Deletes oldest months when limit is exceeded
+ * Keeps only 15 most recent months per user
+ * @param {object} bucket - expense data bucket for user
+ * @returns {object} cleaned bucket with max 15 months
+ */
 function enforceUserMonthLimit(bucket = {}) {
   return limitUserEntries(bucket, {
     limit: MONTH_LIMIT,
@@ -24,6 +47,14 @@ function enforceUserMonthLimit(bucket = {}) {
   });
 }
 
+/**
+ * Handle GET request in JSON file mode
+ * Retrieves expense data for specific month or all months
+ * Returns data with account summary and totals calculated
+ * @param {object} req - HTTP request {query: {month?}}
+ * @param {object} res - HTTP response
+ * @param {string} userId - authenticated user ID
+ */
 function handleJsonExpenseGet(req, res, userId) {
   const bucket = getUserData(JSON_FILENAME, userId);
   const { month } = req.query;
@@ -50,6 +81,15 @@ function handleJsonExpenseGet(req, res, userId) {
   return res.status(200).json(withTotals);
 }
 
+/**
+ * Handle POST request in JSON file mode
+ * Saves/updates expense data for a month
+ * Handles item deletion via __removeKeys in request body
+ * Enforces month limit after save
+ * @param {object} req - HTTP request {body: {month, expense_data}}
+ * @param {object} res - HTTP response
+ * @param {string} userId - authenticated user ID
+ */
 function handleJsonExpensePost(req, res, userId) {
   const { month, expense_data } = req.body;
   if (!month || !expense_data) {
@@ -73,6 +113,14 @@ function handleJsonExpensePost(req, res, userId) {
   return res.status(200).json({ success: true });
 }
 
+/**
+ * Main API handler supporting both JSON and MongoDB modes
+ * Automatically routes to appropriate storage backend
+ * Supports GET and POST methods
+ * GET /api/monthly_expense?month=2025-02 - Get specific month data
+ * GET /api/monthly_expense - Get all months for user
+ * POST /api/monthly_expense - Save/update expense data
+ */
 export default async function handler(req, res) {
   const userId = assertUserId(req, res);
   if (!userId) return;
