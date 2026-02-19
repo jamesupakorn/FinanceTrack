@@ -241,7 +241,7 @@ export default async function handler(req, res) {
         };
         if (removalList.length) {
           updateOps.$unset = removalList.reduce((acc, key) => {
-            acc[key] = "";
+            acc[key] = 1;
             return acc;
           }, {});
         }
