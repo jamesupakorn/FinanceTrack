@@ -79,12 +79,14 @@ const EXPENSE_IGNORED_FIELDS = new Set([
  * @returns {number} parsed numeric value or 0 if invalid
  */
 function parseExpenseNumeric(value) {
+  // ส่วนตัวเลข: ถ้าหาจำนวนให้โคตมีค่าโคตศูนย์
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   if (typeof value === 'string') {
+    // หาก comma ดิ่ง (40,560.00 → 40560.00)
     const parsed = parseFloat(value.replace(/,/g, ''));
     return Number.isFinite(parsed) ? parsed : 0;
   }
-  return 0;
+  return 0; // คืน 0 ถ้าไม่ถูกต้อง
 }
 
 /**
@@ -100,13 +102,16 @@ function parseExpenseNumeric(value) {
  * @returns {boolean} true if row is empty/placeholder
  */
 function isEffectivelyEmptyCustomExpenseRow(key, source) {
+  // ตรวจสอบว่า key เริ่มด้วย 'custom_'
   if (!String(key || '').startsWith(CUSTOM_EXPENSE_KEY_PREFIX)) return false;
+  // หาก object ไม่จอ ถือปฏิผลถา ไม่มีข้อมูล
   if (!source || typeof source !== 'object') return true;
   const name = typeof source.name === 'string' ? source.name.trim() : '';
   const estimate = parseExpenseNumeric(source.estimate);
   const actual = parseExpenseNumeric(source.actual);
   const dueDay = source.dueDay == null ? '' : String(source.dueDay).trim();
   const paid = source.paid === true || source.paid === 'true';
+  // ลหงว่าง: ไม่มีชื่อ ("::: รายการใหม่) ไม่มียอด ไม่ได้ชำระ
   const isDefaultName = !name || name === DEFAULT_CUSTOM_EXPENSE_NAME;
   return isDefaultName && estimate === 0 && actual === 0 && dueDay === '' && !paid;
 }
@@ -119,10 +124,10 @@ function isEffectivelyEmptyCustomExpenseRow(key, source) {
  * @returns {string} formatted number with commas and .00 decimals
  */
 export const formatNumber = (value) => {
-  // รองรับ input ที่มี comma เช่น 40,560.00
+  // หาก comma ดิ่ง เช่น 40,560.00
   let cleaned = typeof value === 'string' ? value.replace(/,/g, '') : value;
   const numValue = parseFloat(cleaned) || 0;
-  // เพิ่ม comma ขั้นหลักพัน
+  // จัดรูปแบบเพิ่ม comma และทศนิยม 2 ตำแหน่ง
   return numValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
@@ -133,6 +138,7 @@ export const formatNumber = (value) => {
  * @returns {string} formatted number
  */
 export const parseAndFormat = (value) => {
+  // ดึงลิบถามทึง แค่ เช่น 40560.00 → 40,560.00
   return formatNumber(value);
 };
 
@@ -144,11 +150,12 @@ export const parseAndFormat = (value) => {
  * @returns {number} plain numeric value
  */
 export const parseToNumber = (value) => {
-  // Remove comma before parsing
+  // ดูลแช่ comma คฺูนและกลับยอดแบบผนโคตศูนย์
   if (typeof value === 'string') {
+    // หาก comma ช่ำจาฉี จยนคืนจำนวน
     return parseFloat(value.replace(/,/g, '')) || 0;
   }
-  return parseFloat(value) || 0;
+  return parseFloat(value) || 0; // คืน 0 ถ้าไม่สามารถใช้
 };
 
 /**
@@ -158,9 +165,11 @@ export const parseToNumber = (value) => {
  * @returns {string} formatted currency string
  */
 export const formatCurrency = (value) => {
+  // แปลงค่าเป็นเงิน (40560 → 40,560.00)
   const numValue = parseFloat(value) || 0;
-    const num = parseFloat(typeof value === 'string' ? value.replace(/,/g, '') : value) || 0;
-    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // จัดรูปแบบเป็นสนุค locale ไทย
+  const num = parseFloat(typeof value === 'string' ? value.replace(/,/g, '') : value) || 0;
+  return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 /**
