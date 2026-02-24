@@ -19,6 +19,23 @@ const getCurrentMonth = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 };
 
+// รีเซ็ตสถานะ paid ของข้อมูลรายจ่ายให้เป็น false ทั้งหมด
+const resetCopiedExpensePaidStatus = (expenseData) => {
+  if (!expenseData || typeof expenseData !== 'object') return {};
+  const normalized = {};
+  Object.entries(expenseData).forEach(([key, value]) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      normalized[key] = value;
+      return;
+    }
+    normalized[key] = {
+      ...value,
+      paid: false
+    };
+  });
+  return normalized;
+};
+
 
 /**
  * ตัวจัดการเลือกเดือน
@@ -156,7 +173,8 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
       investmentAPI.getAll ? investmentAPI.getAll() : Promise.resolve({})
     ]);
     // ดึงข้อมูลเดือนก่อนหน้า
-    const expensePrev = getMonthData(expenseAll, prevMonth);
+    const expensePrevRaw = getMonthData(expenseAll, prevMonth);
+    const expensePrev = resetCopiedExpensePaidStatus(expensePrevRaw);
     const incomePrev = getMonthData(incomeAll, prevMonth);
     const salaryPrev = getMonthData(salaryAll, prevMonth);
     let savingsPrev = [];
