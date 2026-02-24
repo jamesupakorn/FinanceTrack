@@ -1,3 +1,5 @@
+import { assertApiToken } from './apiTokenAuth';
+
 /**
  * แปลงค่า userId ให้อยู่ในรูปแบบ string มาตรฐาน
  * รองรับค่าแบบ array, string และ number
@@ -40,6 +42,9 @@ export function getUserIdFromRequest(req) {
  * @returns {string|null} userId หรือ null
  */
 export function assertUserId(req, res) {
+  if (!assertApiToken(req, res)) {
+    return null;
+  }
   const userId = getUserIdFromRequest(req);
   if (!userId) {
     res.status(400).json({ error: 'userId required' });

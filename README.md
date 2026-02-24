@@ -114,9 +114,51 @@ MONGODB_URI=mongodb+srv://<user>:<pass>@cluster/<db>
 # ป้องกัน endpoint cron แจ้งเตือน LINE
 CRON_SECRET=<your-secret>
 
+# =============================
+# API Bearer Token Protection
+# =============================
+# (แนะนำ) ฝั่ง server ใช้ token แบบเข้ารหัส AES
+API_ACCESS_TOKEN_ENCRYPTION_KEY=<your-encryption-passphrase>
+API_ACCESS_TOKEN_ENCRYPTED=<iv_hex:cipher_hex>
+
+# (fallback) token แบบ base64/plaintext
+API_ACCESS_TOKEN_B64=<base64-token>
+# API_ACCESS_TOKEN=<plain-token>
+
+# ฝั่ง client (จำเป็นต้องส่ง header เรียก API)
+# ควรเป็นค่าเดียวกับ token จริง (base64 ของ token เดียวกัน)
+NEXT_PUBLIC_API_ACCESS_TOKEN_B64=<base64-token>
+# NEXT_PUBLIC_API_ACCESS_TOKEN=<plain-token>
+
 # ใช้ตรวจสอบลายเซ็น webhook ของ LINE
 LINE_CHANNEL_SECRET=<your-line-channel-secret>
 ```
+
+### ตัวอย่างสร้าง token และเข้ารหัส (AES-256-CBC)
+
+1) สร้าง token และ base64
+
+```bash
+TOKEN="your-very-strong-token"
+echo -n "$TOKEN" | base64
+```
+
+2) สร้างค่า `API_ACCESS_TOKEN_ENCRYPTED`
+
+```bash
+TOKEN="your-very-strong-token"
+SECRET="your-encryption-passphrase"
+
+node -e "const crypto=require('crypto');const token=process.env.TOKEN;const secret=process.env.SECRET;const key=crypto.createHash('sha256').update(secret).digest();const iv=crypto.randomBytes(16);const cipher=crypto.createCipheriv('aes-256-cbc',key,iv);const enc=Buffer.concat([cipher.update(token,'utf8'),cipher.final()]);console.log(iv.toString('hex')+':'+enc.toString('hex'));"
+```
+
+3) ตั้งค่าใน Vercel (Project → Settings → Environment Variables)
+
+- `API_ACCESS_TOKEN_ENCRYPTION_KEY`
+- `API_ACCESS_TOKEN_ENCRYPTED`
+- `NEXT_PUBLIC_API_ACCESS_TOKEN_B64`
+
+แล้ว Redeploy โปรเจกต์ 1 รอบ
 
 ## Migration และสคริปต์สำคัญ
 
