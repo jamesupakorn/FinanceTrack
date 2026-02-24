@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { withApiTokenHeaders } from '../src/shared/utils/frontend/apiToken';
 import styles from '../src/frontend/styles/LineNotify.module.css';
 
 export default function LineNotifyPage() {
@@ -24,7 +25,7 @@ export default function LineNotifyPage() {
     try {
       const response = await fetch('/api/line_notify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: withApiTokenHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ message, userId: userId || undefined })
       });
       const data = await response.json().catch(() => ({}));

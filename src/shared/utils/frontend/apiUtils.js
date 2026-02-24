@@ -1,4 +1,5 @@
 import { requireActiveUserId } from './sessionClient';
+import { withApiTokenHeaders } from './apiToken';
 
 const API_URLS = {
 	INCOME: '/api/monthly_income',
@@ -58,7 +59,11 @@ const deleteTaxYearPayload = async (year) => jsonFetch(API_URLS.TAX, {
 });
 
 async function jsonFetch(url, options = {}) {
-	const response = await fetch(url, options);
+	const mergedOptions = {
+		...options,
+		headers: withApiTokenHeaders(options.headers || {})
+	};
+	const response = await fetch(url, mergedOptions);
 	let data;
 	try {
 		data = await response.json();

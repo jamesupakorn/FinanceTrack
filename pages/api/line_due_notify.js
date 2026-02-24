@@ -17,6 +17,7 @@
 import { sendLineMessage } from '../../src/shared/utils/sendLineMessage';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
 import { isPaidFlag } from '../../src/shared/utils/commonUtils.js';
+import { assertApiToken } from '../../src/shared/utils/backend/apiTokenAuth';
 import {
   THAI_MONTH_LABELS,
   normalizeMonthPart,
@@ -213,12 +214,8 @@ async function getExpenseDocForMonth(userId, monthKey) {
  * @param {object} res - Express response
  */
 export default async function handler(req, res) {
-  if (process.env.CRON_SECRET) {
-    const authHeader = req.headers.authorization || '';
-    const expected = `Bearer ${process.env.CRON_SECRET}`;
-    if (authHeader !== expected) {
-      return res.status(401).json({ error: 'unauthorized' });
-    }
+  if (!assertApiToken(req, res, { allowCronSecret: true })) {
+    return;
   }
 
   if (req.method !== 'POST' && req.method !== 'GET') {

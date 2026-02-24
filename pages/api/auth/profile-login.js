@@ -1,6 +1,10 @@
+import { assertApiToken } from '../../../src/shared/utils/backend/apiTokenAuth';
 const { getUserById, checkUserPassword } = require('../../../src/backend/data/userUtils');
 
 export default async function handler(req, res) {
+  if (!assertApiToken(req, res)) {
+    return;
+  }
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'Method not allowed' });

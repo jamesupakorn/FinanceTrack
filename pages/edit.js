@@ -11,6 +11,7 @@ import { Icons } from '../src/frontend/components/Icons';
 import ChangePasswordModal from '../src/frontend/components/ChangePasswordModal';
 import { useTheme } from '../src/frontend/contexts/ThemeContext';
 import { useSession } from '../src/frontend/contexts/SessionContext';
+import { withApiTokenHeaders } from '../src/shared/utils/frontend/apiToken';
 import { incomeAPI, expenseAPI, savingsAPI, salaryAPI } from '../src/shared/utils/frontend/apiUtils';
 import styles from '../src/frontend/styles/Home.module.css';
 
@@ -205,7 +206,7 @@ export default function EditPage() {
     try {
       const response = await fetch('/api/change_password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: withApiTokenHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ currentPassword, newPassword, userId: currentUser?.id })
       });
       const data = await response.json().catch(() => ({}));

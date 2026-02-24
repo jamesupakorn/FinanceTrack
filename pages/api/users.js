@@ -1,6 +1,10 @@
+import { assertApiToken } from '../../src/shared/utils/backend/apiTokenAuth';
 const { loadUsers } = require('../../src/backend/data/userUtils');
 
 export default function handler(req, res) {
+  if (!assertApiToken(req, res)) {
+    return;
+  }
   if (req.method !== 'GET') {
     res.setHeader('Allow', ['GET']);
     return res.status(405).json({ error: 'Method not allowed' });
