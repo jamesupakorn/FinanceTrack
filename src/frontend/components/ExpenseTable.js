@@ -27,7 +27,7 @@ import {
   DEFAULT_EXPENSE_ITEMS
 } from '../../shared/utils/frontend/numberUtils';
 import { formatExpenseForSave, calculateExpenseTotal } from '../../shared/utils/expenseUtils';
-import { getDueDateFromDay, formatDueDateLabel, getStartOfToday } from '../../shared/utils/dateUtils';
+import { getDueDateFromDay, formatDueDateLabel, getStartOfToday, getDaysInMonth } from '../../shared/utils/dateUtils';
 import BankAccountTable from './BankAccountTable';
 import { expenseAPI } from '../../shared/utils/frontend/apiUtils';
 import { useSession } from '../contexts/SessionContext';
@@ -249,6 +249,26 @@ export default function ExpenseTable({ selectedMonth }) {
     return [...defaultKeys, ...customKeys];
   }, [editExpense]);
 
+  const daysInSelectedMonth = useMemo(() => {
+    if (!selectedMonth || !/^\d{4}-\d{2}$/.test(selectedMonth)) {
+      const now = new Date();
+      return getDaysInMonth(now.getFullYear(), now.getMonth());
+    }
+    const [yearStr, monthStr] = selectedMonth.split('-');
+    const year = Number(yearStr);
+    const monthIndex = Number(monthStr) - 1;
+    if (!Number.isFinite(year) || !Number.isFinite(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+      const now = new Date();
+      return getDaysInMonth(now.getFullYear(), now.getMonth());
+    }
+    return getDaysInMonth(year, monthIndex);
+  }, [selectedMonth]);
+
+  const dueDayOptions = useMemo(
+    () => Array.from({ length: daysInSelectedMonth }, (_, index) => String(index + 1)),
+    [daysInSelectedMonth]
+  );
+
   const dueInsights = useMemo(() => {
     const today = getStartOfToday();
     const upcoming = [];
@@ -416,16 +436,16 @@ export default function ExpenseTable({ selectedMonth }) {
                       </td>
                       <td className={`${styles.tableCell} ${styles.dateCell}`}>
                         <div className={styles.dueDateWrapper}>
-                          <input
-                            type="number"
-                            min="1"
-                            max="31"
-                            placeholder="ทุกวันที่ (เช่น 10)"
+                          <select
                             value={row.dueDay || ''}
                             onChange={e => handleExpenseChange(item, 'dueDay', e.target.value)}
-                            onBlur={e => handleExpenseBlur(item, 'dueDay', e.target.value)}
                             className={styles.dateInput}
-                          />
+                          >
+                            <option value="">เลือกวันที่</option>
+                            {dueDayOptions.map(day => (
+                              <option key={day} value={day}>{day}</option>
+                            ))}
+                          </select>
                           <div className={styles.dueMeta}>
                             <span className={styles.dueBadge} data-status={dueInfo.status}>{dueInfo.badge}</span>
                             {dueInfo.helper && <span className={styles.dueHelper}>{dueInfo.helper}</span>}
@@ -513,16 +533,16 @@ export default function ExpenseTable({ selectedMonth }) {
                   <div className={styles.cardRow}>
                     <span className={styles.cardLabel}>วันครบกำหนด</span>
                     <div className={styles.mobileDueField}>
-                      <input
-                        type="number"
-                        min="1"
-                        max="31"
-                        placeholder="ทุกวันที่ (เช่น 10)"
+                      <select
                         value={row.dueDay || ''}
                         onChange={e => handleExpenseChange(item, 'dueDay', e.target.value)}
-                        onBlur={e => handleExpenseBlur(item, 'dueDay', e.target.value)}
                         className={styles.dateInput}
-                      />
+                      >
+                        <option value="">เลือกวันที่</option>
+                        {dueDayOptions.map(day => (
+                          <option key={day} value={day}>{day}</option>
+                        ))}
+                      </select>
                       <span className={styles.dueBadge} data-status={dueInfo.status}>{dueInfo.badge}</span>
                       {dueInfo.helper && <span className={styles.dueHelper}>{dueInfo.helper}</span>}
                     </div>

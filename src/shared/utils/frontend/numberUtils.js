@@ -41,17 +41,7 @@ export const DEFAULT_EXPENSE_ITEMS = [
   { key: 'water', label: 'ค่าน้ำ' },
   { key: 'internet', label: 'ค่าเน็ต' },
   { key: 'electricity', label: 'ค่าไฟ' },
-  { key: 'mobile', label: 'โทรศัพท์มือถือ' },
-  { key: 'credit_kbank', label: 'บัตรเครดิต KBank' },
-  { key: 'credit_kungsri', label: 'บัตรเครดิต Kungsri' },
-  { key: 'credit_uob', label: 'บัตรเครดิต UOB' },
-  { key: 'credit_ttb', label: 'บัตรเครดิต TTB' },
-  { key: 'shopee', label: 'Shopee' },
-  { key: 'netflix', label: 'Netflix' },
-  { key: 'youtube', label: 'YouTube' },
-  { key: 'youtube_membership', label: 'YouTube Membership' },
-  { key: 'motorcycle', label: 'ค่ารถจักรยานยนต์' },
-  { key: 'miscellaneous', label: 'ค่าใช้จ่ายเบ็ดเตล็ด' }
+  { key: 'mobile', label: 'โทรศัพท์มือถือ' }
 ];
 
 const DEFAULT_EXPENSE_KEYS = DEFAULT_EXPENSE_ITEMS.map(item => item.key);
@@ -332,7 +322,12 @@ export const formatExpenseData = (data, month) => {
     !isEffectivelyEmptyCustomExpenseRow(key, monthData[key])
   );
 
-  const allKeys = Array.from(new Set([...DEFAULT_EXPENSE_KEYS, ...dynamicKeys]));
+  // ถ้าเดือนนี้ยังไม่มีข้อมูลจริงเลย ให้แสดงรายการมาตรฐานเป็นค่าเริ่มต้น
+  // แต่ถ้ามีข้อมูลที่บันทึกแล้ว ให้แสดงเฉพาะ key ที่มีอยู่จริง (เพื่อให้การลบรายการคงอยู่)
+  const hasPersistedRows = dynamicKeys.length > 0;
+  const allKeys = hasPersistedRows
+    ? Array.from(new Set(dynamicKeys))
+    : Array.from(new Set(DEFAULT_EXPENSE_KEYS));
 
   allKeys.forEach(item => {
     const source = (monthData && monthData[item]) ? monthData[item] : {};

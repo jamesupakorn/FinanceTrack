@@ -32,6 +32,7 @@ import {
 const { loadUsers, getUserData } = require('../../src/backend/data/userUtils');
 
 const JSON_EXPENSE_FILE = 'monthly_expense.json';
+const DUE_SOON_DAYS = 3;
 
 /**
  * ดึงรายการค่าใช้จ่ายจากเอกสาร โดยตัด field ระบบออก
@@ -67,6 +68,9 @@ function getDueStatus(item, target) {
   }
   if (dueDay === target.day) return { status: 'due', dueDay };
   if (dueDay < target.day) return { status: 'overdue', dueDay };
+  if ((dueDay - target.day) <= DUE_SOON_DAYS) {
+    return { status: 'dueSoon', dueDay };
+  }
   return { status: 'upcoming', dueDay };
 }
 
@@ -86,10 +90,13 @@ function formatAmount(value) {
 function buildMessage(target, groupedItems, notifyMode) {
   const hasDue = groupedItems.due.length > 0;
   const hasOverdue = groupedItems.overdue.length > 0;
+  const hasDueSoon = groupedItems.dueSoon.length > 0;
   const headerTitle = notifyMode === 'unpaid'
     ? 'รายการค้างชำระ'
     : hasDue && hasOverdue
       ? 'ครบกำหนดวันนี้ + ค้างชำระ'
+      : hasDueSoon
+        ? `กำหนดการใกล้ชำระ (ภายใน ${DUE_SOON_DAYS} วัน)`
       : hasDue
         ? 'ครบกำหนดวันนี้'
         : 'ค้างชำระ';
@@ -104,14 +111,17 @@ function buildMessage(target, groupedItems, notifyMode) {
   const dueSection = groupedItems.due.length
     ? buildSection('✅ ครบกำหนดวันนี้', groupedItems.due, target)
     : null;
+  const dueSoonSection = groupedItems.dueSoon.length
+    ? buildSection(`⏳ ใกล้ครบกำหนด (อีกไม่เกิน ${DUE_SOON_DAYS} วัน)`, groupedItems.dueSoon, target)
+    : null;
   const overdueSection = groupedItems.overdue.length
     ? buildSection('⚠️ ค้างชำระ', groupedItems.overdue, target)
     : null;
   const unpaidSection = notifyMode === 'unpaid' && groupedItems.otherUnpaid.length
     ? buildSection('🗂️ รายการยังไม่ถึงกำหนด', groupedItems.otherUnpaid, target)
     : null;
-  const sections = [dueSection, overdueSection, unpaidSection].filter(Boolean);
-  const allItems = [...groupedItems.due, ...groupedItems.overdue, ...groupedItems.otherUnpaid];
+  const sections = [dueSection, dueSoonSection, overdueSection, unpaidSection].filter(Boolean);
+  const allItems = [...groupedItems.due, ...groupedItems.dueSoon, ...groupedItems.overdue, ...groupedItems.otherUnpaid];
   const totalAmount = sumItemAmounts(allItems);
   const footer = [
     '━━━━━━━━━━━━',
@@ -247,6 +257,7 @@ export default async function handler(req, res) {
 
     const groupedItems = {
       due: [],
+      dueSoon: [],
       overdue: [],
       otherUnpaid: []
     };
@@ -258,6 +269,10 @@ export default async function handler(req, res) {
       }
       if (status === 'overdue') {
         groupedItems.overdue.push(item);
+        return;
+      }
+      if (status === 'dueSoon') {
+        groupedItems.dueSoon.push(item);
         return;
       }
       if (notifyMode === 'unpaid') {
@@ -274,10 +289,10 @@ export default async function handler(req, res) {
       groupedItems.otherUnpaid = [];
     }
 
-    const totalMatched = groupedItems.due.length + groupedItems.overdue.length + groupedItems.otherUnpaid.length;
+    const totalMatched = groupedItems.due.length + groupedItems.dueSoon.length + groupedItems.overdue.length + groupedItems.otherUnpaid.length;
 
     if (!totalMatched) {
-      results.push({ userId: user.id, sent: false, reason: 'no due or overdue items' });
+      results.push({ userId: user.id, sent: false, reason: 'no due, near-due, or overdue items' });
       continue;
     }
 
@@ -286,6 +301,7 @@ export default async function handler(req, res) {
       await sendLineMessage(message, user.LineId);
       results.push({ userId: user.id, sent: true, count: totalMatched, breakdown: {
         due: groupedItems.due.length,
+        dueSoon: groupedItems.dueSoon.length,
         overdue: groupedItems.overdue.length,
         otherUnpaid: groupedItems.otherUnpaid.length
       } });
