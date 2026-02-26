@@ -223,6 +223,8 @@
 /* Table Section */
 .tableSection {
   margin-top: 40px;
+  width: 100%;
+  overflow-x: auto;
 }
 
 .tableTitle {
@@ -234,6 +236,7 @@
 
 .monthlyTable {
   width: 100%;
+  min-width: 980px;
   border-collapse: collapse;
   background: var(--bg-surface);
   border-radius: 16px;

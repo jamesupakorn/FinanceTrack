@@ -467,7 +467,6 @@ export default function ExpenseTable({ selectedMonth }) {
                             onChange={e => handleExpenseChange(item, 'dueDay', e.target.value)}
                             className={styles.dateInput}
                           >
-                            <option value="">เลือกวันที่</option>
                             <option value={END_OF_MONTH_DUE_DAY}>วันสิ้นเดือน</option>
                             {dueDayOptions.map(day => (
                               <option key={day} value={day}>{day}</option>
@@ -565,7 +564,6 @@ export default function ExpenseTable({ selectedMonth }) {
                         onChange={e => handleExpenseChange(item, 'dueDay', e.target.value)}
                         className={styles.dateInput}
                       >
-                        <option value="">เลือกวันที่</option>
                         <option value={END_OF_MONTH_DUE_DAY}>วันสิ้นเดือน</option>
                         {dueDayOptions.map(day => (
                           <option key={day} value={day}>{day}</option>
