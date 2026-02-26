@@ -27,7 +27,15 @@ import {
   DEFAULT_EXPENSE_ITEMS
 } from '../../shared/utils/frontend/numberUtils';
 import { formatExpenseForSave, calculateExpenseTotal } from '../../shared/utils/expenseUtils';
-import { getDueDateFromDay, formatDueDateLabel, getStartOfToday, getDaysInMonth } from '../../shared/utils/dateUtils';
+import {
+  END_OF_MONTH_DUE_DAY,
+  isEndOfMonthDueDay,
+  resolveDueDayForMonth,
+  getDueDateFromDay,
+  formatDueDateLabel,
+  getStartOfToday,
+  getDaysInMonth
+} from '../../shared/utils/dateUtils';
 import BankAccountTable from './BankAccountTable';
 import { expenseAPI } from '../../shared/utils/frontend/apiUtils';
 import { useSession } from '../contexts/SessionContext';
@@ -42,14 +50,22 @@ const DEFAULT_EXPENSE_LABEL_MAP = DEFAULT_EXPENSE_ITEMS.reduce((acc, item) => {
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const DUE_SOON_THRESHOLD_DAYS = 5;
 
+const formatDueDayText = (dueDayValue) => {
+  if (isEndOfMonthDueDay(dueDayValue)) {
+    return 'วันสิ้นเดือน';
+  }
+  return dueDayValue ? `วันที่ ${dueDayValue}` : '';
+};
+
 
 const describeDueTiming = (dueDayValue, paid) => {
   const parsedDate = getDueDateFromDay(dueDayValue);
+  const dueDayText = formatDueDayText(dueDayValue);
   if (paid) {
     return {
       status: 'done',
       badge: 'ชำระแล้ว',
-      helper: dueDayValue ? `ครบกำหนดทุกวันที่ ${dueDayValue}` : '',
+      helper: dueDayText ? `ครบกำหนดทุก${dueDayText}` : '',
       date: parsedDate,
       diffDays: null
     };
@@ -69,7 +85,7 @@ const describeDueTiming = (dueDayValue, paid) => {
     return {
       status: 'overdue',
       badge: `เกินกำหนด ${Math.abs(diffDays)} วัน`,
-      helper: `ทุกวันที่ ${dueDayValue}`,
+      helper: dueDayText ? `ทุก${dueDayText}` : '',
       date: parsedDate,
       diffDays
     };
@@ -87,14 +103,14 @@ const describeDueTiming = (dueDayValue, paid) => {
     return {
       status: 'dueSoon',
       badge: `อีก ${diffDays} วัน`,
-      helper: `ทุกวันที่ ${dueDayValue}`,
+      helper: dueDayText ? `ทุก${dueDayText}` : '',
       date: parsedDate,
       diffDays
     };
   }
   return {
     status: 'future',
-    badge: `ทุกวันที่ ${dueDayValue}`,
+    badge: dueDayText ? `ทุก${dueDayText}` : 'ครบกำหนด',
     helper: 'ครบกำหนด',
     date: parsedDate,
     diffDays
@@ -190,6 +206,10 @@ export default function ExpenseTable({ selectedMonth }) {
       return;
     }
     if (field === 'dueDay') {
+      if (isEndOfMonthDueDay(value)) {
+        updateExpenseField(item, field, END_OF_MONTH_DUE_DAY);
+        return;
+      }
       const parsed = parseInt(value, 10);
       if (Number.isNaN(parsed)) {
         updateExpenseField(item, field, '');
@@ -279,13 +299,15 @@ export default function ExpenseTable({ selectedMonth }) {
       if (paid) return;
       const parsedDate = getDueDateFromDay(row.dueDay);
       if (!parsedDate) return;
+      const resolvedDueDay = resolveDueDayForMonth(row.dueDay, daysInSelectedMonth);
       const diffDays = Math.ceil((parsedDate - today) / DAY_IN_MS);
       upcoming.push({
         key: item,
         name: row.name || DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการ',
         date: parsedDate,
         diffDays,
-        dueDay: row.dueDay
+        dueDay: row.dueDay,
+        resolvedDueDay
       });
     });
     upcoming.sort((a, b) => a.date - b.date);
@@ -297,11 +319,15 @@ export default function ExpenseTable({ selectedMonth }) {
       urgentCount,
       overdueCount,
       nextDueLabel: nextDue
-        ? (nextDue.dueDay ? `ทุกวันที่ ${nextDue.dueDay}` : formatDueDateLabel(nextDue.date, { day: 'numeric', month: 'short' }))
+        ? (nextDue.dueDay
+          ? (isEndOfMonthDueDay(nextDue.dueDay)
+            ? 'ทุกวันสิ้นเดือน'
+            : `ทุกวันที่ ${nextDue.resolvedDueDay || nextDue.dueDay}`)
+          : formatDueDateLabel(nextDue.date, { day: 'numeric', month: 'short' }))
         : 'ยังไม่กำหนด',
       nextDueName: nextDue ? nextDue.name : 'ไม่มีรายการ',
     };
-  }, [editExpense, sortedExpenseKeys]);
+  }, [daysInSelectedMonth, editExpense, sortedExpenseKeys]);
 
   const hasExpenseRows = sortedExpenseKeys.length > 0;
   const totalEstimateValue = useMemo(() => calculateExpenseTotal(editExpense, 'estimate', parseToNumber), [editExpense]);
@@ -442,6 +468,7 @@ export default function ExpenseTable({ selectedMonth }) {
                             className={styles.dateInput}
                           >
                             <option value="">เลือกวันที่</option>
+                            <option value={END_OF_MONTH_DUE_DAY}>วันสิ้นเดือน</option>
                             {dueDayOptions.map(day => (
                               <option key={day} value={day}>{day}</option>
                             ))}
@@ -539,6 +566,7 @@ export default function ExpenseTable({ selectedMonth }) {
                         className={styles.dateInput}
                       >
                         <option value="">เลือกวันที่</option>
+                        <option value={END_OF_MONTH_DUE_DAY}>วันสิ้นเดือน</option>
                         {dueDayOptions.map(day => (
                           <option key={day} value={day}>{day}</option>
                         ))}
