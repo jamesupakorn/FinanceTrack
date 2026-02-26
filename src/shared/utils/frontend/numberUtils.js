@@ -8,6 +8,8 @@
  * - จัดการเดือน/ปี และทำความสะอาดข้อมูลเก่า
  */
 
+import { END_OF_MONTH_DUE_DAY, isEndOfMonthDueDay } from '../dateUtils';
+
 /**
  * คำนวณสรุปยอดตามบัญชีจากข้อมูลค่าใช้จ่าย
  * รวมเฉพาะรายการที่ยังไม่ได้ชำระ
@@ -344,7 +346,11 @@ export const formatExpenseData = (data, month) => {
           return String(parseInt(source.dueDay.slice(-2), 10));
         }
         if (typeof source?.dueDay === 'number' || typeof source?.dueDay === 'string') {
-          return String(source.dueDay);
+          const rawDueDay = String(source.dueDay).trim();
+          if (isEndOfMonthDueDay(rawDueDay)) {
+            return END_OF_MONTH_DUE_DAY;
+          }
+          return rawDueDay;
         }
         if (typeof source?.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(source.dueDate)) {
           return String(parseInt(source.dueDate.slice(-2), 10));

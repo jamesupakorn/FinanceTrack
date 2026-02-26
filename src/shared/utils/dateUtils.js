@@ -2,6 +2,7 @@
 // ฟังก์ชันวันที่ที่ใช้ร่วมกันสำหรับค่าใช้จ่ายและการแจ้งเตือน
 
 export const THAI_MONTH_LABELS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+export const END_OF_MONTH_DUE_DAY = 'EOM';
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
@@ -77,6 +78,28 @@ export function normalizeDueDayValue(value) {
 }
 
 /**
+ * ตรวจสอบว่าค่าวันครบกำหนดเป็น "วันสิ้นเดือน" หรือไม่
+ */
+export function isEndOfMonthDueDay(value) {
+  return String(value || '').trim().toUpperCase() === END_OF_MONTH_DUE_DAY;
+}
+
+/**
+ * แปลงค่าวันครบกำหนดให้เป็นเลขวันที่ที่ใช้จริงของเดือนนั้น
+ */
+export function resolveDueDayForMonth(dueDayValue, daysInMonth) {
+  const safeDaysInMonth = Number.isFinite(daysInMonth) && daysInMonth > 0
+    ? Math.floor(daysInMonth)
+    : 31;
+  if (isEndOfMonthDueDay(dueDayValue)) {
+    return safeDaysInMonth;
+  }
+  const numericDay = normalizeDueDayValue(dueDayValue);
+  if (!numericDay) return null;
+  return Math.min(numericDay, safeDaysInMonth);
+}
+
+/**
  * จำกัดค่าวันครบกำหนดให้อยู่ในช่วง 1-31
  */
 export function clampDueDay(num) {
@@ -124,7 +147,10 @@ export function formatThaiDate(target) {
  */
 export function buildDueDateString(target, dueDay) {
   // ลดคำค่าวันให้อยู่ในช่วงวันสุดท้ายของเดือน เช่น เดือนกุมภาพันธ์มี 28 วัน ถ้า 31 → 28
-  const actualDay = Math.min(dueDay, target.daysInMonth);
+  const actualDay = resolveDueDayForMonth(dueDay, target.daysInMonth);
+  if (!actualDay) {
+    return formatThaiDate(target);
+  }
   const monthLabel = THAI_MONTH_LABELS[target.monthIndex] || normalizeMonthPart(target.monthIndex + 1);
   const thaiYear = target.year + 543;
   // เช่น '28 ก.พ. 2568'
@@ -135,10 +161,6 @@ export function buildDueDateString(target, dueDay) {
  * สร้างวันที่ครบกำหนดจากเลขวัน
  */
 export function getDueDateFromDay(dayValue) {
-  // แปลงค่าวันเป็นตัวเลข
-  const parsed = Number(dayValue);
-  // ตรวจสอบค่าปิติตามอยู่ในคืจตด 1-31
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
   // เคุวตา 00:00:00
   const today = getStartOfToday();
   const year = today.getFullYear();
@@ -146,7 +168,8 @@ export function getDueDateFromDay(dayValue) {
   // หาจำนวันสุดท้ายของเดือน
   const lastDay = new Date(year, month + 1, 0).getDate();
   // ลดไวดนี่ให้อยู่ในช่วงวันสุดท้ายของเดือน
-  const safeDay = Math.min(lastDay, Math.max(1, Math.round(parsed)));
+  const safeDay = resolveDueDayForMonth(dayValue, lastDay);
+  if (!safeDay) return null;
   // สร้าง object วันแตว 00:00:00
   const date = new Date(year, month, safeDay);
   date.setHours(0, 0, 0, 0);
