@@ -584,3 +584,45 @@
     padding: 10px;
   }
 }
+
+/* Mobile UX normalization */
+@media (max-width: 768px) {
+  .summaryReport {
+    border-radius: 20px;
+    padding: 20px;
+  }
+
+  .chartsSection,
+  .summaryTablesSection {
+    padding: 20px;
+    border-radius: 18px;
+  }
+
+  .summaryTable {
+    padding: 16px;
+    border-radius: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .summaryItem {
+    font-size: 0.9rem;
+  }
+
+  .itemLabel {
+    font-size: 0.85rem;
+  }
+
+  .itemValue {
+    font-size: 0.95rem;
+  }
+
+  .summaryReport {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    padding: 0;
+    margin: 8px 0;
+  }
+}

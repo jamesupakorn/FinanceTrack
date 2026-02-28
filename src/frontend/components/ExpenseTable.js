@@ -58,8 +58,8 @@ const formatDueDayText = (dueDayValue) => {
 };
 
 
-const describeDueTiming = (dueDayValue, paid) => {
-  const parsedDate = getDueDateFromDay(dueDayValue);
+const describeDueTiming = (dueDayValue, paid, monthKey) => {
+  const parsedDate = getDueDateFromDay(dueDayValue, monthKey);
   const dueDayText = formatDueDayText(dueDayValue);
   if (paid) {
     return {
@@ -297,7 +297,7 @@ export default function ExpenseTable({ selectedMonth }) {
       if (!row) return;
       const paid = row.paid === true || row.paid === 'true';
       if (paid) return;
-      const parsedDate = getDueDateFromDay(row.dueDay);
+      const parsedDate = getDueDateFromDay(row.dueDay, selectedMonth);
       if (!parsedDate) return;
       const resolvedDueDay = resolveDueDayForMonth(row.dueDay, daysInSelectedMonth);
       const diffDays = Math.ceil((parsedDate - today) / DAY_IN_MS);
@@ -327,7 +327,7 @@ export default function ExpenseTable({ selectedMonth }) {
         : 'ยังไม่กำหนด',
       nextDueName: nextDue ? nextDue.name : 'ไม่มีรายการ',
     };
-  }, [daysInSelectedMonth, editExpense, sortedExpenseKeys]);
+  }, [daysInSelectedMonth, editExpense, selectedMonth, sortedExpenseKeys]);
 
   const hasExpenseRows = sortedExpenseKeys.length > 0;
   const totalEstimateValue = useMemo(() => calculateExpenseTotal(editExpense, 'estimate', parseToNumber), [editExpense]);
@@ -420,7 +420,7 @@ export default function ExpenseTable({ selectedMonth }) {
                       ? styles.diffNegative
                       : styles.diffNeutral;
                   const displayName = row.name || DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการใหม่';
-                  const dueInfo = describeDueTiming(row.dueDay, paid);
+                  const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth);
                   return (
                     <tr key={item} className={styles.tableRow}>
                       <td className={styles.tableCell}>
@@ -522,7 +522,7 @@ export default function ExpenseTable({ selectedMonth }) {
                   ? styles.diffNegative
                   : styles.diffNeutral;
               const displayName = row.name || DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการใหม่';
-              const dueInfo = describeDueTiming(row.dueDay, paid);
+              const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth);
               return (
                 <div className={styles.expenseCard} key={item}>
                   <div className={styles.cardRow}>

@@ -79,6 +79,7 @@ html, body {
   font-family: 'Prompt', 'Sarabun', 'Noto Sans Thai', 'Segoe UI', sans-serif;
   line-height: 1.6;
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }
 
 body {
@@ -849,5 +850,48 @@ body {
     font-weight: bold;
     z-index: 9999;
     border-radius: 0 0 0 4px;
+  }
+}
+
+/* Mobile UX baseline override */
+@media (max-width: 768px) {
+  body {
+    background-attachment: scroll;
+  }
+
+  .container {
+    padding: 16px;
+  }
+
+  .card {
+    padding: 18px;
+    border-radius: 16px;
+  }
+
+  .btn {
+    min-height: 44px;
+    text-transform: none;
+    letter-spacing: 0.02em;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --font-size-sm: 0.875rem;
+    --font-size-base: 1rem;
+    --font-size-lg: 1.0625rem;
+  }
+
+  body {
+    font-size: 16px;
+  }
+
+  .container {
+    padding: 12px;
+  }
+
+  .card {
+    padding: 14px;
+    border-radius: 14px;
   }
 }
