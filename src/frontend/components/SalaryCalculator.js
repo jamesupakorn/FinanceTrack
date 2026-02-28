@@ -136,6 +136,7 @@ const serializeItemsForSave = (items) => {
 };
 
 const sumItems = (items) => items.reduce((sum, item) => sum + parseToNumber(item.value), 0);
+const hasInputValue = (value) => String(value ?? '').trim() !== '';
 
 const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
   const [incomeItems, setIncomeItems] = useState(() => buildPresetItems(incomePresetKeys));
@@ -231,11 +232,19 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
       if (result.success) {
         try {
           const [yearStr, monthStr] = selectedMonth.split('-');
-          const year = (parseInt(yearStr, 10) + 543).toString();
+          const year = yearStr;
           const month = monthStr.padStart(2, '0');
           const taxItem = deductionItems.find((item) => item.key === 'tax');
-          const taxValue = taxItem ? parseToNumber(taxItem.value) : 0;
-          await taxAPI.updateMonthlyTax(year, month, taxValue);
+          const providentItem = deductionItems.find((item) => item.key === 'provident_fund');
+          const taxValue = taxItem && hasInputValue(taxItem.value) ? parseToNumber(taxItem.value) : undefined;
+          const providentValue = providentItem && hasInputValue(providentItem.value)
+            ? parseToNumber(providentItem.value)
+            : undefined;
+          await taxAPI.updateMonthlyDeductionFields(year, month, {
+            tax: taxValue,
+            provident: providentValue,
+            income: totalIncome
+          });
         } catch (e) {
           // ไม่ต้องแจ้ง error ให้ user
         }

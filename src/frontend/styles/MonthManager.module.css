@@ -398,6 +398,42 @@
   }
 }
 
+/* Mobile iPhone 15 (390px) */
+@media (max-width: 420px) and (min-width: 375px) {
+  .monthManager {
+    gap: 10px;
+    padding: 12px;
+    margin: 12px 0;
+  }
+  .monthDisplay {
+    font-size: 1.2rem;
+    padding: 8px 10px;
+  }
+  .monthNavigation {
+    gap: 4px;
+  }
+  .monthNavigation button {
+    padding: 6px 8px;
+    font-size: 12px;
+    min-width: 36px;
+  }
+  .monthSelect {
+    font-size: 12px;
+    padding: 6px 8px;
+  }
+  .monthActions {
+    gap: 10px;
+    padding: 12px;
+  }
+  .monthActionButtons {
+    gap: 8px;
+  }
+  .monthActionButtons button {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
+
 @media (max-width: 640px) {
   .monthManager {
     padding: 24px;
@@ -501,5 +537,36 @@
   .formContent {
     margin: 12px;
     width: calc(100% - 24px);
+  }
+}
+
+/* Mobile UX normalization */
+@media (max-width: 768px) {
+  .monthManager {
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .monthDisplayValue,
+  .monthInput,
+  .customAddBtn,
+  .cancelBtn,
+  .quickAddBtn {
+    min-height: 44px;
+  }
+
+  .formContent {
+    border-radius: 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .monthLabel,
+  .monthHint {
+    text-align: left;
+  }
+
+  .monthActionButtons {
+    gap: 10px;
   }
 }

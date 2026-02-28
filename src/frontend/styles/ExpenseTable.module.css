@@ -611,6 +611,54 @@
   }
 }
 
+/* Mobile iPhone 15 (390px) */
+@media (max-width: 420px) and (min-width: 375px) {
+  .expenseTable {
+    padding: 18px;
+    margin: 16px 0;
+    border-radius: 20px;
+  }
+  .sectionTitle {
+    font-size: 1.5rem;
+  }
+  .sectionSubtitle {
+    font-size: 0.85rem;
+  }
+  .formGroupRow {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .formGroup {
+    flex: 1;
+    min-width: 100%;
+  }
+  .formGroup label {
+    font-size: 0.85rem;
+  }
+  .formGroup input,
+  .formGroup select {
+    font-size: 14px;
+    padding: 8px 10px;
+  }
+  .expenseList {
+    gap: 10px;
+  }
+  .expenseCard {
+    padding: 10px 8px;
+    gap: 8px;
+    border-radius: 10px;
+  }
+  .expenseInput {
+    font-size: 13px;
+    padding: 6px 6px;
+    border-radius: 6px;
+  }
+  .tableContainer {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 @media (max-width: 700px) {
   .tableContainer,
   .table {
@@ -668,5 +716,91 @@
 
   .saveButton {
     min-width: unset;
+  }
+}
+
+/* Mobile UX normalization */
+@media (max-width: 768px) {
+  .expenseTable {
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .overviewRow {
+    grid-template-columns: 1fr;
+  }
+
+  .saveButtonContainer {
+    text-align: left;
+  }
+
+  .saveButton,
+  .addItemButton {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 700px) {
+  .expenseCard {
+    border-radius: 14px;
+    padding: 14px 12px;
+  }
+
+  .cardRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .cardLabel {
+    min-width: 0;
+    font-size: 0.9rem;
+  }
+
+  .expenseInput,
+  .nameInput,
+  .dateInput {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* Mobile capture polish */
+@media (max-width: 480px) {
+  .expenseTable {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    padding: 0;
+    margin: 8px 0;
+  }
+
+  .overviewRow {
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .overviewCard,
+  .expenseCard,
+  .totalCard,
+  .loadingState,
+  .emptyState {
+    box-shadow: none;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(7, 12, 30, 0.72);
+    border-radius: 12px;
+  }
+
+  .expenseCard {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .saveButton,
+  .addItemButton,
+  .rowDeleteButton {
+    box-shadow: none;
   }
 }

@@ -49,6 +49,54 @@
   box-shadow: 0 18px 40px rgba(77, 240, 195, 0.35);
 }
 
+/* Mobile iPhone 15 (390px) */
+@media (max-width: 420px) and (min-width: 375px) {
+  .incomeContainer {
+    padding: 16px;
+    margin: 12px 0;
+    border-radius: 18px;
+  }
+  .sectionTitle {
+    font-size: 1.5rem;
+  }
+  .sectionSubtitle {
+    font-size: 0.8rem;
+  }
+  .formGroupRow {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .formGroup {
+    flex: 1;
+    min-width: 100%;
+  }
+  .formGroup label {
+    font-size: 0.85rem;
+  }
+  .formGroup input {
+    font-size: 13px;
+    padding: 6px 8px;
+  }
+  .incomeList {
+    gap: 8px;
+  }
+  .incomeCard {
+    padding: 10px 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+  .cardLabel {
+    font-size: 0.85rem;
+    min-width: 60px;
+  }
+  .incomeInput {
+    font-size: 12px;
+    padding: 5px 6px;
+    border-radius: 6px;
+  }
+}
+
 @media (max-width: 700px) {
   .mobileCardList {
     display: block;
@@ -622,5 +670,66 @@
 
   .incomeInput:hover {
     border-color: rgba(93, 91, 255, 0.6);
+  }
+}
+
+/* Mobile UX normalization */
+@media (max-width: 768px) {
+  .incomeContainer {
+    padding: 20px;
+    border-radius: 20px;
+    margin: 16px 0;
+  }
+
+  .sectionHeader {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .saveButtonContainer {
+    text-align: left;
+  }
+
+  .saveButton,
+  .addItemButton {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 700px) {
+  .incomeCard {
+    border-radius: 14px;
+    padding: 14px 12px;
+    gap: 10px;
+  }
+
+  .cardRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .cardLabel {
+    min-width: 0;
+    font-size: 0.9rem;
+  }
+
+  .incomeInput,
+  .nameInput {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .incomeContainer {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    padding: 0;
+    margin: 8px 0;
   }
 }

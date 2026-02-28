@@ -143,6 +143,47 @@ export const taxAPI = {
 		}
 		monthlyTax[monthKey] = sanitizeTaxAmount(value);
 		return postTaxYearPayload(normalizedYear, { monthly_tax: monthlyTax });
+	},
+	updateMonthlyDeductionFields: async (year, month, { tax, provident, income } = {}) => {
+		const hasTax = tax !== undefined;
+		const hasProvident = provident !== undefined;
+		const hasIncome = income !== undefined;
+		if (!hasTax && !hasProvident && !hasIncome) {
+			return { success: true, skipped: true };
+		}
+
+		const normalizedYear = normalizeYearInput(year);
+		const monthKey = String(month).padStart(2, '0');
+		let monthlyTax = {};
+		let monthlyProvident = {};
+		let monthlyIncome = {};
+
+		try {
+			const data = await getTaxYearPayload(normalizedYear);
+			monthlyTax = { ...(data?.[normalizedYear]?.monthly_tax || {}) };
+			monthlyProvident = { ...(data?.[normalizedYear]?.monthly_provident || {}) };
+			monthlyIncome = { ...(data?.[normalizedYear]?.monthly_income || {}) };
+		} catch (error) {
+			monthlyTax = {};
+			monthlyProvident = {};
+			monthlyIncome = {};
+		}
+
+		if (hasTax) {
+			monthlyTax[monthKey] = sanitizeTaxAmount(tax);
+		}
+		if (hasProvident) {
+			monthlyProvident[monthKey] = sanitizeTaxAmount(provident);
+		}
+		if (hasIncome) {
+			monthlyIncome[monthKey] = sanitizeTaxAmount(income);
+		}
+
+		return postTaxYearPayload(normalizedYear, {
+			...(hasTax ? { monthly_tax: monthlyTax } : {}),
+			...(hasProvident ? { monthly_provident: monthlyProvident } : {}),
+			...(hasIncome ? { monthly_income: monthlyIncome } : {})
+		});
 	}
 };
 
