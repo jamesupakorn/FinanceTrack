@@ -20,6 +20,7 @@ export default function SavingsTable({ selectedMonth }) {
 
   const [savingsData, setSavingsData] = useState(null);
   const [รายการเงินออม, setรายการเงินออม] = useState([]);
+  const [pendingScrollIndex, setPendingScrollIndex] = useState(null);
 
   const loadSavingsData = useCallback(async (month) => {
     if (!month) return;
@@ -53,17 +54,53 @@ export default function SavingsTable({ selectedMonth }) {
     }
   }, [selectedMonth, loadSavingsData]);
 
+  useEffect(() => {
+    if (pendingScrollIndex === null) return;
+    const tryScroll = () => {
+      if (typeof document === 'undefined') return false;
+      const targets = Array.from(document.querySelectorAll(`[data-savings-index="${pendingScrollIndex}"]`));
+      const target = targets.find((node) => node.offsetParent !== null) || targets[0];
+      if (!target) return false;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const firstInput = target.querySelector('input[type="text"]');
+      if (firstInput && typeof firstInput.focus === 'function') {
+        firstInput.focus({ preventScroll: true });
+      }
+      return true;
+    };
+
+    let timer = null;
+    const done = tryScroll();
+    if (!done) {
+      timer = setTimeout(() => {
+        if (tryScroll()) {
+          setPendingScrollIndex(null);
+        }
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+    setPendingScrollIndex(null);
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [pendingScrollIndex, รายการเงินออม]);
+
   const handleAddSavingsItem = () => {
     const defaultAmount = parseAndFormat(0);
-    setรายการเงินออม(prev => ([
-      ...prev,
-      {
-        savings_type: '',
-        รายการ: '',
-        savings_amount: defaultAmount,
-        จำนวนเงิน: defaultAmount
-      }
-    ]));
+    let nextIndex = 0;
+    setรายการเงินออม(prev => {
+      nextIndex = prev.length;
+      return [
+        ...prev,
+        {
+          savings_type: '',
+          รายการ: '',
+          savings_amount: defaultAmount,
+          จำนวนเงิน: defaultAmount
+        }
+      ];
+    });
+    setPendingScrollIndex(nextIndex);
   };
 
   // ใช้ shared numberUtils สำหรับ input logic
@@ -173,7 +210,7 @@ export default function SavingsTable({ selectedMonth }) {
             </thead>
             <tbody>
               {รายการเงินออม.map((item, index) => (
-                <tr key={index} className={styles.tableRow}>
+                <tr key={index} className={styles.tableRow} data-savings-index={index}>
                   <td className={styles.tableCell}>
                     <input
                       type="text"
@@ -214,7 +251,7 @@ export default function SavingsTable({ selectedMonth }) {
             <div className={styles.emptyCard}>ไม่มีรายการเงินออม</div>
           )}
           {รายการเงินออม.map((item, index) => (
-            <div className={styles.savingsCard} key={index}>
+            <div className={styles.savingsCard} key={index} data-savings-index={index}>
               <div className={styles.cardRow}>
                 <label className={styles.cardLabel}>{savingsKeyThaiMapping['savings_type']}</label>
                 <input
