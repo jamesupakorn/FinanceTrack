@@ -539,3 +539,34 @@
     width: calc(100% - 24px);
   }
 }
+
+/* Mobile UX normalization */
+@media (max-width: 768px) {
+  .monthManager {
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .monthDisplayValue,
+  .monthInput,
+  .customAddBtn,
+  .cancelBtn,
+  .quickAddBtn {
+    min-height: 44px;
+  }
+
+  .formContent {
+    border-radius: 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .monthLabel,
+  .monthHint {
+    text-align: left;
+  }
+
+  .monthActionButtons {
+    gap: 10px;
+  }
+}

@@ -469,3 +469,54 @@
     font-size: 1rem;
   }
 }
+
+/* Mobile UX normalization */
+@media (max-width: 768px) {
+  .savingsTable {
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .sectionTitle {
+    align-items: stretch;
+  }
+
+  .addButton,
+  .saveButton {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 700px) {
+  .savingsCard {
+    border-radius: 14px;
+    padding: 14px 12px;
+  }
+
+  .cardRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .cardLabel {
+    min-width: 0;
+    font-size: 0.9rem;
+  }
+
+  .savingsInput {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .savingsTable {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    padding: 0;
+    margin: 8px 0;
+  }
+}

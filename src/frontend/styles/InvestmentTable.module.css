@@ -171,6 +171,17 @@
   min-height: 44px;
 }
 
+.baseAmountInput::-webkit-outer-spin-button,
+.baseAmountInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.baseAmountInput[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 .baseAmountInput:focus {
   border-color: rgba(93,91,255,0.8);
   box-shadow: 0 0 0 3px rgba(93,91,255,0.15);
@@ -423,5 +434,61 @@
   .deleteButton {
     font-size: 11px;
     padding: 2px 6px;
+  }
+}
+
+/* Mobile UX normalization */
+@media (max-width: 768px) {
+  .investmentContainer {
+    padding: 20px;
+    border-radius: 20px;
+    margin-top: 16px;
+  }
+
+  .actionBar {
+    align-items: stretch;
+  }
+
+  .addButton,
+  .averageButton,
+  .saveButton {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .investmentCard {
+    border-radius: 14px;
+    padding: 14px 12px;
+  }
+
+  .cardRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .cardLabel {
+    min-width: 0;
+    font-size: 0.9rem;
+  }
+
+  .inputText,
+  .inputPercent,
+  .baseAmountInput {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .investmentContainer {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    padding: 0;
+    margin: 8px 0;
   }
 }

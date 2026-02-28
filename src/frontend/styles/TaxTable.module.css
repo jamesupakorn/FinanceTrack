@@ -567,3 +567,57 @@
     width: 100%;
   }
 }
+
+/* Mobile UX normalization */
+@media (max-width: 768px) {
+  .taxTable {
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .yearSelector {
+    align-items: stretch;
+  }
+
+  .yearSelect,
+  .addYearBtn,
+  .deleteBtn,
+  .saveBtn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 700px) {
+  .taxCard {
+    border-radius: 14px;
+    padding: 14px 12px;
+  }
+
+  .cardRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .cardLabel {
+    min-width: 0;
+    font-size: 0.9rem;
+  }
+
+  .monthInput {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .taxTable {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    padding: 0;
+    margin: 8px 0;
+  }
+}

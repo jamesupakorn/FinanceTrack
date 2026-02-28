@@ -157,21 +157,35 @@ export function buildDueDateString(target, dueDay) {
   return `${actualDay} ${monthLabel} ${thaiYear}`;
 }
 
+function parseMonthKeyToYearMonth(monthKey) {
+  if (typeof monthKey !== 'string') return null;
+  const trimmedMonthKey = monthKey.trim();
+  if (!/^\d{4}-\d{2}$/.test(trimmedMonthKey)) return null;
+  const [yearStr, monthStr] = trimmedMonthKey.split('-');
+  const year = Number(yearStr);
+  const monthIndex = Number(monthStr) - 1;
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+    return null;
+  }
+  return { year, monthIndex };
+}
+
 /**
  * สร้างวันที่ครบกำหนดจากเลขวัน
  */
-export function getDueDateFromDay(dayValue) {
+export function getDueDateFromDay(dayValue, monthKey) {
+  const monthContext = parseMonthKeyToYearMonth(monthKey);
   // เคุวตา 00:00:00
   const today = getStartOfToday();
-  const year = today.getFullYear();
-  const month = today.getMonth();
+  const year = monthContext ? monthContext.year : today.getFullYear();
+  const monthIndex = monthContext ? monthContext.monthIndex : today.getMonth();
   // หาจำนวันสุดท้ายของเดือน
-  const lastDay = new Date(year, month + 1, 0).getDate();
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
   // ลดไวดนี่ให้อยู่ในช่วงวันสุดท้ายของเดือน
   const safeDay = resolveDueDayForMonth(dayValue, lastDay);
   if (!safeDay) return null;
   // สร้าง object วันแตว 00:00:00
-  const date = new Date(year, month, safeDay);
+  const date = new Date(year, monthIndex, safeDay);
   date.setHours(0, 0, 0, 0);
   return date;
 }
