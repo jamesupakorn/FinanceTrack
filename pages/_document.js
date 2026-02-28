@@ -11,6 +11,8 @@ export default function Document() {
         {/* Mobile optimization */}
         <meta name="description" content="FinanceTrack - Money Management Application" />
         <meta name="theme-color" content="#03081a" />
+        <link rel="icon" href="/avatars/skullmoon_income_favicon.ico" sizes="any" />
+        <link rel="shortcut icon" href="/avatars/skullmoon_income_favicon.ico" />
         
         {/* iPhone specific optimization */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
