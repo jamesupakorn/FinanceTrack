@@ -144,8 +144,40 @@ export default function ExpenseTable({ selectedMonth }) {
   const [editExpense, setEditExpense] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [persistedKeys, setPersistedKeys] = useState([]);
+  const [pendingScrollKey, setPendingScrollKey] = useState(null);
   const { currentUser } = useSession();
   const shouldShowAccountTable = currentUser?.id === 'u001';
+
+  useEffect(() => {
+    if (!pendingScrollKey) return;
+    const tryScroll = () => {
+      if (typeof document === 'undefined') return false;
+      const targets = Array.from(document.querySelectorAll(`[data-expense-key="${pendingScrollKey}"]`));
+      const target = targets.find((node) => node.offsetParent !== null) || targets[0];
+      if (!target) return false;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const firstInput = target.querySelector('input[type="text"]');
+      if (firstInput && typeof firstInput.focus === 'function') {
+        firstInput.focus({ preventScroll: true });
+      }
+      return true;
+    };
+
+    let timer = null;
+    const done = tryScroll();
+    if (!done) {
+      timer = setTimeout(() => {
+        if (tryScroll()) {
+          setPendingScrollKey(null);
+        }
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+    setPendingScrollKey(null);
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [editExpense, pendingScrollKey]);
 
   useEffect(() => {
     if (!selectedMonth) {
@@ -233,6 +265,7 @@ export default function ExpenseTable({ selectedMonth }) {
         dueDay: ''
       }
     }));
+    setPendingScrollKey(uniqueKey);
   };
 
   const handleDeleteExpenseItem = (item) => {
@@ -419,10 +452,10 @@ export default function ExpenseTable({ selectedMonth }) {
                     : diffInfo.tone === 'negative'
                       ? styles.diffNegative
                       : styles.diffNeutral;
-                  const displayName = row.name || DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการใหม่';
+                  const displayName = row.name ?? DEFAULT_EXPENSE_LABEL_MAP[item] ?? 'รายการใหม่';
                   const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth);
                   return (
-                    <tr key={item} className={styles.tableRow}>
+                    <tr key={item} className={styles.tableRow} data-expense-key={item}>
                       <td className={styles.tableCell}>
                         <div className={styles.nameCell}>
                           <input
@@ -521,10 +554,10 @@ export default function ExpenseTable({ selectedMonth }) {
                 : diffInfo.tone === 'negative'
                   ? styles.diffNegative
                   : styles.diffNeutral;
-              const displayName = row.name || DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการใหม่';
+              const displayName = row.name ?? DEFAULT_EXPENSE_LABEL_MAP[item] ?? 'รายการใหม่';
               const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth);
               return (
-                <div className={styles.expenseCard} key={item}>
+                <div className={styles.expenseCard} key={item} data-expense-key={item}>
                   <div className={styles.cardRow}>
                     <span className={styles.cardLabel}>รายการ</span>
                     <input

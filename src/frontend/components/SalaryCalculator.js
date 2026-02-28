@@ -141,6 +141,7 @@ const hasInputValue = (value) => String(value ?? '').trim() !== '';
 const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
   const [incomeItems, setIncomeItems] = useState(() => buildPresetItems(incomePresetKeys));
   const [deductionItems, setDeductionItems] = useState(() => buildPresetItems(deductionPresetKeys));
+  const [pendingScrollItem, setPendingScrollItem] = useState(null);
   const [calculatedResults, setCalculatedResults] = useState({
     รวมรายได้: 0,
     รวมหัก: 0,
@@ -165,6 +166,39 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
     }
     loadSalaryData(selectedMonth);
   }, [selectedMonth]);
+
+  useEffect(() => {
+    if (!pendingScrollItem?.id || !pendingScrollItem?.type) return;
+    const { id, type } = pendingScrollItem;
+
+    const tryScroll = () => {
+      if (typeof document === 'undefined') return false;
+      const selector = `[data-salary-type="${type}"][data-salary-id="${id}"]`;
+      const target = document.querySelector(selector);
+      if (!target) return false;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const firstInput = target.querySelector('input[type="text"]');
+      if (firstInput && typeof firstInput.focus === 'function') {
+        firstInput.focus({ preventScroll: true });
+      }
+      return true;
+    };
+
+    let timer = null;
+    const done = tryScroll();
+    if (!done) {
+      timer = setTimeout(() => {
+        if (tryScroll()) {
+          setPendingScrollItem(null);
+        }
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+    setPendingScrollItem(null);
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [pendingScrollItem, incomeItems, deductionItems]);
 
   const loadSalaryData = async (month) => {
     try {
@@ -200,8 +234,14 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
     );
   };
 
+  const handleAmountInputFocus = (event) => {
+    event.target.select();
+  };
+
   const handleAddItem = (type) => {
-    updateItems(type, (prev) => [...prev, createNewItem(type)]);
+    const newItem = createNewItem(type);
+    updateItems(type, (prev) => [...prev, newItem]);
+    setPendingScrollItem({ type, id: newItem.id });
   };
 
   const handleRemoveItem = (type, id) => {
@@ -290,7 +330,12 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
           </div>
           <div className={styles.dynamicList}>
             {incomeItems.map((item) => (
-              <div key={item.id} className={`${styles.dynamicRow} ${styles.incomeRow}`}>
+              <div
+                key={item.id}
+                className={`${styles.dynamicRow} ${styles.incomeRow}`}
+                data-salary-type="income"
+                data-salary-id={item.id}
+              >
                 <div className={styles.rowField}>
                   <span className={styles.fieldLabel}>ชื่อรายการ</span>
                   <input
@@ -309,6 +354,7 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
                     value={item.value}
                     onChange={(e) => handleValueChange('income', item.id, e.target.value)}
                     onBlur={(e) => handleValueBlur('income', item.id, e.target.value)}
+                    onFocus={handleAmountInputFocus}
                     placeholder="0.00"
                     className={`${styles.labelInput} ${styles.amountInput}`}
                     aria-label="จำนวนเงินรายได้"
@@ -349,7 +395,12 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
           </div>
           <div className={styles.dynamicList}>
             {deductionItems.map((item) => (
-              <div key={item.id} className={`${styles.dynamicRow} ${styles.deductionRow}`}>
+              <div
+                key={item.id}
+                className={`${styles.dynamicRow} ${styles.deductionRow}`}
+                data-salary-type="deduction"
+                data-salary-id={item.id}
+              >
                 <div className={styles.rowField}>
                   <span className={styles.fieldLabel}>ชื่อรายการ</span>
                   <input
@@ -368,6 +419,7 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
                     value={item.value}
                     onChange={(e) => handleValueChange('deduction', item.id, e.target.value)}
                     onBlur={(e) => handleValueBlur('deduction', item.id, e.target.value)}
+                    onFocus={handleAmountInputFocus}
                     placeholder="0.00"
                     className={`${styles.labelInput} ${styles.amountInput}`}
                     aria-label="จำนวนเงินรายการค่าใช้จ่ายหักออก"

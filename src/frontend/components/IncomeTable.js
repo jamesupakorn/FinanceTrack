@@ -31,6 +31,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
   const [incomeLabels, setIncomeLabels] = useState({});
   const [persistedKeys, setPersistedKeys] = useState([]);
   const [salaryNetIncome, setSalaryNetIncome] = useState(0);
+  const [pendingScrollKey, setPendingScrollKey] = useState(null);
 
   const defaultIncomeOrder = useMemo(() => DEFAULT_INCOME_ITEMS.map(item => item.key), []);
   const incomeKeyThaiMap = useMemo(() => {
@@ -89,6 +90,37 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
     };
   }, [selectedMonth, salaryUpdateTrigger]);
 
+  useEffect(() => {
+    if (!pendingScrollKey) return;
+    const tryScroll = () => {
+      if (typeof document === 'undefined') return false;
+      const targets = Array.from(document.querySelectorAll(`[data-income-key="${pendingScrollKey}"]`));
+      const target = targets.find((node) => node.offsetParent !== null) || targets[0];
+      if (!target) return false;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const firstInput = target.querySelector('input[type="text"]');
+      if (firstInput && typeof firstInput.focus === 'function') {
+        firstInput.focus({ preventScroll: true });
+      }
+      return true;
+    };
+
+    let timer = null;
+    const done = tryScroll();
+    if (!done) {
+      timer = setTimeout(() => {
+        if (tryScroll()) {
+          setPendingScrollKey(null);
+        }
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+    setPendingScrollKey(null);
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [editIncome, pendingScrollKey]);
+
   const sortedIncomeKeys = useMemo(() => {
     const keys = Object.keys(editIncome || {});
     const defaults = defaultIncomeOrder.filter(key => keys.includes(key));
@@ -138,6 +170,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
       ...prev,
       [uniqueKey]: CUSTOM_LABEL_FALLBACK
     }));
+    setPendingScrollKey(uniqueKey);
   };
 
   const handleDeleteIncomeItem = (key) => {
@@ -221,7 +254,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
                 const label = getDisplayLabel(itemKey);
                 const isSalary = itemKey === 'salary';
                 return (
-                  <tr key={itemKey} className={styles.tableRow}>
+                  <tr key={itemKey} className={styles.tableRow} data-income-key={itemKey}>
                     <td className={styles.tableCell}>
                       {isSalary ? (
                         <div className={styles.salaryLabel}>
@@ -283,7 +316,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
               const label = getDisplayLabel(itemKey);
               const isSalary = itemKey === 'salary';
               return (
-                <div className={styles.incomeCard} key={itemKey}>
+                <div className={styles.incomeCard} key={itemKey} data-income-key={itemKey}>
                   <div className={styles.cardRow}>
                     <span className={styles.cardLabel}>รายการ</span>
                     {isSalary ? (
