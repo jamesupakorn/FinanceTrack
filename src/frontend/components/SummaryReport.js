@@ -9,12 +9,15 @@ import React, { useState, useEffect } from 'react';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { incomeAPI, expenseAPI, savingsAPI, taxAPI, salaryAPI } from '../../shared/utils/frontend/apiUtils';
 import { getSummaryData, getChartData } from '../../shared/utils/frontend/summaryUtils';
+import { formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
+import { useSession } from '../contexts/SessionContext';
 import styles from '../styles/SummaryReport.module.css';
 
 /**
  * รายงานสรุปภาพรวมการเงิน
  */
 const SummaryReport = ({ selectedMonth }) => {
+  const { currentUser } = useSession();
 
   const [summaryData, setSummaryData] = useState({
     ยอดรวมรายรับรายเดือน: 0,
@@ -41,27 +44,87 @@ const SummaryReport = ({ selectedMonth }) => {
     }
   });
 
+  const [effectiveMonth, setEffectiveMonth] = useState(selectedMonth || '');
+
+  const parseYearFromMonth = (monthKey) => {
+    if (typeof monthKey !== 'string' || !/^\d{4}-\d{2}$/.test(monthKey)) {
+      return new Date().getFullYear().toString();
+    }
+    return monthKey.split('-')[0];
+  };
+
+  const isSummaryEmpty = (summary) => {
+    if (!summary) return true;
+    return Number(summary.ยอดรวมรายรับรายเดือน || 0) === 0
+      && Number(summary.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด || 0) === 0
+      && Number(summary.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง || 0) === 0
+      && Number(summary.ยอดรวมเงินเก็บรายเดือน || 0) === 0;
+  };
+
+  const getLatestMonthWithData = async (currentMonth) => {
+    const [incomeAll, expenseAll, savingsAll, salaryAll] = await Promise.all([
+      incomeAPI.getAll(),
+      expenseAPI.getAll(),
+      savingsAPI.getAll(),
+      salaryAPI.getAll()
+    ]);
+
+    const monthRegex = /^\d{4}-\d{2}$/;
+    const monthSet = new Set([
+      ...Object.keys(incomeAll?.months || {}),
+      ...Object.keys(expenseAll?.months || {}),
+      ...Object.keys(savingsAll?.months || {}),
+      ...Object.keys(salaryAll?.months || {})
+    ].filter(month => monthRegex.test(month)));
+
+    const months = Array.from(monthSet).sort((a, b) => b.localeCompare(a));
+    if (!months.length) return null;
+    if (months.includes(currentMonth)) return currentMonth;
+    return months[0];
+  };
+
 
   useEffect(() => {
     loadSummaryData();
-  }, [selectedMonth]); // เพิ่ม selectedMonth เป็น dependency
+  }, [selectedMonth, currentUser?.id]); // เพิ่ม selectedMonth เป็น dependency
 
   const loadSummaryData = async () => {
     try {
       const currentMonth = selectedMonth || new Date().toISOString().slice(0, 7); // ใช้ selectedMonth prop หรือเดือนปัจจุบัน
-      const currentYear = new Date().getFullYear().toString();
-      
-      // ดึงข้อมูลจาก API
-      const [incomeData, expenseData, savingsData, taxData, salaryData] = await Promise.all([
-        incomeAPI.getByMonth(currentMonth),
-        expenseAPI.getByMonth(currentMonth),
-        savingsAPI.getByMonth(currentMonth),
-        taxAPI.getByYear(currentYear), // เปลี่ยนเป็นดึงตามปี
-        salaryAPI.getByMonth(currentMonth)
-      ]);
+      let monthToUse = currentMonth;
+      let yearToUse = parseYearFromMonth(monthToUse);
 
-      // ใช้ฟังก์ชันกลางสำหรับ summary และ chart
-      const summary = getSummaryData({ incomeData, expenseData, savingsData, taxData, salaryData, currentMonth, currentYear });
+      const loadByMonth = async (monthKey, yearKey) => {
+        const [incomeData, expenseData, savingsData, taxData, salaryData] = await Promise.all([
+          incomeAPI.getByMonth(monthKey),
+          expenseAPI.getByMonth(monthKey),
+          savingsAPI.getByMonth(monthKey),
+          taxAPI.getByYear(yearKey),
+          salaryAPI.getByMonth(monthKey)
+        ]);
+        return getSummaryData({
+          incomeData,
+          expenseData,
+          savingsData,
+          taxData,
+          salaryData,
+          currentMonth: monthKey,
+          currentYear: yearKey
+        });
+      };
+
+      let summary = await loadByMonth(monthToUse, yearToUse);
+
+      if (currentUser?.isDemo && isSummaryEmpty(summary)) {
+        const fallbackMonth = await getLatestMonthWithData(currentMonth);
+        if (fallbackMonth && fallbackMonth !== currentMonth) {
+          monthToUse = fallbackMonth;
+          yearToUse = parseYearFromMonth(monthToUse);
+          summary = await loadByMonth(monthToUse, yearToUse);
+        }
+      }
+
+      setEffectiveMonth(monthToUse);
       setSummaryData(summary);
       setChartData(getChartData({
         totalIncome: summary.ยอดรวมรายรับรายเดือน,
@@ -153,6 +216,11 @@ const SummaryReport = ({ selectedMonth }) => {
   return (
     <div className={styles.summaryReport}>
       <h2 className={styles.reportTitle}>งบประมาณ</h2>
+      {currentUser?.isDemo && effectiveMonth && selectedMonth && effectiveMonth !== selectedMonth && (
+        <p className={styles.reportHint}>
+          บัญชีเดโม่ไม่มีข้อมูลเดือนที่เลือก จึงแสดงข้อมูลล่าสุดจาก {formatMonthLabelTH(effectiveMonth)}
+        </p>
+      )}
       <div className={styles.summaryContent}>
         {/* Pie Chart Section */}
         <div className={styles.chartsSection}>

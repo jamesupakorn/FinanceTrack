@@ -30,6 +30,13 @@
   line-height: 1.3;
 }
 
+.reportHint {
+  margin: -20px 0 28px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
 .summaryContent {
   display: flex;
   flex-direction: column;
@@ -417,6 +424,50 @@
   }
 }
 
+/* Mobile iPhone 15 (390px) */
+@media (max-width: 420px) and (min-width: 375px) {
+  .summaryReport {
+    padding: 16px;
+    margin: 12px 0;
+    border-radius: 18px;
+  }
+  .reportTitle {
+    font-size: 1.5rem;
+    margin-bottom: 14px;
+  }
+  .summaryContent {
+    gap: 16px;
+    grid-template-columns: 1fr;
+  }
+  .chartsSection,
+  .summaryTablesSection {
+    padding: 14px;
+    border-radius: 12px;
+  }
+  .pieChartContainer {
+    max-height: 250px;
+  }
+  .summaryTable {
+    padding: 8px;
+    font-size: 11px;
+  }
+  .summaryTable th,
+  .summaryTable td {
+    padding: 6px 4px;
+  }
+  .summaryItem {
+    padding: 8px 10px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+  .summaryLabel {
+    font-size: 0.75rem;
+  }
+  .summaryValue {
+    font-size: 1.1rem;
+  }
+}
+
 /* Mobile Large */
 @media (max-width: 640px) {
   .summaryReport {
@@ -538,5 +589,47 @@
   .pieChartContainer,
   .summaryTable {
     padding: 10px;
+  }
+}
+
+/* Mobile UX normalization */
+@media (max-width: 768px) {
+  .summaryReport {
+    border-radius: 20px;
+    padding: 20px;
+  }
+
+  .chartsSection,
+  .summaryTablesSection {
+    padding: 20px;
+    border-radius: 18px;
+  }
+
+  .summaryTable {
+    padding: 16px;
+    border-radius: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .summaryItem {
+    font-size: 0.9rem;
+  }
+
+  .itemLabel {
+    font-size: 0.85rem;
+  }
+
+  .itemValue {
+    font-size: 0.95rem;
+  }
+
+  .summaryReport {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    padding: 0;
+    margin: 8px 0;
   }
 }

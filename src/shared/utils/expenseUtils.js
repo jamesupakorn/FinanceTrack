@@ -8,6 +8,7 @@
  */
 
 import { isPaidFlag } from './commonUtils';
+import { END_OF_MONTH_DUE_DAY, isEndOfMonthDueDay } from './dateUtils';
 
 /**
  * แปลงค่า string/number ให้เป็นตัวเลข
@@ -76,6 +77,10 @@ export function formatExpenseForSave(editExpense, parseToNumber) {
       } else if (field === 'dueDay') {
         // ตรวจและลดค่าที่ค์คหา เช่น 1-31
         const raw = String(editExpense[item][field] ?? '').trim();
+        if (isEndOfMonthDueDay(raw)) {
+          numericExpense[item][field] = END_OF_MONTH_DUE_DAY;
+          return;
+        }
         const parsed = parseInt(raw, 10);
         if (Number.isNaN(parsed)) {
           numericExpense[item][field] = '';

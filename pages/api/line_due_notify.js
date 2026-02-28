@@ -23,8 +23,8 @@ import {
   normalizeMonthPart,
   getDaysInMonth,
   getCurrentDateInfo,
+  resolveDueDayForMonth,
   normalizeDueDayValue,
-  clampDueDay,
   formatMonthKeyTH,
   formatThaiDate,
   buildDueDateString
@@ -64,12 +64,13 @@ function extractExpenseItems(doc = {}) {
 function getDueStatus(item, target) {
   if (!item || !target) return { status: 'invalid', dueDay: null };
   const dueDay = getDueDayNumber(item);
-  if (!dueDay || dueDay < 1 || dueDay > target.daysInMonth) {
+  const resolvedDueDay = resolveDueDayForMonth(dueDay, target.daysInMonth);
+  if (!resolvedDueDay || resolvedDueDay < 1 || resolvedDueDay > target.daysInMonth) {
     return { status: 'invalid', dueDay: null };
   }
-  if (dueDay === target.day) return { status: 'due', dueDay };
-  if (dueDay < target.day) return { status: 'overdue', dueDay };
-  if ((dueDay - target.day) <= DUE_SOON_DAYS) {
+  if (resolvedDueDay === target.day) return { status: 'due', dueDay };
+  if (resolvedDueDay < target.day) return { status: 'overdue', dueDay };
+  if ((resolvedDueDay - target.day) <= DUE_SOON_DAYS) {
     return { status: 'dueSoon', dueDay };
   }
   return { status: 'upcoming', dueDay };

@@ -38,6 +38,53 @@
 .hideOnDesktop {
   display: none;
 }
+
+/* Mobile iPhone 15 (390px) */
+@media (max-width: 420px) and (min-width: 375px) {
+  .savingsTable {
+    padding: 18px;
+    margin: 12px 0;
+    border-radius: 18px;
+  }
+  .headerTitle {
+    font-size: 1.5rem;
+    margin-bottom: 14px;
+  }
+  .formGroupRow {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .formGroup {
+    flex: 1;
+    min-width: 100%;
+  }
+  .formGroup label {
+    font-size: 0.85rem;
+  }
+  .formGroup input {
+    font-size: 13px;
+    padding: 6px 8px;
+  }
+  .savingsList {
+    gap: 8px;
+  }
+  .savingsCard {
+    padding: 10px 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+  .cardLabel {
+    font-size: 0.85rem;
+    min-width: 60px;
+  }
+  .savingsInput {
+    font-size: 12px;
+    padding: 5px 6px;
+    border-radius: 6px;
+  }
+}
+
 @media (max-width: 700px) {
   .tableContainer,
   .table {
@@ -420,5 +467,56 @@
   }
   .summaryTitle {
     font-size: 1rem;
+  }
+}
+
+/* Mobile UX normalization */
+@media (max-width: 768px) {
+  .savingsTable {
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .sectionTitle {
+    align-items: stretch;
+  }
+
+  .addButton,
+  .saveButton {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 700px) {
+  .savingsCard {
+    border-radius: 14px;
+    padding: 14px 12px;
+  }
+
+  .cardRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .cardLabel {
+    min-width: 0;
+    font-size: 0.9rem;
+  }
+
+  .savingsInput {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .savingsTable {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    padding: 0;
+    margin: 8px 0;
   }
 }

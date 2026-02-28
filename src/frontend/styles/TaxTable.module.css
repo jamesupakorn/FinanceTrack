@@ -31,6 +31,67 @@
 .hideOnDesktop {
   display: none;
 }
+
+/* Mobile iPhone 15 (390px) */
+@media (max-width: 420px) and (min-width: 375px) {
+  .taxTable {
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 20px;
+  }
+  .headerTitle {
+    font-size: 1.6rem;
+    margin-bottom: 18px;
+  }
+  .yearSelector {
+    margin-bottom: 20px;
+    gap: 10px;
+  }
+  .yearLabel {
+    font-size: 14px;
+    min-width: 50px;
+  }
+  .yearNav {
+    gap: 6px;
+  }
+  .yearNav button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .tableSection {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .monthlyTable {
+    min-width: 600px;
+    font-size: 12px;
+  }
+  .monthlyTable th,
+  .monthlyTable td {
+    padding: 8px 6px;
+    font-size: 11px;
+  }
+  .taxCard {
+    padding: 10px 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    border-radius: 10px;
+  }
+  .cardRow {
+    gap: 6px;
+  }
+  .cardLabel {
+    font-size: 0.9rem;
+    min-width: 70px;
+  }
+  .monthInput {
+    font-size: 12px;
+    padding: 6px 6px;
+    border-radius: 6px;
+    width: 80px;
+  }
+}
+
 @media (max-width: 700px) {
   .tableSection,
   .monthlyTable {
@@ -223,6 +284,8 @@
 /* Table Section */
 .tableSection {
   margin-top: 40px;
+  width: 100%;
+  overflow-x: auto;
 }
 
 .tableTitle {
@@ -234,6 +297,7 @@
 
 .monthlyTable {
   width: 100%;
+  min-width: 980px;
   border-collapse: collapse;
   background: var(--bg-surface);
   border-radius: 16px;
@@ -501,5 +565,59 @@
     font-size: 13px;
     padding: 8px 0;
     width: 100%;
+  }
+}
+
+/* Mobile UX normalization */
+@media (max-width: 768px) {
+  .taxTable {
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .yearSelector {
+    align-items: stretch;
+  }
+
+  .yearSelect,
+  .addYearBtn,
+  .deleteBtn,
+  .saveBtn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 700px) {
+  .taxCard {
+    border-radius: 14px;
+    padding: 14px 12px;
+  }
+
+  .cardRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .cardLabel {
+    min-width: 0;
+    font-size: 0.9rem;
+  }
+
+  .monthInput {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .taxTable {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    padding: 0;
+    margin: 8px 0;
   }
 }
