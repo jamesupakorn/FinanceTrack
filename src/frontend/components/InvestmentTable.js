@@ -17,6 +17,10 @@ export default function InvestmentTable({ selectedMonth, onDataChange }) {
   const [baseAmount, setBaseAmount] = useState('');
   const [investments, setInvestments] = useState([]);
 
+  const handleAmountInputFocus = (event) => {
+    event.target.select();
+  };
+
   // ฟังก์ชันคำนวณ amount ตามเปอร์เซ็นต์
   const recalcAmounts = (amount, invList) => {
     const base = parseToNumber(amount);
@@ -119,6 +123,7 @@ export default function InvestmentTable({ selectedMonth, onDataChange }) {
               setBaseAmount(e.target.value);
               setInvestments(prev => recalcAmounts(e.target.value, prev));
             }}
+            onFocus={handleAmountInputFocus}
             className={styles.baseAmountInput}
           />
         </label>
@@ -152,6 +157,7 @@ export default function InvestmentTable({ selectedMonth, onDataChange }) {
                     max="100"
                     value={item.percent}
                     onChange={e => updateField(idx, 'percent', e.target.value)}
+                    onFocus={handleAmountInputFocus}
                     className={styles.inputPercent}
                   />
                 </td>
@@ -191,6 +197,7 @@ export default function InvestmentTable({ selectedMonth, onDataChange }) {
                 max="100"
                 value={item.percent}
                 onChange={e => updateField(idx, 'percent', e.target.value)}
+                onFocus={handleAmountInputFocus}
                 className={styles.inputPercent}
               />
             </div>

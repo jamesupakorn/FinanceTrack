@@ -137,6 +137,13 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
     return CUSTOM_LABEL_FALLBACK;
   };
 
+  const getInputLabelValue = (key) => {
+    const stored = incomeLabels[key];
+    if (stored !== undefined && stored !== null) return stored;
+    if (incomeKeyThaiMap[key]) return incomeKeyThaiMap[key];
+    return CUSTOM_LABEL_FALLBACK;
+  };
+
   const getSalaryDisplayValue = () => {
     if (salaryNetIncome && !Number.isNaN(Number(salaryNetIncome))) {
       return Number(salaryNetIncome);
@@ -156,8 +163,12 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
     const cleaned = (value || '').trim();
     setIncomeLabels(prev => ({
       ...prev,
-      [key]: cleaned.length ? cleaned : getDisplayLabel(key)
+      [key]: cleaned.length ? cleaned : (incomeKeyThaiMap[key] || CUSTOM_LABEL_FALLBACK)
     }));
+  };
+
+  const handleAmountInputFocus = (event) => {
+    event.target.select();
   };
 
   const handleAddIncomeItem = () => {
@@ -252,6 +263,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
             <tbody>
               {sortedIncomeKeys.map((itemKey) => {
                 const label = getDisplayLabel(itemKey);
+                const inputLabelValue = getInputLabelValue(itemKey);
                 const isSalary = itemKey === 'salary';
                 return (
                   <tr key={itemKey} className={styles.tableRow} data-income-key={itemKey}>
@@ -266,7 +278,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
                           <input
                             type="text"
                             className={styles.nameInput}
-                            value={label}
+                            value={inputLabelValue}
                             onChange={(e) => handleIncomeNameChange(itemKey, e.target.value)}
                             onBlur={(e) => handleIncomeNameBlur(itemKey, e.target.value)}
                             placeholder="ชื่อรายการ"
@@ -295,6 +307,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
                           value={editIncome[itemKey] ?? ''}
                           onChange={e => handleNumberInput(e.target.value, setEditIncome, itemKey)}
                           onBlur={e => handleNumberBlur(e.target.value, setEditIncome, itemKey)}
+                          onFocus={handleAmountInputFocus}
                           className={styles.incomeInput}
                         />
                       )}
@@ -314,6 +327,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
           <div className={styles.mobileCardList + ' ' + styles.hideOnDesktop}>
             {sortedIncomeKeys.map(itemKey => {
               const label = getDisplayLabel(itemKey);
+              const inputLabelValue = getInputLabelValue(itemKey);
               const isSalary = itemKey === 'salary';
               return (
                 <div className={styles.incomeCard} key={itemKey} data-income-key={itemKey}>
@@ -328,7 +342,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
                       <input
                         type="text"
                         className={styles.nameInput}
-                        value={label}
+                        value={inputLabelValue}
                         onChange={(e) => handleIncomeNameChange(itemKey, e.target.value)}
                         onBlur={(e) => handleIncomeNameBlur(itemKey, e.target.value)}
                       />
@@ -349,6 +363,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
                         value={editIncome[itemKey] ?? ''}
                         onChange={e => handleNumberInput(e.target.value, setEditIncome, itemKey)}
                         onBlur={e => handleNumberBlur(e.target.value, setEditIncome, itemKey)}
+                        onFocus={handleAmountInputFocus}
                         className={styles.incomeInput}
                       />
                     )}
