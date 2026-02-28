@@ -417,6 +417,50 @@
   }
 }
 
+/* Mobile iPhone 15 (390px) */
+@media (max-width: 420px) and (min-width: 375px) {
+  .summaryReport {
+    padding: 16px;
+    margin: 12px 0;
+    border-radius: 18px;
+  }
+  .reportTitle {
+    font-size: 1.5rem;
+    margin-bottom: 14px;
+  }
+  .summaryContent {
+    gap: 16px;
+    grid-template-columns: 1fr;
+  }
+  .chartsSection,
+  .summaryTablesSection {
+    padding: 14px;
+    border-radius: 12px;
+  }
+  .pieChartContainer {
+    max-height: 250px;
+  }
+  .summaryTable {
+    padding: 8px;
+    font-size: 11px;
+  }
+  .summaryTable th,
+  .summaryTable td {
+    padding: 6px 4px;
+  }
+  .summaryItem {
+    padding: 8px 10px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+  .summaryLabel {
+    font-size: 0.75rem;
+  }
+  .summaryValue {
+    font-size: 1.1rem;
+  }
+}
+
 /* Mobile Large */
 @media (max-width: 640px) {
   .summaryReport {

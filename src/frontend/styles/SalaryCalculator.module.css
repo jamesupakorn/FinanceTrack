@@ -474,6 +474,85 @@
   }
 }
 
+/* Mobile iPhone 15 (390px) */
+@media (max-width: 420px) and (min-width: 375px) {
+  .salaryCalculator {
+    padding: 24px;
+    margin: 20px 0;
+    border-radius: 24px;
+  }
+
+  .title {
+    font-size: 1.65rem;
+    margin-bottom: 24px;
+  }
+
+  .salaryContent {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+
+  .incomeSection,
+  .deductionSection {
+    padding: 20px 18px 24px;
+    border-radius: 18px;
+  }
+
+  .sectionHeader {
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .sectionTitle {
+    font-size: 1rem;
+    padding: 10px 16px;
+    min-width: auto;
+  }
+
+  .dynamicRow {
+    gap: 12px;
+    padding: 14px;
+    border-radius: 14px;
+    flex-direction: column;
+  }
+
+  .dynamicList {
+    gap: 12px;
+  }
+
+  .addRowBtn {
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    width: 100%;
+    border-radius: 12px;
+  }
+
+  .summaryItem {
+    padding: 12px;
+  }
+
+  .summaryLabel {
+    font-size: 0.85rem;
+  }
+
+  .summaryValue {
+    font-size: 1.3rem;
+  }
+
+  .actionButtons {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .actionButtons button {
+    width: 100%;
+    padding: 11px 14px;
+    font-size: 13px;
+  }
+}
+
 @media (max-width: 640px) {
   .salaryCalculator {
     padding: 22px;
