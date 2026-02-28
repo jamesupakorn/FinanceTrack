@@ -98,27 +98,38 @@ const buildItemsFromSource = (sectionData, presetKeys, type) => {
   const items = [];
   const seenKeys = new Set();
 
+  // แสดงเฉพาะ preset items ที่มีค่าจริง (ไม่ใช่ 0 หรือว่าง)
   presetKeys.forEach((key) => {
     seenKeys.add(key);
     const hasValue = Object.prototype.hasOwnProperty.call(sectionData, key);
-    items.push({
-      id: key,
-      key,
-      label: labelsMap[key] || salaryKeyThaiMapping[key] || 'รายการใหม่',
-      value: hasValue ? formatIncomingValue(sectionData[key]) : ''
-    });
-  });
-
-  Object.entries(sectionData)
-    .filter(([key, value]) => key !== LABELS_META_KEY && !seenKeys.has(key) && isNumericValue(value))
-    .forEach(([key, value]) => {
+    const rawValue = sectionData[key];
+    const numValue = parseToNumber(rawValue);
+    
+    // เพิ่มเฉพาะรายการที่มีค่ามากกว่า 0
+    if (hasValue && numValue > 0) {
       items.push({
         id: key,
         key,
-        label: labelsMap[key] || 'รายการใหม่',
-        value: formatIncomingValue(value)
+        label: labelsMap[key] || salaryKeyThaiMapping[key] || 'รายการใหม่',
+        value: formatIncomingValue(rawValue)
       });
-      seenKeys.add(key);
+    }
+  });
+
+  // เพิ่มรายการที่ไม่ใช่ preset (custom items)
+  Object.entries(sectionData)
+    .filter(([key, value]) => key !== LABELS_META_KEY && !seenKeys.has(key) && isNumericValue(value))
+    .forEach(([key, value]) => {
+      const numValue = parseToNumber(value);
+      if (numValue > 0) {
+        items.push({
+          id: key,
+          key,
+          label: labelsMap[key] || 'รายการใหม่',
+          value: formatIncomingValue(value)
+        });
+        seenKeys.add(key);
+      }
     });
 
   return items.length ? items : [createNewItem(type)];
@@ -128,10 +139,17 @@ const serializeItemsForSave = (items) => {
   const values = {};
   const labels = {};
   items.forEach((item) => {
-    values[item.key] = parseToNumber(item.value);
-    labels[item.key] = item.label?.trim() || 'รายการใหม่';
+    const numValue = parseToNumber(item.value);
+    // บันทึกเฉพาะรายการที่มีค่ามากกว่า 0
+    if (numValue > 0) {
+      values[item.key] = numValue;
+      labels[item.key] = item.label?.trim() || 'รายการใหม่';
+    }
   });
-  values[LABELS_META_KEY] = labels;
+  // บันทึก labels เฉพาะเมื่อมีรายการ
+  if (Object.keys(labels).length > 0) {
+    values[LABELS_META_KEY] = labels;
+  }
   return values;
 };
 
