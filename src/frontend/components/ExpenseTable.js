@@ -253,6 +253,10 @@ export default function ExpenseTable({ selectedMonth }) {
     updateExpenseField(item, field, value);
   };
 
+  const handleAmountInputFocus = (event) => {
+    event.target.select();
+  };
+
   const handleAddExpenseItem = () => {
     const uniqueKey = `custom_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     setEditExpense(prev => ({
@@ -481,6 +485,7 @@ export default function ExpenseTable({ selectedMonth }) {
                           value={row.estimate ?? ''}
                           onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'estimate', val))}
                           onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'estimate', val))}
+                          onFocus={handleAmountInputFocus}
                           className={styles.expenseInput}
                         />
                       </td>
@@ -490,6 +495,7 @@ export default function ExpenseTable({ selectedMonth }) {
                           value={row.actual ?? ''}
                           onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'actual', val))}
                           onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'actual', val))}
+                          onFocus={handleAmountInputFocus}
                           className={styles.expenseInput}
                         />
                       </td>
@@ -576,6 +582,7 @@ export default function ExpenseTable({ selectedMonth }) {
                       value={row.estimate ?? ''}
                       onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'estimate', val))}
                       onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'estimate', val))}
+                      onFocus={handleAmountInputFocus}
                       className={styles.expenseInput}
                     />
                   </div>
@@ -586,6 +593,7 @@ export default function ExpenseTable({ selectedMonth }) {
                       value={row.actual ?? ''}
                       onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'actual', val))}
                       onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'actual', val))}
+                      onFocus={handleAmountInputFocus}
                       className={styles.expenseInput}
                     />
                   </div>

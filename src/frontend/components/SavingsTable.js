@@ -129,6 +129,10 @@ export default function SavingsTable({ selectedMonth }) {
     setรายการเงินออม(newList);
   };
 
+  const handleAmountInputFocus = (event) => {
+    event.target.select();
+  };
+
   const handleDeleteSavingsItem = (index) => {
     const newList = รายการเงินออม.filter((_, i) => i !== index);
     setรายการเงินออม(newList);
@@ -226,6 +230,7 @@ export default function SavingsTable({ selectedMonth }) {
                       value={item.savings_amount || ''}
                       onChange={e => handleSavingsAmountInput(e.target.value, index)}
                       onBlur={e => handleSavingsAmountBlur(e.target.value, index)}
+                      onFocus={handleAmountInputFocus}
                       placeholder={savingsKeyThaiMapping['savings_amount']}
                       className={styles.savingsInput}
                     />
@@ -269,6 +274,7 @@ export default function SavingsTable({ selectedMonth }) {
                   value={item.savings_amount || ''}
                   onChange={e => handleSavingsAmountInput(e.target.value, index)}
                   onBlur={e => handleSavingsAmountBlur(e.target.value, index)}
+                  onFocus={handleAmountInputFocus}
                   placeholder={savingsKeyThaiMapping['savings_amount']}
                   className={styles.savingsInput}
                 />
