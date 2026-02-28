@@ -600,6 +600,34 @@ body {
   }
 }
 
+/* Mobile iPhone 15 (390px) - Specific optimization */
+@media (max-width: 420px) and (min-width: 375px) {
+  :root {
+    --font-size-sm: 0.8rem;     /* 12.8px */
+    --font-size-base: 0.9rem;   /* 14.4px */
+    --font-size-lg: 0.95rem;    /* 15.2px */
+    --font-size-xl: 1rem;       /* 16px */
+    --font-size-2xl: 1.125rem;  /* 18px */
+    --font-size-3xl: 1.25rem;   /* 20px */
+    --font-size-4xl: 1.35rem;   /* 21.6px */
+    --space-5: 0.875rem;        /* 14px */
+    --space-6: 1rem;            /* 16px */
+    --space-8: 1rem;            /* 16px */
+    --space-10: 1.125rem;       /* 18px */
+    --space-12: 1.375rem;       /* 22px */
+    --space-16: 1.625rem;       /* 26px */
+    --space-20: 1.875rem;       /* 30px */
+  }
+  
+  .container {
+    padding: 12px;
+  }
+  
+  body {
+    font-size: 14px;
+  }
+}
+
 /* Mobile Portrait (480px) */
 @media (max-width: 480px) {
   :root {

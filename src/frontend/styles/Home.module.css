@@ -537,6 +537,67 @@
   }
 }
 
+/* Mobile iPhone 15 (390px) */
+@media (max-width: 420px) and (min-width: 375px) {
+  .homeContainer {
+    padding: 50px 10px 70px;
+  }
+  .mainContent {
+    padding: 16px;
+    border-radius: 24px;
+    max-width: 100%;
+  }
+  .pageHeader {
+    padding: 20px 14px;
+    margin-bottom: 18px;
+    border-radius: 20px;
+    gap: 14px;
+  }
+  .pageTitle {
+    font-size: 1.85rem;
+    font-weight: 700;
+    gap: 8px;
+  }
+  .pageLead {
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+  .headerIcon {
+    width: 70px;
+    height: 70px;
+    flex-shrink: 0;
+  }
+  .headerTopRow {
+    gap: 16px;
+  }
+  .tabNavigation {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px;
+    justify-content: center;
+  }
+  .tabButton {
+    padding: 11px 16px;
+    font-size: 13px;
+    min-width: auto;
+    flex: 1;
+    min-width: calc(50% - 4px);
+  }
+  .tabButton svg {
+    width: 15px;
+    height: 15px;
+  }
+  .tabContent {
+    padding: 20px 16px;
+    border-radius: 20px;
+  }
+  .sectionCard {
+    padding: 18px;
+    margin-bottom: 16px;
+    border-radius: 16px;
+  }
+}
+
 /* Mobile Portrait */
 @media (max-width: 480px) {
   .homeContainer {

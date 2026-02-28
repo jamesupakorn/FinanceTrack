@@ -611,6 +611,54 @@
   }
 }
 
+/* Mobile iPhone 15 (390px) */
+@media (max-width: 420px) and (min-width: 375px) {
+  .expenseTable {
+    padding: 18px;
+    margin: 16px 0;
+    border-radius: 20px;
+  }
+  .sectionTitle {
+    font-size: 1.5rem;
+  }
+  .sectionSubtitle {
+    font-size: 0.85rem;
+  }
+  .formGroupRow {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .formGroup {
+    flex: 1;
+    min-width: 100%;
+  }
+  .formGroup label {
+    font-size: 0.85rem;
+  }
+  .formGroup input,
+  .formGroup select {
+    font-size: 14px;
+    padding: 8px 10px;
+  }
+  .expenseList {
+    gap: 10px;
+  }
+  .expenseCard {
+    padding: 10px 8px;
+    gap: 8px;
+    border-radius: 10px;
+  }
+  .expenseInput {
+    font-size: 13px;
+    padding: 6px 6px;
+    border-radius: 6px;
+  }
+  .tableContainer {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 @media (max-width: 700px) {
   .tableContainer,
   .table {

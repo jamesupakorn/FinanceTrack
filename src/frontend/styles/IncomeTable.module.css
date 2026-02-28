@@ -49,6 +49,54 @@
   box-shadow: 0 18px 40px rgba(77, 240, 195, 0.35);
 }
 
+/* Mobile iPhone 15 (390px) */
+@media (max-width: 420px) and (min-width: 375px) {
+  .incomeContainer {
+    padding: 16px;
+    margin: 12px 0;
+    border-radius: 18px;
+  }
+  .sectionTitle {
+    font-size: 1.5rem;
+  }
+  .sectionSubtitle {
+    font-size: 0.8rem;
+  }
+  .formGroupRow {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .formGroup {
+    flex: 1;
+    min-width: 100%;
+  }
+  .formGroup label {
+    font-size: 0.85rem;
+  }
+  .formGroup input {
+    font-size: 13px;
+    padding: 6px 8px;
+  }
+  .incomeList {
+    gap: 8px;
+  }
+  .incomeCard {
+    padding: 10px 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+  .cardLabel {
+    font-size: 0.85rem;
+    min-width: 60px;
+  }
+  .incomeInput {
+    font-size: 12px;
+    padding: 5px 6px;
+    border-radius: 6px;
+  }
+}
+
 @media (max-width: 700px) {
   .mobileCardList {
     display: block;
