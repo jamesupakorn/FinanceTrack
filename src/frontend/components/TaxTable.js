@@ -17,6 +17,10 @@ import styles from '../styles/TaxTable.module.css';
  * ตารางภาษีรายปี
  */
 export default function TaxTable({ selectedMonth }) {
+  const handleAmountInputFocus = (event) => {
+    event.target.select();
+  };
+
   // ...existing code...
   // เพิ่มปีใหม่ (เฉพาะโหมด edit)
   const handleAddNewYear = (yearAD) => {
@@ -274,6 +278,7 @@ export default function TaxTable({ selectedMonth }) {
                       value={income}
                       onChange={e => handleNumberInput(e.target.value, setMonthlyIncome, month)}
                       onBlur={e => handleNumberBlur(e.target.value, setMonthlyIncome, month)}
+                      onFocus={handleAmountInputFocus}
                       placeholder="รายรับ"
                       className={styles.monthInput}
                     />
@@ -287,6 +292,7 @@ export default function TaxTable({ selectedMonth }) {
                       value={provident}
                       onChange={e => handleNumberInput(e.target.value, setMonthlyProvident, month)}
                       onBlur={e => handleNumberBlur(e.target.value, setMonthlyProvident, month)}
+                      onFocus={handleAmountInputFocus}
                       placeholder="กองทุนสำรองเลี้ยงชีพ"
                       className={styles.monthInput}
                     />
@@ -297,6 +303,7 @@ export default function TaxTable({ selectedMonth }) {
                       value={monthlyTaxVal}
                       onChange={e => handleNumberInput(e.target.value, setMonthlyTax, month)}
                       onBlur={e => handleNumberBlur(e.target.value, setMonthlyTax, month)}
+                      onFocus={handleAmountInputFocus}
                       placeholder={taxKeyThaiMapping['monthly_tax']}
                       className={styles.monthInput}
                     />
@@ -341,6 +348,7 @@ export default function TaxTable({ selectedMonth }) {
                   value={income}
                   onChange={e => handleNumberInput(e.target.value, setMonthlyIncome, month)}
                   onBlur={e => handleNumberBlur(e.target.value, setMonthlyIncome, month)}
+                  onFocus={handleAmountInputFocus}
                   placeholder="รายรับ"
                   className={styles.monthInput}
                 />
@@ -353,6 +361,7 @@ export default function TaxTable({ selectedMonth }) {
                   value={provident}
                   onChange={e => handleNumberInput(e.target.value, setMonthlyProvident, month)}
                   onBlur={e => handleNumberBlur(e.target.value, setMonthlyProvident, month)}
+                  onFocus={handleAmountInputFocus}
                   placeholder="กองทุนสำรองเลี้ยงชีพ"
                   className={styles.monthInput}
                 />
@@ -364,6 +373,7 @@ export default function TaxTable({ selectedMonth }) {
                   value={monthlyTaxVal}
                   onChange={e => handleNumberInput(e.target.value, setMonthlyTax, month)}
                   onBlur={e => handleNumberBlur(e.target.value, setMonthlyTax, month)}
+                  onFocus={handleAmountInputFocus}
                   placeholder={taxKeyThaiMapping['monthly_tax']}
                   className={styles.monthInput}
                 />
