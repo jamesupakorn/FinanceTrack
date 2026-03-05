@@ -4,9 +4,7 @@ export default function Document() {
   return (
     <Html lang="th">
       <Head>
-        {/* Viewport meta tag for optimal mobile experience */}
         <meta charSet="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
         
         {/* Mobile optimization */}
         <meta name="description" content="FinanceTrack - Money Management Application" />
