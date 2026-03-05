@@ -72,6 +72,14 @@
   align-self: flex-start;
 }
 
+.headerActionGroup {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .headerIcon {
   width: 96px;
   height: 96px;
@@ -134,6 +142,169 @@
   gap: 8px;
   box-shadow: 0 18px 40px rgba(5,10,32,0.45);
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.reportDownloadButton {
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 999px;
+  padding: 12px 20px;
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 18px 40px rgba(5,10,32,0.45);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  min-height: 44px;
+}
+
+.reportMonthModalBackdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(2, 6, 23, 0.62);
+  z-index: 80;
+}
+
+.reportMonthModal {
+  width: min(540px, 100%);
+  max-height: 86vh;
+  overflow-y: auto;
+  background: rgba(6, 9, 27, 0.96);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  box-shadow: 0 40px 120px rgba(2,6,23,0.65);
+  backdrop-filter: blur(18px);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reportMonthModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.reportMonthModalTitle {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #f5f7ff;
+}
+
+.reportMonthModalHint {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.72);
+}
+
+.reportMonthActions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.reportMonthActions button {
+  border: none;
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.reportMonthActions button:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+.reportMonthList {
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 2px;
+}
+
+.reportMonthModalFooter {
+  margin-top: 4px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.reportMonthModalCancelButton,
+.reportMonthModalConfirmButton {
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.18);
+}
+
+.reportMonthModalCancelButton {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+}
+
+.reportMonthModalCancelButton:hover {
+  background: rgba(255,255,255,0.14);
+}
+
+.reportMonthModalConfirmButton {
+  background: var(--gradient-primary);
+  color: #fff;
+  border: none;
+}
+
+.reportMonthModalConfirmButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.reportMonthItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: #f5f7ff;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.reportMonthItem:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.reportMonthItem input {
+  width: 16px;
+  height: 16px;
+  accent-color: #5d5bff;
+  cursor: pointer;
+}
+
+.reportDownloadButton:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 30px 60px rgba(5,10,32,0.6);
+  background: rgba(255,255,255,0.18);
+}
+
+.reportDownloadButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 14px 28px rgba(5,10,32,0.35);
 }
 
 .userMenuButton svg {
@@ -473,13 +644,50 @@
     width: 100%;
     justify-content: flex-start;
   }
+
+  .headerActionGroup {
+    width: 100%;
+    justify-content: stretch;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .userMenuWrapper {
     width: 100%;
   }
+
+  .reportMonthActions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .reportMonthActions button {
+    flex: 1;
+    min-width: 110px;
+  }
+
   .userMenuButton {
     width: 100%;
     justify-content: center;
   }
+  .reportDownloadButton {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .reportMonthModal {
+    width: min(480px, 100%);
+  }
+
+  .reportMonthModalFooter {
+    flex-direction: column-reverse;
+  }
+
+  .reportMonthModalCancelButton,
+  .reportMonthModalConfirmButton {
+    width: 100%;
+  }
+
   .userDropdown {
     position: static;
     width: 100%;

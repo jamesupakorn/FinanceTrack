@@ -16,7 +16,7 @@ import styles from '../styles/SummaryReport.module.css';
 /**
  * รายงานสรุปภาพรวมการเงิน
  */
-const SummaryReport = ({ selectedMonth }) => {
+const SummaryReport = ({ selectedMonth, onReportDataReady }) => {
   const { currentUser } = useSession();
 
   const [summaryData, setSummaryData] = useState({
@@ -124,13 +124,22 @@ const SummaryReport = ({ selectedMonth }) => {
         }
       }
 
-      setEffectiveMonth(monthToUse);
-      setSummaryData(summary);
-      setChartData(getChartData({
+      const computedChartData = getChartData({
         totalIncome: summary.ยอดรวมรายรับรายเดือน,
         totalExpenseAll: summary.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด,
         totalExpenseActual: summary.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง
-      }));
+      });
+
+      setEffectiveMonth(monthToUse);
+      setSummaryData(summary);
+      setChartData(computedChartData);
+      if (typeof onReportDataReady === 'function') {
+        onReportDataReady({
+          summaryData: summary,
+          chartData: computedChartData,
+          reportMonth: monthToUse
+        });
+      }
     } catch (error) {
       console.error('Error loading summary data:', error);
     }
