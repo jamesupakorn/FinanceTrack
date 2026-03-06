@@ -101,9 +101,83 @@ const createExpenseRatioChartImage = ({ title, expensePercent }) => {
   return canvas.toDataURL('image/png');
 };
 
+const createThaiTextImage = ({
+  text,
+  fontSizePt = 16,
+  fontWeight = '700',
+  color = '#111827',
+  fontFamily = 'Sarabun'
+}) => {
+  if (typeof document === 'undefined' || !text) {
+    return null;
+  }
+
+  const scale = 2;
+  const fontSizePx = Math.max(12, Math.round(fontSizePt * (96 / 72) * scale));
+  const paddingX = 12;
+  const paddingY = 10;
+
+  const measureCanvas = document.createElement('canvas');
+  const measureContext = measureCanvas.getContext('2d');
+  if (!measureContext) {
+    return null;
+  }
+
+  measureContext.font = `${fontWeight} ${fontSizePx}px ${fontFamily}, "Noto Sans Thai", sans-serif`;
+  const metrics = measureContext.measureText(text);
+  const textWidth = Math.ceil(metrics.width);
+  const textAscent = Math.ceil(metrics.actualBoundingBoxAscent || fontSizePx * 0.8);
+  const textDescent = Math.ceil(metrics.actualBoundingBoxDescent || fontSizePx * 0.35);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, textWidth + paddingX * 2);
+  canvas.height = Math.max(1, textAscent + textDescent + paddingY * 2);
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return null;
+  }
+
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.textBaseline = 'alphabetic';
+  context.fillStyle = color;
+  context.font = `${fontWeight} ${fontSizePx}px ${fontFamily}, "Noto Sans Thai", sans-serif`;
+  context.fillText(text, paddingX, paddingY + textAscent);
+
+  return {
+    dataUrl: canvas.toDataURL('image/png'),
+    widthPt: canvas.width / scale,
+    heightPt: canvas.height / scale
+  };
+};
+
+const drawThaiHeadingWithCanvas = (
+  doc,
+  {
+    text,
+    x,
+    topY,
+    fontSizePt = 16,
+    fontWeight = '700',
+    color = '#111827',
+    fontFamily = 'Sarabun',
+    fallbackFontFamily = 'helvetica'
+  }
+) => {
+  const textImage = createThaiTextImage({ text, fontSizePt, fontWeight, color, fontFamily });
+  if (textImage?.dataUrl) {
+    doc.addImage(textImage.dataUrl, 'PNG', x, topY, textImage.widthPt, textImage.heightPt, undefined, 'FAST');
+    return textImage.heightPt;
+  }
+
+  doc.setFont(fallbackFontFamily, 'normal');
+  doc.setFontSize(fontSizePt);
+  doc.text(text, x, topY + fontSizePt);
+  return fontSizePt * 1.3;
+};
+
 const THAI_FONT_FAMILY = 'Sarabun';
 const THAI_FONT_REGULAR_FILE = 'Sarabun-Regular.ttf';
-const THAI_FONT_BOLD_FILE = 'Sarabun-Bold.ttf';
 let cachedThaiFontPayload = null;
 
 const arrayBufferToBase64 = (arrayBuffer) => {
@@ -121,23 +195,16 @@ const loadThaiFontPayload = async () => {
   if (cachedThaiFontPayload) {
     return cachedThaiFontPayload;
   }
-  const [regularResponse, boldResponse] = await Promise.all([
-    fetch('/fonts/Sarabun-Regular.ttf'),
-    fetch('/fonts/Sarabun-Bold.ttf')
-  ]);
+  const regularResponse = await fetch('/fonts/Sarabun-Regular.ttf');
 
-  if (!regularResponse.ok || !boldResponse.ok) {
+  if (!regularResponse.ok) {
     throw new Error('Unable to load Thai font files');
   }
 
-  const [regularBuffer, boldBuffer] = await Promise.all([
-    regularResponse.arrayBuffer(),
-    boldResponse.arrayBuffer()
-  ]);
+  const regularBuffer = await regularResponse.arrayBuffer();
 
   cachedThaiFontPayload = {
-    regularBase64: arrayBufferToBase64(regularBuffer),
-    boldBase64: arrayBufferToBase64(boldBuffer)
+    regularBase64: arrayBufferToBase64(regularBuffer)
   };
 
   return cachedThaiFontPayload;
@@ -145,11 +212,11 @@ const loadThaiFontPayload = async () => {
 
 const registerThaiFont = async (doc) => {
   try {
-    const { regularBase64, boldBase64 } = await loadThaiFontPayload();
+    const { regularBase64 } = await loadThaiFontPayload();
     doc.addFileToVFS(THAI_FONT_REGULAR_FILE, regularBase64);
     doc.addFont(THAI_FONT_REGULAR_FILE, THAI_FONT_FAMILY, 'normal');
-    doc.addFileToVFS(THAI_FONT_BOLD_FILE, boldBase64);
-    doc.addFont(THAI_FONT_BOLD_FILE, THAI_FONT_FAMILY, 'bold');
+    // Reuse regular as bold to avoid Thai diacritic overlap artifacts in some PDF viewers.
+    doc.addFont(THAI_FONT_REGULAR_FILE, THAI_FONT_FAMILY, 'bold');
     return THAI_FONT_FAMILY;
   } catch (error) {
     console.warn('Thai font registration failed, fallback to helvetica:', error);
@@ -177,6 +244,23 @@ const normalizeReportItems = ({ reportItems, summaryData, chartData, reportMonth
   return [fallbackItem];
 };
 
+const getTableStyles = (fontFamily) => ({
+  font: fontFamily,
+  fontSize: 10,
+  fontStyle: 'normal',
+  lineWidth: 0.1,
+  cellPadding: { top: 5, right: 4, bottom: 5, left: 4 }
+});
+
+const getHeadStyles = (fontFamily, fillColor) => ({
+  fillColor,
+  textColor: [255, 255, 255],
+  font: fontFamily,
+  fontStyle: 'normal',
+  lineWidth: 0.1,
+  minCellHeight: 24
+});
+
 export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chartData, reportMonth, details } = {}) => {
   const normalizedItems = normalizeReportItems({ reportItems, summaryData, chartData, reportMonth, details });
   const generatedAt = new Date().toLocaleString('th-TH', { hour12: false });
@@ -188,6 +272,7 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
 
   const autoTable = autoTableModule.default || autoTableModule;
   const doc = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
+  doc.setLineHeightFactor(1.35);
   const pdfFontFamily = await registerThaiFont(doc);
   const marginLeft = 40;
   let contentBottomY = 86;
@@ -213,7 +298,7 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
       contentBottomY = 48;
     }
 
-    doc.setFont(pdfFontFamily, 'bold');
+    doc.setFont(pdfFontFamily, 'normal');
     doc.setFontSize(12);
     doc.text(title, marginLeft, titleY);
 
@@ -223,8 +308,8 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
       body,
       theme: 'grid',
       margin: { left: marginLeft, right: marginLeft },
-      styles: { font: pdfFontFamily, fontSize: 10 },
-      headStyles: { fillColor: headColor, textColor: [255, 255, 255], font: pdfFontFamily, fontStyle: 'bold' }
+      styles: getTableStyles(pdfFontFamily),
+      headStyles: getHeadStyles(pdfFontFamily, headColor)
     });
 
     contentBottomY = doc.lastAutoTable?.finalY || titleY;
@@ -245,7 +330,7 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
     const expenseRows = Array.isArray(normalizedDetails.expenseRows) ? normalizedDetails.expenseRows : [];
     const savingsRows = Array.isArray(normalizedDetails.savingsRows) ? normalizedDetails.savingsRows : [];
 
-    doc.setFont(pdfFontFamily, 'bold');
+    doc.setFont(pdfFontFamily, 'normal');
     doc.setFontSize(18);
     doc.text('รายงานสรุปการเงินรายเดือน', marginLeft, 48);
 
@@ -281,8 +366,8 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
       ],
       theme: 'grid',
       margin: { left: marginLeft, right: marginLeft },
-      styles: { font: pdfFontFamily, fontSize: 10 },
-      headStyles: { fillColor: [93, 91, 255], textColor: [255, 255, 255], font: pdfFontFamily, fontStyle: 'bold' }
+      styles: getTableStyles(pdfFontFamily),
+      headStyles: getHeadStyles(pdfFontFamily, [93, 91, 255])
     });
 
     contentBottomY = doc.lastAutoTable?.finalY || 106;
@@ -297,7 +382,7 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
       contentBottomY = 48;
     }
 
-    doc.setFont(pdfFontFamily, 'bold');
+    doc.setFont(pdfFontFamily, 'normal');
     doc.setFontSize(12);
     doc.text('สัดส่วนรายจ่าย (แผนภูมิ)', marginLeft, chartTitleY);
 
@@ -331,8 +416,8 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
         ],
         theme: 'grid',
         margin: { left: marginLeft, right: marginLeft },
-        styles: { font: pdfFontFamily, fontSize: 10 },
-        headStyles: { fillColor: [78, 203, 255], textColor: [255, 255, 255], font: pdfFontFamily, fontStyle: 'bold' }
+        styles: getTableStyles(pdfFontFamily),
+        headStyles: getHeadStyles(pdfFontFamily, [78, 203, 255])
       });
 
       contentBottomY = doc.lastAutoTable?.finalY || chartTitleY;
@@ -374,18 +459,25 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
   ]);
 
   doc.addPage();
-  doc.setFont(pdfFontFamily, 'bold');
-  doc.setFontSize(16);
-  doc.text('ภาษีสะสมทั้งหมดรายเดือน', marginLeft, 48);
+  const taxTitleTopY = 28;
+  const taxTitleHeight = drawThaiHeadingWithCanvas(doc, {
+    text: 'ภาษีสะสมทั้งหมดรายเดือน',
+    x: marginLeft,
+    topY: taxTitleTopY,
+    fontSizePt: 22,
+    fontWeight: '700',
+    fontFamily: pdfFontFamily,
+    fallbackFontFamily: pdfFontFamily
+  });
 
   runAutoTable({
-    startY: 66,
+    startY: taxTitleTopY + taxTitleHeight + 6,
     head: [['เดือน', 'ภาษีสะสม']],
     body: monthlyTaxRows.length ? monthlyTaxRows : getFallbackRows(2, 'ไม่มีข้อมูลภาษีสะสม'),
     theme: 'grid',
     margin: { left: marginLeft, right: marginLeft },
-    styles: { font: pdfFontFamily, fontSize: 10 },
-    headStyles: { fillColor: [93, 91, 255], textColor: [255, 255, 255], font: pdfFontFamily, fontStyle: 'bold' }
+    styles: getTableStyles(pdfFontFamily),
+    headStyles: getHeadStyles(pdfFontFamily, [93, 91, 255])
   });
 
   const filenameSuffix = normalizedItems.length === 1
