@@ -397,7 +397,7 @@
 }
 
 /* Responsive Design */
-@media (max-width: 1024px) {
+@media (max-width: 1200px) {
   .salaryCalculator {
     padding: 32px;
     border-radius: 28px;
@@ -408,6 +408,7 @@
   }
 
   .salaryContent {
+    grid-template-columns: 1fr;
     gap: 28px;
   }
 
