@@ -369,6 +369,15 @@ export default function ExpenseTable({ selectedMonth }) {
   const hasExpenseRows = sortedExpenseKeys.length > 0;
   const totalEstimateValue = useMemo(() => calculateExpenseTotal(editExpense, 'estimate', parseToNumber), [editExpense]);
   const totalActualValue = useMemo(() => calculateExpenseTotal(editExpense, 'actual', parseToNumber), [editExpense]);
+  const totalUnpaidEstimateValue = useMemo(
+    () => sortedExpenseKeys.reduce((sum, key) => {
+      const row = editExpense[key] || {};
+      const paid = row.paid === true || row.paid === 'true';
+      if (paid) return sum;
+      return sum + parseToNumber(row.estimate);
+    }, 0),
+    [editExpense, sortedExpenseKeys]
+  );
   const totalDiffInfo = useMemo(() => describeExpenseDifference(totalEstimateValue, totalActualValue), [totalEstimateValue, totalActualValue]);
   const accountSummary = useMemo(() => getAccountSummary(editExpense), [editExpense]);
   const diffChipClass = totalDiffInfo.tone === 'positive'
@@ -412,6 +421,7 @@ export default function ExpenseTable({ selectedMonth }) {
             <p className={styles.overviewLabel}>กำหนดชำระถัดไป</p>
             <p className={`${styles.overviewValue} ${styles.nextDueValue}`}>{dueInsights.nextDueLabel}</p>
             <span className={styles.overviewHint}>{dueInsights.nextDueName}</span>
+            <span className={`${styles.diffChip} ${styles.diffChipNegative}`}>ยอดประมาณการค้างชำระ {formatCurrency(totalUnpaidEstimateValue)}</span>
             <div className={styles.overviewMeta}>
               <span>{upcomingSummaryText}</span>
               {dueInsights.urgentCount > 0 && (
@@ -440,7 +450,7 @@ export default function ExpenseTable({ selectedMonth }) {
                   <th className={`${styles.tableHeaderCell} ${styles.right}`}>ยอดประมาณ (ตั้งงบ)</th>
                   <th className={`${styles.tableHeaderCell} ${styles.right}`}>ยอดจ่ายจริง</th>
                   <th className={styles.tableHeaderCell}>วันครบกำหนด</th>
-                  <th className={`${styles.tableHeaderCell} ${styles.center}`}>สถานะชำระ</th>
+                  <th className={`${styles.tableHeaderCell} ${styles.center}`}>สถานะชำระ / ยอดค้าง</th>
                   <th className={`${styles.tableHeaderCell} ${styles.right}`}>ส่วนต่าง (ประมาณ-จริง)</th>
                 </tr>
               </thead>
@@ -536,7 +546,7 @@ export default function ExpenseTable({ selectedMonth }) {
                   <td className={`${styles.totalCell} ${styles.right}`}>{formatCurrency(totalEstimateValue)}</td>
                   <td className={`${styles.totalCell} ${styles.right}`}>{formatCurrency(totalActualValue)}</td>
                   <td className={styles.totalCell}></td>
-                  <td className={`${styles.totalCell} ${styles.center}`}></td>
+                  <td className={`${styles.totalCell} ${styles.center}`}>{formatCurrency(totalUnpaidEstimateValue)}</td>
                   <td className={`${styles.totalCell} ${styles.right} ${totalDiffInfo.tone === 'positive' ? styles.totalDiffPositive : totalDiffInfo.tone === 'negative' ? styles.totalDiffNegative : styles.totalDiffNeutral}`}>
                     <div className={styles.diffValue}>{formatCurrency(totalDiffInfo.value)}</div>
                     <div className={styles.diffLabel}>{totalDiffInfo.text}</div>
@@ -649,6 +659,7 @@ export default function ExpenseTable({ selectedMonth }) {
               <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดรวม</span></div>
               <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดประมาณ</span><span>{formatCurrency(totalEstimateValue)}</span></div>
               <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดจ่ายจริง</span><span>{formatCurrency(totalActualValue)}</span></div>
+              <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดประมาณค้างชำระ</span><span>{formatCurrency(totalUnpaidEstimateValue)}</span></div>
               <div className={styles.cardRow}>
                 <span className={styles.cardLabel}>ส่วนต่าง</span>
                 <span className={`${styles.diffValue} ${totalDiffInfo.tone === 'positive' ? styles.totalDiffPositive : totalDiffInfo.tone === 'negative' ? styles.totalDiffNegative : styles.totalDiffNeutral}`}>

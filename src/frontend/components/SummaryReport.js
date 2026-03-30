@@ -23,6 +23,7 @@ const SummaryReport = ({ selectedMonth, onReportDataReady }) => {
     ยอดรวมรายรับรายเดือน: 0,
     ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด: 0,
     ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง: 0,
+    ยอดรวมค่าใช้จ่ายรายเดือน_ยังไม่ชำระ_ประมาณการ: 0,
     ยอดรวมเงินเก็บรายเดือน: 0,
     ภาษีสะสมตั้งแต่เดือนแรก: 0,
     ยอดเงินคงเหลือ_ประมาณการ: 0,
@@ -275,6 +276,14 @@ const SummaryReport = ({ selectedMonth, onReportDataReady }) => {
                 <div
                   className={styles.summaryItem}
                   tabIndex={0}
+                  aria-label={`ยอดรวมค่าใช้จ่ายรายเดือน ยังไม่ชำระ (ประมาณการ): ${getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ยังไม่ชำระ_ประมาณการ)}`}
+                >
+                  <span className={styles.itemLabel}>ยอดรวมค่าใช้จ่ายรายเดือน ยังไม่ชำระ (ประมาณการ)</span>
+                  <span className={styles.itemValue}>{getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ยังไม่ชำระ_ประมาณการ)}</span>
+                </div>
+                <div
+                  className={styles.summaryItem}
+                  tabIndex={0}
                   aria-label={`ยอดรวมเงินเก็บรายเดือน: ${getDisplay(summaryData.ยอดรวมเงินเก็บรายเดือน)}`}
                 >
                   <span className={styles.itemLabel}>ยอดรวมเงินเก็บรายเดือน</span>
@@ -285,7 +294,7 @@ const SummaryReport = ({ selectedMonth, onReportDataReady }) => {
                   tabIndex={0}
                   aria-label={`ยอดเงินคงเหลือ ประมาณการ: ${getDisplay(summaryData.ยอดเงินคงเหลือ_ประมาณการ)}`}
                 >
-                  <span className={styles.itemLabel}>ยอดเงินคงเหลือ ประมาณการ</span>
+                  <span className={styles.itemLabel}>ยอดเงินคงเหลือ ประมาณการ (หักเฉพาะรายการยังไม่ชำระ)</span>
                   <span className={`${styles.itemValue} ${styles.remaining}`}>{getDisplay(summaryData.ยอดเงินคงเหลือ_ประมาณการ)}</span>
                 </div>
               </div>
