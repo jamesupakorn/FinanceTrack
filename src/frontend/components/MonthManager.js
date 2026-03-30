@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { getNextMonth } from '../../shared/utils/frontend/numberUtils';
 import { getMonthData, getPrevMonth, formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
 import styles from '../styles/MonthManager.module.css';
@@ -108,6 +109,20 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
     fetchMonths();
     return () => { isMounted = false; };
   }, [showAddForm, onDataRefresh]);
+
+  useEffect(() => {
+    if (!showAddForm || typeof document === 'undefined') {
+      return undefined;
+    }
+
+    const { body } = document;
+    const previousOverflow = body.style.overflow;
+    body.style.overflow = 'hidden';
+
+    return () => {
+      body.style.overflow = previousOverflow;
+    };
+  }, [showAddForm]);
 
   // สร้างเดือนใหม่ (ข้อมูลเปล่า)
   const handleAddNewMonth = async () => {
@@ -265,7 +280,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
         </div>
       </div>
 
-      {showAddForm && (
+      {showAddForm && typeof document !== 'undefined' && createPortal(
         <div className={styles.addMonthForm} tabIndex={-1} aria-modal="true" role="dialog">
           <div className={styles.formContent}>
             <button
@@ -313,7 +328,8 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
               ยกเลิก
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>
