@@ -29,7 +29,7 @@ const LEGACY_ITEM_ACCOUNT_MAP = {
  * @param {object} editExpense - ข้อมูลค่าใช้จ่าย
  * @returns {object} สรุปยอด {ชื่อบัญชี: ยอดรวม}
  */
-export const getAccountSummary = (editExpense, bankAccounts = DEFAULT_BANK_ACCOUNTS) => {
+export const getAccountSummary = (editExpense, bankAccounts = []) => {
   const summary = {};
   const normalizedAccounts = Array.isArray(bankAccounts)
     ? Array.from(new Set(bankAccounts.map((item) => String(item || '').trim()).filter(Boolean)))
@@ -363,7 +363,7 @@ export const formatExpenseData = (data, month) => {
       actual: parseAndFormat(source?.actual ?? 0),
       account: (typeof source?.account === 'string' && source.account.trim().length > 0)
         ? source.account.trim()
-        : (LEGACY_ITEM_ACCOUNT_MAP[item] || storedBankAccounts[0] || DEFAULT_BANK_ACCOUNTS[0]),
+        : (LEGACY_ITEM_ACCOUNT_MAP[item] || storedBankAccounts[0] || 'ไม่ระบุบัญชี'),
       paid: source?.paid === true || source?.paid === 'true',
       dueDay: (() => {
         if (typeof source?.dueDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(source.dueDay)) {
@@ -389,9 +389,8 @@ export const formatExpenseData = (data, month) => {
     persistedKeys: allDynamicKeys, // ← ส่งทั้งหมด รวมรายการว่างด้วย เพื่อให้ระบบรู้ว่าอะไรมาจาก API
     emptyKeysToDelete: emptyCustomKeys, // ← ส่งรายการว่างเพื่อลบ
     bankAccounts: Array.from(new Set([
-      ...DEFAULT_BANK_ACCOUNTS,
       ...storedBankAccounts,
-      ...Object.values(formattedData)
+      ...Object.values(monthData || {})
         .map((row) => (typeof row?.account === 'string' ? row.account.trim() : ''))
         .filter(Boolean)
     ]))

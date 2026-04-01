@@ -209,6 +209,7 @@ export default function EditPage() {
   const [activeTab, setActiveTab] = useState('income');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [salaryUpdateTrigger, setSalaryUpdateTrigger] = useState(0);
+  const [triggerSave, setTriggerSave] = useState(0);
   const [months, setMonths] = useState([]);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
@@ -307,6 +308,10 @@ export default function EditPage() {
     if (typeof window !== 'undefined') {
       localStorage.setItem(selectedMonthKey, month);
     }
+  };
+
+  const handleSaveAll = () => {
+    setTriggerSave(prev => prev + 1);
   };
 
   React.useEffect(() => {
@@ -578,6 +583,7 @@ export default function EditPage() {
         <SalaryCalculator 
           selectedMonth={selectedMonth}
           onSalaryUpdate={handleSalaryUpdate}
+          triggerSave={triggerSave}
           key={refreshTrigger}
         />
       </div>
@@ -618,6 +624,7 @@ export default function EditPage() {
             <IncomeTable 
               selectedMonth={selectedMonth}
               salaryUpdateTrigger={salaryUpdateTrigger}
+              triggerSave={triggerSave}
               key={`income-${refreshTrigger}`}
             />
           </div>
@@ -632,6 +639,7 @@ export default function EditPage() {
             </div>
             <ExpenseTable 
               selectedMonth={selectedMonth}
+              triggerSave={triggerSave}
               key={`expense-${refreshTrigger}`}
             />
           </div>
@@ -646,6 +654,7 @@ export default function EditPage() {
             </div>
             <SavingsTable 
               selectedMonth={selectedMonth}
+              triggerSave={triggerSave}
               key={`savings-${refreshTrigger}`}
             />
           </div>
@@ -659,11 +668,45 @@ export default function EditPage() {
               </h3>
             </div>
             <TaxTable 
+              triggerSave={triggerSave}
               selectedMonth={selectedMonth}
               key={`tax-${refreshTrigger}`}
             />
           </div>
         )}
+      </div>
+
+      {/* บันทึกทั้งหมด Button */}
+      <div style={{
+        marginTop: '40px',
+        textAlign: 'center',
+        paddingBottom: '20px'
+      }}>
+        <button
+          onClick={handleSaveAll}
+          style={{
+            padding: '16px 48px',
+            fontSize: '16px',
+            fontWeight: '700',
+            borderRadius: '20px',
+            border: 'none',
+            cursor: 'pointer',
+            background: 'var(--gradient-primary)',
+            color: '#021210',
+            boxShadow: '0 32px 90px rgba(93, 91, 255, 0.4)',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.transform = 'translateY(-4px)';
+            e.target.style.boxShadow = '0 40px 120px rgba(93, 91, 255, 0.6)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.transform = 'translateY(0)';
+            e.target.style.boxShadow = '0 32px 90px rgba(93, 91, 255, 0.4)';
+          }}
+        >
+          บันทึกข้อมูลทั้งหมด
+        </button>
       </div>
       </div>
     </div>

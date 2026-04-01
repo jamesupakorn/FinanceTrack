@@ -4,11 +4,10 @@
  * Usage: node scripts/migrateBankAccounts.js
  * 
  * This script adds the `bankAccounts` field to any existing users
- * that don't have it yet, initializing them with default accounts.
+ * that don't have it yet, initializing them as empty arrays.
  */
 
 const { loadUsers, saveUsers } = require('../src/backend/data/userUtils');
-const DEFAULT_BANK_ACCOUNTS = ['กรุงศรี', 'ttb', 'กสิกร', 'UOB'];
 
 try {
   const users = loadUsers();
@@ -26,7 +25,7 @@ try {
       updated++;
       return {
         ...user,
-        bankAccounts: DEFAULT_BANK_ACCOUNTS
+        bankAccounts: []
       };
     }
     return user;

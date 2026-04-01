@@ -7,6 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { formatCurrency, parseAndFormat, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { salaryAPI, incomeAPI, taxAPI } from '../../shared/utils/frontend/apiUtils';
+import { showToast } from '../../shared/utils/frontend/toast';
 import styles from '../styles/SalaryCalculator.module.css';
 
 // ฟังก์ชันสำหรับแปลงเดือนเป็นชื่อภาษาไทย
@@ -156,7 +157,7 @@ const serializeItemsForSave = (items) => {
 const sumItems = (items) => items.reduce((sum, item) => sum + parseToNumber(item.value), 0);
 const hasInputValue = (value) => String(value ?? '').trim() !== '';
 
-const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
+const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, triggerSave }) => {
   const [incomeItems, setIncomeItems] = useState(() => buildPresetItems(incomePresetKeys));
   const [deductionItems, setDeductionItems] = useState(() => buildPresetItems(deductionPresetKeys));
   const [pendingScrollItem, setPendingScrollItem] = useState(null);
@@ -275,7 +276,7 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
   const saveSalaryData = async () => {
     try {
       if (!selectedMonth) {
-        alert('กรุณาเลือกเดือนที่ต้องการก่อน');
+        showToast('กรุณาเลือกเดือนที่ต้องการก่อน', 'info');
         return;
       }
 
@@ -315,15 +316,21 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
         if (onSalaryUpdate) {
           onSalaryUpdate();
         }
-        alert('บันทึกข้อมูลเงินเดือนเรียบร้อย');
+        showToast('บันทึกข้อมูลเงินเดือนเรียบร้อย');
       } else {
-        alert('เกิดข้อผิดพลาด: ' + (result.error || 'ไม่สามารถบันทึกได้'));
+        showToast('เกิดข้อผิดพลาด: ' + (result.error || 'ไม่สามารถบันทึกได้'), 'error');
       }
     } catch (error) {
       console.error('Error saving salary data:', error);
-      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'error');
     }
   };
+
+  useEffect(() => {
+    if (triggerSave) {
+      saveSalaryData();
+    }
+  }, [triggerSave]);
 
   const clearAll = () => {
     setIncomeItems((prev) => prev.map((item) => ({ ...item, value: '' })));
@@ -473,14 +480,6 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate }) => {
 
       {/* ปุ่มจัดการ */}
       <div className={styles.actionButtons}>
-        <button
-          onClick={saveSalaryData}
-          className={styles.saveBtn}
-          aria-label="บันทึกเงินเดือน"
-          tabIndex={0}
-        >
-          บันทึกเงินเดือน
-        </button>
         <button
           onClick={clearAll}
           className={styles.clearBtn}

@@ -707,8 +707,8 @@
 }
 
 @media (max-width: 1024px) {
-  .tableContainer,
-  .table {
+  .hideOnMobile .tableContainer,
+  .hideOnMobile .table {
     display: none !important;
   }
 

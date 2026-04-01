@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { formatCurrency, parseAndFormat, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { mapSavingsApiToList } from '../../shared/utils/savingsUtils';
 import { savingsAPI } from '../../shared/utils/frontend/apiUtils';
+import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
 import InvestmentTable from './InvestmentTable';
 import styles from '../styles/SavingsTable.module.css';
@@ -16,7 +17,7 @@ import styles from '../styles/SavingsTable.module.css';
 /**
  * ตารางเงินออมรายเดือน
  */
-export default function SavingsTable({ selectedMonth }) {
+export default function SavingsTable({ selectedMonth, triggerSave }) {
 
   const [savingsData, setSavingsData] = useState(null);
   const [รายการเงินออม, setรายการเงินออม] = useState([]);
@@ -156,11 +157,18 @@ export default function SavingsTable({ selectedMonth }) {
       });
       await savingsAPI.saveList(selectedMonth, numericSavings);
       await loadSavingsData(selectedMonth);
-      alert('บันทึกรายการเงินออมสำเร็จ!');
+      showToast('บันทึกรายการเงินออมสำเร็จ');
     } catch (error) {
       console.error('Error saving savings list:', error);
+      showToast('บันทึกไม่สำเร็จ กรุณาลองใหม่', 'error');
     }
   };
+
+  useEffect(() => {
+    if (triggerSave) {
+      handleSavingsSave();
+    }
+  }, [triggerSave]);
 
   // ยอดรวมเงินเก็บคำนวณจากสถานะปัจจุบัน เพื่อสะท้อนผลการแก้ไขทันที
   const displayedTotalSavings = useMemo(() => {
@@ -290,16 +298,6 @@ export default function SavingsTable({ selectedMonth }) {
               </div>
             </div>
           ))}
-        </div>
-
-        <div className={styles.saveButtonContainer}>
-          <button 
-            onClick={handleSavingsSave}
-            className={styles.saveButton}
-          >
-            <Icons.Save size={16} color="white" />
-            บันทึกรายการเงินออม
-          </button>
         </div>
       </div>
 

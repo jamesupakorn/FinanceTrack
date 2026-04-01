@@ -79,7 +79,7 @@ export const SessionProvider = ({ children }) => {
     
     // โหลดบัญชีธนาคารของผู้ใช้
     if (user?.id) {
-      fetch('/api/user-bank-accounts')
+      fetch(`/api/user-bank-accounts?userId=${encodeURIComponent(user.id)}`)
         .then(res => res.json())
         .then(data => {
           if (data.bankAccounts) {

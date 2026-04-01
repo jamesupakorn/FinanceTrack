@@ -13,7 +13,7 @@ import styles from '../styles/InvestmentTable.module.css';
 import { averagePercent, calcAmountFromPercent, sumPercent, mapInvestmentData } from '../../shared/utils/investmentUtils';
 
 // InvestmentTable: แสดงและแก้ไขรายการลงทุนในแต่ละเดือน
-export default function InvestmentTable({ selectedMonth, onDataChange }) {
+export default function InvestmentTable({ selectedMonth, onDataChange, triggerSave }) {
   const [baseAmount, setBaseAmount] = useState('');
   const [investments, setInvestments] = useState([]);
 
@@ -39,19 +39,22 @@ export default function InvestmentTable({ selectedMonth, onDataChange }) {
   };
 
   // ฟังก์ชันบันทึกข้อมูลการลงทุน
-  const [saveStatus, setSaveStatus] = useState('idle');
   const handleSave = async () => {
     if (!selectedMonth) return;
-    setSaveStatus('saving');
     const result = await investmentAPI.saveList(selectedMonth, investments);
     if (result) {
-      setSaveStatus('success');
       if (typeof onDataChange === 'function') onDataChange();
+      showToast('บันทึกสำเร็จ');
     } else {
-      setSaveStatus('error');
+      showToast('บันทึกไม่สำเร็จ', 'error');
     }
-    setTimeout(() => setSaveStatus('idle'), 2000);
   };
+
+  useEffect(() => {
+    if (triggerSave) {
+      handleSave();
+    }
+  }, [triggerSave]);
 
   // โหลดข้อมูลจาก backend เมื่อ selectedMonth เปลี่ยน
   useEffect(() => {
@@ -230,17 +233,7 @@ export default function InvestmentTable({ selectedMonth, onDataChange }) {
         >
           เฉลี่ยเปอร์เซ็น
         </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          className={styles.saveButton}
-          disabled={totalPercent !== 100}
-        >
-          บันทึก
-        </button>
-        {saveStatus === 'saving' && <span className={styles.statusSaving}>กำลังบันทึก...</span>}
-        {saveStatus === 'success' && <span className={styles.statusSuccess}>บันทึกสำเร็จ</span>}
-        {saveStatus === 'error' && <span className={styles.statusError}>บันทึกผิดพลาด</span>}
+
       </div>
       <div className={`${styles.percentSummary} ${totalPercent !== 100 ? styles.percentSummaryError : styles.percentSummaryNormal}`}>
         รวมเปอร์เซ็น: {totalPercent}% {totalPercent > 100 && '(เกิน 100%)'}{totalPercent < 100 && '(ต้องครบ 100%)'}
