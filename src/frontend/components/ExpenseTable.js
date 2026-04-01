@@ -38,6 +38,7 @@ import {
 import BankAccountTable from './BankAccountTable';
 import { expenseAPI } from '../../shared/utils/frontend/apiUtils';
 import { useSession } from '../contexts/SessionContext';
+import { showToast } from '../../shared/utils/frontend/toast';
 import styles from '../styles/ExpenseTable.module.css';
 
 const DEFAULT_EXPENSE_KEY_ORDER = DEFAULT_EXPENSE_ITEMS.map(item => item.key);
@@ -128,7 +129,7 @@ const describeDueTiming = (dueDayValue, paid, monthKey) => {
   };
 };
 
-export default function ExpenseTable({ selectedMonth }) {
+export default function ExpenseTable({ selectedMonth, triggerSave }) {
   const [editExpense, setEditExpense] = useState({});
   const [bankAccounts, setBankAccounts] = useState([]);
   const [previousMonthTotal, setPreviousMonthTotal] = useState(null);
@@ -187,7 +188,7 @@ export default function ExpenseTable({ selectedMonth }) {
           ...monthAccounts,
           ...(currentUser?.bankAccounts || [])
         ])).filter(Boolean);
-        setBankAccounts(mergedAccounts.length ? mergedAccounts : ['ไม่ระบุบัญชี']);
+        setBankAccounts(mergedAccounts);
         setPersistedKeys(formatted.persistedKeys || []);
       })
       .catch(error => {
@@ -196,7 +197,7 @@ export default function ExpenseTable({ selectedMonth }) {
         setEditExpense(formatted.values || {});
         // ใช้บัญชีจากโปรไฟล์ user เป็นค่าเริ่มต้น
         const userAccounts = currentUser?.bankAccounts || [];
-        setBankAccounts(userAccounts.length ? userAccounts : ['ไม่ระบุบัญชี']);
+        setBankAccounts(userAccounts);
         setPersistedKeys(formatted.persistedKeys || []);
       })
       .finally(() => setIsLoading(false));
@@ -304,14 +305,16 @@ export default function ExpenseTable({ selectedMonth }) {
   };
 
   const handleBankAccountsChange = (nextAccounts) => {
-    const normalized = Array.from(new Set(
-      (nextAccounts || [])
-        .map((item) => String(item || '').trim())
+    const rawAccounts = Array.isArray(nextAccounts)
+      ? nextAccounts.map((item) => String(item ?? ''))
+      : [];
+    const validAccounts = Array.from(new Set(
+      rawAccounts
+        .map((item) => item.trim())
         .filter(Boolean)
     ));
 
-    const finalAccounts = normalized.length ? normalized : ['ไม่ระบุบัญชี'];
-    setBankAccounts(finalAccounts);
+    setBankAccounts(rawAccounts);
 
     setEditExpense((prev) => {
       const next = { ...prev };
@@ -319,8 +322,8 @@ export default function ExpenseTable({ selectedMonth }) {
         const row = next[key];
         if (!row || typeof row !== 'object') return;
         const currentAccount = typeof row.account === 'string' ? row.account.trim() : '';
-        if (!currentAccount || finalAccounts.includes(currentAccount)) return;
-        next[key] = { ...row, account: finalAccounts[0] };
+        if (!currentAccount || validAccounts.includes(currentAccount)) return;
+        next[key] = { ...row, account: validAccounts[0] || 'ไม่ระบุบัญชี' };
       });
       return next;
     });
@@ -335,7 +338,7 @@ export default function ExpenseTable({ selectedMonth }) {
           .map((item) => String(item || '').trim())
           .filter(Boolean)
       ));
-      prepared.bankAccounts = normalizedAccounts.length ? normalizedAccounts : ['ไม่ระบุบัญชี'];
+      prepared.bankAccounts = normalizedAccounts;
       const preparedKeys = Object.keys(prepared || {});
       const removedKeys = persistedKeys.filter(key => key !== 'bankAccounts' && !preparedKeys.includes(key));
       if (removedKeys.length > 0) {
@@ -346,15 +349,12 @@ export default function ExpenseTable({ selectedMonth }) {
       await expenseAPI.save(selectedMonth, prepared);
       
       // อัปเดตบัญชีในโปรไฟล์ user (เพื่อให้เดือนหน้าใช้เป็นค่าเริ่มต้น)
-      const userBankAccountsToSave = normalizedAccounts.filter(acc => 
-        acc !== 'ไม่ระบุบัญชี' && acc.trim().length > 0
-      );
-      if (userBankAccountsToSave.length > 0) {
+      if (currentUser?.id) {
         try {
           await fetch('/api/user-bank-accounts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bankAccounts: userBankAccountsToSave })
+            body: JSON.stringify({ bankAccounts: normalizedAccounts, userId: currentUser.id })
           });
         } catch (error) {
           console.warn('Warning: Could not update user bank accounts:', error);
@@ -371,12 +371,20 @@ export default function ExpenseTable({ selectedMonth }) {
         ...monthAccounts,
         ...(currentUser?.bankAccounts || [])
       ])).filter(Boolean);
-      setBankAccounts(mergedAccounts.length ? mergedAccounts : ['ไม่ระบุบัญชี']);
+      setBankAccounts(mergedAccounts);
       setPersistedKeys(formatted.persistedKeys || []);
+      showToast('บันทึกค่าใช้จ่ายสำเร็จ');
     } catch (error) {
       console.error('Error saving expense data:', error);
+      showToast('บันทึกไม่สำเร็จ กรุณาลองใหม่', 'error');
     }
   };
+
+  useEffect(() => {
+    if (triggerSave) {
+      handleSave();
+    }
+  }, [triggerSave]);
   const sortedExpenseKeys = useMemo(() => {
     const keys = Object.keys(editExpense || {});
     const defaultKeys = DEFAULT_EXPENSE_KEY_ORDER.filter(key => keys.includes(key));
@@ -737,14 +745,6 @@ export default function ExpenseTable({ selectedMonth }) {
               onChangeAccounts={handleBankAccountsChange}
             />
           )}
-          <div className={styles.saveButtonContainer}>
-            <button
-              onClick={handleSave}
-              className={styles.saveButton}
-            >
-              บันทึกข้อมูลรายจ่าย
-            </button>
-          </div>
         </>
       )}
       {!isLoading && !hasExpenseRows && (

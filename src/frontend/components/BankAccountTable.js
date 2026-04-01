@@ -32,21 +32,18 @@ export default function BankAccountTable({ accountSummary, accounts = [], onChan
         seen.add(item);
         return true;
       });
-    if (!normalized.length) {
-      normalized.push('ไม่ระบุบัญชี');
-    }
     onChangeAccounts(normalized);
   };
 
   const handleDeleteAccount = (index) => {
     if (typeof onChangeAccounts !== 'function') return;
     const next = safeAccounts.filter((_, itemIndex) => itemIndex !== index);
-    onChangeAccounts(next.length ? next : ['ไม่ระบุบัญชี']);
+    onChangeAccounts(next);
   };
 
   const handleAddAccount = () => {
     if (typeof onChangeAccounts !== 'function') return;
-    onChangeAccounts([...safeAccounts, '']);
+    onChangeAccounts([...safeAccounts, 'บัญชีใหม่']);
   };
 
   return (
@@ -69,7 +66,7 @@ export default function BankAccountTable({ accountSummary, accounts = [], onChan
           </thead>
           <tbody>
             {safeAccounts.map((account, index) => (
-              <tr key={`${account}-${index}`} className={styles.tableRow}>
+              <tr key={`bank-account-row-${index}`} className={styles.tableRow}>
                 <td className={styles.tableCell}>
                   <input
                     type="text"

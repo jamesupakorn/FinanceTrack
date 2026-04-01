@@ -11,12 +11,13 @@ import { useState, useEffect } from 'react';
 import { formatCurrency, handleNumberInput, handleNumberBlur, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { createDefault12MonthsObject, sumAccumulated, sumYearly, getSortedYears } from '../../shared/utils/taxUtils';
 import { taxAPI } from '../../shared/utils/frontend/apiUtils';
+import { showToast } from '../../shared/utils/frontend/toast';
 import styles from '../styles/TaxTable.module.css';
 
 /**
  * ตารางภาษีรายปี
  */
-export default function TaxTable({ selectedMonth }) {
+export default function TaxTable({ selectedMonth, triggerSave }) {
   const handleAmountInputFocus = (event) => {
     event.target.select();
   };
@@ -44,11 +45,11 @@ export default function TaxTable({ selectedMonth }) {
     try {
       const result = await taxAPI.deleteYear(yearAD);
       if (!result?.success) {
-        alert(result?.message || 'ลบข้อมูลไม่สำเร็จ');
+        showToast(result?.message || 'ลบข้อมูลไม่สำเร็จ', 'error');
         return;
       }
     } catch (e) {
-      alert('เกิดข้อผิดพลาดในการลบข้อมูล');
+      showToast('เกิดข้อผิดพลาดในการลบข้อมูล', 'error');
       return;
     }
     // ลบที่ frontend
@@ -88,11 +89,17 @@ export default function TaxTable({ selectedMonth }) {
         monthly_income: monthlyIncome,
         monthly_provident: monthlyProvident
       });
-      alert('บันทึกข้อมูลภาษีสำเร็จ');
+      showToast('บันทึกข้อมูลภาษีสำเร็จ');
     } catch (e) {
-      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูลภาษี');
+      showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูลภาษี', 'error');
     }
   };
+
+  useEffect(() => {
+    if (triggerSave) {
+      handleSave();
+    }
+  }, [triggerSave]);
   // State for provident fund and its tax
   const [monthlyProvident, setMonthlyProvident] = useState({
     '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
@@ -384,15 +391,7 @@ export default function TaxTable({ selectedMonth }) {
         })}
       </div>
 
-      {/* ปุ่มจัดการข้อมูล */}
-      <div className={styles.actionButtons}>
-        <button 
-          onClick={handleSave} 
-          className={styles.saveBtn}
-        >
-          บันทึกภาษี
-        </button>
-      </div>
+
     </div>
   );
 }

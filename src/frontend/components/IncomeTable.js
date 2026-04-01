@@ -18,6 +18,7 @@ import {
 } from '../../shared/utils/frontend/numberUtils';
 import { formatIncomeForSave } from '../../shared/utils/incomeUtils';
 import { incomeAPI, salaryAPI } from '../../shared/utils/frontend/apiUtils';
+import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
 import styles from '../styles/IncomeTable.module.css';
 
@@ -26,7 +27,7 @@ const CUSTOM_LABEL_FALLBACK = 'รายรับใหม่';
 /**
  * ตารางแก้ไขรายรับรายเดือน
  */
-export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
+export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, triggerSave }) {
   const [editIncome, setEditIncome] = useState({});
   const [incomeLabels, setIncomeLabels] = useState({});
   const [persistedKeys, setPersistedKeys] = useState([]);
@@ -234,10 +235,18 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
       setEditIncome(formatted.values || {});
       setIncomeLabels(formatted.labels || {});
       setPersistedKeys(formatted.persistedKeys || Object.keys(formatted.values || {}));
+      showToast('บันทึกรายรับสำเร็จ');
     } catch (error) {
       console.error('Error saving income data:', error);
+      showToast('บันทึกไม่สำเร็จ กรุณาลองใหม่', 'error');
     }
   };
+
+  useEffect(() => {
+    if (triggerSave) {
+      handleSave();
+    }
+  }, [triggerSave]);
 
   return (
     <div className={styles.incomeContainer}>
@@ -388,13 +397,6 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger }) {
                 <span className={styles.totalValue}>{formatCurrency(totalIncomeValue)}</span>
               </div>
             </div>
-          </div>
-
-          <div className={styles.saveButtonContainer}>
-            <button onClick={handleSave} className={styles.saveButton}>
-              <Icons.Save size={16} color="white" className={styles.saveButtonIcon} />
-              บันทึกรายรับ
-            </button>
           </div>
         </>
       ) : (

@@ -12,6 +12,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { getNextMonth } from '../../shared/utils/frontend/numberUtils';
 import { getMonthData, getPrevMonth, formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
+import { showToast } from '../../shared/utils/frontend/toast';
 import styles from '../styles/MonthManager.module.css';
 
 // หาค่าเดือนปัจจุบัน (YYYY-MM)
@@ -175,7 +176,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
   // คัดลอกข้อมูลจากเดือนก่อนหน้า
   const handleCopyPrevMonth = async () => {
     if (!selectedMonth || !/^\d{4}-\d{2}$/.test(selectedMonth)) {
-      alert('กรุณาเลือกเดือนที่ต้องการก่อน (YYYY-MM)');
+      showToast('กรุณาเลือกเดือนที่ต้องการก่อน', 'info');
       return;
     }
     const prevMonth = getPrevMonth(selectedMonth);
@@ -219,7 +220,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
         setShowAddForm(false);
         setNewMonthName('');
       } else {
-        alert('กรุณากรอกรูปแบบ YYYY-MM (เช่น 2025-10)');
+        showToast('รูปแบบไม่ถูกต้อง กรุณากรอก YYYY-MM เช่น 2025-10', 'error');
       }
     }
   };
