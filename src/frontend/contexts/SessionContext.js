@@ -76,6 +76,21 @@ export const SessionProvider = ({ children }) => {
     setCurrentUser(user);
     setActiveUserId(user?.id || null);
     persistUser(user);
+    
+    // โหลดบัญชีธนาคารของผู้ใช้
+    if (user?.id) {
+      fetch('/api/user-bank-accounts')
+        .then(res => res.json())
+        .then(data => {
+          if (data.bankAccounts) {
+            setCurrentUser(prev => ({
+              ...prev,
+              bankAccounts: data.bankAccounts
+            }));
+          }
+        })
+        .catch(error => console.warn('Could not load user bank accounts:', error));
+    }
   }, [persistUser]);
 
   const logout = useCallback(() => {

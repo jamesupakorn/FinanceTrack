@@ -54,9 +54,8 @@ function handleJsonExpenseGet(req, res, userId) {
     const doc = bucket[month];
     if (!doc) return res.status(200).json({});
     let flat = mapDocToFlatItemObjectWithTotals(doc);
-    flat.accountSummary = getAccountSummary(flat);
+    flat.accountSummary = getAccountSummary(flat, flat.bankAccounts);
     const totals = getExpenseTotals(flat);
-    flat.totalEstimate = totals.totalEstimate;
     flat.totalActualPaid = totals.totalActualPaid;
     return res.status(200).json(flat);
   }
@@ -64,9 +63,8 @@ function handleJsonExpenseGet(req, res, userId) {
   Object.entries(bucket).forEach(([monthKey, doc]) => {
     if (!doc || !doc.month) return;
     let flat = mapDocToFlatItemObjectWithTotals(doc);
-    flat.accountSummary = getAccountSummary(flat);
+    flat.accountSummary = getAccountSummary(flat, flat.bankAccounts);
     const totals = getExpenseTotals(flat);
-    flat.totalEstimate = totals.totalEstimate;
     flat.totalActualPaid = totals.totalActualPaid;
     withTotals[monthKey] = flat;
   });
@@ -166,7 +164,7 @@ export default async function handler(req, res) {
           return res.status(200).json({});
         }
         try {
-          flat.accountSummary = getAccountSummary(flat);
+          flat.accountSummary = getAccountSummary(flat, flat.bankAccounts);
         } catch (err) {
           console.error('Error in getAccountSummary:', month, err, flat);
           return res.status(500).json({ error: 'Error in account summary calculation' });
@@ -179,7 +177,6 @@ export default async function handler(req, res) {
           return res.status(500).json({ error: 'Error in expense totals calculation' });
         }
         try {
-          flat.totalEstimate = totals.totalEstimate;
           flat.totalActualPaid = totals.totalActualPaid;
         } catch (err) {
           console.error('Error setting totals in flat:', month, err, flat, totals);
@@ -212,9 +209,8 @@ export default async function handler(req, res) {
             return;
           }
           if (!flat || Object.keys(flat).length === 0) return;
-          flat.accountSummary = getAccountSummary(flat);
+          flat.accountSummary = getAccountSummary(flat, flat.bankAccounts);
           const totals = getExpenseTotals(flat);
-          flat.totalEstimate = totals.totalEstimate;
           flat.totalActualPaid = totals.totalActualPaid;
           withTotals[doc.month] = flat;
         });

@@ -102,6 +102,39 @@ function updateUserLineId(userId, lineUserId) {
   };
 }
 
+function getUserBankAccounts(userId) {
+  const user = getUserById(userId);
+  if (!user) {
+    throw new Error('User not found');
+  }
+  return user.bankAccounts || [];
+}
+
+function updateUserBankAccounts(userId, bankAccounts) {
+  if (!userId) {
+    throw new Error('Invalid userId');
+  }
+  if (!Array.isArray(bankAccounts)) {
+    throw new Error('bankAccounts must be an array');
+  }
+  const users = loadUsers();
+  const userIndex = users.findIndex(user => user.id === userId);
+  if (userIndex === -1) {
+    throw new Error('User not found');
+  }
+  users[userIndex] = {
+    ...users[userIndex],
+    bankAccounts: bankAccounts
+  };
+  saveUsers(users);
+  return {
+    id: users[userIndex].id,
+    displayName: users[userIndex].displayName,
+    avatar: users[userIndex].avatar,
+    bankAccounts: users[userIndex].bankAccounts
+  };
+}
+
 function resolveDataPath(filename) {
   return path.join(DATA_DIR, filename);
 }
@@ -184,6 +217,8 @@ module.exports = {
   checkUserPassword,
   updateUserPassword,
   updateUserLineId,
+  getUserBankAccounts,
+  updateUserBankAccounts,
   generateUserId,
   resolveDataPath,
   readDataFile,

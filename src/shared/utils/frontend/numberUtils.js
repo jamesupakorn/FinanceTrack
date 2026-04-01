@@ -10,31 +10,51 @@
 
 import { END_OF_MONTH_DUE_DAY, isEndOfMonthDueDay } from '../dateUtils';
 
+const DEFAULT_BANK_ACCOUNTS = ['กรุงศรี', 'ttb', 'กสิกร', 'UOB'];
+const LEGACY_ITEM_ACCOUNT_MAP = {
+  credit_kungsri: 'กรุงศรี',
+  house: 'ttb',
+  credit_ttb: 'ttb',
+  credit_kbank: 'กสิกร',
+  shopee: 'กสิกร',
+  netflix: 'กสิกร',
+  youtube: 'กสิกร',
+  youtube_membership: 'กสิกร',
+  credit_uob: 'UOB'
+};
+
 /**
  * คำนวณสรุปยอดตามบัญชีจากข้อมูลค่าใช้จ่าย
  * รวมเฉพาะรายการที่ยังไม่ได้ชำระ
  * @param {object} editExpense - ข้อมูลค่าใช้จ่าย
  * @returns {object} สรุปยอด {ชื่อบัญชี: ยอดรวม}
  */
-export const getAccountSummary = (editExpense) => {
-  const mapping = {
-    "กรุงศรี": ["credit_kungsri"],
-    "ttb": ["house", "credit_ttb"],
-    "กสิกร": ["credit_kbank", "shopee", "netflix", "youtube", "youtube_membership"],
-    "UOB": ["credit_uob"]
-  };
+export const getAccountSummary = (editExpense, bankAccounts = DEFAULT_BANK_ACCOUNTS) => {
   const summary = {};
-  Object.entries(mapping).forEach(([account, items]) => {
-    let sum = 0;
-    items.forEach(item => {
-      // รวมเฉพาะยอดที่ยังไม่จ่าย
-      const paid = editExpense[item]?.['paid'];
-      if (paid !== true && paid !== 'true') {
-        sum += parseToNumber(editExpense[item]?.['estimate'] || 0);
-      }
-    });
-    summary[account] = sum;
+  const normalizedAccounts = Array.isArray(bankAccounts)
+    ? Array.from(new Set(bankAccounts.map((item) => String(item || '').trim()).filter(Boolean)))
+    : [];
+
+  normalizedAccounts.forEach((account) => {
+    summary[account] = 0;
   });
+
+  Object.entries(editExpense || {}).forEach(([itemKey, item]) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+    const paid = item?.paid;
+    if (paid === true || paid === 'true') return;
+
+    const accountName = (typeof item.account === 'string' && item.account.trim().length > 0)
+      ? item.account.trim()
+      : (LEGACY_ITEM_ACCOUNT_MAP[itemKey] || 'ไม่ระบุบัญชี');
+
+    if (!(accountName in summary)) {
+      summary[accountName] = 0;
+    }
+
+    summary[accountName] += parseToNumber(item?.actual || 0);
+  });
+
   return summary;
 };
 // รายการค่าใช้จ่ายมาตรฐานที่ใช้สำหรับสร้างฟอร์ม (15 รายการ)
@@ -51,9 +71,9 @@ const CUSTOM_EXPENSE_KEY_PREFIX = 'custom_';
 const DEFAULT_CUSTOM_EXPENSE_NAME = 'รายการใหม่'; // Default new item placeholder name
 const EXPENSE_IGNORED_FIELDS = new Set([
   // Metadata fields to exclude from expense item processing
-  'totalEstimate',
   'totalActualPaid',
   'accountSummary',
+  'bankAccounts',
   'month',
   '_id',
   'id'
@@ -81,7 +101,6 @@ function parseExpenseNumeric(value) {
  * Check if a custom expense row is effectively empty/should be hidden
  * Identifies placeholder rows that were created but never filled in:
  * - Name is empty or default "รายการใหม่" label
- * - No estimate amount
  * - No actual amount
  * - No due day set
  * - Not marked as paid
@@ -95,13 +114,12 @@ function isEffectivelyEmptyCustomExpenseRow(key, source) {
   // ถ้าไม่มีข้อมูลหรือไม่ใช่ object ให้ถือว่าเป็นแถวว่าง
   if (!source || typeof source !== 'object') return true;
   const name = typeof source.name === 'string' ? source.name.trim() : '';
-  const estimate = parseExpenseNumeric(source.estimate);
   const actual = parseExpenseNumeric(source.actual);
   const dueDay = source.dueDay == null ? '' : String(source.dueDay).trim();
   const paid = source.paid === true || source.paid === 'true';
   // แถวว่าง: ชื่อเริ่มต้น/ว่าง, ยอดเป็น 0, ไม่มี dueDay, ยังไม่ชำระ
   const isDefaultName = !name || name === DEFAULT_CUSTOM_EXPENSE_NAME;
-  return isDefaultName && estimate === 0 && actual === 0 && dueDay === '' && !paid;
+  return isDefaultName && actual === 0 && dueDay === '' && !paid;
 }
 // Utility functions สำหรับจัดการตัวเลขและเงิน
 
@@ -310,9 +328,13 @@ export const formatExpenseData = (data, month) => {
   // เก็บทุกรายการที่ไม่ใช่ metadata ก่อนกรอง
   const allDynamicKeys = Object.keys(monthData || {}).filter(key => {
     if (EXPENSE_IGNORED_FIELDS.has(key)) return false;
-    if (typeof monthData[key] !== 'object') return false;
+    if (typeof monthData[key] !== 'object' || Array.isArray(monthData[key])) return false;
     return true; // เก็บทั้งหมด ก่อนกรอง
   });
+
+  const storedBankAccounts = Array.isArray(monthData?.bankAccounts)
+    ? Array.from(new Set(monthData.bankAccounts.map((item) => String(item || '').trim()).filter(Boolean)))
+    : [];
 
   // ระบุรายการว่างเปล่าที่ต้องลบออกจากการแสดงผล
   const emptyCustomKeys = allDynamicKeys.filter(key =>
@@ -338,8 +360,10 @@ export const formatExpenseData = (data, month) => {
       name: (typeof source.name === 'string' && source.name.trim().length > 0)
         ? source.name
         : (defaultLabel || 'รายการใหม่'),
-      estimate: parseAndFormat(source?.estimate ?? 0),
       actual: parseAndFormat(source?.actual ?? 0),
+      account: (typeof source?.account === 'string' && source.account.trim().length > 0)
+        ? source.account.trim()
+        : (LEGACY_ITEM_ACCOUNT_MAP[item] || storedBankAccounts[0] || DEFAULT_BANK_ACCOUNTS[0]),
       paid: source?.paid === true || source?.paid === 'true',
       dueDay: (() => {
         if (typeof source?.dueDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(source.dueDay)) {
@@ -364,6 +388,13 @@ export const formatExpenseData = (data, month) => {
     values: formattedData,
     persistedKeys: allDynamicKeys, // ← ส่งทั้งหมด รวมรายการว่างด้วย เพื่อให้ระบบรู้ว่าอะไรมาจาก API
     emptyKeysToDelete: emptyCustomKeys, // ← ส่งรายการว่างเพื่อลบ
+    bankAccounts: Array.from(new Set([
+      ...DEFAULT_BANK_ACCOUNTS,
+      ...storedBankAccounts,
+      ...Object.values(formattedData)
+        .map((row) => (typeof row?.account === 'string' ? row.account.trim() : ''))
+        .filter(Boolean)
+    ]))
   };
 };
 

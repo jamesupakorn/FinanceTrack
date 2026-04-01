@@ -4,10 +4,9 @@
  *
  * ฟีเจอร์หลัก:
  * - เพิ่ม/แก้ไข/ลบรายการค่าใช้จ่ายแบบกำหนดเอง
- * - รองรับยอดประมาณการและยอดจ่ายจริง
+ * - รองรับยอดค่าใช้จ่ายแบบยอดเดียว
  * - ติดตามสถานะชำระเงิน
  * - กำหนดวันครบกำหนดรายเดือน (1-31)
- * - คำนวณส่วนต่างระหว่างประมาณการและจ่ายจริง
  * - แสดงสถานะครบกำหนด/ค้างชำระ/ใกล้ถึงกำหนด
  * - แสดงสรุปยอดตามบัญชีธนาคาร (เฉพาะผู้ดูแล)
  * - บันทึกแบบครั้งเดียวพร้อมรายการที่ต้องลบ
@@ -49,6 +48,18 @@ const DEFAULT_EXPENSE_LABEL_MAP = DEFAULT_EXPENSE_ITEMS.reduce((acc, item) => {
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const DUE_SOON_THRESHOLD_DAYS = 5;
+
+const getPreviousMonthKey = (monthKey) => {
+  if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return null;
+  const [yearStr, monthStr] = monthKey.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null;
+  if (month === 1) {
+    return `${year - 1}-12`;
+  }
+  return `${year}-${String(month - 1).padStart(2, '0')}`;
+};
 
 const formatDueDayText = (dueDayValue) => {
   if (isEndOfMonthDueDay(dueDayValue)) {
@@ -117,36 +128,15 @@ const describeDueTiming = (dueDayValue, paid, monthKey) => {
   };
 };
 
-const describeExpenseDifference = (estimateValue = 0, actualValue = 0) => {
-  const diffValue = estimateValue - actualValue;
-  if (Math.abs(diffValue) < 0.01) {
-    return {
-      value: 0,
-      tone: 'neutral',
-      text: 'จ่ายตรงตามที่ตั้งไว้'
-    };
-  }
-  if (diffValue > 0) {
-    return {
-      value: diffValue,
-      tone: 'positive',
-      text: 'ตั้งงบสูงกว่ายอดใช้จริง'
-    };
-  }
-  return {
-    value: diffValue,
-    tone: 'negative',
-    text: 'ใช้จริงสูงกว่างบที่ตั้งไว้'
-  };
-};
-
 export default function ExpenseTable({ selectedMonth }) {
   const [editExpense, setEditExpense] = useState({});
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [previousMonthTotal, setPreviousMonthTotal] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [persistedKeys, setPersistedKeys] = useState([]);
   const [pendingScrollKey, setPendingScrollKey] = useState(null);
   const { currentUser } = useSession();
-  const shouldShowAccountTable = currentUser?.id === 'u001';
+  const shouldShowAccountTable = Boolean(currentUser?.id);
 
   useEffect(() => {
     if (!pendingScrollKey) return;
@@ -182,6 +172,7 @@ export default function ExpenseTable({ selectedMonth }) {
   useEffect(() => {
     if (!selectedMonth) {
       setEditExpense({});
+      setBankAccounts([]);
       setPersistedKeys([]);
       return;
     }
@@ -190,25 +181,57 @@ export default function ExpenseTable({ selectedMonth }) {
       .then(data => {
         const formatted = formatExpenseData(data || {}, selectedMonth);
         setEditExpense(formatted.values || {});
+        // รวมบัญชีจากโปรไฟล์ user กับบัญชีของเดือนนี้ (ถ้ามี)
+        const monthAccounts = formatted.bankAccounts || [];
+        const mergedAccounts = Array.from(new Set([
+          ...monthAccounts,
+          ...(currentUser?.bankAccounts || [])
+        ])).filter(Boolean);
+        setBankAccounts(mergedAccounts.length ? mergedAccounts : ['ไม่ระบุบัญชี']);
         setPersistedKeys(formatted.persistedKeys || []);
       })
       .catch(error => {
         console.error('Error loading expense data:', error);
         const formatted = formatExpenseData({}, selectedMonth);
         setEditExpense(formatted.values || {});
+        // ใช้บัญชีจากโปรไฟล์ user เป็นค่าเริ่มต้น
+        const userAccounts = currentUser?.bankAccounts || [];
+        setBankAccounts(userAccounts.length ? userAccounts : ['ไม่ระบุบัญชี']);
         setPersistedKeys(formatted.persistedKeys || []);
       })
       .finally(() => setIsLoading(false));
+  }, [selectedMonth, currentUser?.bankAccounts]);
+
+  useEffect(() => {
+    if (!selectedMonth) {
+      setPreviousMonthTotal(null);
+      return;
+    }
+    const previousMonthKey = getPreviousMonthKey(selectedMonth);
+    if (!previousMonthKey) {
+      setPreviousMonthTotal(null);
+      return;
+    }
+    expenseAPI.getByMonth(previousMonthKey)
+      .then((data) => {
+        const previousFormatted = formatExpenseData(data || {}, previousMonthKey);
+        const previousValues = previousFormatted.values || {};
+        const previousTotal = calculateExpenseTotal(previousValues, 'actual', parseToNumber);
+        setPreviousMonthTotal(previousTotal);
+      })
+      .catch(() => {
+        setPreviousMonthTotal(null);
+      });
   }, [selectedMonth]);
 
   const updateExpenseField = (item, field, value) => {
     setEditExpense(prev => {
       const current = prev[item] || {
         name: DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการใหม่',
-        estimate: '0.00',
         actual: '0.00',
+        account: bankAccounts[0] || 'ไม่ระบุบัญชี',
         paid: false,
-        dueDay: ''
+        dueDay: END_OF_MONTH_DUE_DAY
       };
       return {
         ...prev,
@@ -218,7 +241,7 @@ export default function ExpenseTable({ selectedMonth }) {
   };
 
   const handleExpenseChange = (item, field, value) => {
-    if (field === 'paid' || field === 'name' || field === 'dueDay') {
+    if (field === 'paid' || field === 'name' || field === 'dueDay' || field === 'account') {
       updateExpenseField(item, field, value);
       return;
     }
@@ -263,10 +286,10 @@ export default function ExpenseTable({ selectedMonth }) {
       ...prev,
       [uniqueKey]: {
         name: 'รายการใหม่',
-        estimate: '0.00',
         actual: '0.00',
+        account: bankAccounts[0] || 'ไม่ระบุบัญชี',
         paid: false,
-        dueDay: ''
+        dueDay: END_OF_MONTH_DUE_DAY
       }
     }));
     setPendingScrollKey(uniqueKey);
@@ -280,20 +303,75 @@ export default function ExpenseTable({ selectedMonth }) {
     });
   };
 
+  const handleBankAccountsChange = (nextAccounts) => {
+    const normalized = Array.from(new Set(
+      (nextAccounts || [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+    ));
+
+    const finalAccounts = normalized.length ? normalized : ['ไม่ระบุบัญชี'];
+    setBankAccounts(finalAccounts);
+
+    setEditExpense((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((key) => {
+        const row = next[key];
+        if (!row || typeof row !== 'object') return;
+        const currentAccount = typeof row.account === 'string' ? row.account.trim() : '';
+        if (!currentAccount || finalAccounts.includes(currentAccount)) return;
+        next[key] = { ...row, account: finalAccounts[0] };
+      });
+      return next;
+    });
+  };
+
   const handleSave = async () => {
     if (!selectedMonth) return;
     try {
       const prepared = formatExpenseForSave(editExpense, parseToNumber);
+      const normalizedAccounts = Array.from(new Set(
+        (bankAccounts || [])
+          .map((item) => String(item || '').trim())
+          .filter(Boolean)
+      ));
+      prepared.bankAccounts = normalizedAccounts.length ? normalizedAccounts : ['ไม่ระบุบัญชี'];
       const preparedKeys = Object.keys(prepared || {});
-      const removedKeys = persistedKeys.filter(key => !preparedKeys.includes(key));
+      const removedKeys = persistedKeys.filter(key => key !== 'bankAccounts' && !preparedKeys.includes(key));
       if (removedKeys.length > 0) {
         prepared.__removeKeys = removedKeys;
       }
+      
+      // บันทึกข้อมูลค่าใช้จ่ายรายเดือน
       await expenseAPI.save(selectedMonth, prepared);
+      
+      // อัปเดตบัญชีในโปรไฟล์ user (เพื่อให้เดือนหน้าใช้เป็นค่าเริ่มต้น)
+      const userBankAccountsToSave = normalizedAccounts.filter(acc => 
+        acc !== 'ไม่ระบุบัญชี' && acc.trim().length > 0
+      );
+      if (userBankAccountsToSave.length > 0) {
+        try {
+          await fetch('/api/user-bank-accounts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bankAccounts: userBankAccountsToSave })
+          });
+        } catch (error) {
+          console.warn('Warning: Could not update user bank accounts:', error);
+        }
+      }
+      
       // รีเฟรชข้อมูลหลังบันทึก
       const data = await expenseAPI.getByMonth(selectedMonth);
       const formatted = formatExpenseData(data || {}, selectedMonth);
       setEditExpense(formatted.values || {});
+      // รวมบัญชีจากโปรไฟล์ user กับบัญชีของเดือนนี้
+      const monthAccounts = formatted.bankAccounts || [];
+      const mergedAccounts = Array.from(new Set([
+        ...monthAccounts,
+        ...(currentUser?.bankAccounts || [])
+      ])).filter(Boolean);
+      setBankAccounts(mergedAccounts.length ? mergedAccounts : ['ไม่ระบุบัญชี']);
       setPersistedKeys(formatted.persistedKeys || []);
     } catch (error) {
       console.error('Error saving expense data:', error);
@@ -367,29 +445,47 @@ export default function ExpenseTable({ selectedMonth }) {
   }, [daysInSelectedMonth, editExpense, selectedMonth, sortedExpenseKeys]);
 
   const hasExpenseRows = sortedExpenseKeys.length > 0;
-  const totalEstimateValue = useMemo(() => calculateExpenseTotal(editExpense, 'estimate', parseToNumber), [editExpense]);
   const totalActualValue = useMemo(() => calculateExpenseTotal(editExpense, 'actual', parseToNumber), [editExpense]);
-  const totalUnpaidEstimateValue = useMemo(
+  const monthDiffValue = useMemo(() => {
+    if (typeof previousMonthTotal !== 'number') return null;
+    return totalActualValue - previousMonthTotal;
+  }, [totalActualValue, previousMonthTotal]);
+  const monthDiffPercent = useMemo(() => {
+    if (typeof previousMonthTotal !== 'number') return null;
+    if (previousMonthTotal === 0) {
+      return totalActualValue === 0 ? 0 : 100;
+    }
+    return ((totalActualValue - previousMonthTotal) / previousMonthTotal) * 100;
+  }, [totalActualValue, previousMonthTotal]);
+  const monthDiffStatus = useMemo(() => {
+    if (monthDiffValue === null) return 'neutral';
+    if (monthDiffValue > 0) return 'negative';
+    if (monthDiffValue < 0) return 'positive';
+    return 'neutral';
+  }, [monthDiffValue]);
+  const monthDiffChipClass = monthDiffStatus === 'positive'
+    ? styles.diffChipPositive
+    : monthDiffStatus === 'negative'
+      ? styles.diffChipNegative
+      : styles.diffChipNeutral;
+  const monthDiffLabel = monthDiffValue === null
+    ? 'ยังไม่มีข้อมูลเดือนก่อน'
+    : monthDiffValue === 0
+      ? 'เท่ากับเดือนก่อน'
+      : `${monthDiffValue > 0 ? 'เพิ่มขึ้น' : 'ลดลง'} ${formatCurrency(Math.abs(monthDiffValue))}`;
+  const monthDiffPercentText = monthDiffPercent === null
+    ? 'เปรียบเทียบไม่ได้'
+    : `${monthDiffPercent > 0 ? '+' : ''}${monthDiffPercent.toFixed(1)}%`;
+  const totalUnpaidValue = useMemo(
     () => sortedExpenseKeys.reduce((sum, key) => {
       const row = editExpense[key] || {};
       const paid = row.paid === true || row.paid === 'true';
       if (paid) return sum;
-      return sum + parseToNumber(row.estimate);
+      return sum + parseToNumber(row.actual);
     }, 0),
     [editExpense, sortedExpenseKeys]
   );
-  const totalDiffInfo = useMemo(() => describeExpenseDifference(totalEstimateValue, totalActualValue), [totalEstimateValue, totalActualValue]);
-  const accountSummary = useMemo(() => getAccountSummary(editExpense), [editExpense]);
-  const diffChipClass = totalDiffInfo.tone === 'positive'
-    ? styles.diffChipPositive
-    : totalDiffInfo.tone === 'negative'
-      ? styles.diffChipNegative
-      : styles.diffChipNeutral;
-  const diffChipText = totalDiffInfo.tone === 'positive'
-    ? `เหลืองบ ${formatCurrency(totalDiffInfo.value)}`
-    : totalDiffInfo.tone === 'negative'
-      ? `เกินงบ ${formatCurrency(Math.abs(totalDiffInfo.value))}`
-      : 'ใช้ตรงตามงบ';
+  const accountSummary = useMemo(() => getAccountSummary(editExpense, bankAccounts), [editExpense, bankAccounts]);
   const upcomingSummaryText = dueInsights.upcomingCount > 0
     ? `${dueInsights.upcomingCount} รายการยังไม่จ่าย`
     : 'ยังไม่มีรายการค้างชำระ';
@@ -399,7 +495,7 @@ export default function ExpenseTable({ selectedMonth }) {
       <div className={styles.sectionHeader}>
         <div>
           <h3 className={styles.sectionTitle}>รายการค่าใช้จ่าย</h3>
-          <p className={styles.sectionSubtitle}>เปรียบเทียบยอดตั้งงบ (ประมาณ) กับยอดจ่ายจริง เพื่อดูว่าประมาณการคลาดเคลื่อนตรงไหน</p>
+          <p className={styles.sectionSubtitle}>บันทึกยอดค่าใช้จ่ายรายเดือนแบบยอดเดียว</p>
         </div>
         <button type="button" className={styles.addItemButton} onClick={handleAddExpenseItem}>
           + เพิ่มรายการค่าใช้จ่าย
@@ -408,20 +504,20 @@ export default function ExpenseTable({ selectedMonth }) {
       {hasExpenseRows && (
         <div className={styles.overviewRow}>
           <div className={styles.overviewCard}>
-            <p className={styles.overviewLabel}>งบประมาณรวม</p>
-            <p className={styles.overviewValue}>{formatCurrency(totalEstimateValue)}</p>
-            <span className={styles.overviewHint}>ตั้งงบทั้งหมดในเดือนนี้</span>
-          </div>
-          <div className={styles.overviewCard}>
-            <p className={styles.overviewLabel}>ยอดใช้จริง</p>
+            <p className={styles.overviewLabel}>ยอดค่าใช้จ่ายรวม</p>
             <p className={styles.overviewValue}>{formatCurrency(totalActualValue)}</p>
-            <span className={`${styles.diffChip} ${diffChipClass}`}>{diffChipText}</span>
+            <span className={styles.overviewHint}>
+              {typeof previousMonthTotal === 'number'
+                ? `เทียบเดือนก่อน ${monthDiffLabel} (เดือนก่อน ${formatCurrency(previousMonthTotal)})`
+                : 'สรุปยอดค่าใช้จ่ายทั้งหมดในเดือนนี้'}
+            </span>
+            <span className={`${styles.diffChip} ${monthDiffChipClass}`}>เปลี่ยนแปลง {monthDiffPercentText}</span>
           </div>
           <div className={`${styles.overviewCard} ${styles.overviewAccent}`}>
             <p className={styles.overviewLabel}>กำหนดชำระถัดไป</p>
             <p className={`${styles.overviewValue} ${styles.nextDueValue}`}>{dueInsights.nextDueLabel}</p>
             <span className={styles.overviewHint}>{dueInsights.nextDueName}</span>
-            <span className={`${styles.diffChip} ${styles.diffChipNegative}`}>ยอดประมาณการค้างชำระ {formatCurrency(totalUnpaidEstimateValue)}</span>
+            <span className={`${styles.diffChip} ${styles.diffChipNegative}`}>ยอดค้างชำระ {formatCurrency(totalUnpaidValue)}</span>
             <div className={styles.overviewMeta}>
               <span>{upcomingSummaryText}</span>
               {dueInsights.urgentCount > 0 && (
@@ -441,32 +537,25 @@ export default function ExpenseTable({ selectedMonth }) {
         <>
           {/* Desktop Table */}
           <div className={styles.hideOnMobile}>
-            <p className={styles.diffExplain}>ส่วนต่าง = ยอดประมาณ - ยอดจ่ายจริง (บวก = จ่ายน้อยกว่าที่ตั้งงบ, ลบ = จ่ายมากกว่าที่ตั้งงบ)</p>
             <div className={styles.tableContainer}>
               <table className={styles.table}>
               <thead className={styles.tableHeader}>
                 <tr>
                   <th className={styles.tableHeaderCell}>รายการค่าใช้จ่าย</th>
-                  <th className={`${styles.tableHeaderCell} ${styles.right}`}>ยอดประมาณ (ตั้งงบ)</th>
-                  <th className={`${styles.tableHeaderCell} ${styles.right}`}>ยอดจ่ายจริง</th>
+                  <th className={`${styles.tableHeaderCell} ${styles.right}`}>ยอดค่าใช้จ่าย</th>
+                  <th className={styles.tableHeaderCell}>บัญชีที่ใช้จ่าย</th>
                   <th className={styles.tableHeaderCell}>วันครบกำหนด</th>
                   <th className={`${styles.tableHeaderCell} ${styles.center}`}>สถานะชำระ / ยอดค้าง</th>
-                  <th className={`${styles.tableHeaderCell} ${styles.right}`}>ส่วนต่าง (ประมาณ-จริง)</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedExpenseKeys.map((item) => {
                   const row = editExpense[item] || {};
-                  const estimate = parseToNumber(row.estimate);
-                  const actual = parseToNumber(row.actual);
                   const paid = row.paid === true || row.paid === 'true';
-                  const diffInfo = describeExpenseDifference(estimate, actual);
-                  const diffClass = diffInfo.tone === 'positive'
-                    ? styles.diffPositive
-                    : diffInfo.tone === 'negative'
-                      ? styles.diffNegative
-                      : styles.diffNeutral;
                   const displayName = row.name ?? DEFAULT_EXPENSE_LABEL_MAP[item] ?? 'รายการใหม่';
+                  const selectedAccount = (typeof row.account === 'string' && row.account.trim().length > 0)
+                    ? row.account
+                    : (bankAccounts[0] || 'ไม่ระบุบัญชี');
                   const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth);
                   return (
                     <tr key={item} className={styles.tableRow} data-expense-key={item}>
@@ -492,16 +581,6 @@ export default function ExpenseTable({ selectedMonth }) {
                       <td className={`${styles.tableCell} ${styles.right}`}>
                         <input
                           type="text"
-                          value={row.estimate ?? ''}
-                          onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'estimate', val))}
-                          onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'estimate', val))}
-                          onFocus={handleAmountInputFocus}
-                          className={styles.expenseInput}
-                        />
-                      </td>
-                      <td className={`${styles.tableCell} ${styles.right}`}>
-                        <input
-                          type="text"
                           value={row.actual ?? ''}
                           onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'actual', val))}
                           onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'actual', val))}
@@ -509,10 +588,21 @@ export default function ExpenseTable({ selectedMonth }) {
                           className={styles.expenseInput}
                         />
                       </td>
+                      <td className={styles.tableCell}>
+                        <select
+                          value={selectedAccount}
+                          onChange={e => handleExpenseChange(item, 'account', e.target.value)}
+                          className={styles.dateInput}
+                        >
+                          {bankAccounts.map((account) => (
+                            <option key={account} value={account}>{account}</option>
+                          ))}
+                        </select>
+                      </td>
                       <td className={`${styles.tableCell} ${styles.dateCell}`}>
                         <div className={styles.dueDateWrapper}>
                           <select
-                            value={row.dueDay || ''}
+                            value={row.dueDay || END_OF_MONTH_DUE_DAY}
                             onChange={e => handleExpenseChange(item, 'dueDay', e.target.value)}
                             className={styles.dateInput}
                           >
@@ -534,23 +624,15 @@ export default function ExpenseTable({ selectedMonth }) {
                           onChange={e => handleExpenseChange(item, 'paid', e.target.checked)}
                         />
                       </td>
-                      <td className={`${styles.tableCell} ${styles.right}`}>
-                        <div className={`${styles.diffValue} ${diffClass}`}>{formatCurrency(diffInfo.value)}</div>
-                        <div className={styles.diffLabel}>{diffInfo.text}</div>
-                      </td>
                     </tr>
                   );
                 })}
                 <tr className={styles.totalRow}>
                   <td className={styles.totalCell}>ยอดรวม</td>
-                  <td className={`${styles.totalCell} ${styles.right}`}>{formatCurrency(totalEstimateValue)}</td>
                   <td className={`${styles.totalCell} ${styles.right}`}>{formatCurrency(totalActualValue)}</td>
                   <td className={styles.totalCell}></td>
-                  <td className={`${styles.totalCell} ${styles.center}`}>{formatCurrency(totalUnpaidEstimateValue)}</td>
-                  <td className={`${styles.totalCell} ${styles.right} ${totalDiffInfo.tone === 'positive' ? styles.totalDiffPositive : totalDiffInfo.tone === 'negative' ? styles.totalDiffNegative : styles.totalDiffNeutral}`}>
-                    <div className={styles.diffValue}>{formatCurrency(totalDiffInfo.value)}</div>
-                    <div className={styles.diffLabel}>{totalDiffInfo.text}</div>
-                  </td>
+                  <td className={`${styles.totalCell} ${styles.center}`}>รวมค้างชำระ</td>
+                  <td className={`${styles.totalCell} ${styles.center}`}>{formatCurrency(totalUnpaidValue)}</td>
                 </tr>
               </tbody>
               </table>
@@ -561,16 +643,11 @@ export default function ExpenseTable({ selectedMonth }) {
           <div className={styles.mobileCardList + ' ' + styles.hideOnDesktop}>
             {sortedExpenseKeys.map(item => {
               const row = editExpense[item] || {};
-              const estimate = parseToNumber(row.estimate);
-              const actual = parseToNumber(row.actual);
               const paid = row.paid === true || row.paid === 'true';
-              const diffInfo = describeExpenseDifference(estimate, actual);
-              const diffClass = diffInfo.tone === 'positive'
-                ? styles.diffPositive
-                : diffInfo.tone === 'negative'
-                  ? styles.diffNegative
-                  : styles.diffNeutral;
               const displayName = row.name ?? DEFAULT_EXPENSE_LABEL_MAP[item] ?? 'รายการใหม่';
+              const selectedAccount = (typeof row.account === 'string' && row.account.trim().length > 0)
+                ? row.account
+                : (bankAccounts[0] || 'ไม่ระบุบัญชี');
               const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth);
               return (
                 <div className={styles.expenseCard} key={item} data-expense-key={item}>
@@ -586,18 +663,7 @@ export default function ExpenseTable({ selectedMonth }) {
                     />
                   </div>
                   <div className={styles.cardRow}>
-                    <span className={styles.cardLabel}>ยอดประมาณการ</span>
-                    <input
-                      type="text"
-                      value={row.estimate ?? ''}
-                      onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'estimate', val))}
-                      onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'estimate', val))}
-                      onFocus={handleAmountInputFocus}
-                      className={styles.expenseInput}
-                    />
-                  </div>
-                  <div className={styles.cardRow}>
-                    <span className={styles.cardLabel}>ยอดที่จ่ายจริง</span>
+                    <span className={styles.cardLabel}>ยอดค่าใช้จ่าย</span>
                     <input
                       type="text"
                       value={row.actual ?? ''}
@@ -611,7 +677,7 @@ export default function ExpenseTable({ selectedMonth }) {
                     <span className={styles.cardLabel}>วันครบกำหนด</span>
                     <div className={styles.mobileDueField}>
                       <select
-                        value={row.dueDay || ''}
+                        value={row.dueDay || END_OF_MONTH_DUE_DAY}
                         onChange={e => handleExpenseChange(item, 'dueDay', e.target.value)}
                         className={styles.dateInput}
                       >
@@ -625,22 +691,24 @@ export default function ExpenseTable({ selectedMonth }) {
                     </div>
                   </div>
                   <div className={styles.cardRow}>
+                    <span className={styles.cardLabel}>บัญชีที่ใช้จ่าย</span>
+                    <select
+                      value={selectedAccount}
+                      onChange={e => handleExpenseChange(item, 'account', e.target.value)}
+                      className={styles.dateInput}
+                    >
+                      {bankAccounts.map((account) => (
+                        <option key={account} value={account}>{account}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className={styles.cardRow}>
                     <span className={styles.cardLabel}>สถานะชำระ</span>
                     <input
                       type="checkbox"
                       checked={paid}
                       onChange={e => handleExpenseChange(item, 'paid', e.target.checked)}
                     />
-                  </div>
-                  <div className={styles.cardRow}>
-                    <span className={styles.cardLabel}>ส่วนต่าง</span>
-                    <span className={`${styles.diffValue} ${diffClass}`}>
-                      {formatCurrency(diffInfo.value)}
-                    </span>
-                  </div>
-                  <div className={styles.cardRow}>
-                    <span className={styles.cardLabel}></span>
-                    <span className={styles.diffLabel}>{diffInfo.text}</span>
                   </div>
                   <div className={`${styles.cardRow} ${styles.cardActions}`}>
                     <button
@@ -657,24 +725,17 @@ export default function ExpenseTable({ selectedMonth }) {
             {/* Total summary card */}
             <div className={styles.expenseCard + ' ' + styles.totalCard}>
               <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดรวม</span></div>
-              <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดประมาณ</span><span>{formatCurrency(totalEstimateValue)}</span></div>
-              <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดจ่ายจริง</span><span>{formatCurrency(totalActualValue)}</span></div>
-              <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดประมาณค้างชำระ</span><span>{formatCurrency(totalUnpaidEstimateValue)}</span></div>
-              <div className={styles.cardRow}>
-                <span className={styles.cardLabel}>ส่วนต่าง</span>
-                <span className={`${styles.diffValue} ${totalDiffInfo.tone === 'positive' ? styles.totalDiffPositive : totalDiffInfo.tone === 'negative' ? styles.totalDiffNegative : styles.totalDiffNeutral}`}>
-                  {formatCurrency(totalDiffInfo.value)}
-                </span>
-              </div>
-              <div className={styles.cardRow}>
-                <span className={styles.cardLabel}></span>
-                <span className={styles.diffLabel}>{totalDiffInfo.text}</span>
-              </div>
+              <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดค่าใช้จ่าย</span><span>{formatCurrency(totalActualValue)}</span></div>
+              <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดค้างชำระ</span><span>{formatCurrency(totalUnpaidValue)}</span></div>
             </div>
           </div>
-          {/* ตารางสรุปค่าใช้จ่ายแต่ละบัญชี (อัพเดตเฉพาะ u001) */}
+          {/* ตารางสรุปค่าใช้จ่ายแต่ละบัญชี (ใช้งานได้ทุกผู้ใช้) */}
           {shouldShowAccountTable && (
-            <BankAccountTable accountSummary={accountSummary} />
+            <BankAccountTable
+              accountSummary={accountSummary}
+              accounts={bankAccounts}
+              onChangeAccounts={handleBankAccountsChange}
+            />
           )}
           <div className={styles.saveButtonContainer}>
             <button

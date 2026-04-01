@@ -23,20 +23,13 @@ const SummaryReport = ({ selectedMonth, onReportDataReady }) => {
     ยอดรวมรายรับรายเดือน: 0,
     ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด: 0,
     ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง: 0,
-    ยอดรวมค่าใช้จ่ายรายเดือน_ยังไม่ชำระ_ประมาณการ: 0,
+    ยอดรวมค่าใช้จ่ายรายเดือน_ยังไม่ชำระ: 0,
     ยอดรวมเงินเก็บรายเดือน: 0,
     ภาษีสะสมตั้งแต่เดือนแรก: 0,
-    ยอดเงินคงเหลือ_ประมาณการ: 0,
-    ยอดเงินคงเหลือ_จริง: 0
+    ยอดเงินคงเหลือ: 0
   });
 
   const [chartData, setChartData] = useState({
-    ประมาณการ: {
-      รับ: 0,
-      จ่าย: 0,
-      เปอร์เซ็นต์รับ: 0,
-      เปอร์เซ็นต์จ่าย: 0
-    },
     จ่ายจริง: {
       รับ: 0,
       จ่าย: 0,
@@ -127,7 +120,6 @@ const SummaryReport = ({ selectedMonth, onReportDataReady }) => {
 
       const computedChartData = getChartData({
         totalIncome: summary.ยอดรวมรายรับรายเดือน,
-        totalExpenseAll: summary.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด,
         totalExpenseActual: summary.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง
       });
 
@@ -237,14 +229,9 @@ const SummaryReport = ({ selectedMonth, onReportDataReady }) => {
           <h3 className={styles.chartTitle}>% ของรายรับที่ใช้</h3>
           <div className={styles.chartsGrid}>
             <PieChart 
-              รับPercent={chartData.ประมาณการ.เปอร์เซ็นต์รับ}
-              จ่ายPercent={chartData.ประมาณการ.เปอร์เซ็นต์จ่าย}
-              title="ประมาณการ"
-            />
-            <PieChart 
               รับPercent={chartData.จ่ายจริง.เปอร์เซ็นต์รับ}
               จ่ายPercent={chartData.จ่ายจริง.เปอร์เซ็นต์จ่าย}
-              title="จ่ายจริง"
+              title="ภาพรวมรายรับ-รายจ่าย"
             />
           </div>
         </div>
@@ -253,55 +240,8 @@ const SummaryReport = ({ selectedMonth, onReportDataReady }) => {
         <div className={styles.summaryTablesSection}>
           <h3 className={styles.tableTitle}>สรุป</h3>
           <div className={styles.tablesGrid}>
-            {/* ตารางประมาณการ */}
-            <div className={`${styles.summaryTable} ${styles.estimated}`}>
-              <h4 className={styles.tableSubtitle}>ประมาณการ</h4>
-              <div className={styles.summaryGrid}>
-                <div
-                  className={styles.summaryItem}
-                  tabIndex={0}
-                  aria-label={`ยอดรวมรายรับรายเดือน: ${getDisplay(summaryData.ยอดรวมรายรับรายเดือน)}`}
-                >
-                  <span className={styles.itemLabel}>ยอดรวมรายรับรายเดือน</span>
-                  <span className={`${styles.itemValue} ${styles.income}`}>{getDisplay(summaryData.ยอดรวมรายรับรายเดือน)}</span>
-                </div>
-                <div
-                  className={styles.summaryItem}
-                  tabIndex={0}
-                  aria-label={`ยอดรวมค่าใช้จ่ายรายเดือน ทั้งหมด: ${getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด)}`}
-                >
-                  <span className={styles.itemLabel}>ยอดรวมค่าใช้จ่ายรายเดือน ทั้งหมด</span>
-                  <span className={styles.itemValue}>{getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด)}</span>
-                </div>
-                <div
-                  className={styles.summaryItem}
-                  tabIndex={0}
-                  aria-label={`ยอดรวมค่าใช้จ่ายรายเดือน ยังไม่ชำระ (ประมาณการ): ${getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ยังไม่ชำระ_ประมาณการ)}`}
-                >
-                  <span className={styles.itemLabel}>ยอดรวมค่าใช้จ่ายรายเดือน ยังไม่ชำระ (ประมาณการ)</span>
-                  <span className={styles.itemValue}>{getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ยังไม่ชำระ_ประมาณการ)}</span>
-                </div>
-                <div
-                  className={styles.summaryItem}
-                  tabIndex={0}
-                  aria-label={`ยอดรวมเงินเก็บรายเดือน: ${getDisplay(summaryData.ยอดรวมเงินเก็บรายเดือน)}`}
-                >
-                  <span className={styles.itemLabel}>ยอดรวมเงินเก็บรายเดือน</span>
-                  <span className={styles.itemValue}>{getDisplay(summaryData.ยอดรวมเงินเก็บรายเดือน)}</span>
-                </div>
-                <div
-                  className={styles.summaryItem}
-                  tabIndex={0}
-                  aria-label={`ยอดเงินคงเหลือ ประมาณการ: ${getDisplay(summaryData.ยอดเงินคงเหลือ_ประมาณการ)}`}
-                >
-                  <span className={styles.itemLabel}>ยอดเงินคงเหลือ ประมาณการ (หักเฉพาะรายการยังไม่ชำระ)</span>
-                  <span className={`${styles.itemValue} ${styles.remaining}`}>{getDisplay(summaryData.ยอดเงินคงเหลือ_ประมาณการ)}</span>
-                </div>
-              </div>
-            </div>
-            {/* ตารางจ่ายจริง */}
             <div className={`${styles.summaryTable} ${styles.actual}`}>
-              <h4 className={styles.tableSubtitle}>จ่ายจริง</h4>
+              <h4 className={styles.tableSubtitle}>สรุปรายเดือน</h4>
               <div className={styles.summaryGrid}>
                 <div
                   className={styles.summaryItem}
@@ -316,8 +256,16 @@ const SummaryReport = ({ selectedMonth, onReportDataReady }) => {
                   tabIndex={0}
                   aria-label={`ยอดรวมค่าใช้จ่ายรายเดือน จ่ายจริง: ${getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง)}`}
                 >
-                  <span className={styles.itemLabel}>ยอดรวมค่าใช้จ่ายรายเดือน จ่ายจริง</span>
+                  <span className={styles.itemLabel}>ยอดรวมค่าใช้จ่ายรายเดือน</span>
                   <span className={styles.itemValue}>{getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง)}</span>
+                </div>
+                <div
+                  className={styles.summaryItem}
+                  tabIndex={0}
+                  aria-label={`ยอดค้างชำระ: ${getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ยังไม่ชำระ)}`}
+                >
+                  <span className={styles.itemLabel}>ยอดค้างชำระ</span>
+                  <span className={styles.itemValue}>{getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ยังไม่ชำระ)}</span>
                 </div>
                 <div
                   className={styles.summaryItem}
@@ -330,10 +278,10 @@ const SummaryReport = ({ selectedMonth, onReportDataReady }) => {
                 <div
                   className={styles.summaryItem}
                   tabIndex={0}
-                  aria-label={`ยอดเงินคงเหลือ จริง: ${getDisplay(summaryData.ยอดเงินคงเหลือ_จริง)}`}
+                  aria-label={`ยอดเงินคงเหลือ: ${getDisplay(summaryData.ยอดเงินคงเหลือ)}`}
                 >
-                  <span className={styles.itemLabel}>ยอดเงินคงเหลือ จริง</span>
-                  <span className={`${styles.itemValue} ${styles.remaining}`}>{getDisplay(summaryData.ยอดเงินคงเหลือ_จริง)}</span>
+                  <span className={styles.itemLabel}>ยอดเงินคงเหลือ</span>
+                  <span className={`${styles.itemValue} ${styles.remaining}`}>{getDisplay(summaryData.ยอดเงินคงเหลือ)}</span>
                 </div>
               </div>
             </div>
