@@ -34,47 +34,65 @@ export const ACCOUNT_MAPPING = {
   "UOB": ["credit_uob"]
 };
 
+export const DEFAULT_BANK_ACCOUNTS = Object.keys(ACCOUNT_MAPPING);
+export const LEGACY_ITEM_ACCOUNT_MAP = Object.entries(ACCOUNT_MAPPING).reduce((acc, [account, items]) => {
+  items.forEach((item) => {
+    acc[item] = account;
+  });
+  return acc;
+}, {});
+
 /**
  * คำนวณสรุปยอดตามบัญชีจากข้อมูลค่าใช้จ่าย
  * @param {object} expenseData - ข้อมูลค่าใช้จ่ายแบบ flat
+ * @param {array} bankAccounts - รายชื่อบัญชีที่อนุญาต
  * @returns {object} สรุปยอด {ชื่อบัญชี: ยอดรวม}
  */
-export function getAccountSummary(expenseData) {
-  const summary = {}; // เก็บยอดรวมสำหรับแต่ละบัญชี
-  // วนลูปแต่ละบัญชี (กรุงศรี, TTB, กสิกร, UOB)
-  Object.entries(ACCOUNT_MAPPING).forEach(([account, items]) => {
-    let sum = 0;
-    // วนลูปรายการที่อยู่ในบัญชีนี้
-    items.forEach(item => {
-      const paid = expenseData[item]?.paid;
-      // รวมเฉพาะรายการที่ยังไม่ได้ชำระ
-      if (!isPaidFlag(paid)) {
-        sum += parseFloat(expenseData[item]?.estimate || 0);
-      }
-    });
-    summary[account] = sum; // บันทึกยอดรวมของบัญชี
+export function getAccountSummary(expenseData, bankAccounts = DEFAULT_BANK_ACCOUNTS) {
+  const summary = {};
+  const normalizedAccounts = Array.isArray(bankAccounts)
+    ? Array.from(new Set(bankAccounts.map((item) => String(item || '').trim()).filter(Boolean)))
+    : [];
+
+  normalizedAccounts.forEach((account) => {
+    summary[account] = 0;
   });
+
+  Object.entries(expenseData || {}).forEach(([itemKey, item]) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+    if (['month', '_id', 'userId', 'periodKey', 'accountSummary', 'totalActualPaid', '__removeKeys', 'bankAccounts'].includes(itemKey)) return;
+    const paid = item?.paid;
+    if (isPaidFlag(paid)) return;
+
+    const accountName = (typeof item.account === 'string' && item.account.trim().length > 0)
+      ? item.account.trim()
+      : (LEGACY_ITEM_ACCOUNT_MAP[itemKey] || 'ไม่ระบุบัญชี');
+
+    if (!(accountName in summary)) {
+      summary[accountName] = 0;
+    }
+
+    summary[accountName] += parseFloat(item?.actual || 0);
+  });
+
   return summary;
 }
 
 /**
  * คำนวณยอดรวมค่าใช้จ่ายจากข้อมูล
  * @param {object} expenseData - ข้อมูลค่าใช้จ่ายแบบ flat
- * @returns {object} {totalEstimate, totalActualPaid}
+ * @returns {object} {totalActualPaid}
  */
 export function getExpenseTotals(expenseData) {
-  let totalEstimate = 0; // รวมยอดคาดการณ์
   let totalActualPaid = 0; // รวมยอดจ่ายจริง
   // วนลูปแต่ละรายการค่าใช้จ่าย
   Object.values(expenseData || {}).forEach(item => {
     if (item && typeof item === 'object') {
-      totalEstimate += parseFloat(item.estimate || 0);
       totalActualPaid += parseFloat(item.actual || 0);
     }
   });
-  // คืนค่าทั้งสองโดยปัดเศษ 2 ตำแหน่ง
+  // คืนค่าโดยปัดเศษ 2 ตำแหน่ง
   return {
-    totalEstimate: Math.round(totalEstimate * 100) / 100,
     totalActualPaid: Math.round(totalActualPaid * 100) / 100
   };
 }
@@ -87,7 +105,7 @@ export function getExpenseTotals(expenseData) {
 export function removeSummaryFields(data = {}) {
   const cleaned = { ...data }; // คัดลอก data object
   // ลบฟิลด์ที่เป็น metadata และไม่ต้องบันทึกลงฐานข้อมูล
-  ['totalEstimate', 'totalActualPaid', 'accountSummary', 'month', '_id', '__removeKeys'].forEach(field => {
+  ['totalActualPaid', 'accountSummary', 'month', '_id', '__removeKeys'].forEach(field => {
     delete cleaned[field];
   });
   return cleaned; // คืน object ที่ทำความสะอาดแล้ว

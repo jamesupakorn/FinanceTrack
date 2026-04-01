@@ -72,16 +72,15 @@ const buildIncomeDetailRows = (incomeData) => {
 };
 
 const buildExpenseDetailRows = (expenseData) => {
-  const ignoredFields = new Set(['totalEstimate', 'totalActualPaid', 'accountSummary', 'month', '_id', 'userId']);
+  const ignoredFields = new Set(['totalActualPaid', 'accountSummary', 'month', '_id', 'userId']);
   return Object.entries(expenseData || {})
     .filter(([key, value]) => {
       if (ignoredFields.has(key)) return false;
       if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-      return 'estimate' in value || 'actual' in value || 'name' in value;
+      return 'actual' in value || 'name' in value;
     })
     .map(([key, value]) => ({
       item: (typeof value.name === 'string' && value.name.trim()) ? value.name.trim() : key,
-      estimate: toNumericValue(value.estimate),
       actual: toNumericValue(value.actual),
       paid: value.paid === true || value.paid === 'true' ? 'ชำระแล้ว' : 'ยังไม่ชำระ'
     }));
@@ -142,7 +141,6 @@ const buildMonthlyReportPayload = async (monthKey, taxByYearCache) => {
 
   const chartData = getChartData({
     totalIncome: summaryData.ยอดรวมรายรับรายเดือน,
-    totalExpenseAll: summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด,
     totalExpenseActual: summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง
   });
 

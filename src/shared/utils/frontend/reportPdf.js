@@ -341,27 +341,23 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
 
     runAutoTable({
       startY: 106,
-      head: [['สรุป', 'ประมาณการ', 'จ่ายจริง']],
+      head: [['สรุป', 'จำนวนเงิน']],
       body: [
         [
           'รายรับรวม',
-          formatAmountForPdf(normalizedSummary.ยอดรวมรายรับรายเดือน),
           formatAmountForPdf(normalizedSummary.ยอดรวมรายรับรายเดือน)
         ],
         [
           'รายจ่ายรวม',
-          formatAmountForPdf(normalizedSummary.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด),
           formatAmountForPdf(normalizedSummary.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง)
         ],
         [
           'เงินออมรวม',
-          formatAmountForPdf(normalizedSummary.ยอดรวมเงินเก็บรายเดือน),
           formatAmountForPdf(normalizedSummary.ยอดรวมเงินเก็บรายเดือน)
         ],
         [
           'เงินคงเหลือ',
-          formatAmountForPdf(normalizedSummary.ยอดเงินคงเหลือ_ประมาณการ),
-          formatAmountForPdf(normalizedSummary.ยอดเงินคงเหลือ_จริง)
+          formatAmountForPdf(normalizedSummary.ยอดเงินคงเหลือ)
         ]
       ],
       theme: 'grid',
@@ -386,24 +382,18 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
     doc.setFontSize(12);
     doc.text('สัดส่วนรายจ่าย (แผนภูมิ)', marginLeft, chartTitleY);
 
-    const estimatedExpensePercent = toPercentInRange(normalizedChart?.ประมาณการ?.เปอร์เซ็นต์จ่าย);
     const actualExpensePercent = toPercentInRange(normalizedChart?.จ่ายจริง?.เปอร์เซ็นต์จ่าย);
-    const estimatedChartImage = createExpenseRatioChartImage({
-      title: 'ประมาณการ',
-      expensePercent: estimatedExpensePercent
-    });
     const actualChartImage = createExpenseRatioChartImage({
       title: 'จ่ายจริง',
       expensePercent: actualExpensePercent
     });
 
-    if (estimatedChartImage && actualChartImage) {
+    if (actualChartImage) {
       const chartTopY = chartTitleY + 10;
-      const chartWidth = 240;
+      const chartWidth = 260;
       const chartHeight = 170;
 
-      doc.addImage(estimatedChartImage, 'PNG', marginLeft, chartTopY, chartWidth, chartHeight, undefined, 'FAST');
-      doc.addImage(actualChartImage, 'PNG', marginLeft + chartWidth + 20, chartTopY, chartWidth, chartHeight, undefined, 'FAST');
+      doc.addImage(actualChartImage, 'PNG', marginLeft, chartTopY, chartWidth, chartHeight, undefined, 'FAST');
 
       contentBottomY = chartTopY + chartHeight;
     } else {
@@ -411,7 +401,6 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
         startY: chartTitleY + 8,
         head: [['ประเภท', 'ค่า']],
         body: [
-          ['สัดส่วนรายจ่ายประมาณการ', formatPercentForPdf(estimatedExpensePercent)],
           ['สัดส่วนรายจ่ายจริง', formatPercentForPdf(actualExpensePercent)]
         ],
         theme: 'grid',
@@ -433,15 +422,14 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
 
     renderSectionTable({
       title: 'รายละเอียดรายจ่ายรายเดือน',
-      head: ['รายการ', 'ประมาณการ', 'จ่ายจริง', 'สถานะ'],
+      head: ['รายการ', 'จำนวนเงิน', 'สถานะ'],
       body: expenseRows.length
         ? expenseRows.map((row) => [
           row.item || '-',
-          formatAmountForPdf(row.estimate),
           formatAmountForPdf(row.actual),
           row.paid || '-'
         ])
-        : getFallbackRows(4, 'ไม่มีข้อมูลรายจ่าย')
+        : getFallbackRows(3, 'ไม่มีข้อมูลรายจ่าย')
     });
 
     renderSectionTable({

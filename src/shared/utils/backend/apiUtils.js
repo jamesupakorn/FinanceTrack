@@ -118,15 +118,20 @@ export function mapDocToFlatItemObjectWithTotals(doc) {
   if (!doc) return {};
   if (doc.months) return doc;
   let out = {};
-  const summaryFields = new Set(['month', '_id', 'accountSummary', 'totalEstimate', 'totalActualPaid']);
-  if (doc.estimate && doc.actual) {
-    const items = Array.from(new Set([...Object.keys(doc.estimate), ...Object.keys(doc.actual)]));
+  const summaryFields = new Set(['month', '_id', 'accountSummary', 'totalActualPaid', 'bankAccounts']);
+
+  if (Array.isArray(doc.bankAccounts)) {
+    out.bankAccounts = Array.from(new Set(doc.bankAccounts.map((item) => String(item || '').trim()).filter(Boolean)));
+  }
+
+  if (doc.actual && typeof doc.actual === 'object') {
+    const items = Array.from(new Set([...Object.keys(doc.actual)]));
     items.forEach(key => {
       const dueDayValue = doc[key]?.dueDay ?? (typeof doc[key]?.dueDate === 'string' ? doc[key].dueDate : undefined);
       out[key] = {
         name: typeof doc[key]?.name === 'string' ? doc[key].name : '',
-        estimate: doc.estimate[key] ?? 0,
         actual: doc.actual[key] ?? 0,
+        account: typeof doc[key]?.account === 'string' ? doc[key].account : '',
         paid: false,
         ...(dueDayValue !== undefined ? { dueDay: dueDayValue } : {})
       };
@@ -135,12 +140,12 @@ export function mapDocToFlatItemObjectWithTotals(doc) {
     Object.keys(doc).forEach(key => {
       if (summaryFields.has(key)) return;
       const val = doc[key];
-      if (val && typeof val === 'object') {
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
         const dueDayValue = val?.dueDay ?? (typeof val?.dueDate === 'string' ? val.dueDate : undefined);
         out[key] = {
           name: typeof val.name === 'string' ? val.name : '',
-          estimate: val.estimate ?? 0,
           actual: val.actual ?? 0,
+          account: typeof val.account === 'string' ? val.account : '',
           paid: typeof val.paid === 'boolean' ? val.paid : false,
           ...(dueDayValue !== undefined ? { dueDay: dueDayValue } : {})
         };
@@ -148,15 +153,16 @@ export function mapDocToFlatItemObjectWithTotals(doc) {
     });
   }
   // Add summary fields
-  const sumEstimate = Object.values(out).reduce((sum, v) => sum + (typeof v === 'object' && v.estimate ? parseFloat(v.estimate) || 0 : 0), 0);
-  const sumActual = Object.values(out).reduce((sum, v) => sum + (typeof v === 'object' && v.actual ? parseFloat(v.actual) || 0 : 0), 0);
-  out.totalEstimate = Math.round(sumEstimate * 100) / 100;
+  const sumActual = Object.values(out).reduce((sum, v) => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return sum;
+    return sum + (v.actual ? parseFloat(v.actual) || 0 : 0);
+  }, 0);
   out.totalActualPaid = Math.round(sumActual * 100) / 100;
   return out;
 }
 
 // Utility: ลบ field summary ออกจาก object
-export function removeSummaryFields(obj, fields = ['รวม', 'totalEstimate', 'totalActualPaid']) {
+export function removeSummaryFields(obj, fields = ['รวม', 'totalActualPaid']) {
   const out = { ...obj };
   fields.forEach(f => { if (f in out) delete out[f]; });
   return out;

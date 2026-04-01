@@ -25,6 +25,7 @@ import {
   getCurrentDateInfo,
   resolveDueDayForMonth,
   normalizeDueDayValue,
+  isEndOfMonthDueDay,
   formatMonthKeyTH,
   formatThaiDate,
   buildDueDateString
@@ -47,7 +48,6 @@ function extractExpenseItems(doc = {}) {
     'userId',
     'periodKey',
     'accountSummary',
-    'totalEstimate',
     'totalActualPaid'
   ]);
   return Object.entries(doc)
@@ -140,7 +140,7 @@ function buildSection(title, items, target) {
 
 function formatLineItem(item, index, target) {
   const name = item.name || 'รายการไม่มีชื่อ';
-  const amount = formatAmount(item.estimate || item.actual || 0);
+  const amount = formatAmount(item.actual || 0);
   const dueDay = getDueDayNumber(item);
   const dueDateText = dueDay ? buildDueDateString(target, dueDay) : formatThaiDate(target);
   const details = [
@@ -159,6 +159,8 @@ function formatLineItem(item, index, target) {
  * @returns {number|null} วันครบกำหนด (1-31) หรือ null
  */
 function getDueDayNumber(item = {}) {
+  // รองรับ 'EOM' (วันสิ้นเดือน) โดยคืนค่า raw ให้ resolveDueDayForMonth จัดการต่อ
+  if (isEndOfMonthDueDay(item.dueDay)) return item.dueDay;
   const rawDay = normalizeDueDayValue(item.dueDay);
   if (rawDay) return rawDay;
   if (typeof item.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.dueDate)) {
@@ -175,7 +177,7 @@ function getDueDayNumber(item = {}) {
  */
 function sumItemAmounts(items = []) {
   return items.reduce((sum, item) => {
-    const raw = Number(item.estimate || item.actual || 0);
+    const raw = Number(item.actual || 0);
     if (!Number.isNaN(raw) && Number.isFinite(raw)) {
       return sum + raw;
     }
@@ -245,7 +247,7 @@ export default async function handler(req, res) {
     const items = extractExpenseItems(expenseDoc);
     const classifiedItems = items.filter(item => {
       if (isPaidFlag(item.paid)) return false;
-      const amount = Number(item.estimate || item.actual || 0);
+      const amount = Number(item.actual || 0);
       if (Number.isNaN(amount) || amount <= 0) return false;
       return true;
     }).map(item => {

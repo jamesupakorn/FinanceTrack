@@ -240,29 +240,24 @@
 
 .tableHeaderCell:first-child,
 .tableCell:first-child {
-  width: 30%;
+  width: 28%;
 }
 
 .tableHeaderCell:nth-child(2),
 .tableHeaderCell:nth-child(3),
 .tableCell:nth-child(2),
 .tableCell:nth-child(3) {
-  width: 16%;
+  width: 14%;
 }
 
 .tableHeaderCell:nth-child(4),
 .tableCell:nth-child(4) {
-  width: 14%;
+  width: 20%;
 }
 
 .tableHeaderCell:nth-child(5),
 .tableCell:nth-child(5) {
-  width: 10%;
-}
-
-.tableHeaderCell:nth-child(6),
-.tableCell:nth-child(6) {
-  width: 14%;
+  width: 12%;
 }
 
 .tableHeaderCell.right,
@@ -520,6 +515,47 @@
 .saveButton:hover {
   transform: translateY(-3px);
   box-shadow: 0 36px 90px rgba(255, 122, 162, 0.45);
+}
+
+.bankAccountPanel {
+  margin-top: 8px;
+  margin-bottom: 16px;
+}
+
+.bankAccountHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.bankAccountTitle {
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.addBankAccountButton {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(77, 240, 195, 0.4);
+  background: rgba(77, 240, 195, 0.12);
+  color: #9cf7df;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.bankAccountInput {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(9, 12, 32, 0.85);
+  color: var(--text-primary);
+  min-height: 44px;
+  width: 100%;
 }
 
 /* Mobile cards */

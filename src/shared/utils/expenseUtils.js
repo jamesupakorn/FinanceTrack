@@ -39,12 +39,11 @@ function shouldSkipCustomExpenseItem(key, item = {}) {
   // ตรวจสอบว่า key เริ่มด้วย 'custom_'
   if (!String(key || '').startsWith('custom_')) return false;
   const name = typeof item.name === 'string' ? item.name.trim() : '';
-  const estimate = parseExpenseNumber(item.estimate);
   const actual = parseExpenseNumber(item.actual);
   const dueDay = item.dueDay == null ? '' : String(item.dueDay).trim();
   const paid = isPaidFlag(item.paid);
   // ขึ้นคืนว่างมีนาม(รายการใหม่) ยอดคน 0 ไม่ได้กำหนด และไม่ได้ชำระ
-  return (!name || name === 'รายการใหม่') && estimate === 0 && actual === 0 && dueDay === '' && !paid;
+  return (!name || name === 'รายการใหม่') && actual === 0 && dueDay === '' && !paid;
 }
 
 /**
@@ -74,6 +73,8 @@ export function formatExpenseForSave(editExpense, parseToNumber) {
       } else if (field === 'name') {
         // ตันไหอและขฝาทองในชื่อแบบฟอส์
         numericExpense[item][field] = (editExpense[item][field] || '').trim();
+      } else if (field === 'account') {
+        numericExpense[item][field] = (editExpense[item][field] || '').trim();
       } else if (field === 'dueDay') {
         // ตรวจและลดค่าที่ค์คหา เช่น 1-31
         const raw = String(editExpense[item][field] ?? '').trim();
@@ -91,7 +92,7 @@ export function formatExpenseForSave(editExpense, parseToNumber) {
       } else if (field === 'dueDate') {
         // เลิกใช้ dueDate แล้ว (ใช้ dueDay แทน)
       } else {
-        // รื้ field คืนจำนวน (estimate, actual, etc.) แปลงเป็นตัวเลข
+        // แปลงค่าฟิลด์ตัวเลขเป็นจำนวนก่อนบันทึก
         numericExpense[item][field] = parseToNumber(editExpense[item][field]);
       }
     });
@@ -100,14 +101,14 @@ export function formatExpenseForSave(editExpense, parseToNumber) {
 }
 
 /**
- * คำนวณยอดรวมของฟิลด์ที่ระบุ (estimate/actual)
+ * คำนวณยอดรวมของฟิลด์ที่ระบุ
  * @param {object} editExpense - ข้อมูลค่าใช้จ่าย
  * @param {string} field - ชื่อฟิลด์ที่จะรวม
  * @param {function} parseToNumber - ฟังก์ชันแปลงตัวเลข
  * @returns {number} ยอดรวมทั้งหมด
  */
 export function calculateExpenseTotal(editExpense, field, parseToNumber) {
-  // วษคทุกแต่ละสึ่งที่ชด field ที่รองมา (estimate/actual/etc.)
+  // วนทุกรายการแล้วรวมค่าตาม field ที่ส่งเข้ามา
   const values = Object.values(editExpense).map(item => parseToNumber(item?.[field]));
   // รวมยอดวัน และกรอก NaN ยอด
   return values.reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
