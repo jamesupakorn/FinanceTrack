@@ -97,7 +97,7 @@
   }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 768px) {
   .mobileCardList {
     display: block;
     margin-top: 8px;
@@ -698,7 +698,7 @@
   }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 768px) {
   .incomeCard {
     border-radius: 14px;
     padding: 14px 12px;

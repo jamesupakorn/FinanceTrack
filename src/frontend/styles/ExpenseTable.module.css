@@ -574,6 +574,7 @@
   flex-direction: column;
   gap: 12px;
   backdrop-filter: blur(18px);
+  overflow: hidden;
 }
 
 .totalCard {
@@ -606,6 +607,117 @@
 
 .hideOnDesktop {
   display: none;
+}
+
+/* Redesigned mobile card elements */
+.expenseCardPaid {
+  border-color: rgba(77, 240, 195, 0.3);
+  background: rgba(9, 12, 32, 0.75);
+  opacity: 0.75;
+}
+
+.cardHeaderRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cardNameInput {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #f5f7ff;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 10px 12px;
+  min-height: 44px;
+  outline: none;
+}
+
+.cardNameInput:focus {
+  border-color: rgba(93, 91, 255, 0.5);
+}
+
+.cardDeleteBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 80, 80, 0.25);
+  background: rgba(255, 80, 80, 0.08);
+  color: rgba(255, 100, 100, 0.7);
+  font-size: 0.78rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.cardAmountRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cardAmountInput {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #f5f7ff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 10px 12px;
+  min-height: 44px;
+  outline: none;
+  text-align: right;
+}
+
+.cardAmountInput:focus {
+  border-color: rgba(93, 91, 255, 0.5);
+}
+
+.paidToggle {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.paidToggleOn {
+  background: rgba(77, 240, 195, 0.12);
+  border-color: rgba(77, 240, 195, 0.35);
+  color: rgb(77, 240, 195);
+}
+
+.cardMetaRow {
+  display: flex;
+  gap: 8px;
+}
+
+.cardSelect {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #f5f7ff;
+  font-size: 0.85rem;
+  padding: 8px 10px;
+  min-height: 44px;
+  outline: none;
+  cursor: pointer;
 }
 
 /* Responsive adjustments */
