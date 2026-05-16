@@ -1059,6 +1059,40 @@
   }
 }
 
+/* Collapsible Section Header */
+.collapsibleHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0 16px;
+  color: #f5f7ff;
+  text-align: left;
+}
+
+.collapsibleTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.collapsibleChevron {
+  display: flex;
+  align-items: center;
+  opacity: 0.5;
+  transition: transform 0.2s ease;
+}
+
+.collapsibleChevronOpen {
+  transform: rotate(180deg);
+}
+
 /* Floating Action Bar */
 .floatingBar {
   position: fixed;
