@@ -147,7 +147,7 @@ export default function ProfileGalleryPage() {
             {profiles.map(profile => (
               <button
                 key={profile.id}
-                className={styles.profileCard}
+                className={`${styles.profileCard} ${profile.isDemo ? styles.demoCard : ''}`}
                 type="button"
                 onClick={() => handleProfileClick(profile)}
               >

@@ -205,8 +205,11 @@ export default function EditPage() {
     return () => clearInterval(interval);
   }, [router, currentUser, sessionKey, logout, clearStoredMonth]);
   const { theme } = useTheme();
+  const isMobileInit = typeof window !== 'undefined' && window.innerWidth < 768;
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [activeTab, setActiveTab] = useState('income');
+  const [salaryCollapsed, setSalaryCollapsed] = useState(isMobileInit);
+  const [summaryCollapsed, setSummaryCollapsed] = useState(isMobileInit);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [salaryUpdateTrigger, setSalaryUpdateTrigger] = useState(0);
   const [triggerSave, setTriggerSave] = useState(0);
@@ -458,6 +461,7 @@ export default function EditPage() {
   };
 
   const userMenuRef = React.useRef(null);
+  const tabContentRef = React.useRef(null);
 
   React.useEffect(() => {
     if (!userMenuOpen) return undefined;
@@ -592,30 +596,63 @@ export default function EditPage() {
 
 
       <div className={styles.sectionCard}>
-        <SalaryCalculator 
-          selectedMonth={selectedMonth}
-          onSalaryUpdate={handleSalaryUpdate}
-          triggerSave={triggerSave}
-          key={refreshTrigger}
-        />
+        <button
+          type="button"
+          className={styles.collapsibleHeader}
+          onClick={() => setSalaryCollapsed(prev => !prev)}
+        >
+          <span className={styles.collapsibleTitle}>
+            <Icons.BarChart size={18} />
+            คำนวณเงินเดือน
+          </span>
+          <span className={`${styles.collapsibleChevron} ${salaryCollapsed ? '' : styles.collapsibleChevronOpen}`}>
+            <Icons.ChevronDown size={18} />
+          </span>
+        </button>
+        {!salaryCollapsed && (
+          <SalaryCalculator
+            selectedMonth={selectedMonth}
+            onSalaryUpdate={handleSalaryUpdate}
+            triggerSave={triggerSave}
+            key={refreshTrigger}
+          />
+        )}
       </div>
 
       <div className={styles.sectionCard}>
-        <SummaryReport 
-          selectedMonth={selectedMonth}
-          key={`summary-${refreshTrigger}`}
-        />
+        <button
+          type="button"
+          className={styles.collapsibleHeader}
+          onClick={() => setSummaryCollapsed(prev => !prev)}
+        >
+          <span className={styles.collapsibleTitle}>
+            <Icons.TrendingUp size={18} />
+            งบประมาณ / สรุป
+          </span>
+          <span className={`${styles.collapsibleChevron} ${summaryCollapsed ? '' : styles.collapsibleChevronOpen}`}>
+            <Icons.ChevronDown size={18} />
+          </span>
+        </button>
+        {!summaryCollapsed && (
+          <SummaryReport
+            selectedMonth={selectedMonth}
+            key={`summary-${refreshTrigger}`}
+          />
+        )}
       </div>
 
-      <div className={styles.tabNavigation}>
+      <div className={styles.tabNavigation} ref={tabContentRef}>
         {[{ id: 'income', label: 'รายรับ', icon: <Icons.TrendingUp size={20} /> },
           { id: 'expense', label: 'รายจ่าย', icon: <Icons.CreditCard size={20} /> },
           { id: 'savings', label: 'เงินออม', icon: <Icons.PiggyBank size={20} /> },
           { id: 'tax', label: 'ภาษี', icon: <Icons.BarChart size={20} /> }
         ].map(tab => (
-          <button 
+          <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              tabContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
             className={`${styles.tabButton} ${activeTab === tab.id ? styles.active : ''}`}
           >
             {tab.icon}

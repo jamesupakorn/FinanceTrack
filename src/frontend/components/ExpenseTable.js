@@ -658,75 +658,68 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
                 : (bankAccounts[0] || 'ไม่ระบุบัญชี');
               const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth);
               return (
-                <div className={styles.expenseCard} key={item} data-expense-key={item}>
-                  <div className={styles.cardRow}>
-                    <span className={styles.cardLabel}>รายการ</span>
+                <div className={`${styles.expenseCard} ${paid ? styles.expenseCardPaid : ''}`} key={item} data-expense-key={item}>
+                  {/* ชื่อ + ลบ */}
+                  <div className={styles.cardHeaderRow}>
                     <input
                       type="text"
                       value={displayName}
                       onChange={e => handleExpenseChange(item, 'name', e.target.value)}
                       onBlur={e => handleExpenseBlur(item, 'name', e.target.value)}
-                      className={styles.nameInput}
+                      className={styles.cardNameInput}
                       placeholder="ชื่อรายการ"
                     />
+                    <button
+                      type="button"
+                      className={styles.cardDeleteBtn}
+                      onClick={() => handleDeleteExpenseItem(item)}
+                    >
+                      ✕
+                    </button>
                   </div>
-                  <div className={styles.cardRow}>
-                    <span className={styles.cardLabel}>ยอดค่าใช้จ่าย</span>
-                    <input
-                      type="text"
-                      value={row.actual ?? ''}
-                      onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'actual', val))}
-                      onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'actual', val))}
-                      onFocus={handleAmountInputFocus}
-                      className={styles.expenseInput}
-                    />
-                  </div>
-                  <div className={styles.cardRow}>
-                    <span className={styles.cardLabel}>วันครบกำหนด</span>
-                    <div className={styles.mobileDueField}>
-                      <select
-                        value={row.dueDay || END_OF_MONTH_DUE_DAY}
-                        onChange={e => handleExpenseChange(item, 'dueDay', e.target.value)}
-                        className={styles.dateInput}
-                      >
-                        <option value={END_OF_MONTH_DUE_DAY}>วันสิ้นเดือน</option>
-                        {dueDayOptions.map(day => (
-                          <option key={day} value={day}>{day}</option>
-                        ))}
-                      </select>
-                      <span className={styles.dueBadge} data-status={dueInfo.status}>{dueInfo.badge}</span>
-                      {dueInfo.helper && <span className={styles.dueHelper}>{dueInfo.helper}</span>}
-                    </div>
-                  </div>
-                  <div className={styles.cardRow}>
-                    <span className={styles.cardLabel}>บัญชีที่ใช้จ่าย</span>
+                  {/* ยอด */}
+                  <input
+                    type="text"
+                    value={row.actual ?? ''}
+                    onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'actual', val))}
+                    onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'actual', val))}
+                    onFocus={handleAmountInputFocus}
+                    className={styles.cardAmountInput}
+                    placeholder="0.00"
+                  />
+                  {/* บัญชี + วันครบ */}
+                  <div className={styles.cardMetaRow}>
                     <select
                       value={selectedAccount}
                       onChange={e => handleExpenseChange(item, 'account', e.target.value)}
-                      className={styles.dateInput}
+                      className={styles.cardSelect}
                     >
                       {bankAccounts.map((account) => (
                         <option key={account} value={account}>{account}</option>
                       ))}
                     </select>
-                  </div>
-                  <div className={styles.cardRow}>
-                    <span className={styles.cardLabel}>สถานะชำระ</span>
-                    <input
-                      type="checkbox"
-                      checked={paid}
-                      onChange={e => handleExpenseChange(item, 'paid', e.target.checked)}
-                    />
-                  </div>
-                  <div className={`${styles.cardRow} ${styles.cardActions}`}>
-                    <button
-                      type="button"
-                      className={styles.rowDeleteButton}
-                      onClick={() => handleDeleteExpenseItem(item)}
+                    <select
+                      value={row.dueDay || END_OF_MONTH_DUE_DAY}
+                      onChange={e => handleExpenseChange(item, 'dueDay', e.target.value)}
+                      className={styles.cardSelect}
                     >
-                      ลบรายการนี้
-                    </button>
+                      <option value={END_OF_MONTH_DUE_DAY}>สิ้นเดือน</option>
+                      {dueDayOptions.map(day => (
+                        <option key={day} value={day}>วันที่ {day}</option>
+                      ))}
+                    </select>
                   </div>
+                  {dueInfo.helper && (
+                    <span className={styles.dueHelper}>{dueInfo.helper}</span>
+                  )}
+                  {/* toggle full-width */}
+                  <button
+                    type="button"
+                    className={`${styles.paidToggle} ${paid ? styles.paidToggleOn : ''}`}
+                    onClick={() => handleExpenseChange(item, 'paid', !paid)}
+                  >
+                    {paid ? '✓ ชำระแล้ว' : 'ยังไม่ชำระ — แตะเพื่อยืนยัน'}
+                  </button>
                 </div>
               );
             })}
