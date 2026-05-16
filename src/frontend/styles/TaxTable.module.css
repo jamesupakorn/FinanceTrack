@@ -92,7 +92,7 @@
   }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 768px) {
   .tableSection,
   .monthlyTable {
     display: none !important;
@@ -588,7 +588,7 @@
   }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 768px) {
   .taxCard {
     border-radius: 14px;
     padding: 14px 12px;

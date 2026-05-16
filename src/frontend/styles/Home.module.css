@@ -3,7 +3,7 @@
 .homeContainer {
   min-height: 100vh;
   width: 100%;
-  padding: 80px 24px 120px;
+  padding: 80px 24px 160px;
   background: radial-gradient(circle at 15% -10%, rgba(93, 91, 255, 0.4), transparent 35%),
     radial-gradient(circle at 85% 0%, rgba(0, 212, 255, 0.35), transparent 45%);
   transition: background 0.4s ease;
@@ -1056,5 +1056,136 @@
   .tabButton {
     padding: 10px;
     font-size: 0.92rem;
+  }
+}
+
+/* Collapsible Section Header */
+.collapsibleHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0 16px;
+  color: #f5f7ff;
+  text-align: left;
+}
+
+.collapsibleTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.collapsibleChevron {
+  display: flex;
+  align-items: center;
+  opacity: 0.5;
+  transition: transform 0.2s ease;
+}
+
+.collapsibleChevronOpen {
+  transform: rotate(180deg);
+}
+
+/* Floating Action Bar */
+.floatingBar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(8, 12, 32, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+.floatingBarNavBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f5f7ff;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.floatingBarNavBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.floatingBarNavBtn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.floatingBarMonth {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #f5f7ff;
+  min-width: 110px;
+  text-align: center;
+}
+
+.floatingBarDivider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
+}
+
+.floatingBarSaveBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: none;
+  background: var(--gradient-primary);
+  color: #021210;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+  flex-shrink: 0;
+}
+
+.floatingBarSaveBtn:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 480px) {
+  .floatingBar {
+    bottom: 16px;
+    padding: 8px 12px;
+    gap: 6px;
+  }
+
+  .floatingBarMonth {
+    min-width: 90px;
+    font-size: 0.82rem;
+  }
+
+  .floatingBarSaveBtn {
+    padding: 7px 14px;
+    font-size: 0.82rem;
   }
 }

@@ -99,6 +99,24 @@
   font-size: 0.75rem;
   background: rgba(255,255,255,0.12);
   color: rgba(255,255,255,0.85);
+  white-space: nowrap;
+}
+
+.demoCard {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+  text-align: left;
+}
+
+.demoCard .profileName,
+.demoCard .demoDescription {
+  text-align: left;
+}
+
+.demoCard .badgeRow {
+  justify-content: flex-start;
 }
 
 .demoBadge {
