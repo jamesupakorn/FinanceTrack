@@ -13,6 +13,7 @@
 - ปรับ feedback จาก alert() เป็น toast เพื่อ UX ที่ไม่ขวางการทำงาน
 - แก้บั๊ก mobile/tablet, เพิ่มบัญชีไม่ได้, พิมพ์แล้วหลุดโฟกัส
 - ปรับเวอร์ชันและ tag release เป็น 2.2.0 ให้ตรงกัน
+- ปรับ UX มือถือรอบใหญ่: collapsible sections, card redesign, profiles fix (2.2.3)
 
 ## 2) การเปลี่ยนแปลงเชิงสถาปัตยกรรม
 
@@ -54,7 +55,35 @@
 - ไม่ต้อง scroll ลงล่างเพื่อบันทึก
 - สลับเดือนได้ 1 คลิกโดยไม่ต้องเปิด dropdown
 
-### 2.4 Global Toast Feedback
+### 2.4 Mobile UX Overhaul (2.2.3)
+
+**ปัญหาเดิม:** ดูยาก กรอกข้อมูลยาก ต้อง scroll ลึก เปลี่ยน tab แล้วสับสน
+
+**สิ่งที่แก้:**
+
+1. **Auto-scroll เมื่อเปลี่ยน tab** — `pages/edit.js`
+   - เพิ่ม `ref` ที่ `tabNavigation` + `scrollIntoView({ behavior: 'smooth' })` ตอนกด tab
+
+2. **Collapsible sections บน mobile** — `pages/edit.js` + `Home.module.css`
+   - SalaryCalculator และ SummaryReport มี toggle header กด expand/collapse ได้
+   - default collapsed บน mobile (< 768px), expanded บน desktop
+   - ทำให้เข้าถึง tab content ได้เร็วขึ้นบนมือถือ
+
+3. **ExpenseTable mobile card redesign** — `ExpenseTable.js` + `ExpenseTable.module.css`
+   - ชื่อรายการ full-width ด้านบน + ปุ่ม ✕ เล็กๆ แทน "ลบรายการนี้"
+   - ยอดเงินใหญ่ชัดเจน
+   - **paid toggle pill full-width** แทน checkbox เล็ก (tap target ≥ 44px)
+   - บัญชี + วันครบกำหนดอยู่แถวเดียวกัน
+   - card fade เมื่อชำระแล้ว
+
+4. **Unified breakpoint 768px** — `IncomeTable.module.css`, `SavingsTable.module.css`, `TaxTable.module.css`
+   - เปลี่ยนจาก 700px → 768px ให้ตรงกับ ExpenseTable
+
+5. **Profiles page fix** — `profiles.js` + `ProfileGallery.module.css`
+   - Demo card full-width (`grid-column: 1 / -1`) แบบ horizontal layout
+   - badge `white-space: nowrap` ไม่ตัดคำกลาง
+
+### 2.5 Global Toast Feedback
 
 - เพิ่มระบบ toast กลาง
 - เปลี่ยนหลายจุดจาก `alert()` เป็น toast success/error
@@ -137,13 +166,16 @@
 
 - branch ที่ใช้ปล่อยล่าสุด: `production`
 - commit สุดท้ายที่จัดเวอร์ชันให้ตรง: `a464442`
-- `package.json` และ `package-lock.json` เป็น `2.2.0`
-- git tag `2.2.0` ชี้ไป commit เดียวกันเรียบร้อย
+- `package.json` และ `package-lock.json` เป็น `2.2.0` (release tag)
+- version ล่าสุดบน branch `develop` คือ `2.2.3` (mobile UX overhaul)
 
 ## 6) สิ่งที่ควรรู้ก่อนพัฒนาต่อ
 
 - Save All ปัจจุบันเป็นแบบกระตุ้นแต่ละ section ให้ save; หากต้องการให้แข็งแรงขึ้นอีก ควรเพิ่มสรุปผลรวม (section ไหน fail/success) หลังการกดครั้งเดียว
 - Floating Bar ใช้ `months` array จาก state ของ `edit.js` — ถ้าแก้ logic การดึงเดือนให้ระวัง index prev/next ที่ bar นี้อาศัยอยู่
+- Collapsible sections ใช้ `isMobileInit` (window.innerWidth < 768) ตอน init — ถ้าเปลี่ยน breakpoint ให้แก้ตรงนี้ด้วย
+- Mobile breakpoint มาตรฐานของ project นี้คือ **768px** ทุก table ใช้ค่าเดียวกัน
+- ExpenseTable mobile card ใช้ CSS class ใหม่ (`.cardNameInput`, `.cardAmountInput`, `.paidToggle`, `.cardMetaRow`) — ไม่ได้ลบ `.cardRow`/`.cardLabel` เดิม เพราะยังใช้ใน desktop table
 - ควรทดสอบ flow ข้ามผู้ใช้ (u001/u002/ผู้ใช้ใหม่) ซ้ำทุกครั้งเมื่อแตะโค้ดที่เกี่ยวกับ bankAccounts หรือ session
 - ถ้าจะแก้ responsive อีก ให้ระวัง selector กลุ่ม table/container ไม่ให้โดนซ่อนทั้งก้อนโดยไม่ตั้งใจ
 
