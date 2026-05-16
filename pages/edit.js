@@ -314,6 +314,18 @@ export default function EditPage() {
     setTriggerSave(prev => prev + 1);
   };
 
+  const currentMonthIndex = months.indexOf(selectedMonth);
+  const handlePrevMonth = () => {
+    if (currentMonthIndex < months.length - 1) {
+      handleMonthSelected(months[currentMonthIndex + 1]);
+    }
+  };
+  const handleNextMonth = () => {
+    if (currentMonthIndex > 0) {
+      handleMonthSelected(months[currentMonthIndex - 1]);
+    }
+  };
+
   React.useEffect(() => {
     setSelectedReportMonths((previous) => {
       const validMonths = previous.filter((month) => months.includes(month));
@@ -676,38 +688,6 @@ export default function EditPage() {
         )}
       </div>
 
-      {/* บันทึกทั้งหมด Button */}
-      <div style={{
-        marginTop: '40px',
-        textAlign: 'center',
-        paddingBottom: '20px'
-      }}>
-        <button
-          onClick={handleSaveAll}
-          style={{
-            padding: '16px 48px',
-            fontSize: '16px',
-            fontWeight: '700',
-            borderRadius: '20px',
-            border: 'none',
-            cursor: 'pointer',
-            background: 'var(--gradient-primary)',
-            color: '#021210',
-            boxShadow: '0 32px 90px rgba(93, 91, 255, 0.4)',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.transform = 'translateY(-4px)';
-            e.target.style.boxShadow = '0 40px 120px rgba(93, 91, 255, 0.6)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.transform = 'translateY(0)';
-            e.target.style.boxShadow = '0 32px 90px rgba(93, 91, 255, 0.4)';
-          }}
-        >
-          บันทึกข้อมูลทั้งหมด
-        </button>
-      </div>
       </div>
     </div>
     {reportMonthModalOpen && (
@@ -773,6 +753,42 @@ export default function EditPage() {
       errorMessage={changePasswordError}
       isSubmitting={changePasswordSubmitting}
     />
+    {selectedMonth && (
+      <div className={styles.floatingBar}>
+        <button
+          type="button"
+          className={styles.floatingBarNavBtn}
+          onClick={handlePrevMonth}
+          disabled={currentMonthIndex >= months.length - 1}
+          title="เดือนก่อนหน้า"
+        >
+          <span style={{ display: 'flex', transform: 'rotate(90deg)' }}>
+            <Icons.ChevronDown size={16} />
+          </span>
+        </button>
+        <span className={styles.floatingBarMonth}>{getMonthLabel(selectedMonth)}</span>
+        <button
+          type="button"
+          className={styles.floatingBarNavBtn}
+          onClick={handleNextMonth}
+          disabled={currentMonthIndex <= 0}
+          title="เดือนถัดไป"
+        >
+          <span style={{ display: 'flex', transform: 'rotate(-90deg)' }}>
+            <Icons.ChevronDown size={16} />
+          </span>
+        </button>
+        <div className={styles.floatingBarDivider} />
+        <button
+          type="button"
+          className={styles.floatingBarSaveBtn}
+          onClick={handleSaveAll}
+        >
+          <Icons.Save size={14} />
+          บันทึก
+        </button>
+      </div>
+    )}
   </>
   );
 }
