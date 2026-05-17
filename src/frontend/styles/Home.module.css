@@ -276,11 +276,12 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 14px 10px;
   border-radius: 10px;
   color: #f5f7ff;
   cursor: pointer;
   transition: background 0.2s ease;
+  min-height: 44px;
 }
 
 .reportMonthItem:hover {
@@ -1073,6 +1074,12 @@
   text-align: left;
 }
 
+.collapsibleHeader:focus-visible {
+  outline: 2px solid rgba(93, 91, 255, 0.7);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 .collapsibleTitle {
   display: flex;
   align-items: center;
@@ -1116,8 +1123,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.06);
@@ -1156,6 +1163,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 18px;
+  min-height: 44px;
   border-radius: 999px;
   border: none;
   background: var(--gradient-primary);
