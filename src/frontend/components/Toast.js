@@ -27,10 +27,10 @@ export default function Toast() {
   if (!toasts.length) return null;
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} role="status" aria-live="polite" aria-atomic="false">
       {toasts.map((toast) => (
         <div key={toast.id} className={`${styles.toast} ${styles[toast.type] || styles.info}`}>
-          <span className={styles.icon}>{ICONS[toast.type] || ICONS.info}</span>
+          <span className={styles.icon} aria-hidden="true">{ICONS[toast.type] || ICONS.info}</span>
           {toast.message}
         </div>
       ))}
