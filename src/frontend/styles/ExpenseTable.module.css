@@ -297,6 +297,15 @@
   padding-right: 0;
 }
 
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
 .checkboxCell input[type="checkbox"] {
   display: block;
   margin: 0 auto;
@@ -643,10 +652,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  min-height: 32px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 50%;
   border: 1px solid rgba(255, 80, 80, 0.25);
   background: rgba(255, 80, 80, 0.08);
@@ -867,7 +876,7 @@
   }
 
   .table {
-    font-size: 11px;
+    font-size: 14px;
   }
 
   .tableHeaderCell,
@@ -906,7 +915,7 @@
   }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 768px) {
   .expenseCard {
     border-radius: 14px;
     padding: 14px 12px;

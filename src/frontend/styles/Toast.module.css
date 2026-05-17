@@ -35,7 +35,7 @@
 .success {
   background: rgba(77, 240, 195, 0.12);
   border-color: rgba(77, 240, 195, 0.35);
-  color: #6ff8d7;
+  color: #a8ffec;
 }
 
 .error {
@@ -68,7 +68,7 @@
 
 @media (max-width: 480px) {
   .container {
-    bottom: 80px;
+    bottom: 96px;
     right: 12px;
     left: 12px;
   }
