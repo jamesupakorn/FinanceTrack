@@ -626,11 +626,13 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
                         </div>
                       </td>
                       <td className={`${styles.tableCell} ${styles.center} ${styles.checkboxCell}`}>
-                        <input
-                          type="checkbox"
-                          checked={paid}
-                          onChange={e => handleExpenseChange(item, 'paid', e.target.checked)}
-                        />
+                        <label className={styles.checkboxLabel}>
+                          <input
+                            type="checkbox"
+                            checked={paid}
+                            onChange={e => handleExpenseChange(item, 'paid', e.target.checked)}
+                          />
+                        </label>
                       </td>
                     </tr>
                   );
