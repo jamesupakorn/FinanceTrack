@@ -50,13 +50,26 @@ function enforceUserMonthLimit(bucket = {}) {
 	});
 }
 
+function findPrevMonthDoc(bucket, month) {
+	const prevMonths = Object.keys(bucket)
+		.filter((m) => m < month)
+		.sort()
+		.reverse();
+	return prevMonths.length ? bucket[prevMonths[0]] : null;
+}
+
 function handleJsonSalaryGet(req, res, userId) {
 	const bucket = getUserData(JSON_FILENAME, userId);
 	const { month } = req.query;
 	if (month) {
 		let doc = bucket[month];
 		if (!doc) {
-			doc = withGeneratedId({ ...createDefaultSalaryStructure(), month });
+			const prevDoc = findPrevMonthDoc(bucket, month);
+			doc = withGeneratedId({
+				...createDefaultSalaryStructure(),
+				...(prevDoc ? { income: prevDoc.income || {}, deduct: prevDoc.deduct || {} } : {}),
+				month,
+			});
 			updateUserData(JSON_FILENAME, userId, (existing) => {
 				const nextBucket = { ...existing };
 				nextBucket[month] = doc;
@@ -152,8 +165,16 @@ export default async function handler(req, res) {
 					}
 				}
 				if (!doc) {
-					doc = createDefaultSalaryStructure();
-					doc.month = month;
+					const prevDoc = await collection.findOne(
+						{ ...userFilter, month: { $lt: month } },
+						{ sort: { month: -1 } }
+					);
+					doc = { ...createDefaultSalaryStructure(), month };
+					if (prevDoc) {
+						doc.income = prevDoc.income || {};
+						doc.deduct = prevDoc.deduct || {};
+					}
+					doc.summary = calculateSalarySummary(doc);
 					await collection.insertOne({ ...doc, ...userFilter });
 					await enforceMonthLimit(collection, 15, { filter: userFilter });
 				} else {
