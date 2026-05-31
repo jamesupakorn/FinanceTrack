@@ -17,7 +17,7 @@ import styles from '../styles/TaxTable.module.css';
 /**
  * ตารางภาษีรายปี
  */
-export default function TaxTable({ selectedMonth, triggerSave }) {
+export default function TaxTable({ selectedMonth, triggerSave, salaryUpdateTrigger }) {
   const handleAmountInputFocus = (event) => {
     event.target.select();
   };
@@ -155,7 +155,7 @@ export default function TaxTable({ selectedMonth, triggerSave }) {
       }
     };
     fetchTaxData();
-  }, [selectedYear]);
+  }, [selectedYear, salaryUpdateTrigger]);
 
 
   const handleMonthlyTaxChange = (month, value) => {

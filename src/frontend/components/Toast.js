@@ -7,7 +7,7 @@ const ICONS = {
   info: 'ℹ',
 };
 
-const DURATION_MS = 3000;
+const DURATION_MS = 4000;
 
 export default function Toast() {
   const [toasts, setToasts] = useState([]);

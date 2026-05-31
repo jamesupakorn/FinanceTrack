@@ -716,9 +716,10 @@ export default function EditPage() {
                 ภาษีรายเดือน
               </h3>
             </div>
-            <TaxTable 
+            <TaxTable
               triggerSave={triggerSave}
               selectedMonth={selectedMonth}
+              salaryUpdateTrigger={salaryUpdateTrigger}
               key={`tax-${refreshTrigger}`}
             />
           </div>

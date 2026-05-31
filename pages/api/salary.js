@@ -70,11 +70,8 @@ function handleJsonSalaryGet(req, res, userId) {
 				...(prevDoc ? { income: prevDoc.income || {}, deduct: prevDoc.deduct || {} } : {}),
 				month,
 			});
-			updateUserData(JSON_FILENAME, userId, (existing) => {
-				const nextBucket = { ...existing };
-				nextBucket[month] = doc;
-				return enforceUserMonthLimit(nextBucket);
-			});
+			// ไม่บันทึก carry-over ลงไฟล์ — แค่คืนข้อมูลเพื่อแสดงผล
+			// บันทึกจริงเมื่อ user กด save (POST) เท่านั้น
 		}
 		const summary = doc.summary || calculateSalarySummary(doc);
 		return res.json({ ...doc, summary });
@@ -175,15 +172,14 @@ export default async function handler(req, res) {
 						doc.deduct = prevDoc.deduct || {};
 					}
 					doc.summary = calculateSalarySummary(doc);
-					await collection.insertOne({ ...doc, ...userFilter });
-					await enforceMonthLimit(collection, 15, { filter: userFilter });
+					// ไม่บันทึก carry-over ลง DB — แค่คืนข้อมูลเพื่อแสดงผล
+					// บันทึกจริงเมื่อ user กด save (POST) เท่านั้น
 				} else {
-					// fallback income/deduct เป็น default ถ้าไม่มี
-					if (!doc.income || Object.keys(doc.income).length === 0 || !doc.deduct || Object.keys(doc.deduct).length === 0) {
-						doc = createDefaultSalaryStructure();
-						doc.month = month;
-						await collection.updateOne({ month, ...userFilter }, { $set: { ...doc, ...userFilter } });
-					}
+					// เติม default เฉพาะ field ที่ขาด (null/undefined) เท่านั้น
+					// ไม่ overwrite ทั้ง doc — {} คือ "ไม่มีรายการ" ที่ถูกต้อง
+					const defaults = createDefaultSalaryStructure();
+					if (!doc.income) doc.income = defaults.income;
+					if (!doc.deduct) doc.deduct = defaults.deduct;
 				}
 				// Ensure summary is present
 				const sanitizedDoc = { ...doc };
