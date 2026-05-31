@@ -426,6 +426,30 @@
   box-shadow: 0 40px 120px rgba(77, 240, 195, 0.5);
 }
 
+.syncBtn {
+  padding: 16px 32px;
+  background: linear-gradient(135deg, #4ecbff 0%, #a78bfa 100%);
+  color: #0a1628;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 700;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 32px 90px rgba(78, 203, 255, 0.3);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 54px;
+  min-width: 180px;
+  justify-content: center;
+}
+
+.syncBtn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 40px 120px rgba(78, 203, 255, 0.45);
+}
+
 .deleteBtn {
   padding: 16px 32px;
   background: linear-gradient(135deg, #ff7aa2 0%, #ffb4c7 100%);
@@ -581,6 +605,7 @@
 
   .yearSelect,
   .addYearBtn,
+  .syncBtn,
   .deleteBtn,
   .saveBtn {
     width: 100%;

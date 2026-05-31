@@ -10,7 +10,7 @@
 import { useState, useEffect } from 'react';
 import { formatCurrency, handleNumberInput, handleNumberBlur, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { createDefault12MonthsObject, sumAccumulated, sumYearly, getSortedYears } from '../../shared/utils/taxUtils';
-import { taxAPI } from '../../shared/utils/frontend/apiUtils';
+import { taxAPI, salaryAPI } from '../../shared/utils/frontend/apiUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import styles from '../styles/TaxTable.module.css';
 
@@ -69,6 +69,42 @@ export default function TaxTable({ selectedMonth, triggerSave, salaryUpdateTrigg
       }
     }
   };
+  const handleSyncFromSalary = async () => {
+    try {
+      const { months: allMonths } = await salaryAPI.getAll();
+      if (!allMonths || typeof allMonths !== 'object') {
+        showToast('ไม่พบข้อมูลเงินเดือน', 'info');
+        return;
+      }
+      const yearPrefix = selectedYear + '-';
+      const newTax = { ...monthlyTax };
+      const newIncome = { ...monthlyIncome };
+      const newProvident = { ...monthlyProvident };
+      let updated = 0;
+      Object.entries(allMonths).forEach(([monthKey, data]) => {
+        if (!monthKey.startsWith(yearPrefix)) return;
+        const mm = monthKey.split('-')[1];
+        const totalIncome = data?.summary?.total_income ?? 0;
+        const tax = data?.deduct?.tax ?? 0;
+        const provident = data?.deduct?.provident_fund ?? 0;
+        newIncome[mm] = parseToNumber(totalIncome).toFixed(2);
+        newTax[mm] = parseToNumber(tax).toFixed(2);
+        newProvident[mm] = parseToNumber(provident).toFixed(2);
+        updated++;
+      });
+      if (updated === 0) {
+        showToast('ไม่พบข้อมูลเงินเดือนสำหรับปีนี้', 'info');
+        return;
+      }
+      setMonthlyIncome(newIncome);
+      setMonthlyTax(newTax);
+      setMonthlyProvident(newProvident);
+      showToast(`ซิงค์ข้อมูลจากเงินเดือน ${updated} เดือนสำเร็จ`);
+    } catch (e) {
+      showToast('เกิดข้อผิดพลาดในการซิงค์ข้อมูล', 'error');
+    }
+  };
+
   // โหลดข้อมูลปีทั้งหมดสำหรับ dropdown ปี (ต้องอยู่ในฟังก์ชันคอมโพเนนต์เท่านั้น)
   useEffect(() => {
     const fetchAllYears = async () => {
@@ -215,7 +251,13 @@ export default function TaxTable({ selectedMonth, triggerSave, salaryUpdateTrigg
           >
             + เพิ่มปีใหม่
           </button>
-          <button 
+          <button
+            onClick={handleSyncFromSalary}
+            className={styles.syncBtn}
+          >
+            ซิงค์จากเงินเดือน
+          </button>
+          <button
             onClick={() => handleDelete(selectedYear)}
             className={styles.deleteBtn}
           >
