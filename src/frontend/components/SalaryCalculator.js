@@ -481,6 +481,14 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, triggerSave }) => {
       {/* ปุ่มจัดการ */}
       <div className={styles.actionButtons}>
         <button
+          onClick={saveSalaryData}
+          className={styles.saveBtn}
+          aria-label="บันทึกเงินเดือน"
+          tabIndex={0}
+        >
+          บันทึกเงินเดือน
+        </button>
+        <button
           onClick={clearAll}
           className={styles.clearBtn}
           aria-label="ล้างข้อมูล"

@@ -1,6 +1,6 @@
 .container {
   position: fixed;
-  bottom: 28px;
+  top: 24px;
   right: 24px;
   z-index: 9999;
   display: flex;
@@ -23,7 +23,7 @@
   box-shadow: 0 8px 32px rgba(2, 6, 23, 0.6);
   max-width: 320px;
   animation: toastIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both,
-             toastOut 0.35s ease 2.65s forwards;
+             toastOut 0.35s ease 3.65s forwards;
 }
 
 .icon {
@@ -53,7 +53,7 @@
 @keyframes toastIn {
   from {
     opacity: 0;
-    transform: translateY(14px) scale(0.96);
+    transform: translateY(-14px) scale(0.96);
   }
   to {
     opacity: 1;
@@ -63,12 +63,12 @@
 
 @keyframes toastOut {
   from { opacity: 1; transform: translateY(0); }
-  to   { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 0; transform: translateY(-6px); }
 }
 
 @media (max-width: 480px) {
   .container {
-    bottom: 96px;
+    top: 16px;
     right: 12px;
     left: 12px;
   }
