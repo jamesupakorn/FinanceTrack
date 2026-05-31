@@ -609,14 +609,14 @@ export default function EditPage() {
             <Icons.ChevronDown size={18} />
           </span>
         </button>
-        {!salaryCollapsed && (
+        <div style={salaryCollapsed ? { display: 'none' } : undefined}>
           <SalaryCalculator
             selectedMonth={selectedMonth}
             onSalaryUpdate={handleSalaryUpdate}
             triggerSave={triggerSave}
             key={refreshTrigger}
           />
-        )}
+        </div>
       </div>
 
       <div className={styles.sectionCard}>
