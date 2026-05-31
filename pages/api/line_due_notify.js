@@ -111,7 +111,7 @@ function buildMessage(target, groupedItems, notifyMode) {
     '━━━━━━━━━━━━'
   ].join('\n');
   const dueSection = groupedItems.due.length
-    ? buildSection('✅ ครบกำหนดวันนี้', groupedItems.due, target)
+    ? buildSection('✅ ครบกำหนดวันนี้', groupedItems.due, target, { hideDate: true })
     : null;
   const dueSoonSection = groupedItems.dueSoon.length
     ? buildSection(`⏳ ใกล้ครบกำหนด (อีกไม่เกิน ${DUE_SOON_DAYS} วัน)`, groupedItems.dueSoon, target)
@@ -120,36 +120,38 @@ function buildMessage(target, groupedItems, notifyMode) {
     ? buildSection('⚠️ ค้างชำระ', groupedItems.overdue, target)
     : null;
   const unpaidSection = notifyMode === 'unpaid' && groupedItems.otherUnpaid.length
-    ? buildSection('🗂️ รายการยังไม่ถึงกำหนด', groupedItems.otherUnpaid, target)
+    ? buildSection('🗂️ รายการยังไม่ถึงกำหนด', groupedItems.otherUnpaid, target, { hideDate: true })
     : null;
   const sections = [dueSection, dueSoonSection, overdueSection, unpaidSection].filter(Boolean);
-  const allItems = [...groupedItems.due, ...groupedItems.dueSoon, ...groupedItems.overdue, ...groupedItems.otherUnpaid];
-  const totalAmount = sumItemAmounts(allItems);
-  const footer = [
+  const todayItems = [...groupedItems.due, ...groupedItems.overdue];
+  const upcomingItems = [...groupedItems.dueSoon, ...groupedItems.otherUnpaid];
+  const todayTotal = sumItemAmounts(todayItems);
+  const upcomingTotal = sumItemAmounts(upcomingItems);
+  const footerLines = [
     '━━━━━━━━━━━━',
-    `รวมทั้งหมด: ${formatAmount(totalAmount)} บาท (${allItems.length} รายการ)`,
+    `ต้องจ่ายวันนี้/ค้างชำระ: ${formatAmount(todayTotal)} บาท (${todayItems.length} รายการ)`,
+    upcomingItems.length ? `ใกล้ครบกำหนด: ${formatAmount(upcomingTotal)} บาท (${upcomingItems.length} รายการ)` : null,
     'อัปเดตสถานะ ➜ https://finance-track-one.vercel.app/ 💼'
-  ].join('\n');
+  ].filter(Boolean);
+  const footer = footerLines.join('\n');
   return [header, ...sections, footer].join('\n\n');
 }
 
-function buildSection(title, items, target) {
-  const lines = items.map((item, index) => formatLineItem(item, index, target));
-  return [title, ...lines].join('\n\n');
+function buildSection(title, items, target, opts = {}) {
+  const lines = items.map((item, index) => formatLineItem(item, index, target, opts));
+  return [title, ...lines].join('\n');
 }
 
-function formatLineItem(item, index, target) {
+function formatLineItem(item, index, target, opts = {}) {
   const name = item.name || 'รายการไม่มีชื่อ';
   const amount = formatAmount(item.actual || 0);
+  const account = item.account ? ` | ${item.account}` : '';
+  const fromMonth = item._fromMonth ? ` (ค้างจาก ${formatMonthKeyTH(item._fromMonth)})` : '';
+  const firstLine = `${index + 1}. ${name} — ${amount} บาท${account}${fromMonth}`;
+  if (opts.hideDate) return firstLine;
   const dueDay = getDueDayNumber(item);
-  const dueDateText = dueDay ? buildDueDateString(target, dueDay) : formatThaiDate(target);
-  const details = [
-    `💰 ${amount} บาท`,
-    `📅 ครบกำหนด ${dueDateText}`,
-    item.account ? `🏦 บัญชี ${item.account}` : null,
-    item.category ? `📌 หมวด ${item.category}` : null
-  ].filter(Boolean);
-  return `${index + 1}. ${name}\n${details.join('\n')}`;
+  const dueDateText = dueDay ? buildDueDateString(target, dueDay) : null;
+  return dueDateText ? `${firstLine}\n   📅 ${dueDateText}` : firstLine;
 }
 
 /**
@@ -201,6 +203,12 @@ async function getUsersForNotify(targetUserId) {
   return docs.filter(user => user.LineId);
 }
 
+function getPrevMonthKey(monthKey) {
+  const [y, m] = monthKey.split('-').map(Number);
+  if (m === 1) return `${y - 1}-12`;
+  return `${y}-${String(m - 1).padStart(2, '0')}`;
+}
+
 async function getExpenseDocForMonth(userId, monthKey) {
   if (isJsonMode()) {
     const bucket = getUserData(JSON_EXPENSE_FILE, userId);
@@ -239,46 +247,44 @@ export default async function handler(req, res) {
 
   for (const user of users) {
     const expenseDoc = await getExpenseDocForMonth(user.id, target.monthKey);
-    if (!expenseDoc) {
+    const prevMonthKey = getPrevMonthKey(target.monthKey);
+    const prevExpenseDoc = await getExpenseDocForMonth(user.id, prevMonthKey);
+
+    if (!expenseDoc && !prevExpenseDoc) {
       results.push({ userId: user.id, sent: false, reason: 'no expense data' });
       continue;
     }
 
-    const items = extractExpenseItems(expenseDoc);
-    const classifiedItems = items.filter(item => {
-      if (isPaidFlag(item.paid)) return false;
-      const amount = Number(item.actual || 0);
-      if (Number.isNaN(amount) || amount <= 0) return false;
-      return true;
-    }).map(item => {
-      const { status } = getDueStatus(item, target);
-      return { item, status };
-    });
+    const groupedItems = { due: [], dueSoon: [], overdue: [], otherUnpaid: [] };
 
-    const groupedItems = {
-      due: [],
-      dueSoon: [],
-      overdue: [],
-      otherUnpaid: []
-    };
-
-    classifiedItems.forEach(({ item, status }) => {
-      if (status === 'due') {
-        groupedItems.due.push(item);
-        return;
-      }
-      if (status === 'overdue') {
-        groupedItems.overdue.push(item);
-        return;
-      }
-      if (status === 'dueSoon') {
-        groupedItems.dueSoon.push(item);
-        return;
-      }
-      if (notifyMode === 'unpaid') {
+    // classify current month items
+    if (expenseDoc) {
+      const items = extractExpenseItems(expenseDoc);
+      items.filter(item => {
+        if (isPaidFlag(item.paid)) return false;
+        const amount = Number(item.actual || 0);
+        return !Number.isNaN(amount) && amount > 0;
+      }).forEach(item => {
+        const { status } = getDueStatus(item, target);
+        if (status === 'due') { groupedItems.due.push(item); return; }
+        if (status === 'overdue') { groupedItems.overdue.push(item); return; }
+        if (status === 'dueSoon') { groupedItems.dueSoon.push(item); return; }
+        // invalid (no dueDay) หรือ upcoming → otherUnpaid
         groupedItems.otherUnpaid.push(item);
-      }
-    });
+      });
+    }
+
+    // prev month: unpaid items ทั้งหมดถือว่าเลยกำหนดแล้ว
+    if (prevExpenseDoc) {
+      const prevItems = extractExpenseItems(prevExpenseDoc);
+      prevItems.filter(item => {
+        if (isPaidFlag(item.paid)) return false;
+        const amount = Number(item.actual || 0);
+        return !Number.isNaN(amount) && amount > 0;
+      }).forEach(item => {
+        groupedItems.overdue.push({ ...item, _fromMonth: prevMonthKey });
+      });
+    }
 
     if (notifyMode === 'due') {
       groupedItems.overdue = [];
