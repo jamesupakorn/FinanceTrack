@@ -33,7 +33,8 @@ import {
   getDueDateFromDay,
   formatDueDateLabel,
   getStartOfToday,
-  getDaysInMonth
+  getDaysInMonth,
+  formatMonthKeyTH
 } from '../../shared/utils/dateUtils';
 import BankAccountTable from './BankAccountTable';
 import { expenseAPI } from '../../shared/utils/frontend/apiUtils';
@@ -133,6 +134,8 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
   const [editExpense, setEditExpense] = useState({});
   const [bankAccounts, setBankAccounts] = useState([]);
   const [previousMonthTotal, setPreviousMonthTotal] = useState(null);
+  const [prevMonthUnpaid, setPrevMonthUnpaid] = useState(null);
+  const [prevAccountSummary, setPrevAccountSummary] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [persistedKeys, setPersistedKeys] = useState([]);
   const [pendingScrollKey, setPendingScrollKey] = useState(null);
@@ -219,9 +222,19 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
         const previousValues = previousFormatted.values || {};
         const previousTotal = calculateExpenseTotal(previousValues, 'actual', parseToNumber);
         setPreviousMonthTotal(previousTotal);
+        const unpaidItems = Object.values(previousValues).filter(row => {
+          if (!row || typeof row !== 'object') return false;
+          if (row.paid === true || row.paid === 'true') return false;
+          return parseToNumber(row.actual) > 0;
+        });
+        const unpaidTotal = unpaidItems.reduce((s, row) => s + parseToNumber(row.actual), 0);
+        setPrevMonthUnpaid(unpaidTotal > 0 ? { total: unpaidTotal, count: unpaidItems.length, monthKey: previousMonthKey } : null);
+        setPrevAccountSummary(getAccountSummary(previousValues, bankAccounts));
       })
       .catch(() => {
         setPreviousMonthTotal(null);
+        setPrevMonthUnpaid(null);
+        setPrevAccountSummary({});
       });
   }, [selectedMonth]);
 
@@ -415,15 +428,26 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
   const dueInsights = useMemo(() => {
     const today = getStartOfToday();
     const upcoming = [];
+    let overdueTotal = 0;
+    let pendingTotal = 0;
     sortedExpenseKeys.forEach(item => {
       const row = editExpense[item];
       if (!row) return;
       const paid = row.paid === true || row.paid === 'true';
       if (paid) return;
+      const amount = parseToNumber(row.actual);
       const parsedDate = getDueDateFromDay(row.dueDay, selectedMonth);
-      if (!parsedDate) return;
+      if (!parsedDate) {
+        pendingTotal += amount;
+        return;
+      }
       const resolvedDueDay = resolveDueDayForMonth(row.dueDay, daysInSelectedMonth);
       const diffDays = Math.ceil((parsedDate - today) / DAY_IN_MS);
+      if (diffDays < 0) {
+        overdueTotal += amount;
+      } else {
+        pendingTotal += amount;
+      }
       upcoming.push({
         key: item,
         name: row.name || DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการ',
@@ -441,6 +465,8 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
       upcomingCount: upcoming.length,
       urgentCount,
       overdueCount,
+      overdueTotal,
+      pendingTotal,
       nextDueLabel: nextDue
         ? (nextDue.dueDay
           ? (isEndOfMonthDueDay(nextDue.dueDay)
@@ -525,7 +551,8 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
             <p className={styles.overviewLabel}>กำหนดชำระถัดไป</p>
             <p className={`${styles.overviewValue} ${styles.nextDueValue}`}>{dueInsights.nextDueLabel}</p>
             <span className={styles.overviewHint}>{dueInsights.nextDueName}</span>
-            <span className={`${styles.diffChip} ${styles.diffChipNegative}`}>ยอดค้างชำระ {formatCurrency(totalUnpaidValue)}</span>
+            <span className={`${styles.diffChip} ${styles.diffChipNegative}`}>เลยกำหนด {formatCurrency(dueInsights.overdueTotal)}</span>
+            <span className={`${styles.diffChip} ${styles.diffChipNeutral}`}>ยังไม่ถึงกำหนด {formatCurrency(dueInsights.pendingTotal)}</span>
             <div className={styles.overviewMeta}>
               <span>{upcomingSummaryText}</span>
               {dueInsights.urgentCount > 0 && (
@@ -536,6 +563,14 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
               )}
             </div>
           </div>
+          {prevMonthUnpaid && (
+            <div className={`${styles.overviewCard} ${styles.overviewWarn}`}>
+              <p className={styles.overviewLabel}>ค้างจ่ายเดือนก่อน</p>
+              <p className={`${styles.overviewValue} ${styles.warnValue}`}>{formatCurrency(prevMonthUnpaid.total)}</p>
+              <span className={styles.overviewHint}>{formatMonthKeyTH(prevMonthUnpaid.monthKey)} · {prevMonthUnpaid.count} รายการ</span>
+              <span className={`${styles.diffChip} ${styles.diffChipNegative}`}>ยังไม่ได้ชำระ</span>
+            </div>
+          )}
         </div>
       )}
       {isLoading && !hasExpenseRows && (
@@ -736,6 +771,7 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
           {shouldShowAccountTable && (
             <BankAccountTable
               accountSummary={accountSummary}
+              prevAccountSummary={prevAccountSummary}
               accounts={bankAccounts}
               onChangeAccounts={handleBankAccountsChange}
             />

@@ -55,6 +55,16 @@
   box-shadow: 0 28px 70px rgba(12, 32, 84, 0.65);
 }
 
+.overviewWarn {
+  background: linear-gradient(135deg, rgba(50, 25, 10, 0.95) 0%, rgba(80, 45, 10, 0.8) 100%);
+  border-color: rgba(255, 160, 60, 0.45);
+  box-shadow: 0 28px 70px rgba(80, 40, 5, 0.55);
+}
+
+.warnValue {
+  color: #ffaa3b;
+}
+
 .overviewLabel {
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -529,6 +539,20 @@
 .bankAccountPanel {
   margin-top: 8px;
   margin-bottom: 16px;
+}
+
+.overdueCell {
+  color: #ff7aa2;
+}
+
+.totalCell {
+  color: #4df0c3;
+  font-weight: 700;
+}
+
+.totalRow td {
+  background: rgba(255, 255, 255, 0.04);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .bankAccountHeader {
