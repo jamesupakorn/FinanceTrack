@@ -12,104 +12,89 @@
       "credit_kbank": {
         "name": "บัตรเครดิต KBank",
         "actual": 5965.65,
-        "paid": false
+        "paid": true,
+        "dueDay": 5
       },
       "credit_kungsri": {
         "name": "บัตรเครดิต Kungsri",
         "actual": 0,
-        "paid": true
+        "paid": true,
+        "dueDay": 15
       },
       "credit_ttb": {
         "name": "บัตรเครดิต TTB",
         "actual": 2325.77,
-        "paid": false
+        "paid": true,
+        "dueDay": 5
       },
       "credit_uob": {
         "name": "บัตรเครดิต UOB",
         "actual": 0,
-        "paid": true
+        "paid": true,
+        "dueDay": 22
       },
       "electricity": {
         "name": "ค่าไฟ",
         "actual": 1025.45,
-        "paid": true
+        "paid": true,
+        "dueDay": 22
       },
       "house": {
         "name": "ค่าบ้าน",
-        "actual": 9000,
-        "paid": false,
+        "actual": 8800,
+        "paid": true,
         "dueDay": 10
       },
       "internet": {
         "name": "ค่าเน็ต",
         "actual": 426.93,
-        "paid": true
-      },
-      "miscellaneous": {
-        "name": "ค่าใช้จ่ายเบ็ดเตล็ด",
-        "actual": 0,
-        "paid": false
+        "paid": true,
+        "dueDay": 26
       },
       "mobile": {
         "name": "โทรศัพท์มือถือ",
         "actual": 1396.86,
-        "paid": true
+        "paid": true,
+        "dueDay": 5
       },
       "motorcycle": {
         "name": "ค่ารถจักรยานยนต์",
         "actual": 2500,
-        "paid": true
+        "paid": true,
+        "dueDay": 28
       },
       "netflix": {
         "name": "Netflix",
         "actual": 0,
-        "paid": false
+        "paid": true,
+        "dueDay": 12
       },
       "shopee": {
         "name": "Shopee",
-        "actual": 0,
-        "paid": false
+        "actual": 2473.2,
+        "paid": true,
+        "dueDay": 28
       },
       "water": {
         "name": "ค่าน้ำ",
-        "actual": 0,
-        "paid": false
+        "actual": 63.77,
+        "paid": true,
+        "dueDay": 10
       },
       "youtube": {
         "name": "YouTube",
-        "actual": 0,
-        "paid": false
+        "actual": 469,
+        "paid": true,
+        "dueDay": 28
       },
       "youtube_membership": {
         "name": "YouTube Membership",
         "actual": 330,
-        "paid": false
+        "paid": true,
+        "dueDay": 28
       },
-      "custom_1768449226727": {
-        "actual": 0,
-        "paid": false
-      },
-      "custom_1768449429908": {
-        "actual": 0,
-        "paid": false
-      },
-      "custom_1768449456308": {
-        "actual": 0,
-        "paid": false
-      },
-      "custom_1768449576218": {
-        "actual": 0,
-        "paid": false
-      },
-      "custom_1768449650629": {
-        "actual": 0,
-        "paid": false
-      },
-      "custom_1769660592065_799": {
-        "name": "รายการใหม่",
-        "actual": 0,
-        "paid": false
-      }
+      "userId": "u001",
+      "periodKey": "2026-02"
     },
     "2026-01": {
       "_id": "695cb6367fe94f535c10bd6d",
@@ -199,7 +184,9 @@
         "name": "รายการใหม่",
         "actual": 0,
         "paid": false
-      }
+      },
+      "userId": "u001",
+      "periodKey": "2026-01"
     },
     "2025-12": {
       "_id": "692af54b9ba6da2362d99d25",
@@ -269,7 +256,9 @@
       "youtube_membership": {
         "actual": 330,
         "paid": true
-      }
+      },
+      "userId": "u001",
+      "periodKey": "2025-12"
     },
     "2025-11": {
       "_id": "690b1189ddcf877a116097ff",
@@ -334,7 +323,9 @@
       "youtube_membership": {
         "actual": 0,
         "paid": false
-      }
+      },
+      "userId": "u001",
+      "periodKey": "2025-11"
     },
     "2025-10": {
       "_id": "6907800e7c0b4ba9b3c2d906",
@@ -398,7 +389,9 @@
       "miscellaneous": {
         "actual": 0,
         "paid": false
-      }
+      },
+      "userId": "u001",
+      "periodKey": "2025-10"
     },
     "2025-09": {
       "_id": "6907800e7c0b4ba9b3c2d907",
@@ -462,7 +455,9 @@
       "miscellaneous": {
         "actual": 0,
         "paid": true
-      }
+      },
+      "userId": "u001",
+      "periodKey": "2025-09"
     },
     "2025-08": {
       "_id": "6907800e7c0b4ba9b3c2d908",
@@ -511,7 +506,9 @@
       },
       "miscellaneous": {
         "actual": 0
-      }
+      },
+      "userId": "u001",
+      "periodKey": "2025-08"
     },
     "2025-07": {
       "_id": "6907800e7c0b4ba9b3c2d909",
@@ -560,7 +557,9 @@
       },
       "miscellaneous": {
         "actual": 0
-      }
+      },
+      "userId": "u001",
+      "periodKey": "2025-07"
     },
     "2025-06": {
       "_id": "6907800e7c0b4ba9b3c2d90a",
@@ -609,7 +608,9 @@
       },
       "miscellaneous": {
         "actual": 0
-      }
+      },
+      "userId": "u001",
+      "periodKey": "2025-06"
     },
     "2025-05": {
       "_id": "6907800e7c0b4ba9b3c2d90b",
@@ -658,7 +659,9 @@
       },
       "miscellaneous": {
         "actual": 0
-      }
+      },
+      "userId": "u001",
+      "periodKey": "2025-05"
     },
     "2025-04": {
       "_id": "6907800e7c0b4ba9b3c2d90c",
@@ -707,194 +710,510 @@
       },
       "miscellaneous": {
         "actual": 0
-      }
+      },
+      "userId": "u001",
+      "periodKey": "2025-04"
     },
-    "2025-03": {
-      "_id": "6907800e7c0b4ba9b3c2d90d",
-      "month": "2025-03",
-      "house": {
-        "actual": 9000
+    "2026-03": {
+      "_id": "69a1818f1afb253334436a53",
+      "month": "2026-03",
+      "userId": "u001",
+      "accountSummary": {
+        "กรุงศรี": 0,
+        "ttb": 0,
+        "กสิกร": 0,
+        "UOB": 0,
+        "paid": false
       },
-      "water": {
-        "actual": 0
+      "credit_kbank": {
+        "name": "บัตรเครดิต KBank",
+        "actual": 9753.98,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 5
       },
-      "internet": {
-        "actual": 500
+      "credit_kungsri": {
+        "name": "บัตรเครดิต Kungsri",
+        "actual": 0,
+        "account": "กรุงศรี",
+        "paid": true,
+        "dueDay": 15
+      },
+      "credit_ttb": {
+        "name": "บัตรเครดิต TTB",
+        "actual": 4919.12,
+        "account": "ttb",
+        "paid": true,
+        "dueDay": 5
+      },
+      "credit_uob": {
+        "name": "บัตรเครดิต UOB",
+        "actual": 0,
+        "account": "UOB",
+        "paid": true,
+        "dueDay": 22
       },
       "electricity": {
-        "actual": 2359.44
+        "name": "ค่าไฟ",
+        "actual": 2337.42,
+        "account": "กรุงศรี",
+        "paid": true,
+        "dueDay": 22
       },
-      "mobile": {
-        "actual": 700
-      },
-      "credit_kbank": {
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "actual": 3590
-      },
-      "credit_uob": {
-        "actual": 0
-      },
-      "credit_ttb": {
-        "actual": 0
-      },
-      "shopee": {
-        "actual": 0
-      },
-      "netflix": {
-        "actual": 0
-      },
-      "youtube": {
-        "actual": 0
-      },
-      "youtube_membership": {
-        "actual": 0
-      },
-      "motorcycle": {
-        "actual": 0
-      },
-      "miscellaneous": {
-        "actual": 0
-      }
-    },
-    "2025-02": {
-      "_id": "6907800e7c0b4ba9b3c2d90e",
-      "month": "2025-02",
       "house": {
-        "actual": 10000
-      },
-      "water": {
-        "actual": 0
+        "name": "ค่าบ้าน",
+        "actual": 8800,
+        "account": "ttb",
+        "paid": true,
+        "dueDay": 10
       },
       "internet": {
-        "actual": 0
+        "name": "ค่าเน็ต",
+        "actual": 426.93,
+        "account": "กรุงศรี",
+        "paid": true,
+        "dueDay": 24
       },
       "mobile": {
-        "actual": 0
-      },
-      "credit_kbank": {
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "actual": 3590
-      },
-      "credit_uob": {
-        "actual": 0
-      },
-      "credit_ttb": {
-        "actual": 0
-      },
-      "shopee": {
-        "actual": 0
-      },
-      "netflix": {
-        "actual": 0
-      },
-      "youtube": {
-        "actual": 0
-      },
-      "youtube_membership": {
-        "actual": 0
+        "name": "โทรศัพท์มือถือ",
+        "actual": 1396.86,
+        "account": "กรุงศรี",
+        "paid": true,
+        "dueDay": 26
       },
       "motorcycle": {
-        "actual": 0
+        "name": "ค่ารถจักรยานยนต์",
+        "actual": 2500,
+        "account": "กรุงศรี",
+        "paid": true,
+        "dueDay": 28
       },
-      "miscellaneous": {
-        "actual": 0
-      }
-    },
-    "2025-01": {
-      "_id": "6907800e7c0b4ba9b3c2d90f",
-      "month": "2025-01",
-      "house": {
-        "actual": 10000
+      "netflix": {
+        "name": "Netflix",
+        "actual": 617,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 12
+      },
+      "shopee": {
+        "name": "Shopee pay",
+        "actual": 3002.4,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 28
       },
       "water": {
-        "actual": 0
-      },
-      "internet": {
-        "actual": 0
-      },
-      "mobile": {
-        "actual": 0
-      },
-      "credit_kbank": {
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "actual": 3590
-      },
-      "credit_uob": {
-        "actual": 0
-      },
-      "credit_ttb": {
-        "actual": 0
-      },
-      "shopee": {
-        "actual": 0
-      },
-      "netflix": {
-        "actual": 0
+        "name": "ค่าน้ำ",
+        "actual": 54.52,
+        "account": "กรุงศรี",
+        "paid": true,
+        "dueDay": 10
       },
       "youtube": {
-        "actual": 0
+        "name": "YouTube",
+        "actual": 469,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 28
       },
       "youtube_membership": {
-        "actual": 0
+        "name": "YouTube Membership",
+        "actual": 330,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 28
+      },
+      "custom_1774762288349_536": {
+        "name": "Be in",
+        "actual": 0,
+        "account": "กรุงศรี",
+        "paid": true,
+        "dueDay": 6
+      },
+      "bankAccounts": [
+        "กรุงศรี",
+        "ttb",
+        "กสิกร",
+        "UOB"
+      ],
+      "periodKey": "2026-03"
+    },
+    "2026-04": {
+      "_id": "69c8ba5f8ddc5b605df64269",
+      "month": "2026-04",
+      "userId": "u001",
+      "accountSummary": {
+        "กรุงศรี": 0,
+        "ttb": 0,
+        "กสิกร": 799,
+        "UOB": 0,
+        "paid": false
+      },
+      "credit_kbank": {
+        "name": "บัตรเครดิต KBank",
+        "actual": 8884.65,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 6
+      },
+      "credit_kungsri": {
+        "name": "บัตรเครดิต Kungsri",
+        "actual": 0,
+        "account": "กรุงศรี",
+        "paid": false,
+        "dueDay": 15
+      },
+      "credit_ttb": {
+        "name": "บัตรเครดิต TTB",
+        "actual": 8448.55,
+        "account": "ttb",
+        "paid": true,
+        "dueDay": 5
+      },
+      "credit_uob": {
+        "name": "บัตรเครดิต UOB",
+        "actual": 0,
+        "account": "UOB",
+        "paid": false,
+        "dueDay": 22
+      },
+      "custom_1774762288349_536": {
+        "name": "Be in",
+        "actual": 329,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 6
+      },
+      "electricity": {
+        "name": "ค่าไฟ",
+        "actual": 2144.14,
+        "account": "กรุงไทย",
+        "paid": true,
+        "dueDay": 22
+      },
+      "house": {
+        "name": "ค่าบ้าน",
+        "actual": 8800,
+        "account": "ttb",
+        "paid": true,
+        "dueDay": 10
+      },
+      "internet": {
+        "name": "ค่าเน็ต",
+        "actual": 426.93,
+        "account": "กรุงไทย",
+        "paid": true,
+        "dueDay": 24
+      },
+      "mobile": {
+        "name": "โทรศัพท์มือถือ",
+        "actual": 1407.56,
+        "account": "กรุงไทย",
+        "paid": true,
+        "dueDay": 26
       },
       "motorcycle": {
-        "actual": 0
+        "name": "ค่ารถจักรยานยนต์",
+        "actual": 1500,
+        "account": "กรุงไทย",
+        "paid": true,
+        "dueDay": 28
       },
-      "miscellaneous": {
-        "actual": 0
-      }
-    },
-    "2024-12": {
-      "_id": "6907800e7c0b4ba9b3c2d910",
-      "month": "2024-12",
-      "house": {
-        "actual": 10000
+      "netflix": {
+        "name": "Netflix",
+        "actual": 617,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 12
+      },
+      "shopee": {
+        "name": "Shopee pay",
+        "actual": 4129.67,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 28
       },
       "water": {
-        "actual": 0
-      },
-      "internet": {
-        "actual": 0
-      },
-      "mobile": {
-        "actual": 0
-      },
-      "credit_kbank": {
-        "actual": 0
-      },
-      "credit_kungsri": {
-        "actual": 3590
-      },
-      "credit_uob": {
-        "actual": 0
-      },
-      "credit_ttb": {
-        "actual": 0
-      },
-      "shopee": {
-        "actual": 0
-      },
-      "netflix": {
-        "actual": 0
+        "name": "ค่าน้ำ",
+        "actual": 63.77,
+        "account": "กรุงไทย",
+        "paid": true,
+        "dueDay": 10
       },
       "youtube": {
-        "actual": 0
+        "name": "YouTube",
+        "actual": 469,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 28
       },
       "youtube_membership": {
-        "actual": 0
+        "name": "YouTube Membership",
+        "actual": 330,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 28
+      },
+      "bankAccounts": [
+        "กสิกร",
+        "กรุงศรี",
+        "ttb",
+        "UOB",
+        "กรุงไทย"
+      ],
+      "periodKey": "2026-04"
+    },
+    "2026-05": {
+      "_id": "69f597d206f24901036afbaf",
+      "userId": "u001",
+      "month": "2026-05",
+      "bankAccounts": [
+        "กสิกร",
+        "กรุงศรี",
+        "ttb",
+        "UOB",
+        "กรุงไทย"
+      ],
+      "accountSummary": {
+        "กสิกร": 0,
+        "กรุงศรี": 0,
+        "ttb": 0,
+        "UOB": 0,
+        "กรุงไทย": 0,
+        "paid": false
+      },
+      "credit_kbank": {
+        "name": "บัตรเครดิต KBank",
+        "actual": 8884.65,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 6
+      },
+      "credit_kungsri": {
+        "name": "บัตรเครดิต Kungsri",
+        "actual": 0,
+        "account": "กรุงศรี",
+        "paid": true,
+        "dueDay": 15
+      },
+      "credit_ttb": {
+        "name": "บัตรเครดิต TTB",
+        "actual": 8448.55,
+        "account": "ttb",
+        "paid": true,
+        "dueDay": 5
+      },
+      "credit_uob": {
+        "name": "บัตรเครดิต UOB",
+        "actual": 0,
+        "account": "UOB",
+        "paid": false,
+        "dueDay": 22
+      },
+      "custom_1774762288349_536": {
+        "name": "Be in",
+        "actual": 329,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 6
+      },
+      "electricity": {
+        "name": "ค่าไฟ",
+        "actual": 1272.72,
+        "account": "กรุงไทย",
+        "paid": true,
+        "dueDay": 22
+      },
+      "house": {
+        "name": "ค่าบ้าน",
+        "actual": 8800,
+        "account": "ttb",
+        "paid": true,
+        "dueDay": 10
+      },
+      "internet": {
+        "name": "ค่าเน็ต",
+        "actual": 426.93,
+        "account": "กรุงไทย",
+        "paid": true,
+        "dueDay": 24
+      },
+      "mobile": {
+        "name": "โทรศัพท์มือถือ",
+        "actual": 1407.56,
+        "account": "กรุงไทย",
+        "paid": true,
+        "dueDay": 26
       },
       "motorcycle": {
-        "actual": 0
+        "name": "ค่ารถจักรยานยนต์",
+        "actual": 1500,
+        "account": "กรุงไทย",
+        "paid": true,
+        "dueDay": 28
       },
-      "miscellaneous": {
-        "actual": 0
-      }
+      "netflix": {
+        "name": "Netflix",
+        "actual": 617,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 12
+      },
+      "shopee": {
+        "name": "Shopee pay",
+        "actual": 4129.67,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 28
+      },
+      "water": {
+        "name": "ค่าน้ำ",
+        "actual": 63.77,
+        "account": "กรุงไทย",
+        "paid": true,
+        "dueDay": 10
+      },
+      "youtube": {
+        "name": "YouTube",
+        "actual": 469,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 28
+      },
+      "youtube_membership": {
+        "name": "YouTube Membership",
+        "actual": 330,
+        "account": "กสิกร",
+        "paid": true,
+        "dueDay": 28
+      },
+      "periodKey": "2026-05"
+    },
+    "2026-06": {
+      "_id": "6a1a6a0db36d7214c0f1589b",
+      "month": "2026-06",
+      "userId": "u001",
+      "bankAccounts": [
+        "กสิกร",
+        "กรุงศรี",
+        "ttb",
+        "UOB",
+        "กรุงไทย"
+      ],
+      "accountSummary": {
+        "กสิกร": 0,
+        "กรุงศรี": 0,
+        "ttb": 0,
+        "UOB": 0,
+        "กรุงไทย": 0,
+        "paid": false
+      },
+      "credit_kbank": {
+        "name": "บัตรเครดิต KBank",
+        "actual": 6961.1,
+        "account": "กสิกร",
+        "paid": false,
+        "dueDay": 6
+      },
+      "credit_kungsri": {
+        "name": "บัตรเครดิต Kungsri",
+        "actual": 0,
+        "account": "กรุงศรี",
+        "paid": false,
+        "dueDay": 15
+      },
+      "credit_ttb": {
+        "name": "บัตรเครดิต TTB",
+        "actual": 3606.83,
+        "account": "ttb",
+        "paid": false,
+        "dueDay": 5
+      },
+      "credit_uob": {
+        "name": "บัตรเครดิต UOB",
+        "actual": 0,
+        "account": "UOB",
+        "paid": false,
+        "dueDay": 22
+      },
+      "custom_1774762288349_536": {
+        "name": "Be in",
+        "actual": 329,
+        "account": "กสิกร",
+        "paid": false,
+        "dueDay": 6
+      },
+      "electricity": {
+        "name": "ค่าไฟ",
+        "actual": 1272.72,
+        "account": "กรุงไทย",
+        "paid": false,
+        "dueDay": 22
+      },
+      "house": {
+        "name": "ค่าบ้าน",
+        "actual": 8800,
+        "account": "ttb",
+        "paid": false,
+        "dueDay": 10
+      },
+      "internet": {
+        "name": "ค่าเน็ต",
+        "actual": 426.93,
+        "account": "กรุงไทย",
+        "paid": false,
+        "dueDay": 24
+      },
+      "mobile": {
+        "name": "โทรศัพท์มือถือ",
+        "actual": 1407.56,
+        "account": "กรุงไทย",
+        "paid": false,
+        "dueDay": 26
+      },
+      "motorcycle": {
+        "name": "ค่ารถจักรยานยนต์",
+        "actual": 1500,
+        "account": "กรุงไทย",
+        "paid": false,
+        "dueDay": 28
+      },
+      "netflix": {
+        "name": "Netflix",
+        "actual": 617,
+        "account": "กสิกร",
+        "paid": false,
+        "dueDay": 12
+      },
+      "shopee": {
+        "name": "Shopee pay",
+        "actual": 3216.73,
+        "account": "กสิกร",
+        "paid": false,
+        "dueDay": 28
+      },
+      "water": {
+        "name": "ค่าน้ำ",
+        "actual": 63.77,
+        "account": "กรุงไทย",
+        "paid": false,
+        "dueDay": 10
+      },
+      "youtube": {
+        "name": "YouTube",
+        "actual": 469,
+        "account": "กสิกร",
+        "paid": false,
+        "dueDay": 28
+      },
+      "youtube_membership": {
+        "name": "YouTube Membership",
+        "actual": 330,
+        "account": "กสิกร",
+        "paid": false,
+        "dueDay": 28
+      },
+      "periodKey": "2026-06"
     }
   },
   "demo": {
@@ -910,99 +1229,161 @@
       "credit_kbank": {
         "name": "บัตรเครดิต KBank",
         "actual": 2050.25,
+        "account": "กสิกร",
         "paid": true,
-        "dueDay": ""
+        "dueDay": 5
       },
       "credit_kungsri": {
         "name": "บัตรเครดิต Kungsri",
         "actual": 0,
+        "account": "กรุงศรี",
         "paid": true,
-        "dueDay": ""
+        "dueDay": 15
       },
       "credit_ttb": {
         "name": "บัตรเครดิต TTB",
         "actual": 1820,
+        "account": "ttb",
         "paid": true,
-        "dueDay": ""
+        "dueDay": 5
       },
       "credit_uob": {
         "name": "บัตรเครดิต UOB",
         "actual": 0,
+        "account": "กรุงศรี",
         "paid": true,
-        "dueDay": ""
+        "dueDay": 22
       },
       "electricity": {
         "name": "ค่าไฟ",
         "actual": 1185,
+        "account": "กรุงศรี",
         "paid": true,
-        "dueDay": ""
+        "dueDay": 22
       },
       "house": {
         "name": "ค่าบ้าน",
         "actual": 7200,
+        "account": "ttb",
         "paid": true,
-        "dueDay": ""
+        "dueDay": 10
       },
       "internet": {
         "name": "ค่าเน็ต",
         "actual": 599,
+        "account": "กรุงศรี",
         "paid": true,
-        "dueDay": ""
+        "dueDay": 26
       },
       "miscellaneous": {
         "name": "ค่าใช้จ่ายเบ็ดเตล็ด",
         "actual": 800,
+        "account": "กรุงศรี",
         "paid": true,
-        "dueDay": ""
+        "dueDay": 28
       },
       "mobile": {
         "name": "โทรศัพท์มือถือ",
         "actual": 899,
+        "account": "กรุงศรี",
         "paid": true,
-        "dueDay": ""
+        "dueDay": 5
       },
       "motorcycle": {
         "name": "ค่ารถจักรยานยนต์",
         "actual": 1500,
+        "account": "กรุงศรี",
         "paid": true,
-        "dueDay": ""
+        "dueDay": 28
       },
       "netflix": {
         "name": "Netflix",
         "actual": 419,
+        "account": "กสิกร",
         "paid": true,
-        "dueDay": ""
+        "dueDay": 12
       },
       "shopee": {
         "name": "Shopee",
         "actual": 900,
+        "account": "กสิกร",
         "paid": true,
-        "dueDay": ""
+        "dueDay": 28
       },
       "water": {
         "name": "ค่าน้ำ",
         "actual": 165,
+        "account": "กรุงศรี",
         "paid": true,
-        "dueDay": ""
+        "dueDay": 10
       },
       "youtube": {
-        "name": "YouTube",
+        "name": "YouTuber",
         "actual": 289,
+        "account": "กสิกร",
         "paid": true,
-        "dueDay": ""
+        "dueDay": 28
       },
       "youtube_membership": {
         "name": "YouTube Membership",
         "actual": 159,
+        "account": "กสิกร",
         "paid": true,
-        "dueDay": ""
+        "dueDay": 28
       },
-      "custom_1770890184915_254": {
-        "name": "ทดสอบ",
-        "actual": 0,
+      "userId": "demo",
+      "periodKey": "2026-01",
+      "bankAccounts": [
+        "กรุงศรี",
+        "ttb",
+        "กสิกร",
+        "ไทยพานิช"
+      ]
+    }
+  },
+  "u002": {
+    "2026-02": {
+      "_id": "69a2b2251afb25333444d0a8",
+      "month": "2026-02",
+      "userId": "u002",
+      "house": {
+        "name": "ค่าผ่อนรถ",
+        "actual": 1600,
         "paid": false,
-        "dueDay": ""
-      }
+        "dueDay": 28
+      },
+      "mobile": {
+        "name": "โทรศัพท์มือถือ",
+        "actual": 801,
+        "paid": false,
+        "dueDay": 5
+      },
+      "periodKey": "2026-02"
+    },
+    "2026-03": {
+      "_id": "69a2e4b01afb25333444d3a7",
+      "month": "2026-03",
+      "userId": "u002",
+      "accountSummary": {
+        "กรุงศรี": 0,
+        "ttb": 0,
+        "กสิกร": 0,
+        "UOB": 0,
+        "paid": false
+      },
+      "house": {
+        "name": "ค่าผ่อนรถ",
+        "actual": 1600,
+        "paid": true,
+        "dueDay": 28
+      },
+      "mobile": {
+        "name": "โทรศัพท์มือถือ",
+        "actual": 801,
+        "paid": true,
+        "dueDay": 5
+      },
+      "periodKey": "2026-03"
     }
   }
 }

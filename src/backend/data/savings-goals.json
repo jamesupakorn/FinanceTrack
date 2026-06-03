@@ -1,0 +1,54 @@
+{
+  "u001": {
+    "goals": [
+      {
+        "_id": "goal001",
+        "userId": "u001",
+        "goalName": "Emergency Fund",
+        "description": "Fund for unexpected expenses",
+        "targetAmount": 100000,
+        "currency": "THB",
+        "category": "emergency",
+        "priority": "high",
+        "status": "active",
+        "endDate": null,
+        "notes": "Build emergency fund to 100k",
+        "allocationPercent": 50,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "_id": "goal002",
+        "userId": "u001",
+        "goalName": "Travel Fund",
+        "description": "For annual vacation",
+        "targetAmount": 80000,
+        "currency": "THB",
+        "category": "travel",
+        "priority": "medium",
+        "status": "active",
+        "endDate": "2026-12-31",
+        "notes": "Save for holiday trip",
+        "allocationPercent": 30,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "_id": "goal003",
+        "userId": "u001",
+        "goalName": "Investment",
+        "description": "Stock market investment",
+        "targetAmount": 200000,
+        "currency": "THB",
+        "category": "investment",
+        "priority": "medium",
+        "status": "active",
+        "endDate": null,
+        "notes": "Long-term investment portfolio",
+        "allocationPercent": 20,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    ]
+  }
+}

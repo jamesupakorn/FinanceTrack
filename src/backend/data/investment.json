@@ -39,7 +39,9 @@
           "percent": "7",
           "amount": ""
         }
-      ]
+      ],
+      "userId": "u001",
+      "periodKey": "2026-02"
     },
     "2026-01": {
       "_id": "695cb6367fe94f535c10bd6e",
@@ -80,7 +82,9 @@
           "percent": "7",
           "amount": ""
         }
-      ]
+      ],
+      "userId": "u001",
+      "periodKey": "2026-01"
     },
     "2025-12": {
       "_id": "692af54b9ba6da2362d99d24",
@@ -121,7 +125,9 @@
           "percent": "7",
           "amount": "490.00"
         }
-      ]
+      ],
+      "userId": "u001",
+      "periodKey": "2025-12"
     },
     "2025-11": {
       "_id": "690b0f78ddcf877a116097d1",
@@ -162,19 +168,11 @@
           "percent": "7",
           "amount": "490.00"
         }
-      ]
+      ],
+      "userId": "u001",
+      "periodKey": "2025-11"
     },
     "2025-10": {
-      "0": {
-        "name": "S&P500",
-        "percent": 50,
-        "amount": 1000
-      },
-      "1": {
-        "name": "Bualuang RMF",
-        "percent": 50,
-        "amount": 1000
-      },
       "_id": "690780117c0b4ba9b3c2d927",
       "month": "2025-10",
       "investments": [
@@ -183,7 +181,181 @@
           "percent": 100,
           "amount": 0
         }
-      ]
+      ],
+      "userId": "u001",
+      "periodKey": "2025-10"
+    },
+    "2026-03": {
+      "_id": "69a1818f1afb253334436a52",
+      "month": "2026-03",
+      "userId": "u001",
+      "investments": [
+        {
+          "name": "S&P 500",
+          "percent": "25",
+          "amount": ""
+        },
+        {
+          "name": "GOOG",
+          "percent": "18",
+          "amount": ""
+        },
+        {
+          "name": "NVDA",
+          "percent": "16",
+          "amount": ""
+        },
+        {
+          "name": "TSM",
+          "percent": "12",
+          "amount": ""
+        },
+        {
+          "name": "CEG",
+          "percent": "12",
+          "amount": ""
+        },
+        {
+          "name": "LEU",
+          "percent": "10",
+          "amount": ""
+        },
+        {
+          "name": "NXE",
+          "percent": "7",
+          "amount": ""
+        }
+      ],
+      "periodKey": "2026-03"
+    },
+    "2026-04": {
+      "_id": "69c8ba5f8ddc5b605df6426a",
+      "month": "2026-04",
+      "userId": "u001",
+      "investments": [
+        {
+          "name": "S&P 500",
+          "percent": "25",
+          "amount": ""
+        },
+        {
+          "name": "GOOG",
+          "percent": "18",
+          "amount": ""
+        },
+        {
+          "name": "NVDA",
+          "percent": "16",
+          "amount": ""
+        },
+        {
+          "name": "TSM",
+          "percent": "12",
+          "amount": ""
+        },
+        {
+          "name": "CEG",
+          "percent": "12",
+          "amount": ""
+        },
+        {
+          "name": "LEU",
+          "percent": "10",
+          "amount": ""
+        },
+        {
+          "name": "NXE",
+          "percent": "7",
+          "amount": ""
+        }
+      ],
+      "periodKey": "2026-04"
+    },
+    "2026-05": {
+      "_id": "69f597d206f24901036afbb0",
+      "userId": "u001",
+      "month": "2026-05",
+      "investments": [
+        {
+          "name": "S&P 500",
+          "percent": "25",
+          "amount": ""
+        },
+        {
+          "name": "GOOG",
+          "percent": "18",
+          "amount": ""
+        },
+        {
+          "name": "NVDA",
+          "percent": "16",
+          "amount": ""
+        },
+        {
+          "name": "TSM",
+          "percent": "12",
+          "amount": ""
+        },
+        {
+          "name": "CEG",
+          "percent": "12",
+          "amount": ""
+        },
+        {
+          "name": "LEU",
+          "percent": "10",
+          "amount": ""
+        },
+        {
+          "name": "NXE",
+          "percent": "7",
+          "amount": ""
+        }
+      ],
+      "periodKey": "2026-05"
+    },
+    "2026-06": {
+      "_id": "6a1a6a0db36d7214c0f1589a",
+      "month": "2026-06",
+      "userId": "u001",
+      "investments": [
+        {
+          "name": "S&P 500",
+          "percent": "25",
+          "amount": ""
+        },
+        {
+          "name": "GOOG",
+          "percent": "18",
+          "amount": ""
+        },
+        {
+          "name": "NVDA",
+          "percent": "16",
+          "amount": ""
+        },
+        {
+          "name": "TSM",
+          "percent": "12",
+          "amount": ""
+        },
+        {
+          "name": "CEG",
+          "percent": "12",
+          "amount": ""
+        },
+        {
+          "name": "LEU",
+          "percent": "10",
+          "amount": ""
+        },
+        {
+          "name": "NXE",
+          "percent": "7",
+          "amount": ""
+        }
+      ],
+      "periodKey": "2026-06"
     }
   },
   "demo": {
@@ -216,7 +388,23 @@
           "percent": "20",
           "amount": "1000.00"
         }
-      ]
+      ],
+      "userId": "demo",
+      "periodKey": "2026-01"
+    }
+  },
+  "u002": {
+    "2026-03": {
+      "_id": "69a2e4b01afb25333444d3a5",
+      "month": "2026-03",
+      "userId": "u002",
+      "investments": []
+    },
+    "2026-02": {
+      "_id": "69a2e4b51afb25333444d3a9",
+      "month": "2026-02",
+      "userId": "u002",
+      "investments": []
     }
   }
 }
