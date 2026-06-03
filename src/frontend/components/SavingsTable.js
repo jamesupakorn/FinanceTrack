@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { formatCurrency, parseAndFormat, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { mapSavingsApiToList } from '../../shared/utils/savingsUtils';
-import { savingsAPI } from '../../shared/utils/frontend/apiUtils';
+import { savingsAPI, savingsGoalsAPI } from '../../shared/utils/frontend/apiUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
 import InvestmentTable from './InvestmentTable';
@@ -22,6 +22,22 @@ export default function SavingsTable({ selectedMonth, triggerSave }) {
   const [savingsData, setSavingsData] = useState(null);
   const [รายการเงินออม, setรายการเงินออม] = useState([]);
   const [pendingScrollIndex, setPendingScrollIndex] = useState(null);
+  const [goalOptions, setGoalOptions] = useState([]);
+
+  const loadGoalOptions = useCallback(async () => {
+    try {
+      const data = await savingsGoalsAPI.getAll();
+      const names = Array.isArray(data?.goals)
+        ? data.goals
+          .map((goal) => (goal?.goalName || '').trim())
+          .filter(Boolean)
+        : [];
+      setGoalOptions(Array.from(new Set(names)));
+    } catch (error) {
+      console.error('Error loading savings goals for dropdown:', error);
+      setGoalOptions([]);
+    }
+  }, []);
 
   const loadSavingsData = useCallback(async (month) => {
     if (!month) return;
@@ -54,6 +70,10 @@ export default function SavingsTable({ selectedMonth, triggerSave }) {
       setรายการเงินออม([]);
     }
   }, [selectedMonth, loadSavingsData]);
+
+  useEffect(() => {
+    loadGoalOptions();
+  }, [loadGoalOptions, selectedMonth, triggerSave]);
 
   useEffect(() => {
     if (pendingScrollIndex === null) return;
@@ -189,6 +209,12 @@ export default function SavingsTable({ selectedMonth, triggerSave }) {
     savings_amount: 'จำนวนเงินออม'
   };
 
+  const getRowGoalOptions = (currentValue) => {
+    const value = (currentValue || '').trim();
+    if (!value || goalOptions.includes(value)) return goalOptions;
+    return [...goalOptions, value];
+  };
+
   return (
     <div className={styles.savingsTable}>
       {isLoading && (
@@ -224,13 +250,16 @@ export default function SavingsTable({ selectedMonth, triggerSave }) {
               {รายการเงินออม.map((item, index) => (
                 <tr key={index} className={styles.tableRow} data-savings-index={index}>
                   <td className={styles.tableCell}>
-                    <input
-                      type="text"
+                    <select
                       value={item.savings_type || ''}
                       onChange={(e) => handleSavingsItemChange(index, 'savings_type', e.target.value)}
-                      placeholder={savingsKeyThaiMapping['savings_type']}
                       className={styles.savingsInput}
-                    />
+                    >
+                      <option value="">ไม่ระบุ</option>
+                      {getRowGoalOptions(item.savings_type).map((goalName) => (
+                        <option key={goalName} value={goalName}>{goalName}</option>
+                      ))}
+                    </select>
                   </td>
                   <td className={styles.tableCell}>
                     <input
@@ -267,13 +296,16 @@ export default function SavingsTable({ selectedMonth, triggerSave }) {
             <div className={styles.savingsCard} key={index} data-savings-index={index}>
               <div className={styles.cardRow}>
                 <label className={styles.cardLabel}>{savingsKeyThaiMapping['savings_type']}</label>
-                <input
-                  type="text"
+                <select
                   value={item.savings_type || ''}
                   onChange={e => handleSavingsItemChange(index, 'savings_type', e.target.value)}
-                  placeholder={savingsKeyThaiMapping['savings_type']}
                   className={styles.savingsInput}
-                />
+                >
+                  <option value="">ไม่ระบุ</option>
+                  {getRowGoalOptions(item.savings_type).map((goalName) => (
+                    <option key={goalName} value={goalName}>{goalName}</option>
+                  ))}
+                </select>
               </div>
               <div className={styles.cardRow}>
                 <label className={styles.cardLabel}>{savingsKeyThaiMapping['savings_amount']}</label>

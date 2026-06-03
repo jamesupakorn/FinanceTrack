@@ -212,3 +212,36 @@ export const investmentAPI = {
 		body: withUserPayload({ month, investments })
 	})
 };
+
+export const savingsGoalsAPI = {
+	getAll: async () => jsonFetch(buildUrl('/api/savings-goals')),
+	create: async (payload) => jsonFetch('/api/savings-goals', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload(payload)
+	}),
+	saveAllocations: async (allocations) => jsonFetch('/api/savings-goals', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ allocations })
+	}),
+	update: async (id, payload) => jsonFetch('/api/savings-goals', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ goalId: id, ...payload })
+	}),
+	delete: async (id) => jsonFetch('/api/savings-goals', {
+		method: 'DELETE',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ goalId: id })
+	})
+};
+
+export const savingsAllocationAPI = {
+	get: async () => jsonFetch(buildUrl('/api/savings-allocation')),
+	save: async (buckets) => jsonFetch('/api/savings-allocation', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ buckets })
+	})
+};
