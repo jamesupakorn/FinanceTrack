@@ -3,6 +3,8 @@ import { useRouter } from 'next/router';
 import IncomeTable from '../src/frontend/components/IncomeTable';
 import ExpenseTable from '../src/frontend/components/ExpenseTable';
 import SavingsTable from '../src/frontend/components/SavingsTable';
+import SavingsGoalTracker from '../src/frontend/components/SavingsGoalTracker';
+
 import TaxTable from '../src/frontend/components/TaxTable';
 import SummaryReport from '../src/frontend/components/SummaryReport';
 import SalaryCalculator from '../src/frontend/components/SalaryCalculator';
@@ -213,6 +215,10 @@ export default function EditPage() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [salaryUpdateTrigger, setSalaryUpdateTrigger] = useState(0);
   const [triggerSave, setTriggerSave] = useState(0);
+  const [allocatableAmount, setAllocatableAmount] = useState(0);
+  // Reset to 0 on month change so SummaryReport doesn't show stale planner value
+  // when user navigates months while on a non-savings tab.
+  React.useEffect(() => { setAllocatableAmount(0); }, [selectedMonth]);
   const [months, setMonths] = useState([]);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
@@ -273,7 +279,7 @@ export default function EditPage() {
         ...savingsMonths,
         ...salaryMonths,
         ...investmentMonths
-      ])).sort().reverse();
+      ])).filter(m => m <= currentMonth).sort().reverse();
       const normalizedMonths = allMonths.length ? allMonths : [currentMonth];
       setMonths(normalizedMonths);
       const hasMonthFromData = normalizedMonths.length > 0;
@@ -637,6 +643,7 @@ export default function EditPage() {
           <SummaryReport
             selectedMonth={selectedMonth}
             key={`summary-${refreshTrigger}`}
+            allocatableAmount={allocatableAmount}
           />
         )}
       </div>
@@ -701,11 +708,19 @@ export default function EditPage() {
                 เงินออมรายเดือน
               </h3>
             </div>
-            <SavingsTable 
+            <SavingsTable
               selectedMonth={selectedMonth}
               triggerSave={triggerSave}
               key={`savings-${refreshTrigger}`}
             />
+            <SavingsGoalTracker
+              key={selectedMonth}
+              refreshTrigger={refreshTrigger}
+              selectedMonth={selectedMonth}
+              onAllocatableChange={setAllocatableAmount}
+              triggerSave={triggerSave}
+            />
+
           </div>
         )}
         {activeTab === 'tax' && (
