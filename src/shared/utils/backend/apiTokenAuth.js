@@ -8,14 +8,27 @@
 
 import crypto from 'crypto';
 
+function normalizeEnvValue(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  const singleQuoted = trimmed.startsWith("'") && trimmed.endsWith("'");
+  const doubleQuoted = trimmed.startsWith('"') && trimmed.endsWith('"');
+  if ((singleQuoted || doubleQuoted) && trimmed.length >= 2) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
 function decryptAesToken(encryptedValue, secret) {
-  if (!encryptedValue || !secret) return '';
-  const [ivHex, encryptedHex] = String(encryptedValue).split(':');
+  const normalizedEncrypted = normalizeEnvValue(encryptedValue);
+  const normalizedSecret = normalizeEnvValue(secret);
+  if (!normalizedEncrypted || !normalizedSecret) return '';
+  const [ivHex, encryptedHex] = normalizedEncrypted.split(':');
   if (!ivHex || !encryptedHex) return '';
   try {
     const iv = Buffer.from(ivHex, 'hex');
     const encrypted = Buffer.from(encryptedHex, 'hex');
-    const key = crypto.createHash('sha256').update(String(secret)).digest();
+    const key = crypto.createHash('sha256').update(normalizedSecret).digest();
     const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
     const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
     return decrypted.toString('utf-8').trim();
@@ -25,24 +38,34 @@ function decryptAesToken(encryptedValue, secret) {
 }
 
 function decodeBase64Safe(value) {
-  if (!value || typeof value !== 'string') return '';
+  const normalizedValue = normalizeEnvValue(value);
+  if (!normalizedValue) return '';
+  const base64 = normalizedValue
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const paddingLength = (4 - (base64.length % 4)) % 4;
+  const padded = `${base64}${'='.repeat(paddingLength)}`;
   try {
-    return Buffer.from(value, 'base64').toString('utf-8').trim();
+    return Buffer.from(padded, 'base64').toString('utf-8').trim();
   } catch (error) {
     return '';
   }
 }
 
 function getExpectedApiToken() {
-  const encrypted = process.env.API_ACCESS_TOKEN_ENCRYPTED || '';
-  const encryptionKey = process.env.API_ACCESS_TOKEN_ENCRYPTION_KEY || '';
+  const encrypted = normalizeEnvValue(process.env.API_ACCESS_TOKEN_ENCRYPTED) || '';
+  const encryptionKey = normalizeEnvValue(process.env.API_ACCESS_TOKEN_ENCRYPTION_KEY) || '';
   const decryptedToken = decryptAesToken(encrypted, encryptionKey);
   if (decryptedToken) return decryptedToken;
 
-  const encoded = process.env.API_ACCESS_TOKEN_B64 || process.env.API_TOKEN_B64 || '';
+  const encoded = normalizeEnvValue(process.env.API_ACCESS_TOKEN_B64)
+    || normalizeEnvValue(process.env.API_TOKEN_B64)
+    || '';
   const decoded = decodeBase64Safe(encoded);
   if (decoded) return decoded;
-  return process.env.API_ACCESS_TOKEN || process.env.API_TOKEN || '';
+  return normalizeEnvValue(process.env.API_ACCESS_TOKEN)
+    || normalizeEnvValue(process.env.API_TOKEN)
+    || '';
 }
 
 function extractBearerToken(req) {
