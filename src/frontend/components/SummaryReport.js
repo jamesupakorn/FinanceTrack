@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
-import { incomeAPI, expenseAPI, savingsAPI, taxAPI, salaryAPI } from '../../shared/utils/frontend/apiUtils';
+import { incomeAPI, expenseAPI, savingsAPI, taxAPI, salaryAPI, savingsGoalsAPI } from '../../shared/utils/frontend/apiUtils';
 import { getSummaryData, getChartData } from '../../shared/utils/frontend/summaryUtils';
 import { formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
 import { useSession } from '../contexts/SessionContext';
@@ -16,7 +16,7 @@ import styles from '../styles/SummaryReport.module.css';
 /**
  * รายงานสรุปภาพรวมการเงิน
  */
-const SummaryReport = ({ selectedMonth, onReportDataReady }) => {
+const SummaryReport = ({ selectedMonth, onReportDataReady, allocatableAmount }) => {
   const { currentUser } = useSession();
 
   const [summaryData, setSummaryData] = useState({
@@ -28,6 +28,8 @@ const SummaryReport = ({ selectedMonth, onReportDataReady }) => {
     ภาษีสะสมตั้งแต่เดือนแรก: 0,
     ยอดเงินคงเหลือ: 0
   });
+
+  const [totalGoalsTarget, setTotalGoalsTarget] = useState(0);
 
   const [chartData, setChartData] = useState({
     จ่ายจริง: {
@@ -124,7 +126,7 @@ const SummaryReport = ({ selectedMonth, onReportDataReady }) => {
       });
 
       setEffectiveMonth(monthToUse);
-      setSummaryData(summary);
+      setSummaryData(prev => ({ ...prev, ...summary }));
       setChartData(computedChartData);
       if (typeof onReportDataReady === 'function') {
         onReportDataReady({
@@ -133,6 +135,14 @@ const SummaryReport = ({ selectedMonth, onReportDataReady }) => {
           reportMonth: monthToUse
         });
       }
+      // Fetch active goals total after chart is already rendered (truly non-blocking)
+      savingsGoalsAPI.getAll()
+        .then(goalsRes => {
+          const activeGoals = (goalsRes?.goals || [])
+            .filter(g => g.status !== 'completed' && g.status !== 'abandoned');
+          setTotalGoalsTarget(activeGoals.reduce((sum, g) => sum + (parseFloat(g.targetAmount) || 0), 0));
+        })
+        .catch(() => { /* non-blocking; leave previous value */ });
     } catch (error) {
       console.error('Error loading summary data:', error);
     }
@@ -278,23 +288,36 @@ const SummaryReport = ({ selectedMonth, onReportDataReady }) => {
                 <div
                   className={styles.summaryItem}
                   tabIndex={0}
+                  aria-label={`ควรเก็บต่อเดือน: ${getDisplay(allocatableAmount ?? 0)}`}
+                >
+                  <span className={styles.itemLabel}>ควรเก็บต่อเดือน</span>
+                  <span className={`${styles.itemValue} ${styles.income}`}>{getDisplay(allocatableAmount ?? 0)}</span>
+                </div>
+                <div
+                  className={styles.summaryItem}
+                  tabIndex={0}
+                  aria-label={`รวมเป้าหมายเงินออม: ${getDisplay(totalGoalsTarget)}`}
+                >
+                  <span className={styles.itemLabel}>รวมเป้าหมายเงินออม</span>
+                  <span className={`${styles.itemValue} ${styles.goalTarget}`}>{getDisplay(totalGoalsTarget)}</span>
+                </div>
+                <div
+                  className={styles.summaryItem}
+                  tabIndex={0}
                   aria-label={`ยอดเงินคงเหลือ: ${getDisplay(summaryData.ยอดเงินคงเหลือ)}`}
                 >
                   <span className={styles.itemLabel}>ยอดเงินคงเหลือ</span>
                   <span className={`${styles.itemValue} ${styles.remaining}`}>{getDisplay(summaryData.ยอดเงินคงเหลือ)}</span>
                 </div>
+                <div
+                  className={`${styles.summaryItem} ${styles.taxSection}`}
+                  tabIndex={0}
+                  aria-label={`ภาษีสะสมตั้งแต่เดือนแรก: ${getDisplay(summaryData.ภาษีสะสมตั้งแต่เดือนแรก)}`}
+                >
+                  <span className={styles.itemLabel}>ภาษีสะสมตั้งแต่เดือนแรก</span>
+                  <span className={`${styles.itemValue} ${styles.tax}`}>{getDisplay(summaryData.ภาษีสะสมตั้งแต่เดือนแรก)}</span>
+                </div>
               </div>
-            </div>
-          </div>
-          {/* ภาษีสะสม (แยกต่างหาก) */}
-          <div className={styles.taxSummary}>
-            <div
-              className={`${styles.summaryItem} ${styles.taxSection}`}
-              tabIndex={0}
-              aria-label={`ภาษีสะสมตั้งแต่เดือนแรก: ${getDisplay(summaryData.ภาษีสะสมตั้งแต่เดือนแรก)}`}
-            >
-              <span className={styles.itemLabel}>ภาษีสะสมตั้งแต่เดือนแรก</span>
-              <span className={`${styles.itemValue} ${styles.tax}`}>{getDisplay(summaryData.ภาษีสะสมตั้งแต่เดือนแรก)}</span>
             </div>
           </div>
         </div>

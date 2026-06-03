@@ -239,11 +239,6 @@
   color: var(--secondary-color);
 }
 
-.taxSummary {
-  grid-column: 1 / -1;
-  text-align: center;
-}
-
 .summaryGrid {
   display: grid;
   gap: 20px;
@@ -309,6 +304,11 @@
 }
 
 .itemValue.tax {
+  color: var(--warning-color);
+  font-weight: 700;
+}
+
+.itemValue.goalTarget {
   color: var(--warning-color);
   font-weight: 700;
 }
