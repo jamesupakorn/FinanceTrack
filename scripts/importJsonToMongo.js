@@ -12,7 +12,8 @@ const COLLECTION_CONFIGS = [
   { name: 'salary', file: 'salary.json', keyField: 'month', skipKeys: ['months'] },
   { name: 'savings', file: 'savings.json', keyField: 'month' },
   { name: 'investment', file: 'investment.json', keyField: 'month' },
-  { name: 'tax_accumulated', file: 'tax_accumulated.json', keyField: 'year' }
+  { name: 'tax_accumulated', file: 'tax_accumulated.json', keyField: 'year' },
+  { name: 'savingsGoals', file: 'savings-goals.json', keyField: '_id', source: 'goalsArray' }
 ];
 
 const shouldDrop = process.argv.includes('--drop');
@@ -33,7 +34,7 @@ async function loadJson(filename) {
   }
 }
 
-function flattenDocs(jsonData, { keyField, skipKeys = [] }) {
+function flattenDefaultDocs(jsonData, { keyField, skipKeys = [] }) {
   if (!jsonData || typeof jsonData !== 'object') {
     return [];
   }
@@ -44,6 +45,8 @@ function flattenDocs(jsonData, { keyField, skipKeys = [] }) {
       if (skipKeys.includes(entryKey)) return;
       if (!value || typeof value !== 'object') return;
       const doc = { ...value };
+      // Avoid immutable field conflicts when replacing existing Mongo documents.
+      delete doc._id;
       if (!doc[keyField]) {
         doc[keyField] = entryKey;
       }
@@ -52,6 +55,32 @@ function flattenDocs(jsonData, { keyField, skipKeys = [] }) {
     });
   });
   return docs;
+}
+
+function flattenGoalsArrayDocs(jsonData, { keyField }) {
+  if (!jsonData || typeof jsonData !== 'object') {
+    return [];
+  }
+
+  const docs = [];
+  Object.entries(jsonData).forEach(([userId, bucket]) => {
+    const goals = Array.isArray(bucket?.goals) ? bucket.goals : [];
+    goals.forEach((goal) => {
+      if (!goal || typeof goal !== 'object') return;
+      const doc = { ...goal };
+      if (!doc[keyField]) return;
+      doc.userId = userId;
+      docs.push(doc);
+    });
+  });
+  return docs;
+}
+
+function flattenDocs(jsonData, config) {
+  if (config.source === 'goalsArray') {
+    return flattenGoalsArrayDocs(jsonData, config);
+  }
+  return flattenDefaultDocs(jsonData, config);
 }
 
 async function importCollection(db, config) {
