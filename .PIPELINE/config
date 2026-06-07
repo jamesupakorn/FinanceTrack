@@ -1,0 +1,145 @@
+﻿# FinanceTrack Pipeline v2.2
+# Read before every task. Source of truth for theme, patterns, and workflow.
+
+## STACK
+Next.js 16 (Pages Router) · React (hooks only) · MongoDB Atlas · CSS Modules · Thai UI
+
+## THEME — Midnight Glass (dark-only, single theme)
+CSS vars (always use these, never hardcode colors):
+- `--bg-color / --bg-primary`: #03081a
+- `--bg-surface`: rgba(15,18,40,0.92)  → card/panel bg
+- `--bg-surface-alt`: rgba(21,26,56,0.88) → nested card
+- `--text-primary`: #f8fbff · `--text-secondary`: #c7cffc · `--text-light`: #8e96c9
+- `--primary-color`: #5d5bff (indigo) · `--secondary-color`: #4df0c3 (mint)
+- `--danger-color`: #ff7aa2 · `--warning-color`: #facc6b · `--info-color`: #4ecbff
+- `--gradient-primary`: linear-gradient(135deg,#5d5bff,#00d4ff)
+- `--border-color`: rgba(255,255,255,0.16) · `--border-light`: rgba(255,255,255,0.08)
+- `--shadow-md`: rgba(2,6,23,0.60)
+
+Font: `'Prompt','Sarabun','Noto Sans Thai','Segoe UI',sans-serif`
+
+Card pattern:
+```
+background:var(--bg-surface); border:1px solid var(--border-color);
+border-radius:12px; backdrop-filter:blur(12px); box-shadow:0 8px 32px var(--shadow-md);
+```
+Progress bar: incomplete=`--secondary-color` gradient · complete(≥100%)=`#22c55e` gradient
+
+## FILE LAYOUT
+```
+pages/
+  index.js           re-export -> edit.js
+  edit.js            monthly data entry (tab-based + floating save bar)
+  profiles.js        user selector
+  api/               API routes (backend)
+src/frontend/
+  components/        React components (1 file = 1 CSS module)
+  styles/            *.module.css + globals.css (vars+body only)
+  contexts/          SessionContext.js · ThemeContext.js
+src/shared/utils/
+  frontend/          apiUtils.js · apiToken.js · numberUtils.js · toast.js
+  backend/           apiTokenAuth.js · apiUtils.js · userRequest.js
+  *.js               dateUtils · savingsUtils · expenseUtils …
+lib/
+  dataSource.js      getMongoCollection() · isJsonMode()
+  mongodb.js         MongoDB client (direct URI, no SRV)
+  dataMode.config.js reads DATA_MODE env
+scripts/             one-time migrate/setup scripts
+```
+
+## API ROUTE TEMPLATE
+```js
+import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
+
+export default async function handler(req, res) {
+  const userId = assertUserId(req, res);  // validates token + userId, sends 400/401 on fail
+  if (!userId) return;
+  if (isJsonMode()) return res.status(501).json({ error: 'Requires MongoDB' });
+
+  const col = await getMongoCollection('collectionName'); // camelCase
+  // ALWAYS include { userId } in every MongoDB filter
+  if (req.method === 'GET') { ... }
+  if (req.method === 'POST') { ... }
+  return res.status(405).end();
+}
+```
+- `userId` sources: `req.query.userId` → `req.body.userId` → `req.headers['x-user-id']`
+- `_id`: use `crypto.randomBytes(12).toString('hex')` for manual IDs
+- Some routes use `assertApiToken()` + `assertUserId()` separately instead of a single helper; keep behavior consistent per file
+
+## FRONTEND PATTERNS
+```js
+// API calls — always via apiUtils wrappers, never raw fetch()
+import { savingsAPI } from '../../shared/utils/frontend/apiUtils';
+
+// Toast — never alert()
+import { showToast } from '../../shared/utils/frontend/toast';
+showToast('message');          // success
+showToast('message', 'error'); // error
+
+// Icons — import { Icons } from './Icons'
+// Available: Message Lock Sun Moon DollarSign TrendingUp TrendingDown
+//            Wallet CreditCard PiggyBank BarChart Plus Save Trash Edit
+//            Settings ChevronDown Check Target
+// Add new: append SVG to Icons.js object
+
+// triggerSave pattern (parent→child bulk save)
+useEffect(() => { if (triggerSave) handleSave(); }, [triggerSave]);
+```
+
+## RESPONSIVE
+- Breakpoint: **768px** (all files use same value)
+- `> 768px`: `<table>` + `hideOnMobile` class
+- `≤ 768px`: card list + `hideOnDesktop` class · tap targets ≥ 44px
+- `edit.js`: floating action bar (fixed bottom) with month nav ◀▶ + save button
+- `SalaryCalculator` / `SummaryReport`: collapsible on mobile (default collapsed)
+
+## DATA MODEL
+All data scoped by `userId`. Monthly data uses `month: 'YYYY-MM'`.
+
+| Collection | Shape |
+|---|---|
+| monthly_income | `{userId, month, income_data}` |
+| monthly_expense | `{userId, month, expense_data:[]}` |
+| savings | `{userId, month, savings_list:[{savings_type, savings_amount}]}` |
+| savingsGoals | `{userId, goalName, targetAmount, status, category, priority, endDate, allocationPercent}` |
+| salary | `{userId, month, income, deduct, note}` |
+| investment | `{userId, month, investments:[]}` |
+| tax_accumulated | `{userId, year, ...}` |
+| users | `{userId, username, passwordHash, bankAccounts:[]}` |
+
+savingsGoals `currentAmount` = computed on-the-fly (sum `savings_amount` where `savings_type.toLowerCase() === goalName.toLowerCase()`). Never store in DB.
+bankAccounts are stored per-user and exposed via `/api/user-bank-accounts`.
+
+EOM due_day → always pass through `getDueDayNumber()` (dateUtils.js).
+
+## ENV VARS (.env.local)
+```
+DATA_MODE=mongo
+MONGODB_URI=mongodb://user:pass@host1:27017,host2:27017,host3:27017/?authSource=admin&replicaSet=...&tls=true
+API_ACCESS_TOKEN_ENCRYPTION_KEY=...
+API_ACCESS_TOKEN_ENCRYPTED=iv:ciphertext
+NEXT_PUBLIC_API_ACCESS_TOKEN_B64=base64(decryptedToken)  # must match server token exactly
+CRON_SECRET=...
+LINE_CHANNEL_SECRET=...
+```
+Token rule: `NEXT_PUBLIC_API_ACCESS_TOKEN_B64` decoded === `API_ACCESS_TOKEN_ENCRYPTED` decrypted → mismatch = `unauthorized`.
+MongoDB rule: Use direct `mongodb://`. Never `mongodb+srv://` (Windows DNS blocks SRV lookup).
+
+## CHECKLISTS
+New Feature: API route · apiUtils export · component · CSS module · integrate · mobile 768px
+New API: `assertUserId` first · `{userId}` in all filters · handle methods · `405` fallthrough
+New CSS: CSS vars only · 768px mobile override · card uses `--bg-surface` + border + backdrop-filter
+
+## DON'T
+- `alert()`/`confirm()` → `showToast()`
+- Raw `fetch()` in components → apiUtils
+- Class components · hardcoded colors · `mongodb+srv://`
+- Store computed values (e.g. `currentAmount`) in DB
+- Break `triggerSave` pattern in `edit.js`
+- Unstable `key` (index) on rows with add/delete
+
+## RELEASE
+Version: `2.2.10` · Branch: `production` / `develop`
+Update `package.json` + `package-lock.json` + git tag on every release.
