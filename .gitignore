@@ -31,6 +31,9 @@ yarn-error.log*
 # backend data snapshots from DB
 src/backend/data/*.json
 
+# local pipeline notes
+.PIPELINE/
+
 # vercel
 .vercel
 
