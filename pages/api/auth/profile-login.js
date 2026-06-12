@@ -1,4 +1,6 @@
 import { assertApiToken } from '../../../src/shared/utils/backend/apiTokenAuth';
+import bcrypt from 'bcryptjs';
+import { getMongoCollection, isJsonMode } from '../../../lib/dataSource';
 const { getUserById, checkUserPassword } = require('../../../src/backend/data/userUtils');
 
 export default async function handler(req, res) {
@@ -15,13 +17,26 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'กรุณาระบุ userId และ password' });
   }
 
-  const user = getUserById(userId);
-  if (!user) {
-    return res.status(401).json({ error: 'ไม่พบผู้ใช้' });
-  }
-
   try {
-    const isValid = await checkUserPassword(userId, password);
+    let user = null;
+    let isValid = false;
+
+    if (isJsonMode()) {
+      user = getUserById(userId);
+      if (!user) {
+        return res.status(401).json({ error: 'ไม่พบผู้ใช้' });
+      }
+      isValid = await checkUserPassword(userId, password);
+    } else {
+      const collection = await getMongoCollection('users');
+      user = await collection.findOne({ id: userId });
+      if (!user) {
+        return res.status(401).json({ error: 'ไม่พบผู้ใช้' });
+      }
+      const passwordHash = typeof user.passwordHash === 'string' ? user.passwordHash : '';
+      isValid = passwordHash ? await bcrypt.compare(password, passwordHash) : false;
+    }
+
     if (!isValid) {
       return res.status(401).json({ error: 'รหัสผ่านไม่ถูกต้อง' });
     }
