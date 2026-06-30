@@ -1,14 +1,8 @@
 import { assertApiToken } from '../../src/shared/utils/backend/apiTokenAuth';
 import { assertUserId } from '../../src/shared/utils/backend/userRequest';
-const { getUserBankAccounts, updateUserBankAccounts } = require('../../src/backend/data/userUtils');
+import { getUserBankAccounts, updateUserBankAccounts } from '../../lib/userStore';
 
-/**
- * API: pages/api/user-bank-accounts.js
- * จัดการรายชื่อบัญชีธนาคารของผู้ใช้
- * - GET: คืนรายชื่อบัญชีของผู้ใช้ปัจจุบัน
- * - POST: อัปเดตรายชื่อบัญชีของผู้ใช้ปัจจุบัน
- */
-export default function handler(req, res) {
+export default async function handler(req, res) {
   if (!assertApiToken(req, res)) {
     return;
   }
@@ -18,7 +12,7 @@ export default function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      const bankAccounts = getUserBankAccounts(userId);
+      const bankAccounts = await getUserBankAccounts(userId);
       return res.status(200).json({ bankAccounts });
     } catch (error) {
       console.error('Failed to fetch user bank accounts:', error);
@@ -32,7 +26,7 @@ export default function handler(req, res) {
       if (!Array.isArray(bankAccounts)) {
         return res.status(400).json({ error: 'bankAccounts must be an array' });
       }
-      updateUserBankAccounts(userId, bankAccounts);
+      await updateUserBankAccounts(userId, bankAccounts);
       return res.status(200).json({ success: true, bankAccounts });
     } catch (error) {
       console.error('Failed to update user bank accounts:', error);

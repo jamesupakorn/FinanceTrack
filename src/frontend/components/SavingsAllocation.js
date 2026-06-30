@@ -218,12 +218,10 @@ export default function SavingsAllocation({ monthlySavingsTotal = 0, triggerSave
                   </td>
                   <td className={styles.tableCell}>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       value={b.percentage}
                       onChange={e => handleBucketChange(index, 'percentage', e.target.value)}
-                      min={0}
-                      max={100}
-                      step={0.01}
                       placeholder="0"
                       className={`${styles.bucketInput} ${styles.percentInput}`}
                     />
@@ -272,12 +270,10 @@ export default function SavingsAllocation({ monthlySavingsTotal = 0, triggerSave
               <div className={styles.cardMeta}>
                 <label className={styles.cardLabel}>% สัดส่วน</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={b.percentage}
                   onChange={e => handleBucketChange(index, 'percentage', e.target.value)}
-                  min={0}
-                  max={100}
-                  step={0.01}
                   placeholder="0"
                   className={`${styles.bucketInput} ${styles.percentInput}`}
                 />

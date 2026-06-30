@@ -139,10 +139,6 @@
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 32px;
-  background: var(--gradient-primary);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
 }
 
 /* Form Controls */

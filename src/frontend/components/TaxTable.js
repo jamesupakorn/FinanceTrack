@@ -272,12 +272,11 @@ export default function TaxTable({ selectedMonth, triggerSave, salaryUpdateTrigg
           <div className={styles.addFormControls}>
             <label className={styles.addFormLabel}>ปี พ.ศ.:</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={newYear}
               onChange={(e) => setNewYear(e.target.value)}
               placeholder="เช่น 2568"
-              min="2563"
-              max="2573"
               className={styles.yearInput}
             />
             <button onClick={() => {

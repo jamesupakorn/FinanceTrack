@@ -1,7 +1,5 @@
 import { assertApiToken } from '../../../src/shared/utils/backend/apiTokenAuth';
-import bcrypt from 'bcryptjs';
-import { getMongoCollection, isJsonMode } from '../../../lib/dataSource';
-const { getUserById, checkUserPassword } = require('../../../src/backend/data/userUtils');
+import { getUserById, checkUserPassword } from '../../../lib/userStore';
 
 export default async function handler(req, res) {
   if (!assertApiToken(req, res)) {
@@ -18,28 +16,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    let user = null;
-    let isValid = false;
-
-    if (isJsonMode()) {
-      user = getUserById(userId);
-      if (!user) {
-        return res.status(401).json({ error: 'ไม่พบผู้ใช้' });
-      }
-      isValid = await checkUserPassword(userId, password);
-    } else {
-      const collection = await getMongoCollection('users');
-      user = await collection.findOne({ id: userId });
-      if (!user) {
-        return res.status(401).json({ error: 'ไม่พบผู้ใช้' });
-      }
-      const passwordHash = typeof user.passwordHash === 'string' ? user.passwordHash : '';
-      isValid = passwordHash ? await bcrypt.compare(password, passwordHash) : false;
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(401).json({ error: 'ไม่พบผู้ใช้' });
     }
 
+    const isValid = await checkUserPassword(userId, password);
     if (!isValid) {
       return res.status(401).json({ error: 'รหัสผ่านไม่ถูกต้อง' });
     }
+
     const safeUser = {
       id: user.id,
       displayName: user.displayName,

@@ -1,5 +1,5 @@
 import { assertUserId } from '../../src/shared/utils/backend/userRequest';
-import { checkUserPassword, updateUserPassword } from '../../src/backend/data/userUtils';
+import { checkUserPassword, updateUserPassword } from '../../lib/userStore';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
