@@ -365,10 +365,6 @@
   font-weight: 800;
   color: var(--secondary-color);
   font-size: 18px;
-  background: var(--gradient-secondary);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
 }
 
 .tableCell,

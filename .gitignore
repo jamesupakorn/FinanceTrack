@@ -41,3 +41,6 @@ src/backend/data/*.json
 *.tsbuildinfo
 next-env.d.ts
 .env.local
+
+# impeccable skill critique storage
+.impeccable/
