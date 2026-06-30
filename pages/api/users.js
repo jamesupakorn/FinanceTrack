@@ -1,7 +1,7 @@
 import { assertApiToken } from '../../src/shared/utils/backend/apiTokenAuth';
-const { loadUsers } = require('../../src/backend/data/userUtils');
+import { loadUsers } from '../../lib/userStore';
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   if (!assertApiToken(req, res)) {
     return;
   }
@@ -14,7 +14,8 @@ export default function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store, max-age=0');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
-    const users = loadUsers().map(user => ({
+    const allUsers = await loadUsers();
+    const users = allUsers.map(user => ({
       id: user.id,
       displayName: user.displayName,
       avatar: user.avatar

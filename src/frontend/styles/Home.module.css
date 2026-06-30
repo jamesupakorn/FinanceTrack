@@ -24,44 +24,35 @@
 /* Header Styles */
 .pageHeader {
   width: 100%;
-  margin-bottom: 48px;
-  padding: 40px 36px;
-  background: radial-gradient(circle at top left, rgba(93, 91, 255, 0.45), rgba(0, 212, 255, 0.35));
-  border-radius: 32px;
+  margin-bottom: 24px;
+  padding: 10px 20px;
+  background: rgba(8, 12, 32, 0.72);
+  border-radius: 16px;
   color: #fff;
-  box-shadow: 0 40px 120px rgba(5, 10, 32, 0.65);
+  box-shadow: 0 4px 24px rgba(5, 10, 32, 0.35);
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 0;
   text-align: left;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   overflow: visible; /* allow dropdown to render outside header bounds */
-}
-
-.pageHeader::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 80% 20%, rgba(77, 240, 195, 0.35), transparent 45%);
-  opacity: 0.8;
-  pointer-events: none;
 }
 
 .headerTopRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 32px;
-  flex-wrap: wrap;
+  gap: 16px;
 }
 
 .headerIntro {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 12px;
   flex: 1;
-  min-width: 280px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .headerUserControls {
@@ -106,14 +97,14 @@
 }
 
 .pageTitle {
-  margin: 0 0 8px;
-  font-size: 2.9rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pageLead {
@@ -538,6 +529,11 @@
   transform: translateY(-2px);
 }
 
+.tabButton:focus-visible {
+  outline: 2px solid var(--color-primary, #5d5bff);
+  outline-offset: 2px;
+}
+
 /* Tab Content */
 .tabContent {
   background: rgba(6, 9, 27, 0.78);
@@ -582,12 +578,6 @@
     max-width: 100%;
     border-radius: 32px;
   }
-  .pageHeader {
-    padding: 32px;
-  }
-  .pageTitle {
-    font-size: 2.4rem;
-  }
   .actionToast {
     left: 16px;
     right: 16px;
@@ -623,38 +613,9 @@
     border-radius: 28px;
   }
   .pageHeader {
-    padding: 28px 20px;
-    margin-bottom: 24px;
-    border-radius: 24px;
-  }
-  .pageTitle {
-    font-size: 2.2rem;
-    gap: 12px;
-  }
-  .headerTopRow {
-    flex-direction: column;
-  }
-  .headerIntro {
-    width: 100%;
-  }
-  .headerIcon {
-    width: 76px;
-    height: 76px;
-  }
-  .headerUserControls {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .headerActionGroup {
-    width: 100%;
-    justify-content: stretch;
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .userMenuWrapper {
-    width: 100%;
+    padding: 8px 16px;
+    margin-bottom: 16px;
+    border-radius: 12px;
   }
 
   .reportMonthActions {
@@ -665,15 +626,6 @@
   .reportMonthActions button {
     flex: 1;
     min-width: 110px;
-  }
-
-  .userMenuButton {
-    width: 100%;
-    justify-content: center;
-  }
-  .reportDownloadButton {
-    width: 100%;
-    justify-content: center;
   }
 
   .reportMonthModal {
@@ -727,12 +679,7 @@
     padding: 18px;
   }
   .pageHeader {
-    padding: 22px 14px;
-    margin-bottom: 20px;
-  }
-  .pageTitle {
-    font-size: 1.9rem;
-    gap: 10px;
+    padding: 8px 12px;
   }
   .tabButton {
     min-width: calc(50% - 6px);
@@ -755,52 +702,6 @@
     padding: 16px;
     border-radius: 24px;
     max-width: 100%;
-  }
-  .pageHeader {
-    padding: 20px 14px;
-    margin-bottom: 18px;
-    border-radius: 20px;
-    gap: 14px;
-  }
-  .pageTitle {
-    font-size: 1.85rem;
-    font-weight: 700;
-    gap: 8px;
-  }
-  .pageLead {
-    font-size: 0.95rem;
-    line-height: 1.6;
-  }
-  .headerIcon {
-    width: 70px;
-    height: 70px;
-    flex-shrink: 0;
-  }
-
-  .headerIntro {
-    min-width: 0;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .headerCopy {
-    min-width: 0;
-    width: 100%;
-  }
-
-  .headerEyebrow {
-    letter-spacing: 0.2em;
-    font-size: 0.75rem;
-  }
-
-  .pageLead {
-    max-width: 100%;
-    overflow-wrap: anywhere;
-  }
-
-  .headerTopRow {
-    gap: 16px;
   }
   .tabNavigation {
     flex-wrap: wrap;
@@ -840,9 +741,9 @@
     border-radius: 20px;
   }
   .pageHeader {
-    padding: 18px 12px;
-    margin-bottom: 16px;
-    border-radius: 18px;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border-radius: 12px;
   }
   .tabButton {
     min-width: 100%;
@@ -854,21 +755,6 @@
   .tabButton svg {
     width: 16px;
     height: 16px;
-  }
-  .pageTitle {
-    font-size: 1.6rem;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .headerTopRow {
-    flex-direction: column;
-  }
-  .headerUserControls {
-    width: 100%;
-    justify-content: flex-start;
-  }
-  .userMenuButton {
-    width: 100%;
   }
   .userDropdown {
     width: 100%;
@@ -913,13 +799,9 @@
   }
   
   .pageHeader {
-    padding: 16px 8px;
+    padding: 6px 8px;
   }
-  
-  .pageTitle {
-    font-size: 1.4rem;
-  }
-  
+
   .sectionCard {
     padding: 12px;
   }
@@ -1143,6 +1025,11 @@
   cursor: default;
 }
 
+.floatingBarNavBtn:focus-visible {
+  outline: 2px solid var(--color-primary, #5d5bff);
+  outline-offset: 2px;
+}
+
 .floatingBarMonth {
   font-size: 0.9rem;
   font-weight: 600;
@@ -1178,6 +1065,11 @@
 .floatingBarSaveBtn:hover {
   opacity: 0.88;
   transform: translateY(-1px);
+}
+
+.floatingBarSaveBtn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
 }
 
 @media (max-width: 480px) {

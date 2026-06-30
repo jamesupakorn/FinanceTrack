@@ -245,3 +245,12 @@ export const savingsAllocationAPI = {
 		body: withUserPayload({ buckets })
 	})
 };
+
+export const dailyExpenseAPI = {
+	getByMonth: async (month) => jsonFetch(buildUrl('/api/daily_expenses', { month })),
+	save: async (month, items) => jsonFetch('/api/daily_expenses', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ month, items })
+	})
+};

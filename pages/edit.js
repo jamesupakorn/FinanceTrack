@@ -4,6 +4,7 @@ import IncomeTable from '../src/frontend/components/IncomeTable';
 import ExpenseTable from '../src/frontend/components/ExpenseTable';
 import SavingsTable from '../src/frontend/components/SavingsTable';
 import SavingsGoalTracker from '../src/frontend/components/SavingsGoalTracker';
+import DailyExpenseTable from '../src/frontend/components/DailyExpenseTable';
 
 import TaxTable from '../src/frontend/components/TaxTable';
 import SummaryReport from '../src/frontend/components/SummaryReport';
@@ -14,6 +15,7 @@ import ChangePasswordModal from '../src/frontend/components/ChangePasswordModal'
 import { useTheme } from '../src/frontend/contexts/ThemeContext';
 import { useSession } from '../src/frontend/contexts/SessionContext';
 import { withApiTokenHeaders } from '../src/shared/utils/frontend/apiToken';
+import { showToast } from '../src/shared/utils/frontend/toast';
 import { incomeAPI, expenseAPI, savingsAPI, salaryAPI, taxAPI } from '../src/shared/utils/frontend/apiUtils';
 import { getSummaryData, getChartData } from '../src/shared/utils/frontend/summaryUtils';
 import { formatMonthLabelTH } from '../src/shared/utils/frontend/monthUtils';
@@ -225,6 +227,8 @@ export default function EditPage() {
   const [changePasswordError, setChangePasswordError] = useState('');
   const [changePasswordSubmitting, setChangePasswordSubmitting] = useState(false);
   const [passwordToast, setPasswordToast] = useState(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const navTimeoutRef = React.useRef(null);
   const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   const [reportMonthModalOpen, setReportMonthModalOpen] = useState(false);
   const [selectedReportMonths, setSelectedReportMonths] = useState([]);
@@ -279,11 +283,13 @@ export default function EditPage() {
         ...savingsMonths,
         ...salaryMonths,
         ...investmentMonths
-      ])).filter(m => m <= currentMonth).sort().reverse();
+      ])).sort().reverse();
       const normalizedMonths = allMonths.length ? allMonths : [currentMonth];
       setMonths(normalizedMonths);
       const hasMonthFromData = normalizedMonths.length > 0;
-      const monthToSelect = hasMonthFromData ? normalizedMonths[0] : currentMonth;
+      const monthToSelect = hasMonthFromData
+        ? (normalizedMonths.includes(currentMonth) ? currentMonth : normalizedMonths[0])
+        : currentMonth;
       const shouldUpdateSelection = !selectedMonth || (hasMonthFromData && !normalizedMonths.includes(selectedMonth));
       if (shouldUpdateSelection && monthToSelect) {
         setSelectedMonth(monthToSelect);
@@ -321,19 +327,37 @@ export default function EditPage() {
 
   const handleSaveAll = () => {
     setTriggerSave(prev => prev + 1);
+    setIsDirty(false);
   };
 
   const currentMonthIndex = months.indexOf(selectedMonth);
+
+  const navigateToMonth = React.useCallback((newMonth) => {
+    if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current);
+    if (isDirty) {
+      setTriggerSave(prev => prev + 1); // fires save with current selectedMonth before re-render
+      navTimeoutRef.current = setTimeout(() => {
+        handleMonthSelected(newMonth);
+        setIsDirty(false);
+      }, 300);
+    } else {
+      handleMonthSelected(newMonth);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDirty, selectedMonth]);
+
   const handlePrevMonth = () => {
     if (currentMonthIndex < months.length - 1) {
-      handleMonthSelected(months[currentMonthIndex + 1]);
+      navigateToMonth(months[currentMonthIndex + 1]);
     }
   };
   const handleNextMonth = () => {
     if (currentMonthIndex > 0) {
-      handleMonthSelected(months[currentMonthIndex - 1]);
+      navigateToMonth(months[currentMonthIndex - 1]);
     }
   };
+
+  React.useEffect(() => () => { if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current); }, []);
 
   React.useEffect(() => {
     setSelectedReportMonths((previous) => {
@@ -389,13 +413,13 @@ export default function EditPage() {
 
   const handleDownloadReport = async () => {
     if (isDownloadingReport) {
-      alert('กำลังเตรียมข้อมูลรายงาน กรุณาลองอีกครั้ง');
+      showToast('กำลังเตรียมข้อมูลรายงาน กรุณาลองอีกครั้ง', 'info');
       return;
     }
 
     const targetMonths = orderedSelectedReportMonths;
     if (!targetMonths.length) {
-      alert('ไม่พบเดือนที่ใช้สร้างรายงาน กรุณาเลือกเดือนก่อนดาวน์โหลด');
+      showToast('ไม่พบเดือนที่ใช้สร้างรายงาน กรุณาเลือกเดือนก่อนดาวน์โหลด', 'error');
       return;
     }
 
@@ -410,7 +434,7 @@ export default function EditPage() {
       await downloadSummaryReportPdf({ reportItems });
     } catch (error) {
       console.error('Error downloading report PDF from header:', error);
-      alert('ไม่สามารถดาวน์โหลดรายงาน PDF ได้ กรุณาลองใหม่');
+      showToast('ไม่สามารถดาวน์โหลดรายงาน PDF ได้ กรุณาลองใหม่', 'error');
     } finally {
       setIsDownloadingReport(false);
     }
@@ -524,16 +548,7 @@ export default function EditPage() {
         <header className={styles.pageHeader}>
           <div className={styles.headerTopRow}>
             <div className={styles.headerIntro}>
-              <div className={styles.headerIcon}>
-                <Icons.Wallet size={36} color="#0b2155" />
-              </div>
-              <div className={styles.headerCopy}>
-                <p className={styles.headerEyebrow}>Finance Workspace</p>
-                <h1 className={styles.pageTitle}>โหมดแก้ไขข้อมูล</h1>
-                <p className={styles.pageLead}>
-                  บริหารข้อมูลรายรับรายจ่ายและเงินออมแบบเรียลไทม์ในที่เดียว
-                </p>
-              </div>
+              <h1 className={styles.pageTitle}>โหมดแก้ไขข้อมูล</h1>
             </div>
             <div className={styles.headerUserControls}>
               <div className={styles.headerActionGroup}>
@@ -606,6 +621,7 @@ export default function EditPage() {
           type="button"
           className={styles.collapsibleHeader}
           onClick={() => setSalaryCollapsed(prev => !prev)}
+          aria-expanded={!salaryCollapsed}
         >
           <span className={styles.collapsibleTitle}>
             <Icons.BarChart size={18} />
@@ -630,6 +646,7 @@ export default function EditPage() {
           type="button"
           className={styles.collapsibleHeader}
           onClick={() => setSummaryCollapsed(prev => !prev)}
+          aria-expanded={!summaryCollapsed}
         >
           <span className={styles.collapsibleTitle}>
             <Icons.TrendingUp size={18} />
@@ -652,6 +669,7 @@ export default function EditPage() {
         {[{ id: 'income', label: 'รายรับ', icon: <Icons.TrendingUp size={20} /> },
           { id: 'expense', label: 'รายจ่าย', icon: <Icons.CreditCard size={20} /> },
           { id: 'savings', label: 'เงินออม', icon: <Icons.PiggyBank size={20} /> },
+          { id: 'daily', label: 'รายวัน', icon: <Icons.CreditCard size={20} /> },
           { id: 'tax', label: 'ภาษี', icon: <Icons.BarChart size={20} /> }
         ].map(tab => (
           <button
@@ -668,7 +686,7 @@ export default function EditPage() {
         ))}
       </div>
 
-      <div className={styles.tabContent}>
+      <div className={styles.tabContent} onInput={() => setIsDirty(true)} onChange={() => setIsDirty(true)}>
         {activeTab === 'income' && (
           <div>
             <div className={styles.tabHeader}>
@@ -721,6 +739,21 @@ export default function EditPage() {
               triggerSave={triggerSave}
             />
 
+          </div>
+        )}
+        {activeTab === 'daily' && (
+          <div>
+            <div className={styles.tabHeader}>
+              <h3 className={styles.tabTitle}>
+                <Icons.CreditCard size={24} color="var(--color-primary)" />
+                ค่าใช้จ่ายรายวัน
+              </h3>
+            </div>
+            <DailyExpenseTable
+              selectedMonth={selectedMonth}
+              triggerSave={triggerSave}
+              key={`daily-${refreshTrigger}`}
+            />
           </div>
         )}
         {activeTab === 'tax' && (
@@ -814,6 +847,7 @@ export default function EditPage() {
           onClick={handlePrevMonth}
           disabled={currentMonthIndex >= months.length - 1}
           title="เดือนก่อนหน้า"
+          aria-label="เดือนก่อนหน้า"
         >
           <span style={{ display: 'flex', transform: 'rotate(90deg)' }}>
             <Icons.ChevronDown size={16} />
@@ -826,6 +860,7 @@ export default function EditPage() {
           onClick={handleNextMonth}
           disabled={currentMonthIndex <= 0}
           title="เดือนถัดไป"
+          aria-label="เดือนถัดไป"
         >
           <span style={{ display: 'flex', transform: 'rotate(-90deg)' }}>
             <Icons.ChevronDown size={16} />

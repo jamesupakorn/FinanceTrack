@@ -1,5 +1,5 @@
 import { assertApiToken } from '../../../src/shared/utils/backend/apiTokenAuth';
-const { getUserById, checkUserPassword } = require('../../../src/backend/data/userUtils');
+import { getUserById, checkUserPassword } from '../../../lib/userStore';
 
 export default async function handler(req, res) {
   if (!assertApiToken(req, res)) {
@@ -15,16 +15,17 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'กรุณาระบุ userId และ password' });
   }
 
-  const user = getUserById(userId);
-  if (!user) {
-    return res.status(401).json({ error: 'ไม่พบผู้ใช้' });
-  }
-
   try {
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(401).json({ error: 'ไม่พบผู้ใช้' });
+    }
+
     const isValid = await checkUserPassword(userId, password);
     if (!isValid) {
       return res.status(401).json({ error: 'รหัสผ่านไม่ถูกต้อง' });
     }
+
     const safeUser = {
       id: user.id,
       displayName: user.displayName,
