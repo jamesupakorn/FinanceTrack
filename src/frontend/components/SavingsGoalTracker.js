@@ -4,7 +4,7 @@
  * - currentAmount คำนวณจาก savings_type ที่ตรงชื่อ goal เท่านั้น
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { savingsGoalsAPI, salaryAPI, incomeAPI, expenseAPI } from '../../shared/utils/frontend/apiUtils';
+import { savingsGoalsAPI, salaryAPI, incomeAPI, expenseAPI, dailyExpenseAPI } from '../../shared/utils/frontend/apiUtils';
 import { getSummaryData } from '../../shared/utils/frontend/summaryUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
@@ -95,7 +95,7 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [plannerOpen, setPlannerOpen] = useState(false);
-  const [monthlyLiving, setMonthlyLiving] = useState('');
+  const [dailyExpenseTotal, setDailyExpenseTotal] = useState(0);
   const [plannerNetIncome, setPlannerNetIncome] = useState(null); // number|null
   const [plannerLoading, setPlannerLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null); // goalId pending deletion | null
@@ -131,10 +131,11 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
     (async () => {
       try {
         const year = selectedMonth.split('-')[0];
-        const [incomeData, expenseData, salaryData] = await Promise.all([
+        const [incomeData, expenseData, salaryData, dailyData] = await Promise.all([
           incomeAPI.getByMonth(selectedMonth),
           expenseAPI.getByMonth(selectedMonth),
-          salaryAPI.getByMonth(selectedMonth)
+          salaryAPI.getByMonth(selectedMonth),
+          dailyExpenseAPI.getByMonth(selectedMonth).catch(() => ({ totalMonthly: 0 })),
         ]);
         if (cancelled) return;
         const summary = getSummaryData({
@@ -147,8 +148,12 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
           currentYear: year
         });
         setPlannerNetIncome(summary.ยอดเงินคงเหลือ > 0 ? summary.ยอดเงินคงเหลือ : null);
+        setDailyExpenseTotal(Number(dailyData?.totalMonthly) || 0);
       } catch {
-        if (!cancelled) setPlannerNetIncome(null);
+        if (!cancelled) {
+          setPlannerNetIncome(null);
+          setDailyExpenseTotal(0);
+        }
       } finally {
         if (!cancelled) setPlannerLoading(false);
       }
@@ -158,12 +163,7 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
 
   // Notify parent of allocatable changes (extracted from useMemo for purity).
   const currentAllocatable = plannerOpen
-    ? (() => {
-        const living = parseFloat(String(monthlyLiving).replace(/,/g, '')) || 0;
-        const net = plannerNetIncome ?? 0;
-        const postExpenseBalance = Math.max(0, net - living);
-        return postExpenseBalance;
-      })()
+    ? Math.max(0, (plannerNetIncome ?? 0) - dailyExpenseTotal)
     : 0;
 
   useEffect(() => {
@@ -288,9 +288,8 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
   // Compute monthly allocation by user-defined split when available, otherwise fallback to priority waterfall.
   const allocationResults = useMemo(() => {
     if (!plannerOpen) return [];
-    const livingAmt = parseFloat(String(monthlyLiving).replace(/,/g, '')) || 0;
     const net = plannerNetIncome ?? 0;
-    const allocatable = Math.max(0, net - livingAmt);
+    const allocatable = Math.max(0, net - dailyExpenseTotal);
 
     const remainingOf = (g) =>
       g.metadata?.remainingAmount ?? Math.max(0, (g.targetAmount || 0) - (g.currentAmount || 0));
@@ -372,11 +371,9 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
         ...(resultMap.get(g._id) || {}),
         allocationPercent: parseAllocationPercent(allocationInputs[g._id])
       }));
-  }, [plannerOpen, plannerNetIncome, monthlyLiving, activeGoals, allocationInputs, manualAllocationTotal]);
+  }, [plannerOpen, plannerNetIncome, dailyExpenseTotal, activeGoals, allocationInputs, manualAllocationTotal]);
 
-  const livingAmt = parseFloat(String(monthlyLiving).replace(/,/g, '')) || 0;
-  const postExpenseBalance = Math.max(0, (plannerNetIncome ?? 0) - livingAmt);
-  const allocatable = postExpenseBalance;
+  const allocatable = Math.max(0, (plannerNetIncome ?? 0) - dailyExpenseTotal);
 
   const handleAllocationInputChange = (goalId, value) => {
     setAllocationInputs(prev => ({ ...prev, [goalId]: value }));
@@ -475,18 +472,11 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
                 </div>
               ) : (
                 <>
-                  <div className={styles.plannerInputRow}>
-                    <label htmlFor="plannerLiving">ค่าใช้จ่ายเพิ่มเติม (ยังไม่ได้บันทึก):</label>
-                    <input
-                      id="plannerLiving"
-                      className={styles.input}
-                      type="number"
-                      min="0"
-                      inputMode="numeric"
-                      value={monthlyLiving}
-                      onChange={e => setMonthlyLiving(e.target.value)}
-                      placeholder="เช่น 15000"
-                    />
+                  <div className={styles.plannerInfoRow}>
+                    <span>ค่าใช้จ่ายรายวัน/เดือน:</span>
+                    <span className={styles.plannerInfoValue}>
+                      {plannerLoading ? 'กำลังโหลด...' : formatCurrency(dailyExpenseTotal)}
+                    </span>
                   </div>
 
                   <div className={styles.plannerAllocRow}>
@@ -561,8 +551,8 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
               <label className={styles.label}>เป้าหมาย (บาท) *</label>
               <input
                 className={styles.input}
-                type="number"
-                min="1"
+                type="text"
+                inputMode="decimal"
                 value={form.targetAmount}
                 onChange={e => handleFormChange('targetAmount', e.target.value)}
                 placeholder="เช่น 100000"
@@ -654,10 +644,8 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
                     <label htmlFor={`card-alloc-${goal._id}`}>สัดส่วน</label>
                     <input
                       id={`card-alloc-${goal._id}`}
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.5"
+                      type="text"
+                      inputMode="decimal"
                       className={styles.goalAllocationInput}
                       value={allocationInputs[goal._id] ?? ''}
                       onChange={(e) => handleAllocationInputChange(goal._id, e.target.value)}

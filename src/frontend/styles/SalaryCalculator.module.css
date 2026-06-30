@@ -43,10 +43,7 @@
   margin-bottom: 40px;
   text-align: center;
   letter-spacing: -0.01em;
-  background: linear-gradient(135deg, #5d5bff 0%, #4df0c3 100%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--color-primary);
 }
 
 .salaryContent {

@@ -377,10 +377,6 @@ body {
   font-weight: 800;
   margin-bottom: 8px;
   color: var(--primary-color);
-  background: var(--gradient-primary);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
 }
 
 .stat-label {

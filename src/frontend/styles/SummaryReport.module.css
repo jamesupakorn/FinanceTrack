@@ -21,10 +21,6 @@
   font-weight: 700;
   margin-bottom: 36px;
   color: var(--text-primary);
-  background: var(--gradient-primary);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
   text-align: center;
   letter-spacing: -0.01em;
   line-height: 1.3;
@@ -288,18 +284,10 @@
 
 .itemValue.income {
   color: var(--secondary-color);
-  background: linear-gradient(135deg, var(--secondary-color) 0%, #22c55e 100%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
 }
 
 .itemValue.remaining {
   color: var(--primary-color);
-  background: var(--gradient-primary);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
   font-weight: 800;
 }
 

@@ -119,8 +119,8 @@ export default function InvestmentTable({ selectedMonth, onDataChange, triggerSa
         <label>
           จำนวนเงินลงทุนรวม (บาท):
           <input
-            type="number"
-            min="0"
+            type="text"
+            inputMode="decimal"
             value={baseAmount}
             onChange={e => {
               setBaseAmount(e.target.value);
@@ -155,9 +155,8 @@ export default function InvestmentTable({ selectedMonth, onDataChange, triggerSa
                 </td>
                 <td className={styles.tableCell}>
                   <input
-                    type="number"
-                    min="0"
-                    max="100"
+                    type="text"
+                    inputMode="decimal"
                     value={item.percent}
                     onChange={e => updateField(idx, 'percent', e.target.value)}
                     onFocus={handleAmountInputFocus}
@@ -195,9 +194,8 @@ export default function InvestmentTable({ selectedMonth, onDataChange, triggerSa
             <div className={styles.cardRow}>
               <label className={styles.cardLabel}>เปอร์เซ็น (%)</label>
               <input
-                type="number"
-                min="0"
-                max="100"
+                type="text"
+                inputMode="decimal"
                 value={item.percent}
                 onChange={e => updateField(idx, 'percent', e.target.value)}
                 onFocus={handleAmountInputFocus}

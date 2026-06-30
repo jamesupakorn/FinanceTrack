@@ -1,0 +1,267 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.loading {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-secondary, #c7cffc);
+}
+
+/* ────── Section ────── */
+.section {
+  background: var(--bg-surface, rgba(15, 18, 40, 0.92));
+  border: 1px solid var(--border-color, rgba(255,255,255,0.16));
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.sectionTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary, #f8fbff);
+  margin: 0;
+}
+
+.sectionHint {
+  font-size: 12px;
+  color: var(--text-secondary, #c7cffc);
+}
+
+/* ────── Table header ────── */
+.tableHeader {
+  display: grid;
+  grid-template-columns: 1fr 90px 120px 90px 32px;
+  gap: 8px;
+  padding: 0 4px 6px;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.16));
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #c7cffc);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* misc section has no freq column */
+.section:has(.rowMisc) .tableHeader {
+  grid-template-columns: 1fr 120px 32px;
+}
+
+/* ────── Row ────── */
+.row {
+  display: grid;
+  grid-template-columns: 1fr 90px 120px 90px 32px;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 4px;
+  border-bottom: 1px solid var(--border-light, rgba(255,255,255,0.08));
+}
+
+.rowMisc {
+  grid-template-columns: 1fr 120px 32px;
+}
+
+.nameInput {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border-color, rgba(255,255,255,0.16));
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--bg-surface-alt, rgba(21,26,56,0.88));
+  color: var(--text-primary, #f8fbff);
+}
+
+.nameInput:focus {
+  outline: none;
+  border-color: var(--color-primary, #5d5bff);
+}
+
+.amountInput {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border-color, rgba(255,255,255,0.16));
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: right;
+  background: var(--bg-surface-alt, rgba(21,26,56,0.88));
+  color: var(--text-primary, #f8fbff);
+}
+
+.amountInput:focus {
+  outline: none;
+  border-color: var(--color-primary, #5d5bff);
+}
+
+.freqSelect {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border-color, rgba(255,255,255,0.16));
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--bg-surface-alt, rgba(21,26,56,0.88));
+  color: var(--text-primary, #f8fbff);
+  cursor: pointer;
+}
+
+.freqLabel {
+  font-size: 12px;
+  color: var(--text-secondary, #c7cffc);
+  text-align: center;
+}
+
+.monthlyAmt {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-primary, #6366f1);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.deleteBtn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary, #c7cffc);
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.deleteBtn:hover {
+  background: rgba(255, 122, 162, 0.12);
+  color: var(--danger-color, #ff7aa2);
+}
+
+/* ────── Empty / Add / Total ────── */
+.emptyRow {
+  padding: 12px 4px;
+  font-size: 13px;
+  color: var(--text-secondary, #c7cffc);
+}
+
+.addBtn {
+  margin-top: 10px;
+  padding: 7px 14px;
+  border: 1px dashed var(--border-color, rgba(255,255,255,0.16));
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-primary, #5d5bff);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+  width: 100%;
+  text-align: left;
+}
+
+.addBtn:hover {
+  background: rgba(93, 91, 255, 0.1);
+}
+
+.sectionTotal {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color, rgba(255,255,255,0.16));
+  font-size: 13px;
+  color: var(--text-secondary, #c7cffc);
+  text-align: right;
+}
+
+.sectionTotal strong {
+  margin-left: 8px;
+  color: var(--text-primary, #f8fbff);
+}
+
+/* ────── Grand Total ────── */
+.grandTotal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: rgba(93, 91, 255, 0.1);
+  border: 1px solid rgba(93, 91, 255, 0.35);
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--text-primary, #f8fbff);
+}
+
+.grandTotalValue {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-primary, #5d5bff);
+}
+
+/* ────── Columns (header alignment) ────── */
+.colName   { grid-column: 1; }
+.colAmount { grid-column: 2; text-align: right; }
+.colFreq   { grid-column: 3; }
+.colMonthly { grid-column: 4; text-align: right; }
+.colAction { grid-column: 5; }
+
+.colAmountMisc { grid-column: 2; text-align: right; }
+
+/* ────── Mobile (< 768px) ────── */
+@media (max-width: 768px) {
+  .tableHeader {
+    display: none;
+  }
+
+  .row,
+  .rowMisc {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: var(--bg-surface, rgba(15,18,40,0.92));
+    border: 1px solid var(--border-color, rgba(255,255,255,0.16));
+    border-radius: 10px;
+    margin-bottom: 8px;
+  }
+
+  .nameInput,
+  .amountInput,
+  .freqSelect {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 15px;
+    min-height: 44px;
+  }
+
+  .freqLabel {
+    font-size: 13px;
+  }
+
+  .monthlyAmt {
+    font-size: 15px;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .deleteBtn {
+    width: 44px;
+    height: 44px;
+    align-self: flex-end;
+    font-size: 14px;
+  }
+
+  .grandTotal {
+    flex-direction: column;
+    gap: 6px;
+    text-align: center;
+  }
+}
