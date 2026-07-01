@@ -143,7 +143,7 @@ export default function DailyExpenseTable({ selectedMonth, triggerSave }) {
   const { fixedMonthly, miscMonthly, totalMonthly } = calcTotals(items);
 
   if (loading) {
-    return <div className={styles.loading}>กำลังโหลด...</div>;
+    return <div className={styles.loading} role="status" aria-live="polite">กำลังโหลด...</div>;
   }
 
   return (

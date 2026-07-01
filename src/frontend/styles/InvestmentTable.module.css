@@ -11,7 +11,6 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  backdrop-filter: blur(18px);
 }
 .cardRow {
   display: flex;
@@ -31,7 +30,7 @@
 }
 .emptyCard {
   text-align: center;
-  color: #aaa;
+  color: var(--text-light);
   margin: 20px 0;
 }
 .hideOnMobile {
@@ -132,7 +131,6 @@
   border-radius: 28px;
   border: 1px solid rgba(255,255,255,0.12);
   box-shadow: 0 35px 110px rgba(2, 6, 23, 0.65);
-  backdrop-filter: blur(18px);
 }
 
 .investmentTitle {
@@ -196,7 +194,6 @@
   overflow: hidden;
   box-shadow: 0 28px 90px rgba(2, 6, 23, 0.6);
   border: 1px solid rgba(255,255,255,0.1);
-  backdrop-filter: blur(16px);
 }
 
 .investmentTableWrapper {
@@ -206,7 +203,7 @@
 
 .tableHeaderRow {
   background: var(--gradient-primary);
-  color: #050914;
+  color: var(--bg-primary);
 }
 
 .tableHeaderCell {
@@ -259,7 +256,7 @@
   border-radius: 12px;
   border: 1px solid rgba(255, 122, 162, 0.55);
   background: rgba(255, 122, 162, 0.12);
-  color: #ff9bb9;
+  color: var(--danger-color);
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s ease, transform 0.2s ease;
@@ -284,7 +281,7 @@
   border-radius: 16px;
   border: none;
   background: var(--gradient-secondary);
-  color: #021210;
+  color: var(--bg-primary);
   font-weight: 700;
   cursor: pointer;
   box-shadow: 0 25px 70px rgba(77, 240, 195, 0.35);
@@ -310,7 +307,7 @@
   border-radius: 18px;
   border: none;
   background: var(--gradient-primary);
-  color: #050914;
+  color: var(--bg-primary);
   font-weight: 800;
   cursor: pointer;
   box-shadow: 0 28px 85px rgba(93, 91, 255, 0.4);

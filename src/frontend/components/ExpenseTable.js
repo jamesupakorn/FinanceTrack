@@ -574,7 +574,7 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
         </div>
       )}
       {isLoading && !hasExpenseRows && (
-        <div className={styles.loadingState}>กำลังโหลดข้อมูล...</div>
+        <div className={styles.loadingState} role="status" aria-live="polite">กำลังโหลดข้อมูล...</div>
       )}
       {hasExpenseRows && (
         <>

@@ -218,7 +218,7 @@ export default function SavingsTable({ selectedMonth, triggerSave }) {
   return (
     <div className={styles.savingsTable}>
       {isLoading && (
-        <div className={styles.loadingState}>กำลังโหลด...</div>
+        <div className={styles.loadingState} role="status" aria-live="polite">กำลังโหลด...</div>
       )}
       {/* รายการเงินออม */}
       <div>
