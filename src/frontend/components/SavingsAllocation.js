@@ -166,7 +166,7 @@ export default function SavingsAllocation({ monthlySavingsTotal = 0, triggerSave
         </div>
       )}
 
-      {loading && <div className={styles.loadingState}>กำลังโหลด...</div>}
+      {loading && <div className={styles.loadingState} role="status" aria-live="polite">กำลังโหลด...</div>}
 
       {/* Empty state */}
       {!loading && buckets.length === 0 && (

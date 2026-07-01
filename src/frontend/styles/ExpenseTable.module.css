@@ -6,7 +6,6 @@
   box-shadow: 0 35px 110px rgba(2, 6, 23, 0.65);
   border: 1px solid rgba(255, 255, 255, 0.12);
   margin: 32px 0;
-  backdrop-filter: blur(20px);
 }
 
 .sectionHeader {
@@ -111,7 +110,7 @@
 
 .overdueHighlight {
   background: rgba(255, 122, 162, 0.15);
-  color: #ff7aa2;
+  color: var(--danger-color);
   border: 1px solid rgba(255, 122, 162, 0.35);
 }
 
@@ -128,13 +127,13 @@
 
 .diffChipPositive {
   background: rgba(77, 240, 195, 0.15);
-  color: #4df0c3;
+  color: var(--secondary-color);
   border: 1px solid rgba(77, 240, 195, 0.4);
 }
 
 .diffChipNegative {
   background: rgba(255, 122, 162, 0.15);
-  color: #ff7aa2;
+  color: var(--danger-color);
   border: 1px solid rgba(255, 122, 162, 0.4);
 }
 
@@ -149,7 +148,7 @@
   border-radius: 16px;
   border: none;
   background: linear-gradient(135deg, #4df0c3 0%, #4ecbff 100%);
-  color: #031229;
+  color: var(--bg-primary);
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 24px 60px rgba(78, 203, 255, 0.3);
@@ -204,7 +203,7 @@
   border-radius: 12px;
   border: 1px solid rgba(255, 122, 162, 0.5);
   background: rgba(255, 122, 162, 0.12);
-  color: #ff9bb9;
+  color: var(--danger-color);
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s ease, transform 0.2s ease;
@@ -236,7 +235,7 @@
 
 .tableHeader {
   background: var(--gradient-primary);
-  color: #fff;
+  color: var(--bg-primary);
 }
 
 .tableHeaderCell {
@@ -400,7 +399,7 @@
 .dueBadge[data-status="overdue"] {
   border-color: rgba(255, 122, 162, 0.4);
   background: rgba(255, 122, 162, 0.12);
-  color: #ff7aa2;
+  color: var(--danger-color);
 }
 
 .dueBadge[data-status="dueToday"] {
@@ -418,7 +417,7 @@
 .dueBadge[data-status="future"] {
   border-color: rgba(77, 240, 195, 0.35);
   background: rgba(77, 240, 195, 0.12);
-  color: #4df0c3;
+  color: var(--secondary-color);
 }
 
 .dueBadge[data-status="done"] {
@@ -542,11 +541,11 @@
 }
 
 .overdueCell {
-  color: #ff7aa2;
+  color: var(--danger-color);
 }
 
 .totalCell {
-  color: #4df0c3;
+  color: var(--secondary-color);
   font-weight: 700;
 }
 
@@ -606,7 +605,6 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  backdrop-filter: blur(18px);
   overflow: hidden;
 }
 
@@ -660,7 +658,7 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  color: #f5f7ff;
+  color: var(--text-primary);
   font-size: 1rem;
   font-weight: 600;
   padding: 10px 12px;
@@ -669,7 +667,8 @@
 }
 
 .cardNameInput:focus {
-  border-color: rgba(93, 91, 255, 0.5);
+  border-color: rgba(93, 91, 255, 0.8);
+  box-shadow: 0 0 0 3px rgba(93, 91, 255, 0.2);
 }
 
 .cardDeleteBtn {
@@ -701,7 +700,7 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  color: #f5f7ff;
+  color: var(--text-primary);
   font-size: 1.1rem;
   font-weight: 700;
   padding: 10px 12px;
@@ -711,7 +710,8 @@
 }
 
 .cardAmountInput:focus {
-  border-color: rgba(93, 91, 255, 0.5);
+  border-color: rgba(93, 91, 255, 0.8);
+  box-shadow: 0 0 0 3px rgba(93, 91, 255, 0.2);
 }
 
 .paidToggle {
@@ -745,12 +745,13 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  color: #f5f7ff;
+  color: var(--text-primary);
   font-size: 0.85rem;
   padding: 8px 10px;
   min-height: 44px;
   outline: none;
   cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   font-family: inherit;
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -770,9 +771,14 @@
   display: none;
 }
 
+.cardSelect:focus {
+  border-color: rgba(77, 240, 195, 0.8);
+  box-shadow: 0 0 0 3px rgba(77, 240, 195, 0.2);
+}
+
 .cardSelect option {
   background: rgba(11, 15, 40, 0.98);
-  color: #f5f7ff;
+  color: var(--text-primary);
 }
 
 /* Responsive adjustments */
