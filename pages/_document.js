@@ -9,8 +9,11 @@ export default function Document() {
         {/* Mobile optimization */}
         <meta name="description" content="FinanceTrack - Money Management Application" />
         <meta name="theme-color" content="#03081a" />
-        <link rel="icon" href="/avatars/skullmoon_income_favicon.ico" sizes="any" />
-        <link rel="shortcut icon" href="/avatars/skullmoon_income_favicon.ico" />
+        <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
+        <link rel="shortcut icon" href="/icons/favicon-32.png" />
+        {/* PWA */}
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
         
         {/* iPhone specific optimization */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
