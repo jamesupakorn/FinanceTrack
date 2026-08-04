@@ -50,12 +50,26 @@ function enforceUserMonthLimit(bucket = {}) {
 	});
 }
 
+// เช็คว่า doc เงินเดือนนี้มีข้อมูลจริง (income/deduct มีค่ามากกว่า 0 อย่างน้อย 1 รายการ)
+// ใช้แยกแยะ "record ที่มีอยู่จริงแต่ว่างเปล่า" (เช่นจากปุ่มเพิ่มเดือนใหม่) ออกจาก
+// "record ที่มีข้อมูลเงินเดือนจริง" — เพื่อไม่ให้ record ว่างมาบัง carry-forward ย้อนหลัง
+function hasMeaningfulSalaryData(doc) {
+	if (!doc || typeof doc !== 'object') return false;
+	const income = doc.income || {};
+	const deduct = doc.deduct || {};
+	const hasIncome = Object.values(income).some((value) => Number(value) > 0);
+	const hasDeduct = Object.values(deduct).some((value) => Number(value) > 0);
+	return hasIncome || hasDeduct;
+}
+
 function findPrevMonthDoc(bucket, month) {
 	const prevMonths = Object.keys(bucket)
 		.filter((m) => m < month)
 		.sort()
 		.reverse();
-	return prevMonths.length ? bucket[prevMonths[0]] : null;
+	// เดินย้อนกลับจนเจอเดือนที่มีข้อมูลจริง ข้ามเดือนว่าง (blank record) ไป
+	const found = prevMonths.find((m) => hasMeaningfulSalaryData(bucket[m]));
+	return found ? bucket[found] : null;
 }
 
 function handleJsonSalaryGet(req, res, userId) {
@@ -162,10 +176,13 @@ export default async function handler(req, res) {
 					}
 				}
 				if (!doc) {
-					const prevDoc = await collection.findOne(
-						{ ...userFilter, month: { $lt: month } },
-						{ sort: { month: -1 } }
-					);
+					// เดินย้อนกลับจนเจอเดือนที่มีข้อมูลจริง ข้ามเดือนว่าง (blank record) ไป
+					// จำนวน doc ถูกจำกัดด้วยเพดาน 15 เดือนต่อ user (BR-002) จึงดึงมาทั้งหมดแล้วกรองใน JS ได้อย่างปลอดภัย
+					const priorDocs = await collection
+						.find({ ...userFilter, month: { $lt: month } })
+						.sort({ month: -1 })
+						.toArray();
+					const prevDoc = priorDocs.find((d) => hasMeaningfulSalaryData(d)) || null;
 					doc = { ...createDefaultSalaryStructure(), month };
 					if (prevDoc) {
 						doc.income = prevDoc.income || {};
