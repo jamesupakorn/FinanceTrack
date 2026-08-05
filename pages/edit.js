@@ -4,6 +4,7 @@ import IncomeTable from '../src/frontend/components/IncomeTable';
 import ExpenseTable from '../src/frontend/components/ExpenseTable';
 import SavingsTable from '../src/frontend/components/SavingsTable';
 import SavingsGoalTracker from '../src/frontend/components/SavingsGoalTracker';
+import InvestmentTable from '../src/frontend/components/InvestmentTable';
 import DailyExpenseTable from '../src/frontend/components/DailyExpenseTable';
 
 import TaxTable from '../src/frontend/components/TaxTable';
@@ -737,6 +738,10 @@ export default function EditPage() {
               selectedMonth={selectedMonth}
               onAllocatableChange={setAllocatableAmount}
               triggerSave={triggerSave}
+            />
+            <InvestmentTable
+              selectedMonth={selectedMonth}
+              key={`investment-${refreshTrigger}`}
             />
 
           </div>

@@ -180,15 +180,16 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
       return;
     }
     const prevMonth = getPrevMonth(selectedMonth);
-    const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = await import('../../shared/utils/frontend/apiUtils');
-    const [expenseAll, incomeAll, salaryPrevDoc, savingsAll, investmentAll] = await Promise.all([
+    const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI, dailyExpenseAPI } = await import('../../shared/utils/frontend/apiUtils');
+    const [expenseAll, incomeAll, salaryPrevDoc, savingsAll, investmentAll, dailyExpensePrevDoc] = await Promise.all([
       expenseAPI.getAll(),
       incomeAPI.getAll(),
       // ใช้ endpoint เดียวกับที่ SalaryCalculator ใช้แสดงผล เพื่อให้ได้ค่าที่ "carry-forward" มาแล้วจริง ๆ
       // (ไม่ใช้ getAll() + getMonthData() เพราะจะได้แค่ record ที่ persist จริง ไม่รวม carry-forward)
       salaryAPI.getByMonth(prevMonth),
       savingsAPI.getAll ? savingsAPI.getAll() : Promise.resolve({}),
-      investmentAPI.getAll ? investmentAPI.getAll() : Promise.resolve({})
+      investmentAPI.getAll ? investmentAPI.getAll() : Promise.resolve({}),
+      dailyExpenseAPI.getByMonth(prevMonth)
     ]);
     // ดึงข้อมูลเดือนก่อนหน้า
     const expensePrevRaw = getMonthData(expenseAll, prevMonth);
@@ -202,6 +203,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
     if (investmentAll && investmentAll[prevMonth]) {
       investmentPrev = JSON.parse(JSON.stringify(investmentAll[prevMonth]));
     }
+    const dailyExpensePrev = dailyExpensePrevDoc?.items || [];
     await Promise.all([
       expenseAPI.save(selectedMonth, expensePrev),
       incomeAPI.save(selectedMonth, incomePrev),
@@ -212,7 +214,8 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
         salaryPrevDoc?.note || ''
       ),
       savingsAPI.saveList ? savingsAPI.saveList(selectedMonth, savingsPrev) : Promise.resolve(),
-      investmentAPI.saveList ? investmentAPI.saveList(selectedMonth, investmentPrev) : Promise.resolve()
+      investmentAPI.saveList ? investmentAPI.saveList(selectedMonth, investmentPrev) : Promise.resolve(),
+      dailyExpenseAPI.save(selectedMonth, dailyExpensePrev)
     ]);
     onMonthSelected(selectedMonth);
     onDataRefresh();

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { dailyExpenseAPI } from '../../shared/utils/frontend/apiUtils';
-import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
+import { formatCurrency, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import styles from '../styles/DailyExpenseTable.module.css';
 
@@ -9,7 +9,7 @@ function genId() {
 }
 
 function getMonthlyAmount(item) {
-  const amount = Number(item.amount) || 0;
+  const amount = parseToNumber(item.amount);
   if (item.category === 'fixed') {
     if (item.frequency === 'daily') return amount * 30;
     if (item.frequency === 'weekly') return amount * 4.33;
@@ -51,21 +51,20 @@ function ItemRow({ item, onChange, onDelete }) {
         placeholder="0"
       />
       {item.category === 'fixed' && (
-        <select
-          className={styles.freqSelect}
-          value={item.frequency || 'daily'}
-          onChange={e => onChange(item.id, 'frequency', e.target.value)}
-        >
-          <option value="daily">ต่อวัน</option>
-          <option value="weekly">ต่อสัปดาห์</option>
-        </select>
+        <>
+          <select
+            className={styles.freqSelect}
+            value={item.frequency || 'daily'}
+            onChange={e => onChange(item.id, 'frequency', e.target.value)}
+          >
+            <option value="daily">ต่อวัน</option>
+            <option value="weekly">ต่อสัปดาห์</option>
+          </select>
+          <span className={styles.monthlyAmt}>
+            {monthlyAmt > 0 ? formatCurrency(Math.round(monthlyAmt)) : '—'}
+          </span>
+        </>
       )}
-      {item.category === 'misc' && (
-        <span className={styles.freqLabel}>/เดือน</span>
-      )}
-      <span className={styles.monthlyAmt}>
-        {monthlyAmt > 0 ? formatCurrency(Math.round(monthlyAmt)) : '—'}
-      </span>
       <button
         type="button"
         className={styles.deleteBtn}
