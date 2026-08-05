@@ -21,11 +21,20 @@ function getPreviousMonth(monthKey) {
   return `${year}-${String(month - 1).padStart(2, '0')}`;
 }
 
+function parseAmount(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value.replace(/,/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
 function calculateTotals(items = []) {
   let fixedMonthly = 0;
   let miscMonthly = 0;
   items.forEach(item => {
-    const amount = Number(item.amount) || 0;
+    const amount = parseAmount(item.amount);
     if (item.category === 'fixed') {
       if (item.frequency === 'daily') fixedMonthly += amount * 30;
       else if (item.frequency === 'weekly') fixedMonthly += amount * 4.33;
@@ -44,7 +53,7 @@ function validateItems(items) {
   if (!Array.isArray(items)) return 'items must be an array';
   for (const item of items) {
     if (!item.name || !String(item.name).trim()) return 'item name is required';
-    if (Number(item.amount) < 0) return 'item amount must be >= 0';
+    if (parseAmount(item.amount) < 0) return 'item amount must be >= 0';
     if (item.category === 'fixed' && !['daily', 'weekly'].includes(item.frequency)) {
       return 'fixed items must have frequency: daily or weekly';
     }

@@ -11,7 +11,6 @@ import { mapSavingsApiToList } from '../../shared/utils/savingsUtils';
 import { savingsAPI, savingsGoalsAPI } from '../../shared/utils/frontend/apiUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
-import InvestmentTable from './InvestmentTable';
 import styles from '../styles/SavingsTable.module.css';
 
 /**
@@ -345,11 +344,6 @@ export default function SavingsTable({ selectedMonth, triggerSave }) {
             <span className={styles.summaryValue}>{formatCurrency(รวมเงินเก็บ)}</span>
           </div>
         </div>
-      </div>
-
-      {/* การลงทุน */}
-      <div className={styles.investmentSection}>
-        <InvestmentTable selectedMonth={selectedMonth} />
       </div>
     </div>
   );
