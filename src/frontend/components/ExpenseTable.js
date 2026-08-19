@@ -15,7 +15,8 @@
  * - selectedMonth {string} เดือนที่เลือก (YYYY-MM)
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { Fragment, useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import {
   formatCurrency,
   parseToNumber,
@@ -36,8 +37,9 @@ import {
   getDaysInMonth,
   formatMonthKeyTH
 } from '../../shared/utils/dateUtils';
+import { isCreditCardRowKey, isRevolvingRowKey } from '../../shared/utils/creditCardUtils';
 import BankAccountTable from './BankAccountTable';
-import { expenseAPI } from '../../shared/utils/frontend/apiUtils';
+import { expenseAPI, creditCardAPI } from '../../shared/utils/frontend/apiUtils';
 import { useSession } from '../contexts/SessionContext';
 import { showToast } from '../../shared/utils/frontend/toast';
 import styles from '../styles/ExpenseTable.module.css';
@@ -139,6 +141,8 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
   const [isLoading, setIsLoading] = useState(false);
   const [persistedKeys, setPersistedKeys] = useState([]);
   const [pendingScrollKey, setPendingScrollKey] = useState(null);
+  // metadata ของแถวผ่อนบัตรเครดิต (ชื่อบัตร/สี/ลิงก์) — ตัวแถวเองมาจาก API รายจ่ายอยู่แล้ว
+  const [installmentMeta, setInstallmentMeta] = useState({});
   const { currentUser } = useSession();
   const shouldShowAccountTable = Boolean(currentUser?.id);
 
@@ -205,6 +209,34 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
       })
       .finally(() => setIsLoading(false));
   }, [selectedMonth, currentUser?.bankAccounts]);
+
+  useEffect(() => {
+    if (!selectedMonth || !currentUser?.id) {
+      setInstallmentMeta({});
+      return;
+    }
+    let cancelled = false;
+    // metadata ของทั้งสองตระกูล — ล้มเหลวแล้วแค่ไม่มีป้ายบัตร ไม่ทำให้หน้ารายจ่ายพัง
+    Promise.all([
+      creditCardAPI.getMonthInstallments(selectedMonth),
+      creditCardAPI.getRevolving({ month: selectedMonth }).catch(() => null)
+    ]).then(([items, revolving]) => {
+      if (cancelled) return;
+      const map = {};
+      items.forEach((item) => { map[item.key] = item; });
+      (Array.isArray(revolving?.cycles) ? revolving.cycles : []).forEach((cycle) => {
+        if (!cycle?.key) return;
+        map[cycle.key] = {
+          key: cycle.key,
+          cardId: cycle.cardId,
+          cardName: cycle.cardName,
+          cardColor: cycle.cardColor
+        };
+      });
+      setInstallmentMeta(map);
+    });
+    return () => { cancelled = true; };
+  }, [selectedMonth, currentUser?.id]);
 
   useEffect(() => {
     if (!selectedMonth) {
@@ -398,12 +430,21 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
       handleSave();
     }
   }, [triggerSave]);
+  // สามกลุ่ม: รายการมาตรฐาน → รายการที่ผู้ใช้เพิ่มเอง → แถวบัตรเครดิต (ท้ายสุดเสมอ)
+  // ภายในกลุ่มบัตรเครดิต: ยอดหมุนเวียนมาก่อนงวดผ่อน เพราะยอดในใบแจ้งหนี้เป็นภาระหลักของบัตร
   const sortedExpenseKeys = useMemo(() => {
     const keys = Object.keys(editExpense || {});
     const defaultKeys = DEFAULT_EXPENSE_KEY_ORDER.filter(key => keys.includes(key));
-    const customKeys = keys.filter(key => !DEFAULT_EXPENSE_KEY_ORDER.includes(key));
-    return [...defaultKeys, ...customKeys];
+    const revolvingKeys = keys.filter(key => isRevolvingRowKey(key));
+    const installmentKeys = keys.filter(key => isCreditCardRowKey(key) && !isRevolvingRowKey(key));
+    const customKeys = keys.filter(key => !DEFAULT_EXPENSE_KEY_ORDER.includes(key) && !isCreditCardRowKey(key));
+    return [...defaultKeys, ...customKeys, ...revolvingKeys, ...installmentKeys];
   }, [editExpense]);
+
+  const firstCreditCardKey = useMemo(
+    () => sortedExpenseKeys.find(key => isCreditCardRowKey(key)) || null,
+    [sortedExpenseKeys]
+  );
 
   const daysInSelectedMonth = useMemo(() => {
     if (!selectedMonth || !/^\d{4}-\d{2}$/.test(selectedMonth)) {
@@ -600,6 +641,57 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
                     ? row.account
                     : (bankAccounts[0] || 'ไม่ระบุบัญชี');
                   const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth);
+                  const isCreditCardRow = isCreditCardRowKey(item);
+                  const meta = installmentMeta[item];
+
+                  // แถวบัตรเครดิต: ชื่อ/ยอด/บัญชี/วันครบกำหนดเป็นข้อความอ่านอย่างเดียว
+                  // แก้ไม่ได้เพราะค่าถูกสร้างใหม่จากแผนผ่อน/ยอดหมุนเวียนทุกครั้งที่โหลด
+                  // เหลือแค่ paid ที่กดได้
+                  if (isCreditCardRow) {
+                    return (
+                      <Fragment key={item}>
+                        {item === firstCreditCardKey && (
+                          <tr className={styles.tableRow}>
+                            <td className={`${styles.tableCell} ${styles.installmentDivider}`} colSpan={5}>
+                              บัตรเครดิต (ซิงก์อัตโนมัติ)
+                            </td>
+                          </tr>
+                        )}
+                        <tr className={`${styles.tableRow} ${styles.lockedRow}`} data-expense-key={item}>
+                          <td className={styles.tableCell}>
+                            <span className={styles.readonlyValue} title={displayName}>🔒 {displayName}</span>
+                            {meta && (
+                              <>
+                                <span className={styles.cardSourceBadge}>💳 {meta.cardName}</span>
+                                <Link href={`/credit-cards?card=${meta.cardId}`} className={styles.cardSourceLink}>
+                                  จัดการที่หน้าบัตรเครดิต →
+                                </Link>
+                              </>
+                            )}
+                          </td>
+                          <td className={`${styles.tableCell} ${styles.right}`}>
+                            <span className={styles.readonlyValue}>{formatCurrency(row.actual)}</span>
+                          </td>
+                          <td className={styles.tableCell}>
+                            <span className={styles.readonlyValue}>{selectedAccount}</span>
+                          </td>
+                          <td className={`${styles.tableCell} ${styles.dateCell}`}>
+                            <span className={styles.readonlyValue}>{formatDueDayText(row.dueDay) || 'ไม่ระบุ'}</span>
+                          </td>
+                          <td className={`${styles.tableCell} ${styles.center} ${styles.checkboxCell}`}>
+                            <label className={styles.checkboxLabel}>
+                              <input
+                                type="checkbox"
+                                checked={paid}
+                                onChange={e => handleExpenseChange(item, 'paid', e.target.checked)}
+                              />
+                            </label>
+                          </td>
+                        </tr>
+                      </Fragment>
+                    );
+                  }
+
                   return (
                     <tr key={item} className={styles.tableRow} data-expense-key={item}>
                       <td className={styles.tableCell}>
@@ -694,6 +786,46 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
                 ? row.account
                 : (bankAccounts[0] || 'ไม่ระบุบัญชี');
               const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth);
+              const isCreditCardRow = isCreditCardRowKey(item);
+              const meta = installmentMeta[item];
+
+              // แถวบัตรเครดิต: อ่านอย่างเดียว ไม่มีปุ่มลบ เหลือแค่ปุ่ม paid ที่กดได้
+              if (isCreditCardRow) {
+                return (
+                  <Fragment key={item}>
+                    {item === firstCreditCardKey && (
+                      <div className={styles.installmentDivider}>บัตรเครดิต (ซิงก์อัตโนมัติ)</div>
+                    )}
+                    <div
+                      className={`${styles.expenseCard} ${styles.lockedRow} ${paid ? styles.expenseCardPaid : ''}`}
+                      data-expense-key={item}
+                    >
+                      <div className={styles.cardHeaderRow}>
+                        <span className={styles.readonlyValue} title={displayName}>{displayName}</span>
+                        <span aria-hidden="true">🔒</span>
+                      </div>
+                      {meta && <span className={styles.cardSourceBadge}>💳 {meta.cardName}</span>}
+                      <span className={`${styles.readonlyValue} ${styles.readonlyAmount}`}>{formatCurrency(row.actual)}</span>
+                      <span className={styles.readonlyValue}>
+                        {`ครบกำหนด ${formatDueDayText(row.dueDay) || 'ไม่ระบุ'} · ${selectedAccount}`}
+                      </span>
+                      <button
+                        type="button"
+                        className={`${styles.paidToggle} ${paid ? styles.paidToggleOn : ''}`}
+                        onClick={() => handleExpenseChange(item, 'paid', !paid)}
+                      >
+                        {paid ? '✓ ชำระแล้ว' : 'ยังไม่ชำระ — แตะเพื่อยืนยัน'}
+                      </button>
+                      {meta && (
+                        <Link href={`/credit-cards?card=${meta.cardId}`} className={styles.cardSourceLink}>
+                          จัดการที่หน้าบัตรเครดิต →
+                        </Link>
+                      )}
+                    </div>
+                  </Fragment>
+                );
+              }
+
               return (
                 <div className={`${styles.expenseCard} ${paid ? styles.expenseCardPaid : ''}`} key={item} data-expense-key={item}>
                   {/* ชื่อ + ลบ */}

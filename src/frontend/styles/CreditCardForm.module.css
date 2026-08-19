@@ -1,0 +1,496 @@
+/*
+ * CreditCardForm.module.css
+ * ฟอร์มเพิ่ม/แก้ไขบัตร (หน้าจอ 3a) และฟอร์มแผนผ่อนชำระ (หน้าจอ 3b) รวมถึง confirm dialog
+ *
+ * modal บน desktop · full-screen sheet บนมือถือ
+ * breakpoint เดียวคือ 768px เท่านั้น (AC-27)
+ * input ตัวเลขเป็น type="text" + inputMode เสมอ ไม่มี type="number" / min / max / step (ADR-006)
+ */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(2, 6, 23, 0.68);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.modal {
+  width: 100%;
+  max-width: 560px;
+  background: rgba(9, 12, 32, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  box-shadow: 0 40px 120px rgba(2, 6, 23, 0.7);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 40px);
+}
+
+.modalNarrow {
+  max-width: 440px;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modalTitle {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.closeButton {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.modalBody {
+  padding: 18px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal :focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------------------- fieldsets */
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.groupTitle {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-light);
+  letter-spacing: 0.02em;
+  padding: 0;
+}
+
+.divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* กลุ่มย่อยภายใน fieldset — จัดเงินไว้กับเงิน วันที่ไว้กับวันที่ */
+.subGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.subGroupTitle {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-light);
+  letter-spacing: 0.02em;
+}
+
+.label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.required {
+  color: #ff9db6;
+}
+
+.input,
+.select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.input:focus,
+.select:focus {
+  border-color: rgba(93, 91, 255, 0.8);
+  box-shadow: 0 0 0 3px rgba(93, 91, 255, 0.2);
+}
+
+.input[aria-invalid='true'],
+.select[aria-invalid='true'] {
+  border-color: rgba(235, 87, 87, 0.7);
+}
+
+.inputShort {
+  max-width: 140px;
+}
+
+.select option {
+  background: rgba(11, 15, 40, 0.98);
+  color: var(--text-primary);
+}
+
+.readonlyField {
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+}
+
+.helper {
+  font-size: 0.76rem;
+  color: var(--text-light);
+  line-height: 1.5;
+}
+
+.error {
+  font-size: 0.78rem;
+  color: #ff9db6;
+}
+
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(242, 201, 76, 0.12);
+  border: 1px solid rgba(242, 201, 76, 0.35);
+  color: #ffe6a8;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* ------------------------------------------------------------ colour picker */
+
+.colorGrid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 8px;
+}
+
+.colorSwatch {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.colorSwatchSelected {
+  border-color: #fff;
+  box-shadow: 0 0 0 3px rgba(93, 91, 255, 0.45);
+}
+
+.colorSwatchUsed::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+/* ---------------------------------------------------------- radio segments */
+
+.radioRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.radioOption {
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  transition: background 0.2s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.radioOptionActive {
+  background: rgba(93, 91, 255, 0.2);
+  border-color: rgba(93, 91, 255, 0.6);
+  color: #fff;
+}
+
+.radioSub {
+  font-size: 0.72rem;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+/* --------------------------------------------------------- result preview */
+
+.resultPanel {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.resultTitle {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.resultRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.86rem;
+}
+
+.resultLabel {
+  color: var(--text-light);
+}
+
+.resultValue {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.resultValueStrong {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.previewToggle {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.previewTableWrap {
+  max-height: 260px;
+  overflow: auto;
+  margin-top: 8px;
+}
+
+.previewTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.previewTable th {
+  position: sticky;
+  top: 0;
+  background: rgba(9, 12, 32, 0.98);
+  text-align: left;
+  padding: 6px 8px;
+  color: var(--text-light);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.previewTable td {
+  padding: 6px 8px;
+  color: var(--text-primary);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ buttons */
+
+.primaryButton {
+  border: 1px solid rgba(93, 91, 255, 0.5);
+  border-radius: 999px;
+  padding: 12px 22px;
+  background: rgba(93, 91, 255, 0.28);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+  min-height: 44px;
+  transition: background 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: rgba(93, 91, 255, 0.4);
+}
+
+.primaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 12px 22px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.dangerButton {
+  border: 1px solid rgba(235, 87, 87, 0.5);
+  border-radius: 999px;
+  padding: 12px 22px;
+  background: rgba(235, 87, 87, 0.2);
+  color: #ffc4c4;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.confirmText {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin: 0;
+}
+
+/* ------------------------------------------------------------ mobile 768px */
+
+@media (max-width: 768px) {
+  .backdrop {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .modal,
+  .modalNarrow {
+    max-width: none;
+    border-radius: 0;
+    max-height: 100vh;
+    height: 100%;
+  }
+
+  .fieldRow {
+    grid-template-columns: 1fr;
+  }
+
+  .radioRow {
+    grid-template-columns: 1fr;
+  }
+
+  .colorGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .inputShort {
+    max-width: none;
+  }
+
+  /* ปุ่มหลักอยู่บน เรียงเต็มความกว้าง */
+  .modalFooter {
+    flex-direction: column-reverse;
+  }
+
+  .modalFooter button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input,
+  .select,
+  .radioOption,
+  .primaryButton {
+    transition: none;
+  }
+}

@@ -1,0 +1,297 @@
+/*
+ * ExpenseCalendar.module.css
+ * ปฏิทินรวมค่าใช้จ่าย (ExpenseCalendar.js) + เชลล์โมดัล (ExpenseCalendarModal.js)
+ *
+ * คลาสตาราง/ปฏิทินย้ายมาจาก CreditCard.module.css ทั้งก้อน (ก่อนหน้านี้เคยเป็นของ
+ * ปฏิทินบัตรเครดิตเดิมที่ผูกอยู่กับ /credit-cards เพียงที่เดียว — ตอนนี้ทั้งแอปใช้ผ่านโมดัลนี้ที่เดียว)
+ * ส่วน .backdrop / .modal / .modalHeader / .modalBody / .modalFooter / .closeButton /
+ * .primaryButton / .secondaryButton / .dangerButton ยังคงมาจาก CreditCardForm.module.css เดิม
+ * (reuse ไม่ duplicate — ดู UX_SPEC §Breakpoint & reuse checklist)
+ *
+ * breakpoint เดียวคือ 768px เท่านั้น (AC-75) — ห้ามเพิ่ม breakpoint ที่สอง
+ */
+
+/* ---------------------------------------------------------------- modal chrome */
+
+/*
+ * ".calendarModal.calendarModal" ตั้งใจซ้ำคลาส — เพิ่ม specificity ให้ชนะ .modal ของ
+ * CreditCardForm.module.css เสมอ โดยไม่ต้องพึ่งลำดับการรวมไฟล์ CSS ของ bundler (ไม่ใช้ !important)
+ */
+.calendarModal.calendarModal {
+  max-width: 960px;
+}
+
+.calendarModalBody.calendarModalBody {
+  padding: 16px;
+}
+
+.calendarSkeletonGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.calendarSkeletonGrid > div {
+  height: 64px;
+  border-radius: 10px;
+}
+
+/* ------------------------------------------------------------------- calendar */
+
+.calendarWrap {
+  background: rgba(9, 12, 32, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  padding: 18px;
+}
+
+.calendarNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.calendarMonth {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.calendarLayout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  align-items: start;
+}
+
+.calendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calendarWeekday {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-light);
+  padding: 6px 0;
+}
+
+.calendarCell {
+  min-height: 64px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-primary);
+  font-family: inherit;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.calendarCellEmpty {
+  border-color: transparent;
+  background: transparent;
+  cursor: default;
+}
+
+.calendarCellToday {
+  box-shadow: inset 0 0 0 2px rgba(93, 91, 255, 0.7);
+}
+
+.calendarCellSelected {
+  background: rgba(93, 91, 255, 0.16);
+  border-color: rgba(93, 91, 255, 0.5);
+}
+
+.calendarDayNum {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.calendarDayOverdue {
+  color: #eb5757;
+}
+
+.calendarDots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.dotDue {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot-color, #5d5bff);
+}
+
+.dotStatement {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--dot-color, #5d5bff);
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.calendarChip {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.calendarLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dayDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dayDetailTitle {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.dayDetailTitle span {
+  font-weight: 400;
+  color: var(--text-light);
+  font-size: 0.82rem;
+}
+
+.calendarFooter {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.calendarFooterTotal {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* ------------------------------------------------------------ event cards (new) */
+
+/* แถวที่ชำระแล้วยังแสดงอยู่เสมอ แต่ลดความเด่นลง — แยกด้วย ✓ ไม่ใช่แค่สี (ADR-006) */
+.calendarEventPaid {
+  opacity: 0.55;
+}
+
+.calendarEventPaid .dotDue,
+.calendarEventPaid .dotStatement {
+  opacity: 0.45;
+}
+
+.revolvingEventActions {
+  display: flex;
+  gap: 8px;
+}
+
+.revolvingEventActions button {
+  flex: 1;
+}
+
+/* -------------------------------------------------------- out-of-window notice */
+
+.outOfWindowNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.outOfWindowNotice p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.outOfWindowNotice p:first-child {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ unscheduled */
+
+.unscheduledTray {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.unscheduledToggle {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 0;
+  min-height: 44px;
+}
+
+/* ------------------------------------------------------------ mobile (768px) */
+
+@media (max-width: 768px) {
+  .calendarLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .calendarWrap {
+    padding: 12px;
+  }
+
+  .calendarCell {
+    min-height: 52px;
+    padding: 4px;
+  }
+
+  .calendarChip {
+    display: none;
+  }
+
+  .calendarModalBody {
+    padding: 12px;
+  }
+
+  .revolvingEventActions {
+    flex-direction: column;
+  }
+}

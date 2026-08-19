@@ -68,6 +68,10 @@ export const DEFAULT_EXPENSE_ITEMS = [
 
 const DEFAULT_EXPENSE_KEYS = DEFAULT_EXPENSE_ITEMS.map(item => item.key);
 const CUSTOM_EXPENSE_KEY_PREFIX = 'custom_';
+// แถวบัตรเครดิตที่ inject มาตอน GET — ไม่ใช่แถวที่ผู้ใช้บันทึกไว้
+// cci_ = งวดผ่อนชำระ (ADR-009) · ccr_ = ยอดใช้จ่ายหมุนเวียน (ADR-011)
+const CREDIT_CARD_ROW_KEY_PREFIXES = ['cci_', 'ccr_'];
+const isCreditCardRowKey = (key) => CREDIT_CARD_ROW_KEY_PREFIXES.some(prefix => String(key).startsWith(prefix));
 const DEFAULT_CUSTOM_EXPENSE_NAME = 'รายการใหม่'; // Default new item placeholder name
 const EXPENSE_IGNORED_FIELDS = new Set([
   // Metadata fields to exclude from expense item processing
@@ -348,10 +352,20 @@ export const formatExpenseData = (data, month) => {
 
   // ถ้าเดือนนี้ยังไม่มีข้อมูลจริงเลย ให้แสดงรายการมาตรฐานเป็นค่าเริ่มต้น
   // แต่ถ้ามีข้อมูลที่บันทึกแล้ว ให้แสดงเฉพาะ key ที่มีอยู่จริง (เพื่อให้การลบรายการคงอยู่)
-  const hasPersistedRows = dynamicKeys.length > 0;
-  const allKeys = hasPersistedRows
-    ? Array.from(new Set(dynamicKeys))
-    : Array.from(new Set(DEFAULT_EXPENSE_KEYS));
+  //
+  // ⚠ แถวบัตรเครดิต (cci_ งวดผ่อน · ccr_ ยอดหมุนเวียน) เป็นแถวที่ derive มาตอน GET
+  //   ไม่ใช่ข้อมูลที่ผู้ใช้บันทึกไว้ ถ้านับรวมในการเช็คนี้ เดือนที่ยังไม่เคยแก้ไข
+  //   แต่บังเอิญมีแถวบัตรเครดิต 1 แถว จะแสดงเฉพาะแถวนั้นแถวเดียว รายการมาตรฐานทั้งชุดหายไป
+  //   และ Save All จะบันทึกการหายนั้นทับลงไป
+  //   ต้องครอบทั้งสอง prefix — บั๊กนี้เคยหลุดขึ้น production มาแล้วครั้งหนึ่งกับ cci_
+  //   (Stage 4 MAJOR-2 / AC-32 / AC-53)
+  const creditCardKeys = dynamicKeys.filter(isCreditCardRowKey);
+  const persistedKeys = dynamicKeys.filter(key => !isCreditCardRowKey(key));
+  const hasPersistedRows = persistedKeys.length > 0;
+  const allKeys = Array.from(new Set([
+    ...(hasPersistedRows ? persistedKeys : DEFAULT_EXPENSE_KEYS),
+    ...creditCardKeys
+  ]));
 
   allKeys.forEach(item => {
     const source = (monthData && monthData[item]) ? monthData[item] : {};

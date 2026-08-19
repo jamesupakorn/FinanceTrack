@@ -1,0 +1,1023 @@
+/*
+ * CreditCard.module.css
+ * โครงหน้า + การ์ด + รายการ + ปฏิทิน สำหรับหน้าจอ 1, 2 และ 4 ของฟีเจอร์บัตรเครดิต
+ *
+ * ยึดตาม DECISIONS/006 (premium dark, accent เดียว #5d5bff, ไม่มี gradient text)
+ * breakpoint เดียวคือ 768px เท่านั้น — การเพิ่ม breakpoint ที่สองถือเป็น defect (AC-27)
+ */
+
+.page {
+  min-height: 100vh;
+  padding: 24px 20px 96px;
+}
+
+.container {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.guardContainer {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ------------------------------------------------------------------ header */
+
+.pageHeader {
+  width: 100%;
+  margin-bottom: 20px;
+  padding: 14px 20px;
+  background: rgba(8, 12, 32, 0.72);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 24px rgba(5, 10, 32, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  backdrop-filter: blur(18px);
+}
+
+.headerTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pageTitle {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.primaryButton {
+  border: 1px solid rgba(93, 91, 255, 0.5);
+  border-radius: 999px;
+  padding: 10px 18px;
+  background: rgba(93, 91, 255, 0.22);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  transition: background 0.2s cubic-bezier(0.22, 1, 0.36, 1), transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.primaryButton:hover {
+  background: rgba(93, 91, 255, 0.34);
+  transform: translateY(-1px);
+}
+
+.ghostButton {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 10px 18px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  transition: background 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ghostButton:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.iconButton {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.iconButton:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.page :focus-visible,
+.page button:focus-visible,
+.page a:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ----------------------------------------------------------- summary strip */
+
+.summaryStrip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.summaryTile {
+  background: rgba(9, 12, 32, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 16px 18px;
+}
+
+.summaryLabel {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  margin: 0 0 6px;
+}
+
+.summaryValue {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.25;
+}
+
+.summaryHint {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.summaryMobileCard {
+  display: none;
+}
+
+/* ------------------------------------------------------- segmented control */
+
+.segmented {
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  background: rgba(9, 12, 32, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  margin-bottom: 22px;
+}
+
+.segmentedButton {
+  flex: 1;
+  min-height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.2s cubic-bezier(0.22, 1, 0.36, 1), color 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.segmentedActive {
+  background: rgba(93, 91, 255, 0.25);
+  color: #fff;
+}
+
+/* ---------------------------------------------------------------- sections */
+
+.sectionHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 24px 0 12px;
+}
+
+.sectionTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.hint {
+  font-size: 0.82rem;
+  color: var(--text-light);
+  margin: 8px 0 0;
+}
+
+/* --------------------------------------------------------- upcoming events */
+
+.upcomingList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.upcomingItem {
+  background: rgba(9, 12, 32, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 4px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upcomingOverdue {
+  border-left-color: #eb5757;
+}
+
+.upcomingTopRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.upcomingName {
+  font-weight: 600;
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.upcomingAmount {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.upcomingMeta {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+/* ------------------------------------------------------------- card tiles */
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.cardTile {
+  position: relative;
+  background: rgba(9, 12, 32, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 4px solid var(--card-accent, #5d5bff);
+  border-radius: 20px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cardTile:hover {
+  transform: translateY(-2px);
+}
+
+.cardTileHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cardTileName {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.colorChip {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: var(--card-accent, #5d5bff);
+}
+
+.cardTileSub {
+  font-size: 0.82rem;
+  color: var(--text-light);
+}
+
+.cardDebtLabel {
+  font-size: 0.78rem;
+  color: var(--text-light);
+  margin-top: 6px;
+}
+
+.cardDebtValue {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.utilBar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.utilFill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-primary);
+  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.utilFillDanger {
+  background: #eb5757;
+}
+
+.utilText {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.warnChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(235, 87, 87, 0.16);
+  border: 1px solid rgba(235, 87, 87, 0.4);
+  color: #ffb3b3;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.cardMetaLine {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.cardTileFooter {
+  margin-top: 10px;
+}
+
+/* --------------------------------------------------------------- ⋯ menu */
+
+.menuWrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.menuDropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 220px;
+  background: rgba(6, 9, 27, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 8px;
+  box-shadow: 0 40px 120px rgba(2, 6, 23, 0.65);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 30;
+}
+
+.menuItem {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+  padding: 12px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.menuItem:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.menuItem:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.menuItemDanger {
+  color: #ff9db6;
+}
+
+.menuHelper {
+  font-size: 0.72rem;
+  color: var(--text-light);
+  padding: 0 12px 8px;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------- paid pill */
+
+.paidPill {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.2s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.paidPillOn {
+  background: rgba(34, 193, 164, 0.14);
+  border-color: rgba(34, 193, 164, 0.4);
+  color: #4df0c3;
+}
+
+.paidPillBusy {
+  opacity: 0.6;
+}
+
+/* ---------------------------------------------------------- card detail */
+
+.detailLayout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.detailSummaryPanel {
+  position: sticky;
+  top: 90px;
+  background: rgba(9, 12, 32, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  overflow: hidden;
+}
+
+.detailBand {
+  height: 10px;
+  background: var(--card-accent, #5d5bff);
+}
+
+.detailBody {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detailRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.86rem;
+  padding: 4px 0;
+}
+
+.detailRowLabel {
+  color: var(--text-light);
+}
+
+.detailRowValue {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.planList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.planCard {
+  background: rgba(9, 12, 32, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.planCardSettled {
+  opacity: 0.72;
+}
+
+.planHeaderRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.planTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.planMeta {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.badgeDone {
+  background: rgba(34, 193, 164, 0.16);
+  border-color: rgba(34, 193, 164, 0.4);
+  color: #4df0c3;
+}
+
+.badgeCancelled {
+  background: rgba(235, 87, 87, 0.14);
+  border-color: rgba(235, 87, 87, 0.35);
+  color: #ffb3b3;
+}
+
+.progressBar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-primary);
+  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.scheduleToggle {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.scheduleTableWrap {
+  overflow-x: auto;
+  margin-top: 10px;
+}
+
+.scheduleTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+
+.scheduleTable th {
+  text-align: left;
+  padding: 8px 10px;
+  color: var(--text-light);
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+}
+
+.scheduleTable td {
+  padding: 8px 10px;
+  color: var(--text-primary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+
+.scheduleRowPaid td {
+  opacity: 0.6;
+}
+
+.scheduleRowNext td {
+  background: rgba(93, 91, 255, 0.1);
+}
+
+.scheduleCards {
+  display: none;
+}
+
+.scheduleCard {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 3px solid transparent;
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.scheduleCardPaid {
+  opacity: 0.65;
+}
+
+.scheduleCardNext {
+  border-left-color: var(--color-primary);
+}
+
+.scheduleCardHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.scheduleCardAmount {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.scheduleCardSplit {
+  font-size: 0.78rem;
+  color: var(--text-light);
+}
+
+.scheduleMoreButton {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------- ยอดใช้จ่ายหมุนเวียน */
+
+.revolvingSection {
+  background: rgba(9, 12, 32, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 18px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.revolvingMonth {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-light);
+}
+
+.revolvingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 0.88rem;
+}
+
+.revolvingHint {
+  font-size: 0.75rem;
+  color: var(--text-light);
+}
+
+.revolvingLabel {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.revolvingSpendInput {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 1.25rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.revolvingSpendInput:disabled {
+  opacity: 0.6;
+}
+
+.revolvingDivider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 6px 0;
+}
+
+.revolvingTotal {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* desktop: ปุ่มสองปุ่มอยู่แถวเดียวกัน · มือถือ: เรียงลงเต็มความกว้าง (ดู media 768px) */
+.revolvingActions {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* ปุ่มรอง — ตั้ง min-height 48px ตรงนี้เพราะเป้าแตะบนมือถือต้อง ≥ 44px */
+.secondaryAction {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondaryAction:disabled,
+.revolvingActions .primaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.revolvingActions .primaryButton {
+  width: 100%;
+  min-height: 48px;
+  justify-content: center;
+}
+
+.revolvingSettled {
+  border: 1px solid rgba(34, 193, 164, 0.4);
+  border-left: 3px solid #22c1a4;
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(34, 193, 164, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0.9;
+}
+
+.revolvingSettledTitle {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #4df0c3;
+}
+
+/* เดือนที่ไม่เคยถูกบันทึก — materialise ขึ้นมาเพื่อให้เห็นยอดยกมาเท่านั้น */
+.rowImplicit {
+  opacity: 0.6;
+}
+
+/* ปฏิทินย้ายไปอยู่ที่ ExpenseCalendar.module.css ทั้งก้อนแล้ว (ADR-012 · Feature 2)
+   — .calendarWrap/.calendarGrid/.dotDue/.dotStatement/.dayDetail/... ดูที่นั่น */
+
+/* ------------------------------------------------------------------ states */
+
+.skeletonStrip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.skeleton {
+  height: 92px;
+  border-radius: 18px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.05) 25%, rgba(255, 255, 255, 0.11) 37%, rgba(255, 255, 255, 0.05) 63%);
+  background-size: 400% 100%;
+  animation: creditShimmer 1.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@keyframes creditShimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.emptyState {
+  text-align: center;
+  padding: 48px 24px;
+  background: rgba(9, 12, 32, 0.7);
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.emptyTitle {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.emptyText {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.errorState {
+  padding: 20px;
+  background: rgba(235, 87, 87, 0.1);
+  border: 1px solid rgba(235, 87, 87, 0.35);
+  border-radius: 16px;
+  color: #ffc4c4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ------------------------------------------------------------ mobile 768px */
+
+@media (max-width: 768px) {
+  .page {
+    padding: 12px 12px 96px;
+  }
+
+  .pageHeader {
+    padding: 10px 14px;
+    border-radius: 14px;
+  }
+
+  .pageTitle {
+    font-size: 1rem;
+  }
+
+  /* J1 ต้องอ่านหนี้รวมได้โดยไม่ต้อง scroll → รวมเหลือการ์ดเดียว */
+  .summaryStrip {
+    display: none;
+  }
+
+  .summaryMobileCard {
+    display: block;
+    background: rgba(9, 12, 32, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .skeletonStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .cardGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .detailLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .detailSummaryPanel {
+    position: static;
+  }
+
+  /* ตารางผ่อนบนมือถือใช้การ์ดแทน table */
+  .scheduleTableWrap {
+    display: none;
+  }
+
+  .scheduleCards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .headerActions .ghostButton span {
+    display: none;
+  }
+
+  .revolvingSection {
+    padding: 14px;
+  }
+
+  .revolvingTotal {
+    font-size: 1.5rem;
+  }
+
+  .revolvingActions {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+
+  .cardTile,
+  .primaryButton,
+  .ghostButton,
+  .utilFill,
+  .progressFill,
+  .paidPill,
+  .segmentedButton {
+    transition: none;
+  }
+}

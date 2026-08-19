@@ -18,6 +18,12 @@ import { sendLineMessage } from '../../src/shared/utils/sendLineMessage';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
 import { isPaidFlag } from '../../src/shared/utils/commonUtils.js';
 import { assertApiToken } from '../../src/shared/utils/backend/apiTokenAuth';
+import { getUserCreditData } from '../../src/shared/utils/backend/creditCardStore';
+import {
+  PLAN_STATUS,
+  buildRevolvingCycles,
+  summariseRevolving
+} from '../../src/shared/utils/creditCardUtils';
 import {
   THAI_MONTH_LABELS,
   normalizeMonthPart,
@@ -218,6 +224,153 @@ async function getExpenseDocForMonth(userId, monthKey) {
   return collection.findOne({ userId, month: monthKey });
 }
 
+// ---------------------------------------------------------------------------
+// แจ้งเตือนบัตรเครดิต (BR-CC-011) — ข้อความแยกอีกฉบับ ส่งหลังข้อความค่าใช้จ่ายเดิม
+// เส้นทาง buildMessage() เดิมไม่ถูกแตะต้อง
+//
+// งวดผ่อนและยอดหมุนเวียนไม่เคยถูกบันทึกลง monthly_expense (ADR-009 · ADR-011)
+// getExpenseDocForMonth() อ่าน store ตรง ๆ จึงมองไม่เห็นแถวเหล่านี้
+// ยอดบัตรเครดิตจึงไม่มีทางถูกแจ้งซ้ำในข้อความค่าใช้จ่ายทั่วไป (AC-61)
+// ---------------------------------------------------------------------------
+
+/**
+ * รวบรวมบัตรที่มีงวดผ่อน/ยอดหมุนเวียนครบกำหนด/ใกล้ครบ/เลยกำหนด ในเดือนเป้าหมาย
+ * @param {object} creditData - { cards, plans, cycles }
+ * @param {object} target - ข้อมูลวันเป้าหมาย
+ * @returns {array} รายการเหตุการณ์ต่อบัตร
+ */
+function collectCardDueEvents(creditData, target) {
+  const cards = Array.isArray(creditData?.cards) ? creditData.cards : [];
+  const plans = Array.isArray(creditData?.plans) ? creditData.plans : [];
+  const cycles = Array.isArray(creditData?.cycles) ? creditData.cycles : [];
+  // ⚠ เช็คแค่ cards เท่านั้น — เงื่อนไขเดิมมี !plans.length ด้วย ทำให้ผู้ใช้ที่ใช้
+  //   เฉพาะยอดหมุนเวียน (ไม่มีแผนผ่อนเลย) ไม่ได้รับข้อความอะไรเลย (AC-59)
+  if (!cards.length) return [];
+
+  return cards.map(card => {
+    const resolvedDueDay = resolveDueDayForMonth(card.dueDay, target.daysInMonth);
+    if (!resolvedDueDay) return null;
+
+    let status = null;
+    if (resolvedDueDay === target.day) status = 'due';
+    else if (resolvedDueDay < target.day) status = 'overdue';
+    else if ((resolvedDueDay - target.day) <= DUE_SOON_DAYS) status = 'dueSoon';
+    if (!status) return null;
+
+    const items = [];
+    plans.forEach(plan => {
+      if (plan?.cardId !== card.id) return;
+      if (plan.status !== PLAN_STATUS.ONGOING) return;
+      const schedule = Array.isArray(plan.schedule) ? plan.schedule : [];
+      const remaining = schedule.filter(row => row?.paid !== true).length;
+      schedule.forEach(row => {
+        if (row?.dueMonth !== target.monthKey) return;
+        if (row.paid === true) return;
+        items.push({ plan, row, remaining });
+      });
+    });
+
+    // ยอดหมุนเวียนของเดือนเป้าหมาย — แจ้งเฉพาะที่ยังไม่ตัดสินใจชำระ (กติกาเดียวกับงวดผ่อน)
+    const chain = buildRevolvingCycles(card, cycles, { throughMonth: target.monthKey });
+    const summary = summariseRevolving(chain, { asOfMonth: target.monthKey });
+    const cycle = summary.cycle;
+    const revolving = cycle && cycle.amountDue > 0 && cycle.paymentAction === null
+      ? { amountDue: cycle.amountDue, minPaymentDue: cycle.minPaymentDue, paymentAction: cycle.paymentAction }
+      : null;
+
+    if (!items.length && !revolving) return null;
+
+    return {
+      card,
+      status,
+      resolvedDueDay,
+      dueDateText: buildDueDateString(target, card.dueDay),
+      isEndOfMonth: isEndOfMonthDueDay(card.dueDay),
+      diffDays: resolvedDueDay - target.day,
+      items,
+      revolving,
+      total: items.reduce((sum, item) => sum + (Number(item.row.payment) || 0), 0)
+        + (revolving?.amountDue ?? 0)
+    };
+  }).filter(Boolean);
+}
+
+function describeCardTiming(event) {
+  if (event.isEndOfMonth) return 'สิ้นเดือน';
+  if (event.status === 'due') return 'ครบกำหนดวันนี้';
+  if (event.status === 'overdue') return `เลยกำหนด ${Math.abs(event.diffDays)} วัน`;
+  return `อีก ${event.diffDays} วัน`;
+}
+
+/** บรรทัดยอดหมุนเวียน — ภาระหลักของบัตร จึงอยู่เหนือรายการงวดผ่อนเสมอ */
+function buildRevolvingLine(revolving) {
+  if (!revolving) return null;
+  if (revolving.paymentAction === 'minimum') {
+    return `   • ยอดใช้จ่ายหมุนเวียน (ขั้นต่ำ) — ${formatAmount(revolving.amountDue)} บาท`;
+  }
+  return `   • ยอดใช้จ่ายหมุนเวียน — ${formatAmount(revolving.amountDue)} บาท (ขั้นต่ำ ${formatAmount(revolving.minPaymentDue)})`;
+}
+
+function buildCardSection(title, events, startIndex) {
+  const lines = events.map((event, index) => {
+    const last4 = event.card.last4 ? ` (····${event.card.last4})` : '';
+    const head = `${startIndex + index + 1}. ${event.card.name}${last4} — ${formatAmount(event.total)} บาท`;
+    const dateLine = `   📅 ${event.dueDateText} (${describeCardTiming(event)})`;
+    const revolvingLine = buildRevolvingLine(event.revolving);
+    const itemLines = event.items.map(item => (
+      `   • ${item.plan.itemName} — งวด ${item.row.no}/${item.plan.months} (เหลืออีก ${item.remaining} งวด) ${formatAmount(item.row.payment)} บาท`
+    ));
+    return [head, dateLine, ...(revolvingLine ? [revolvingLine] : []), ...itemLines].join('\n');
+  });
+  return [title, ...lines].join('\n');
+}
+
+/**
+ * สร้างข้อความแจ้งเตือนบัตรเครดิต
+ * @param {object} target - ข้อมูลวันเป้าหมาย
+ * @param {array} cardEvents - ผลจาก collectCardDueEvents
+ * @returns {string|null} null เมื่อไม่มีอะไรต้องแจ้ง (ต้องไม่ส่งข้อความเปล่า)
+ */
+function buildCreditCardMessage(target, cardEvents) {
+  if (!Array.isArray(cardEvents) || !cardEvents.length) return null;
+
+  const overdue = cardEvents.filter(event => event.status === 'overdue');
+  const upcoming = cardEvents.filter(event => event.status !== 'overdue');
+  const headerTitle = overdue.length && upcoming.length
+    ? 'ครบกำหนดชำระ + เลยกำหนด'
+    : overdue.length
+      ? 'เลยกำหนดชำระ'
+      : 'ครบกำหนดชำระ';
+
+  const header = [
+    '💳 FinanceTrack แจ้งเตือนบัตรเครดิต',
+    headerTitle,
+    `เดือน ${formatMonthKeyTH(target.monthKey)}`,
+    `วันที่ ${formatThaiDate(target)}`,
+    '━━━━━━━━━━━━'
+  ].join('\n');
+
+  const sections = [];
+  if (overdue.length) sections.push(buildCardSection('⚠️ เลยกำหนดชำระ', overdue, 0));
+  if (upcoming.length) sections.push(buildCardSection('📌 ครบกำหนดชำระ', upcoming, overdue.length));
+
+  const grandTotal = cardEvents.reduce((sum, event) => sum + event.total, 0);
+  const installmentCount = cardEvents.reduce((sum, event) => sum + event.items.length, 0);
+  const revolvingCount = cardEvents.filter(event => event.revolving).length;
+  const countParts = [
+    `${cardEvents.length} บัตร`,
+    `${installmentCount} งวด`,
+    ...(revolvingCount ? [`${revolvingCount} ยอดหมุนเวียน`] : [])
+  ].join(' · ');
+  const footer = [
+    '━━━━━━━━━━━━',
+    `รวมต้องชำระ: ${formatAmount(grandTotal)} บาท (${countParts})`,
+    'จัดการบัตร ➜ https://finance-track-one.vercel.app/credit-cards 💳'
+  ].join('\n');
+
+  return [header, ...sections, footer].join('\n\n');
+}
+
 /**
  * ตัวจัดการหลักของ API แจ้งเตือนค่าใช้จ่ายผ่าน LINE
  * ตรวจสอบสิทธิ์ด้วย CRON_SECRET และส่งข้อความตามเงื่อนไข
@@ -316,5 +469,38 @@ export default async function handler(req, res) {
     }
   }
 
-  return res.status(200).json({ success: true, results });
+  // ข้อความบัตรเครดิตเป็นฉบับที่สอง ส่งหลังข้อความค่าใช้จ่ายเดิมของทุกผู้ใช้ (BR-CC-011)
+  // ผู้ใช้ที่ไม่มีบัตร หรือไม่มีอะไรครบกำหนด/เลยกำหนด จะไม่ได้รับข้อความเลย ไม่ใช่ข้อความเปล่า
+  const creditCardResults = [];
+  for (const user of users) {
+    let creditData;
+    try {
+      creditData = await getUserCreditData(user.id);
+    } catch (error) {
+      creditCardResults.push({ userId: user.id, sent: false, reason: 'credit store unavailable' });
+      continue;
+    }
+
+    const cardEvents = collectCardDueEvents(creditData, target);
+    const message = buildCreditCardMessage(target, cardEvents);
+    if (!message) {
+      creditCardResults.push({ userId: user.id, sent: false, reason: 'no credit card due items' });
+      continue;
+    }
+
+    try {
+      await sendLineMessage(message, user.LineId);
+      creditCardResults.push({
+        userId: user.id,
+        sent: true,
+        cardCount: cardEvents.length,
+        installmentCount: cardEvents.reduce((sum, event) => sum + event.items.length, 0),
+        revolvingCount: cardEvents.filter(event => event.revolving).length
+      });
+    } catch (error) {
+      creditCardResults.push({ userId: user.id, sent: false, reason: error.message });
+    }
+  }
+
+  return res.status(200).json({ success: true, results, creditCardResults });
 }

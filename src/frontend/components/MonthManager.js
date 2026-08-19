@@ -138,34 +138,11 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
       investmentAPI.saveList ? investmentAPI.saveList(nextMonth, []) : Promise.resolve()
     ]);
 
-    // Fetch all months after adding new month
-    const [expenseData, incomeData, salaryData] = await Promise.all([
-      expenseAPI.getAll(),
-      incomeAPI.getAll(),
-      salaryAPI.getAll()
-    ]);
-    const getMonths = data => (data?.months ? Object.keys(data.months) : []);
-    const allMonthsSet = new Set([
-      ...getMonths(expenseData),
-      ...getMonths(incomeData),
-      ...getMonths(salaryData)
-    ]);
-    const validMonthRegex = /^\d{4}-\d{2}$/;
-    const allMonths = Array.from(allMonthsSet)
-      .filter(month => validMonthRegex.test(month))
-      .sort((a, b) => b.localeCompare(a)); // new -> old
-
-    // If more than 15 months, delete the oldest
-    if (allMonths.length > 15) {
-      const oldestMonth = allMonths[allMonths.length - 1];
-      await Promise.all([
-        expenseAPI.delete ? expenseAPI.delete(oldestMonth) : Promise.resolve(),
-        incomeAPI.delete ? incomeAPI.delete(oldestMonth) : Promise.resolve(),
-        salaryAPI.delete ? salaryAPI.delete(oldestMonth) : Promise.resolve(),
-        savingsAPI.delete ? savingsAPI.delete(oldestMonth) : Promise.resolve(),
-        investmentAPI.delete ? investmentAPI.delete(oldestMonth) : Promise.resolve()
-      ]);
-    }
+    // หมายเหตุ: เดิมมีขั้นตอนดึงรายชื่อเดือนทั้งหมดแล้วลบเดือนเก่าสุดถ้าเกิน 15 เดือนอยู่ตรงนี้
+    // แต่ expenseAPI/incomeAPI/savingsAPI/investmentAPI ไม่มี .delete() จริง (มีแค่ salaryAPI.delete)
+    // จึงไม่เคยลบข้อมูล 4 ใน 5 อย่างได้จริงมาก่อน — เอาออกเพราะตอนนี้ฝั่ง server (POST ของแต่ละ
+    // collection) บังคับหน้าต่าง 15 เดือนร่วมกันให้แล้วโดยอัตโนมัติทุกครั้งที่ save ด้านบน
+    // (ดู sharedMonthWindow.js) การเก็บ logic นี้ไว้จะกลายเป็น enforcement คู่ขนานที่อาจไม่ตรงกัน
 
     onMonthSelected(nextMonth);
     onDataRefresh();

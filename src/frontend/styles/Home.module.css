@@ -134,6 +134,52 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
+/* ปุ่มเปิดปฏิทินรวมค่าใช้จ่าย — ทรีตเมนต์เดียวกับ .creditCardsLinkButton (Feature 2 / ADR-012) */
+.calendarLinkButton {
+  border: 1px solid rgba(93, 91, 255, 0.45);
+  border-radius: 999px;
+  padding: 12px 20px;
+  background: rgba(93, 91, 255, 0.2);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  box-shadow: 0 18px 40px rgba(5,10,32,0.45);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.calendarLinkButton:hover {
+  transform: translateY(-2px);
+  background: rgba(93, 91, 255, 0.32);
+}
+
+/* ลิงก์ไปหน้าบัตรเครดิต — ปุ่มเดียวที่ฟีเจอร์บัตรเครดิตเพิ่มเข้ามาใน edit.js (ADR-008 / AC-30) */
+.creditCardsLinkButton {
+  border: 1px solid rgba(93, 91, 255, 0.45);
+  border-radius: 999px;
+  padding: 12px 20px;
+  background: rgba(93, 91, 255, 0.2);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  box-shadow: 0 18px 40px rgba(5,10,32,0.45);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.creditCardsLinkButton:hover {
+  transform: translateY(-2px);
+  background: rgba(93, 91, 255, 0.32);
+}
+
 .reportDownloadButton {
   border: 1px solid rgba(255,255,255,0.2);
   border-radius: 999px;
