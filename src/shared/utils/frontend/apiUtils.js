@@ -254,3 +254,80 @@ export const dailyExpenseAPI = {
 		body: withUserPayload({ month, items })
 	})
 };
+
+const CREDIT_CARDS_URL = '/api/credit-cards';
+const CREDIT_CARD_PLANS_URL = '/api/credit-cards/plans';
+const CREDIT_CARD_REVOLVING_URL = '/api/credit-cards/revolving';
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+/**
+ * บัตรเครดิต & แผนผ่อนชำระ
+ * ใช้ buildUrl / withUserPayload เหมือน API อื่น ทำให้ userId + Bearer token แนบไปเองเสมอ
+ */
+export const creditCardAPI = {
+	getCards: async () => jsonFetch(buildUrl(CREDIT_CARDS_URL)),
+	saveCard: async (card) => jsonFetch(CREDIT_CARDS_URL, {
+		method: 'POST',
+		headers: JSON_HEADERS,
+		body: withUserPayload({ card })
+	}),
+	deleteCard: async (cardId) => jsonFetch(CREDIT_CARDS_URL, {
+		method: 'DELETE',
+		headers: JSON_HEADERS,
+		body: withUserPayload({ cardId })
+	}),
+	getPlans: async (filters = {}) => jsonFetch(buildUrl(CREDIT_CARD_PLANS_URL, filters)),
+	createPlan: async (plan) => jsonFetch(CREDIT_CARD_PLANS_URL, {
+		method: 'POST',
+		headers: JSON_HEADERS,
+		body: withUserPayload({ plan })
+	}),
+	updatePlan: async (planId, patch) => jsonFetch(CREDIT_CARD_PLANS_URL, {
+		method: 'PUT',
+		headers: JSON_HEADERS,
+		body: withUserPayload({ planId, patch })
+	}),
+	setInstallmentPaid: async (planId, installmentNo, paid) => jsonFetch(CREDIT_CARD_PLANS_URL, {
+		method: 'PATCH',
+		headers: JSON_HEADERS,
+		body: withUserPayload({ planId, installmentNo, paid })
+	}),
+	cancelPlan: async (planId) => jsonFetch(CREDIT_CARD_PLANS_URL, {
+		method: 'DELETE',
+		headers: JSON_HEADERS,
+		body: withUserPayload({ planId, mode: 'cancel' })
+	}),
+	deletePlan: async (planId) => jsonFetch(CREDIT_CARD_PLANS_URL, {
+		method: 'DELETE',
+		headers: JSON_HEADERS,
+		body: withUserPayload({ planId, mode: 'delete' })
+	}),
+	// ยอดใช้จ่ายหมุนเวียน — ตัวเลขทั้งหมด server คำนวณให้ client ส่งได้แค่ newSpend / paymentAction
+	getRevolving: async (filters = {}) => jsonFetch(buildUrl(CREDIT_CARD_REVOLVING_URL, filters)),
+	saveRevolvingSpend: async (cardId, month, newSpend) => jsonFetch(CREDIT_CARD_REVOLVING_URL, {
+		method: 'POST',
+		headers: JSON_HEADERS,
+		body: withUserPayload({ cycle: { cardId, month, newSpend } })
+	}),
+	setRevolvingAction: async (cardId, month, paymentAction) => jsonFetch(CREDIT_CARD_REVOLVING_URL, {
+		method: 'PATCH',
+		headers: JSON_HEADERS,
+		body: withUserPayload({ cardId, month, paymentAction })
+	}),
+	deleteRevolvingCycle: async (cardId, month) => jsonFetch(CREDIT_CARD_REVOLVING_URL, {
+		method: 'DELETE',
+		headers: JSON_HEADERS,
+		body: withUserPayload({ cardId, month })
+	}),
+	// metadata สำหรับตกแต่งแถว cci_ ใน ExpenseTable — ล้มเหลวแล้วคืน [] ไม่ทำให้หน้ารายจ่ายพัง
+	getMonthInstallments: async (month) => {
+		if (!month) return [];
+		try {
+			const data = await jsonFetch(buildUrl(CREDIT_CARD_PLANS_URL, { month }));
+			return Array.isArray(data?.items) ? data.items : [];
+		} catch (error) {
+			console.warn('Could not load installment metadata:', error);
+			return [];
+		}
+	}
+};

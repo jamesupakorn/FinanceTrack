@@ -1,20 +1,22 @@
-import { calculateSalarySummary, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils';
+import { calculateSalarySummary } from '../../src/shared/utils/backend/apiUtils';
 import { assertUserId } from '../../src/shared/utils/backend/userRequest';
 import {
 	isJsonMode,
 	withGeneratedId,
 	getMongoCollection
 } from '../../lib/dataSource';
+import {
+	enforceSharedMonthWindowJson,
+	enforceSharedMonthWindowMongo
+} from '../../src/shared/utils/backend/sharedMonthWindow.js';
 
 const {
 	getUserData,
 	updateUserData,
-	limitUserEntries,
 } = require('../../src/backend/data/userUtils');
 
 const COLLECTION_NAME = 'salary';
 const JSON_FILENAME = 'salary.json';
-const MONTH_LIMIT = 15;
 
 function createDefaultSalaryStructure() {
 	return {
@@ -41,13 +43,6 @@ function createDefaultSalaryStructure() {
 		saved_at: new Date().toISOString(),
 		note: ""
 	};
-}
-
-function enforceUserMonthLimit(bucket = {}) {
-	return limitUserEntries(bucket, {
-		limit: MONTH_LIMIT,
-		keySelector: (_, value) => value?.month || ''
-	});
 }
 
 // เช็คว่า doc เงินเดือนนี้มีข้อมูลจริง (income/deduct มีค่ามากกว่า 0 อย่างน้อย 1 รายการ)
@@ -115,8 +110,10 @@ function handleJsonSalaryPost(req, res, userId) {
 		const nextBucket = { ...bucket };
 		const existing = nextBucket[month] || {};
 		nextBucket[month] = withGeneratedId({ ...existing, ...salaryData, month });
-		return enforceUserMonthLimit(nextBucket);
+		return nextBucket;
 	});
+	// จำกัดหน้าต่าง 15 เดือนแบบรวมทุก collection (expense/income/salary/investment) หลังเขียนไฟล์นี้แล้ว
+	enforceSharedMonthWindowJson(userId, { extraMonth: month });
 	return res.status(201).json({ success: true });
 }
 
@@ -244,7 +241,8 @@ export default async function handler(req, res) {
 				{ $set: { ...salaryData, month, ...userFilter } },
 				{ upsert: true }
 			);
-			await enforceMonthLimit(collection, 15, { filter: userFilter });
+			// จำกัดหน้าต่าง 15 เดือนแบบรวมทุก collection (expense/income/salary/investment)
+			await enforceSharedMonthWindowMongo(userId, { extraMonth: month });
 			return res.status(201).json({ success: true });
 		} else if (req.method === 'DELETE') {
 			const { month } = req.query;

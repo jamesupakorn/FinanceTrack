@@ -8,35 +8,100 @@
  * - คำนวณสรุปยอดตามบัญชีและยอดรวมค่าใช้จ่าย
  */
 
-import { mapDocToFlatItemObjectWithTotals, removeSummaryFields, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils.js';
+import { mapDocToFlatItemObjectWithTotals, removeSummaryFields } from '../../src/shared/utils/backend/apiUtils.js';
 import { assertUserId } from '../../src/shared/utils/backend/userRequest.js';
 import { getAccountSummary, getExpenseTotals, extractRemovalKeys } from '../../src/shared/utils/commonUtils.js';
+import {
+  loadCreditCardContext,
+  safeBuildCreditCardRows,
+  safeGetCreditCardMonths,
+  applyCreditCardPaidFromExpensePayload,
+  stripCreditCardKeys
+} from '../../src/shared/utils/backend/creditCardSync.js';
+import { getUserBankAccounts } from '../../lib/userStore.js';
 import {
   isJsonMode,
   withGeneratedId,
   getMongoCollection
 } from '../../lib/dataSource.js';
+import {
+  enforceSharedMonthWindowJson,
+  enforceSharedMonthWindowMongo
+} from '../../src/shared/utils/backend/sharedMonthWindow.js';
 
 const {
   getUserData,
   updateUserData,
-  limitUserEntries,
 } = require('../../src/backend/data/userUtils');
 
 const COLLECTION_NAME = 'monthly_expense'; // ชื่อ collection ใน MongoDB
 const JSON_FILENAME = 'monthly_expense.json'; // ไฟล์ JSON สำหรับโหมด file-based
-const MONTH_LIMIT = 15; // จำกัดข้อมูลย้อนหลังสูงสุด 15 เดือนต่อผู้ใช้
 
 /**
- * จำกัดจำนวนเดือนข้อมูลต่อผู้ใช้ไว้ที่ 15 เดือน
- * @param {object} bucket - ข้อมูลรายเดือนของผู้ใช้
- * @returns {object} bucket ที่ถูกจำกัดจำนวนเดือนแล้ว
+ * โหลด context สำหรับ inject แถวบัตรเครดิต (ADR-009 · ADR-011)
+ * ความล้มเหลวทุกกรณีถูกกลืนและคืน null — บัตรเครดิตต้องไม่มีทางทำให้หน้ารายจ่ายพัง
+ * @param {string} userId
+ * @returns {Promise<object|null>}
  */
-function enforceUserMonthLimit(bucket = {}) {
-  return limitUserEntries(bucket, {
-    limit: MONTH_LIMIT,
-    keySelector: (_, value) => value?.month || ''
+async function loadCreditCardSyncContext(userId) {
+  try {
+    let bankAccounts = [];
+    try {
+      bankAccounts = await getUserBankAccounts(userId);
+    } catch (err) {
+      bankAccounts = [];
+    }
+    return await loadCreditCardContext(userId, bankAccounts);
+  } catch (err) {
+    console.error('Credit card sync: context unavailable for user', userId, err);
+    return null;
+  }
+}
+
+/**
+ * สร้าง response ของเดือนที่ยังไม่มีเอกสาร แต่มีแถวบัตรเครดิต (Stage 4 MAJOR-1)
+ * @param {object} derived - แถวที่ derive มา
+ * @returns {object} flat object พร้อมสรุปยอด
+ */
+function buildDerivedOnlyMonth(derived) {
+  const flat = { ...derived };
+  flat.accountSummary = getAccountSummary(flat, []);
+  flat.totalActualPaid = getExpenseTotals(flat).totalActualPaid;
+  return flat;
+}
+
+/**
+ * เติมเดือนที่มีเฉพาะแถวบัตรเครดิต (ยังไม่มีเอกสารเก็บไว้) เข้าไปใน map ของ branch "ทุกเดือน"
+ * ถ้าไม่ทำขั้นนี้ แผน 10 งวดจะเห็นแค่เดือนที่เคยบันทึกไว้เท่านั้น
+ * และเดือนที่มีแต่ยอดหมุนเวียนจะหายไปทั้งเดือน (AC-34 / AC-54)
+ * @param {object} withTotals - map เดือน → flat (แก้ไขในที่)
+ * @param {object|null} context
+ */
+function mergeCreditCardOnlyMonths(withTotals, context) {
+  if (!context) return;
+  safeGetCreditCardMonths(context).forEach(monthKey => {
+    if (withTotals[monthKey]) return;
+    const derived = safeBuildCreditCardRows(context, monthKey);
+    if (!Object.keys(derived).length) return;
+    withTotals[monthKey] = buildDerivedOnlyMonth(derived);
   });
+}
+
+/**
+ * ขั้นตอน POST: เขียน paid ของงวดผ่อน/ยอดหมุนเวียนกลับเข้าแผน แล้วคืน payload ที่ปลอดคีย์ cci_/ccr_
+ * การ sync ล้มเหลวไม่ทำให้การบันทึกรายจ่ายล้มเหลว — log แล้วบันทึกต่อ (R-2)
+ * @param {string} userId
+ * @param {object} expenseData
+ * @param {string} month - บังคับ เพราะคีย์ ccr_ ไม่ได้เข้ารหัสเดือนไว้ในตัวเอง (ADR-011)
+ * @returns {Promise<object>} payload ที่พร้อมบันทึก
+ */
+async function applyCreditCardPaid(userId, expenseData, month) {
+  try {
+    await applyCreditCardPaidFromExpensePayload(userId, expenseData, month);
+  } catch (err) {
+    console.error('Credit card sync: failed to write paid state back to credit card store', err);
+  }
+  return stripCreditCardKeys(expenseData);
 }
 
 /**
@@ -47,27 +112,39 @@ function enforceUserMonthLimit(bucket = {}) {
  * @param {object} res - Express response
  * @param {string} userId - รหัสผู้ใช้
  */
-function handleJsonExpenseGet(req, res, userId) {
+async function handleJsonExpenseGet(req, res, userId) {
   const bucket = getUserData(JSON_FILENAME, userId);
   const { month } = req.query;
+  const context = await loadCreditCardSyncContext(userId);
+
   if (month) {
     const doc = bucket[month];
-    if (!doc) return res.status(200).json({});
+    const derived = safeBuildCreditCardRows(context, month, doc?.bankAccounts);
+    // เดือนที่ยังไม่เคยบันทึก แต่มีงวดผ่อนครบกำหนด ต้องคืนแถวนั้นด้วย (AC-31)
+    if (!doc) {
+      if (!Object.keys(derived).length) return res.status(200).json({});
+      return res.status(200).json(buildDerivedOnlyMonth(derived));
+    }
     let flat = mapDocToFlatItemObjectWithTotals(doc);
+    // merge หลัง mapDocToFlatItemObjectWithTotals เสมอ เพราะ legacy branch ของมัน hardcode paid: false
+    Object.assign(flat, derived);
     flat.accountSummary = getAccountSummary(flat, flat.bankAccounts);
     const totals = getExpenseTotals(flat);
     flat.totalActualPaid = totals.totalActualPaid;
     return res.status(200).json(flat);
   }
+
   const withTotals = {};
   Object.entries(bucket).forEach(([monthKey, doc]) => {
     if (!doc || !doc.month) return;
     let flat = mapDocToFlatItemObjectWithTotals(doc);
+    Object.assign(flat, safeBuildCreditCardRows(context, monthKey, doc.bankAccounts));
     flat.accountSummary = getAccountSummary(flat, flat.bankAccounts);
     const totals = getExpenseTotals(flat);
     flat.totalActualPaid = totals.totalActualPaid;
     withTotals[monthKey] = flat;
   });
+  mergeCreditCardOnlyMonths(withTotals, context);
   return res.status(200).json(withTotals);
 }
 
@@ -78,13 +155,16 @@ function handleJsonExpenseGet(req, res, userId) {
  * @param {object} res - Express response
  * @param {string} userId - รหัสผู้ใช้
  */
-function handleJsonExpensePost(req, res, userId) {
+async function handleJsonExpensePost(req, res, userId) {
   const { month, expense_data } = req.body;
   if (!month || !expense_data) {
     return res.status(400).json({ error: 'month and expense_data required' });
   }
-  const removalList = extractRemovalKeys(expense_data);
-  const cleanData = removeSummaryFields(expense_data);
+  // เขียนเฉพาะ paid กลับเข้าแผนผ่อน/ยอดหมุนเวียน แล้วตัดคีย์ cci_/ccr_ ทิ้งก่อนบันทึก
+  // (BR-CC-007 · BR-CC-016) — month จำเป็นเพราะคีย์ ccr_ ไม่ได้เข้ารหัสเดือนไว้ในตัวเอง
+  const payload = await applyCreditCardPaid(userId, expense_data, month);
+  const removalList = extractRemovalKeys(payload);
+  const cleanData = removeSummaryFields(payload);
   delete cleanData.__removeKeys;
   updateUserData(JSON_FILENAME, userId, (bucket) => {
     const nextBucket = { ...bucket };
@@ -96,8 +176,10 @@ function handleJsonExpensePost(req, res, userId) {
       }
     });
     nextBucket[month] = withGeneratedId(merged);
-    return enforceUserMonthLimit(nextBucket);
+    return nextBucket;
   });
+  // จำกัดหน้าต่าง 15 เดือนแบบรวมทุก collection (expense/income/salary/investment) หลังเขียนไฟล์นี้แล้ว
+  enforceSharedMonthWindowJson(userId, { extraMonth: month });
   return res.status(200).json({ success: true });
 }
 
@@ -113,10 +195,10 @@ export default async function handler(req, res) {
 
   if (isJsonMode()) {
     if (req.method === 'GET') {
-      return handleJsonExpenseGet(req, res, userId);
+      return await handleJsonExpenseGet(req, res, userId);
     }
     if (req.method === 'POST') {
-      return handleJsonExpensePost(req, res, userId);
+      return await handleJsonExpensePost(req, res, userId);
     }
     return res.status(405).end();
   }
@@ -133,6 +215,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const { month } = req.query;
+      const context = await loadCreditCardSyncContext(userId);
 
       if (month) {
         let doc;
@@ -145,7 +228,12 @@ export default async function handler(req, res) {
           console.error('Error fetching doc for month:', month, err);
           return res.status(500).json({ error: 'Database query error' });
         }
+        const derived = safeBuildCreditCardRows(context, month, doc?.bankAccounts);
         if (!doc || typeof doc !== 'object') {
+          // เดือนที่ยังไม่เคยบันทึก แต่มีงวดผ่อนครบกำหนด ต้องคืนแถวนั้นด้วย (AC-31)
+          if (Object.keys(derived).length) {
+            return res.status(200).json(buildDerivedOnlyMonth(derived));
+          }
           console.error('No expense data found for this month:', month);
           return res.status(200).json({});
         }
@@ -157,9 +245,14 @@ export default async function handler(req, res) {
           flat = mapDocToFlatItemObjectWithTotals(docForMapping);
         } catch (err) {
           console.error('Error mapping expense doc for month:', month, err, doc);
+          if (Object.keys(derived).length) {
+            return res.status(200).json(buildDerivedOnlyMonth(derived));
+          }
           return res.status(200).json({});
         }
-        if (!flat || Object.keys(flat).length === 0) {
+        // merge ก่อนเช็คว่าว่างหรือไม่ มิฉะนั้นเดือนที่มีแต่แถวผ่อนจะถูกทิ้ง
+        flat = Object.assign(flat || {}, derived);
+        if (Object.keys(flat).length === 0) {
           console.error('Malformed expense data for this month:', month, flat);
           return res.status(200).json({});
         }
@@ -209,11 +302,14 @@ export default async function handler(req, res) {
             return;
           }
           if (!flat || Object.keys(flat).length === 0) return;
+          Object.assign(flat, safeBuildCreditCardRows(context, doc.month, doc.bankAccounts));
           flat.accountSummary = getAccountSummary(flat, flat.bankAccounts);
           const totals = getExpenseTotals(flat);
           flat.totalActualPaid = totals.totalActualPaid;
           withTotals[doc.month] = flat;
         });
+        // เดือนที่มีเฉพาะงวดผ่อน (ยังไม่มีเอกสาร) ต้องปรากฏใน branch ทุกเดือนด้วย (AC-34)
+        mergeCreditCardOnlyMonths(withTotals, context);
         res.status(200).json(withTotals);
       }
     } catch (error) {
@@ -223,9 +319,12 @@ export default async function handler(req, res) {
     try {
       const { month, expense_data } = req.body;
       if (month && expense_data) {
+        // เขียนเฉพาะ paid กลับเข้าแผนผ่อน/ยอดหมุนเวียน แล้วตัดคีย์ cci_/ccr_ ทิ้งก่อนบันทึก
+        // (BR-CC-007 · BR-CC-016) — month จำเป็นเพราะคีย์ ccr_ ไม่ได้เข้ารหัสเดือนไว้ในตัวเอง
+        const payload = await applyCreditCardPaid(userId, expense_data, month);
         // ลบ field summary ก่อนบันทึก
-        const removalList = extractRemovalKeys(expense_data);
-        const cleanData = removeSummaryFields(expense_data);
+        const removalList = extractRemovalKeys(payload);
+        const cleanData = removeSummaryFields(payload);
         delete cleanData.__removeKeys;
         const updateOps = {
           $set: { ...cleanData, month, ...userFilter },
@@ -241,7 +340,8 @@ export default async function handler(req, res) {
           updateOps,
           { upsert: true }
         );
-        await enforceMonthLimit(collection, 15, { filter: userFilter });
+        // จำกัดหน้าต่าง 15 เดือนแบบรวมทุก collection (expense/income/salary/investment)
+        await enforceSharedMonthWindowMongo(userId, { extraMonth: month });
         res.status(200).json({ success: true });
       } else {
         res.status(400).json({ error: 'month and expense_data required' });

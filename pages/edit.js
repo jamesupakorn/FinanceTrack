@@ -13,6 +13,7 @@ import SalaryCalculator from '../src/frontend/components/SalaryCalculator';
 import MonthManager from '../src/frontend/components/MonthManager';
 import { Icons } from '../src/frontend/components/Icons';
 import ChangePasswordModal from '../src/frontend/components/ChangePasswordModal';
+import ExpenseCalendarModal from '../src/frontend/components/ExpenseCalendarModal';
 import { useTheme } from '../src/frontend/contexts/ThemeContext';
 import { useSession } from '../src/frontend/contexts/SessionContext';
 import { withApiTokenHeaders } from '../src/shared/utils/frontend/apiToken';
@@ -233,6 +234,7 @@ export default function EditPage() {
   const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   const [reportMonthModalOpen, setReportMonthModalOpen] = useState(false);
   const [selectedReportMonths, setSelectedReportMonths] = useState([]);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   React.useEffect(() => {
     if (isReady && !currentUser) {
       router.replace('/profiles');
@@ -555,6 +557,23 @@ export default function EditPage() {
               <div className={styles.headerActionGroup}>
                 <button
                   type="button"
+                  className={styles.calendarLinkButton}
+                  onClick={() => setCalendarOpen(true)}
+                  aria-label="เปิดปฏิทินค่าใช้จ่าย"
+                >
+                  <Icons.Calendar size={16} />
+                  ปฏิทิน
+                </button>
+                <button
+                  type="button"
+                  className={styles.creditCardsLinkButton}
+                  onClick={() => router.push('/credit-cards')}
+                >
+                  <Icons.CreditCard size={16} />
+                  บัตรเครดิต
+                </button>
+                <button
+                  type="button"
                   className={styles.reportDownloadButton}
                   onClick={handleOpenReportMonthModal}
                   disabled={isDownloadingReport || months.length === 0}
@@ -843,6 +862,13 @@ export default function EditPage() {
       onSubmit={handleChangePasswordSubmit}
       errorMessage={changePasswordError}
       isSubmitting={changePasswordSubmitting}
+    />
+    <ExpenseCalendarModal
+      open={calendarOpen}
+      onClose={({ changed } = {}) => {
+        setCalendarOpen(false);
+        if (changed) handleDataRefresh();
+      }}
     />
     {selectedMonth && (
       <div className={styles.floatingBar}>

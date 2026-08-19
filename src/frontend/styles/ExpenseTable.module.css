@@ -967,6 +967,62 @@
   }
 }
 
+/* แถวผ่อนชำระบัตรเครดิต (cci_) — อ่านอย่างเดียว ยกเว้นสถานะชำระ (ADR-009) */
+.installmentDivider {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-light);
+  padding: 12px 10px 6px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.16);
+}
+
+.lockedRow {
+  background: rgba(93, 91, 255, 0.05);
+}
+
+.readonlyValue {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.readonlyAmount {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+.cardSourceBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(93, 91, 255, 0.14);
+  border: 1px solid rgba(93, 91, 255, 0.32);
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.cardSourceLink {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--color-primary);
+  font-size: 0.78rem;
+  text-decoration: none;
+  min-height: 44px;
+  line-height: 44px;
+}
+
+.cardSourceLink:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 768px) {
   .expenseCard {
     border-radius: 14px;
@@ -989,6 +1045,19 @@
   .dateInput {
     width: 100%;
     min-width: 0;
+  }
+
+  .installmentDivider {
+    padding: 14px 2px 6px;
+  }
+
+  .readonlyValue {
+    font-size: 0.95rem;
+  }
+
+  .readonlyAmount {
+    font-size: 1.2rem;
+    text-align: left;
   }
 }
 
