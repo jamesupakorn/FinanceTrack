@@ -2,6 +2,7 @@
 // รวมฟังก์ชันคำนวณ summary และ chart สำหรับ SummaryReport
 
 import { isPaidFlag } from '../commonUtils';
+import { computeTotalIncome } from './monthlySummary';
 
 const META_FIELDS = new Set(['totalActualPaid', 'accountSummary', 'month', '_id', '__removeKeys']);
 
@@ -18,12 +19,9 @@ const getUnpaidTotal = (expenseData = {}) => {
 };
 
 export function getSummaryData({ incomeData, expenseData, savingsData, taxData, salaryData, currentMonth, currentYear }) {
-  const incomeTotalRaw = parseFloat(incomeData?.รวม || 0);
-  const incomeSalaryRaw = parseFloat(incomeData?.salary || 0);
-  const salaryNetIncome = parseFloat(salaryData?.summary?.net_income || salaryData?.สรุป?.เงินได้สุทธิ || 0);
-  const nonSalaryIncome = incomeTotalRaw - (Number.isFinite(incomeSalaryRaw) ? incomeSalaryRaw : 0);
-  const totalIncome = (Number.isFinite(salaryNetIncome) && salaryNetIncome > 0 ? salaryNetIncome : incomeSalaryRaw || 0)
-    + (Number.isFinite(nonSalaryIncome) ? nonSalaryIncome : 0);
+  // รายรับรวม: ย้ายไปเป็น computeTotalIncome ใน monthlySummary.js (P1 · shell-navigation) —
+  // ตรรกะเดิมทุกประการ ผลลัพธ์จึง byte-identical (AC-SH-6)
+  const totalIncome = computeTotalIncome({ incomeData, salaryData });
   const totalExpenseActual = parseFloat(expenseData.totalActualPaid || 0);
   const totalExpenseUnpaid = getUnpaidTotal(expenseData);
   const totalSavings = parseFloat(savingsData.รวมเงินเก็บ || 0);

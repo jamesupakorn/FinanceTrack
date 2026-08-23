@@ -1,0 +1,238 @@
+/*
+ * Settings.module.css — หน้า /settings (P4 · reports-settings)
+ * breakpoint เดียวคือ 768px (AC-RS-25) — ตามธรรมเนียมเดียวกับ Layout.module.css/CreditCard.module.css
+ * โทเค็นสี/รัศมี/focus-ring ใช้ของเดิมทั้งหมด (rgba(93,91,255,*) = --color-primary, ตามแพทเทิร์นที่
+ * CreditCardForm.module.css ใช้อยู่แล้ว) ไม่มี token ใหม่
+ */
+
+.settingsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 640px;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sectionHint {
+  margin: 0 0 20px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.thresholdForm {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ------------------------------------------------------------ load-failed notice */
+.loadFailedNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(235, 87, 87, 0.35);
+  background: rgba(235, 87, 87, 0.08);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.retryButton {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.retryButton:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ------------------------------------------------------------ field rows */
+.fieldList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.fieldRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 16px;
+  row-gap: 4px;
+  min-height: 56px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-light);
+  border-radius: 8px;
+  transition: box-shadow 0.2s ease;
+}
+
+@keyframes settingsFieldPulse {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 0 3px var(--color-primary); }
+}
+
+.fieldRowPulse {
+  animation: settingsFieldPulse 2s ease;
+}
+
+.fieldLabel {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fieldInputWrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: end;
+}
+
+.fieldInput {
+  width: 84px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.95rem;
+  text-align: right;
+  outline: none;
+  transition: border-color 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.fieldInput:focus-visible {
+  border-color: rgba(93, 91, 255, 0.8);
+  box-shadow: 0 0 0 3px rgba(93, 91, 255, 0.2);
+}
+
+.fieldInput:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fieldInputError {
+  border-color: rgba(235, 87, 87, 0.7);
+}
+
+.fieldSuffix {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.fieldHint {
+  grid-column: 1 / -1;
+  font-size: 0.72rem;
+  color: var(--text-light);
+}
+
+.fieldError {
+  grid-column: 1 / -1;
+  font-size: 0.78rem;
+  color: #ff9db6;
+}
+
+/* ------------------------------------------------------------ summary line + actions */
+.summaryLine {
+  margin: 0;
+  padding-top: 4px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.formActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-light);
+}
+
+.resetButton {
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.resetButton:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.saveButton {
+  min-height: 44px;
+  padding: 10px 24px;
+  border-radius: 999px;
+  border: none;
+  background: var(--color-primary);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.saveButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.resetButton:focus-visible,
+.saveButton:focus-visible,
+.retryButton:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ================================================================
+   Mobile — breakpoint เดียวเท่านั้น (AC-RS-25)
+   ================================================================ */
+@media (max-width: 768px) {
+  .fieldRow {
+    grid-template-columns: 1fr;
+    min-height: 56px;
+  }
+
+  .fieldInputWrapper {
+    justify-self: stretch;
+  }
+
+  .fieldInput {
+    width: 100%;
+    max-width: 120px;
+  }
+
+  .formActions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .resetButton,
+  .saveButton {
+    width: 100%;
+  }
+}

@@ -255,6 +255,20 @@ export const dailyExpenseAPI = {
 	})
 };
 
+/**
+ * บัญชีธนาคาร + เกณฑ์สุขภาพงบประมาณ ของผู้ใช้ — ทั้งคู่อยู่บน endpoint เดียวกัน (user-bank-accounts.js)
+ * ใช้ buildUrl/withUserPayload/jsonFetch เหมือน API อื่นทุกตัว — ไม่ผ่าน SessionContext.js:82 ที่ยัง
+ * เป็น bare fetch() ไม่แนบ token (F-1) จึงไม่ได้รับผลจากบั๊กนั้น
+ */
+export const userSettingsAPI = {
+	get: async () => jsonFetch(buildUrl('/api/user-bank-accounts')),
+	saveThresholds: async (budgetThresholds) => jsonFetch('/api/user-bank-accounts', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ budgetThresholds })
+	})
+};
+
 const CREDIT_CARDS_URL = '/api/credit-cards';
 const CREDIT_CARD_PLANS_URL = '/api/credit-cards/plans';
 const CREDIT_CARD_REVOLVING_URL = '/api/credit-cards/revolving';

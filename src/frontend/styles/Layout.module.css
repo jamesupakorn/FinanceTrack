@@ -1,0 +1,445 @@
+/*
+ * Layout.module.css
+ * เชลล์กลางของทุกหน้า: sidebar (desktop) / top bar + bottom nav (mobile) / bottom sheet "เพิ่มเติม"
+ * breakpoint เดียวคือ 768px เท่านั้น (AC-SH-18) — ตามธรรมเนียมเดียวกับ CreditCard.module.css
+ * โทเค็นเรขาคณิต 3 ตัวที่ UX_SPEC ระบุ ประกาศแบบ global ที่นี่ — ไม่มี token สี/ดีไซน์ใหม่
+ * reduced-motion ใช้กติกา global ที่มีอยู่แล้วใน globals.css (ครอบทุก transition/animation ด้วย
+ * !important) จึงไม่ต้องประกาศ media query ของ prefers-reduced-motion ซ้ำที่นี่ — จะทำให้ผิด AC-SH-18
+ */
+
+:global(:root) {
+  --nav-sidebar-width: 240px;
+  --nav-bottom-height: 56px;
+  --nav-safe-bottom: calc(var(--nav-bottom-height) + env(safe-area-inset-bottom, 0px));
+}
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.skipLink {
+  position: fixed;
+  top: -60px;
+  left: 12px;
+  z-index: 200;
+  padding: 12px 20px;
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: 10px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.skipLink:focus-visible,
+.skipLink:focus {
+  top: 12px;
+}
+
+/* ------------------------------------------------------------ sidebar (desktop) */
+.sidebar {
+  width: var(--nav-sidebar-width);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-light);
+  padding: 24px 16px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.sidebarBrand {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding: 0 12px 24px;
+}
+
+.sidebarNavList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.sidebarNavItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: none;
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.18s cubic-bezier(0.22, 1, 0.36, 1), color 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sidebarNavItem:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+.sidebarNavItemActive {
+  border-left-color: var(--color-primary);
+  background: rgba(93, 91, 255, 0.14);
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.sidebarFooter {
+  border-top: 1px solid var(--border-light);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.sidebarLogout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: var(--danger-color);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.sidebarLogout:hover {
+  background: rgba(255, 122, 162, 0.12);
+}
+
+.navIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.navIconActive {
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------ main column */
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topBar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-light);
+  backdrop-filter: blur(18px);
+  padding: 12px 28px;
+}
+
+.topBarTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 36px;
+}
+
+.topBarTitle {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userMenuWrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.headerActionsRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.content {
+  flex: 1;
+  padding: 28px;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ------------------------------------------------------------ bottom nav (mobile) — ซ่อนบน desktop */
+.bottomNav {
+  display: none;
+}
+
+.bottomNavItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 44px;
+  min-height: 44px;
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-light);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.bottomNavItemActive {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.bottomNavLabel {
+  font-size: 0.68rem;
+  line-height: 1.1;
+}
+
+/* ------------------------------------------------------------ bottom sheet "เพิ่มเติม" */
+.sheetBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: rgba(2, 6, 23, 0.62);
+  display: flex;
+  align-items: flex-end;
+}
+
+.sheet {
+  width: 100%;
+  background: var(--bg-surface);
+  border-radius: 20px 20px 0 0;
+  border: 1px solid var(--border-light);
+  border-bottom: none;
+  padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: sheetSlideUp 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes sheetSlideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.sheetHandle {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-color);
+  margin: 4px auto 12px;
+}
+
+.sheetRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sheetRow:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sheetRowDanger {
+  color: var(--danger-color);
+}
+
+.sheetDivider {
+  height: 1px;
+  background: var(--border-light);
+  margin: 8px 4px;
+}
+
+/* ------------------------------------------------------------ placeholder pages (reports/settings) */
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 40px 0;
+}
+
+.placeholderText {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.placeholderLink {
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  padding: 10px 20px;
+  min-height: 44px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.placeholderLink:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ------------------------------------------------------------ interim dashboard (P1) quick actions */
+.dashboardIntro {
+  color: var(--text-secondary);
+  margin: 0 0 24px;
+}
+
+.quickActionGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.quickActionCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px;
+  min-height: 96px;
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  background: var(--bg-surface-alt);
+  color: var(--text-primary);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.quickActionCard:hover {
+  transform: translateY(-2px);
+  background: rgba(93, 91, 255, 0.14);
+}
+
+.quickActionIcon {
+  display: inline-flex;
+  color: var(--color-primary);
+}
+
+.quickActionLabel {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+/* ------------------------------------------------------------ focus-visible — ADR-006 Decision 5 */
+.sidebarNavItem:focus-visible,
+.sidebarLogout:focus-visible,
+.bottomNavItem:focus-visible,
+.sheetRow:focus-visible,
+.placeholderLink:focus-visible,
+.quickActionCard:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/*
+ * headerActions มาจากแต่ละหน้า (className จาก CSS module ของหน้านั้น เช่น CreditCard.module.css)
+ * เลือกด้วย tag เพื่อไม่ต้องพึ่งพา class ของหน้าที่เรียกใช้ — เดิม credit-cards.js มี
+ * ".page :focus-visible" ครอบปุ่มพวกนี้อยู่ แต่ปุ่มย้ายออกมาอยู่ใน header ของ Layout แล้ว จึงไม่ได้อยู่
+ * ใต้ ".page" อีกต่อไป กติกานี้จึงมาแทนที่ให้ครบทุกหน้าที่ส่ง headerActions เข้ามา
+ */
+.headerActionsRow button:focus-visible,
+.headerActionsRow a:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ================================================================
+   Mobile — breakpoint เดียวเท่านั้น (AC-SH-18)
+   ================================================================ */
+@media (max-width: 768px) {
+  .sidebar {
+    display: none;
+  }
+
+  .content {
+    padding: 16px 16px calc(var(--nav-safe-bottom) + 24px);
+  }
+
+  .topBar {
+    padding: 10px 16px;
+  }
+
+  .topBarTitle {
+    font-size: 1.05rem;
+  }
+
+  .headerActionsRow {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+  }
+
+  .headerActionsRow > * {
+    flex-shrink: 0;
+  }
+
+  .bottomNav {
+    display: flex;
+    align-items: stretch;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100;
+    height: var(--nav-safe-bottom);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border-light);
+    backdrop-filter: blur(18px);
+  }
+
+  .quickActionGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .quickActionCard {
+    padding: 16px;
+    min-height: 84px;
+  }
+}

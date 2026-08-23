@@ -347,9 +347,20 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
           'รายรับรวม',
           formatAmountForPdf(normalizedSummary.ยอดรวมรายรับรายเดือน)
         ],
+        // รายจ่ายรวมเดิม (ก้อนเดียว ทั่วไป+บัตรเครดิตปนกัน) แยกเป็น 2 บรรทัดแล้ว ผลรวมยังเท่าตัวเลขก้อน
+        // เดียวเดิมทุกประการ (AC-RS-27) — ปิด known inconsistency เดิมของ ADR-013
         [
-          'รายจ่ายรวม',
-          formatAmountForPdf(normalizedSummary.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง)
+          'รายจ่ายทั่วไป',
+          formatAmountForPdf(normalizedSummary.ยอดรวมค่าใช้จ่ายรายเดือน_ทั่วไป)
+        ],
+        [
+          'บัตรเครดิต',
+          formatAmountForPdf(normalizedSummary.ยอดรวมค่าใช้จ่ายรายเดือน_บัตรเครดิต)
+        ],
+        // รายวัน — ของเดิมไม่เคยดึงข้อมูลนี้เลย จึงไม่เคยแสดงบรรทัดนี้มาก่อน (AC-RS-29)
+        [
+          'รายจ่ายประจำวัน',
+          formatAmountForPdf(normalizedSummary.ยอดรวมค่าใช้จ่ายรายเดือน_รายวัน)
         ],
         [
           'เงินออมรวม',
