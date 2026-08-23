@@ -9,6 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { incomeAPI, expenseAPI, savingsAPI, taxAPI, salaryAPI, savingsGoalsAPI } from '../../shared/utils/frontend/apiUtils';
 import { getSummaryData, getChartData } from '../../shared/utils/frontend/summaryUtils';
+import { splitExpenseTotals } from '../../shared/utils/frontend/monthlySummary';
 import { formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
 import { useSession } from '../contexts/SessionContext';
 import styles from '../styles/SummaryReport.module.css';
@@ -30,6 +31,10 @@ const SummaryReport = ({ selectedMonth, onReportDataReady, allocatableAmount }) 
   });
 
   const [totalGoalsTarget, setTotalGoalsTarget] = useState(0);
+
+  // แยกรายจ่ายทั่วไป/บัตรเครดิตออกจากกัน (AC-SH-22) — ผลรวมของทั้งคู่ยังเท่ากับตัวเลขเดิม
+  // (summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง) เสมอ ไม่ได้แทนที่ ยอดเงินคงเหลือ/ตัวเลขอื่นใด
+  const [expenseSplit, setExpenseSplit] = useState({ generalExpense: 0, creditCard: 0 });
 
   const [chartData, setChartData] = useState({
     จ่ายจริง: {
@@ -98,7 +103,7 @@ const SummaryReport = ({ selectedMonth, onReportDataReady, allocatableAmount }) 
           taxAPI.getByYear(yearKey),
           salaryAPI.getByMonth(monthKey)
         ]);
-        return getSummaryData({
+        const summary = getSummaryData({
           incomeData,
           expenseData,
           savingsData,
@@ -107,16 +112,19 @@ const SummaryReport = ({ selectedMonth, onReportDataReady, allocatableAmount }) 
           currentMonth: monthKey,
           currentYear: yearKey
         });
+        // แยก รายจ่ายทั่วไป/บัตรเครดิต จาก expenseData ก้อนเดียวกันที่ getSummaryData ใช้อยู่แล้ว
+        const split = splitExpenseTotals(expenseData);
+        return { summary, split };
       };
 
-      let summary = await loadByMonth(monthToUse, yearToUse);
+      let { summary, split } = await loadByMonth(monthToUse, yearToUse);
 
       if (currentUser?.isDemo && isSummaryEmpty(summary)) {
         const fallbackMonth = await getLatestMonthWithData(currentMonth);
         if (fallbackMonth && fallbackMonth !== currentMonth) {
           monthToUse = fallbackMonth;
           yearToUse = parseYearFromMonth(monthToUse);
-          summary = await loadByMonth(monthToUse, yearToUse);
+          ({ summary, split } = await loadByMonth(monthToUse, yearToUse));
         }
       }
 
@@ -127,6 +135,7 @@ const SummaryReport = ({ selectedMonth, onReportDataReady, allocatableAmount }) 
 
       setEffectiveMonth(monthToUse);
       setSummaryData(prev => ({ ...prev, ...summary }));
+      setExpenseSplit({ generalExpense: split.generalExpense, creditCard: split.creditCard });
       setChartData(computedChartData);
       if (typeof onReportDataReady === 'function') {
         onReportDataReady({
@@ -264,10 +273,18 @@ const SummaryReport = ({ selectedMonth, onReportDataReady, allocatableAmount }) 
                 <div
                   className={styles.summaryItem}
                   tabIndex={0}
-                  aria-label={`ยอดรวมค่าใช้จ่ายรายเดือน จ่ายจริง: ${getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง)}`}
+                  aria-label={`รายจ่ายทั่วไป: ${getDisplay(expenseSplit.generalExpense)}`}
                 >
-                  <span className={styles.itemLabel}>ยอดรวมค่าใช้จ่ายรายเดือน</span>
-                  <span className={styles.itemValue}>{getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง)}</span>
+                  <span className={styles.itemLabel}>รายจ่ายทั่วไป</span>
+                  <span className={styles.itemValue}>{getDisplay(expenseSplit.generalExpense)}</span>
+                </div>
+                <div
+                  className={styles.summaryItem}
+                  tabIndex={0}
+                  aria-label={`บัตรเครดิต: ${getDisplay(expenseSplit.creditCard)}`}
+                >
+                  <span className={styles.itemLabel}>บัตรเครดิต</span>
+                  <span className={styles.itemValue}>{getDisplay(expenseSplit.creditCard)}</span>
                 </div>
                 <div
                   className={styles.summaryItem}

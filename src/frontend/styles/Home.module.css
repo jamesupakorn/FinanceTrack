@@ -1,13 +1,14 @@
 /* Home Page Styles */
 
-.homeContainer {
-  min-height: 100vh;
-  width: 100%;
-  padding: 80px 24px 160px;
-  background: radial-gradient(circle at 15% -10%, rgba(93, 91, 255, 0.4), transparent 35%),
-    radial-gradient(circle at 85% 0%, rgba(0, 212, 255, 0.35), transparent 45%);
-  transition: background 0.4s ease;
-}
+/*
+ * .homeContainer, .pageHeader และเพื่อนบ้าน (headerTopRow/headerIntro/headerUserControls/
+ * headerActionGroup/headerIcon/headerCopy/headerEyebrow/pageTitle/pageLead/calendarLinkButton/
+ * creditCardsLinkButton/userMenuWrapper) ถูกลบออก — เดิมเป็นชิ้นส่วนของ header ที่ edit.js เคยเรนเดอร์
+ * เอง ตอนนี้ Layout.js เป็นเจ้าของ header/nav/session guard ของทุกหน้าแล้ว (shell-navigation P1)
+ * classes ด้านล่างที่เหลืออยู่ (userMenuButton/userDropdown/userMenuItem/actionToast/guardContainer ฯลฯ)
+ * ยังใช้อยู่จริง เพราะ Layout.js re-import สไตล์ชุดนี้มาใช้กับเมนูผู้ใช้ของตัวเอง (โครงสร้างเดิม
+ * ไม่เปลี่ยน — ย้ายแค่ผู้เรียกใช้)
+ */
 
 .mainContent {
   max-width: 1280px;
@@ -18,104 +19,6 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 60px 200px rgba(2, 6, 23, 0.65);
   backdrop-filter: blur(28px);
-  position: relative;
-}
-
-/* Header Styles */
-.pageHeader {
-  width: 100%;
-  margin-bottom: 24px;
-  padding: 10px 20px;
-  background: rgba(8, 12, 32, 0.72);
-  border-radius: 16px;
-  color: #fff;
-  box-shadow: 0 4px 24px rgba(5, 10, 32, 0.35);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  text-align: left;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  overflow: visible; /* allow dropdown to render outside header bounds */
-}
-
-.headerTopRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.headerIntro {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.headerUserControls {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  min-width: 160px;
-  align-self: flex-start;
-}
-
-.headerActionGroup {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.headerIcon {
-  width: 96px;
-  height: 96px;
-  border-radius: 28px;
-  background: rgba(255,255,255,0.12);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 30px 60px rgba(5, 10, 32, 0.35);
-}
-
-.headerCopy {
-  flex: 1;
-  min-width: 240px;
-}
-
-.headerEyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.4em;
-  font-size: 0.85rem;
-  margin: 0 0 12px;
-  color: rgba(255,255,255,0.6);
-}
-
-.pageTitle {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pageLead {
-  margin: 0;
-  color: rgba(255,255,255,0.78);
-  font-size: 1.05rem;
-  line-height: 1.7;
-  max-width: 640px;
-}
-
-.userMenuWrapper {
-  margin-left: 0;
   position: relative;
 }
 
@@ -134,50 +37,11 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
-/* ปุ่มเปิดปฏิทินรวมค่าใช้จ่าย — ทรีตเมนต์เดียวกับ .creditCardsLinkButton (Feature 2 / ADR-012) */
-.calendarLinkButton {
-  border: 1px solid rgba(93, 91, 255, 0.45);
-  border-radius: 999px;
-  padding: 12px 20px;
-  background: rgba(93, 91, 255, 0.2);
-  color: #fff;
-  font-family: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  box-shadow: 0 18px 40px rgba(5,10,32,0.45);
-  transition: transform 0.2s ease, background 0.2s ease;
-}
-
-.calendarLinkButton:hover {
-  transform: translateY(-2px);
-  background: rgba(93, 91, 255, 0.32);
-}
-
-/* ลิงก์ไปหน้าบัตรเครดิต — ปุ่มเดียวที่ฟีเจอร์บัตรเครดิตเพิ่มเข้ามาใน edit.js (ADR-008 / AC-30) */
-.creditCardsLinkButton {
-  border: 1px solid rgba(93, 91, 255, 0.45);
-  border-radius: 999px;
-  padding: 12px 20px;
-  background: rgba(93, 91, 255, 0.2);
-  color: #fff;
-  font-family: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  box-shadow: 0 18px 40px rgba(5,10,32,0.45);
-  transition: transform 0.2s ease, background 0.2s ease;
-}
-
-.creditCardsLinkButton:hover {
-  transform: translateY(-2px);
-  background: rgba(93, 91, 255, 0.32);
+/* ADR-006 Decision 5 — เมนูผู้ใช้ตอนนี้เป็น interactive element ของ Layout.js (ผู้เรียกใช้สไตล์ชุดนี้) */
+.userMenuButton:focus-visible,
+.userMenuItem:focus-visible {
+  outline: 2px solid var(--color-primary, #5d5bff);
+  outline-offset: 2px;
 }
 
 .reportDownloadButton {
@@ -591,7 +455,15 @@
 @media (max-width: 768px) {
   .tabContent {
     padding: 24px;
+    padding-bottom: calc(var(--nav-safe-bottom) + 64px);
     border-radius: 24px;
+  }
+
+  /* กันฟิลด์แถวสุดท้ายโดนบัง floating save bar + bottom nav เวลาคีย์บอร์ดมือถือเปิดอยู่ (AC-SH-17 / E11) */
+  .tabContent input,
+  .tabContent select,
+  .tabContent textarea {
+    scroll-margin-bottom: calc(var(--nav-safe-bottom) + 80px);
   }
 }
 
@@ -639,24 +511,13 @@
     width: 16px;
     height: 16px;
   }
-  .headerTopRow {
-    gap: 20px;
-  }
 }
 
 /* Tablet Portrait */
 @media (max-width: 768px) {
-  .homeContainer {
-    padding: 60px 16px 80px;
-  }
   .mainContent {
     padding: 24px;
     border-radius: 28px;
-  }
-  .pageHeader {
-    padding: 8px 16px;
-    margin-bottom: 16px;
-    border-radius: 12px;
   }
 
   .reportMonthActions {
@@ -713,14 +574,8 @@
 
 /* Mobile Large */
 @media (max-width: 640px) {
-  .homeContainer {
-    padding: 48px 12px 72px;
-  }
   .mainContent {
     padding: 18px;
-  }
-  .pageHeader {
-    padding: 8px 12px;
   }
   .tabButton {
     min-width: calc(50% - 6px);
@@ -736,9 +591,6 @@
 
 /* Mobile iPhone 15 (390px) */
 @media (max-width: 420px) and (min-width: 375px) {
-  .homeContainer {
-    padding: 50px 10px 70px;
-  }
   .mainContent {
     padding: 16px;
     border-radius: 24px;
@@ -774,17 +626,9 @@
 
 /* Mobile Portrait */
 @media (max-width: 480px) {
-  .homeContainer {
-    padding: 32px 10px 60px;
-  }
   .mainContent {
     padding: 14px;
     border-radius: 20px;
-  }
-  .pageHeader {
-    padding: 8px 10px;
-    margin-bottom: 12px;
-    border-radius: 12px;
   }
   .tabButton {
     min-width: 100%;
@@ -809,23 +653,6 @@
     box-shadow: none;
   }
 
-  .headerIntro {
-    min-width: 0;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .headerCopy {
-    min-width: 0;
-    width: 100%;
-  }
-
-  .pageLead {
-    max-width: 100%;
-    overflow-wrap: anywhere;
-  }
-
   .sectionCard:hover {
     transform: none;
     box-shadow: none;
@@ -836,10 +663,6 @@
 @media (max-width: 375px) {
   .mainContent {
     padding: 8px;
-  }
-  
-  .pageHeader {
-    padding: 6px 8px;
   }
 
   .sectionCard {
@@ -854,6 +677,8 @@
   }
 
   .tabContent {
+    /* padding จริงที่มีผลคือก้อนล่างสุดของ media query นี้ (มี .tabContent อีกรอบ, ตั้ง padding ทับ
+       อยู่แล้วในโค้ดเดิม) — ค่า padding ที่นี่จึงไม่มีผลกับ bottom offset ของ AC-SH-17 ไม่ต้องแก้ตรงนี้ */
     padding: 16px 12px;
     width: 100%;
     max-width: 100%;
@@ -868,11 +693,6 @@
     top: 12px;
     border-radius: 14px;
     padding: 12px 14px;
-  }
-
-  .homeContainer {
-    padding-left: 8px;
-    padding-right: 8px;
   }
 
   .mainContent {
@@ -905,7 +725,8 @@
     border: none;
     box-shadow: none;
     backdrop-filter: none;
-    padding: 0;
+    /* padding-bottom ไม่ใช้ shorthand — ต้องคงระยะเผื่อ floating bar/bottom nav ไว้ (AC-SH-17) */
+    padding: 0 0 calc(var(--nav-safe-bottom) + 64px);
   }
 }
 
@@ -1091,9 +912,16 @@
   outline-offset: 2px;
 }
 
+/* ยกบาร์ขึ้นพ้น bottom nav ของ Layout เสมอบนมือถือ ไม่ให้ซ้อนทับกัน (AC-SH-17) */
+@media (max-width: 768px) {
+  .floatingBar {
+    bottom: calc(var(--nav-safe-bottom) + 16px);
+  }
+}
+
 @media (max-width: 480px) {
   .floatingBar {
-    bottom: 16px;
+    bottom: calc(var(--nav-safe-bottom) + 8px);
     padding: 8px 12px;
     gap: 6px;
   }

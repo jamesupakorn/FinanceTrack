@@ -1,0 +1,485 @@
+/*
+ * Reports.module.css — หน้า /reports (P4 · reports-settings)
+ * breakpoint เดียวคือ 768px (AC-RS-25) — รวมทุก override มือถือไว้ใน @media บล็อกเดียวท้ายไฟล์
+ * โทเค็นสี/รัศมี/เงา nam ใช้ของเดิมทั้งหมด (คัดลอกรูปแบบจาก Home.module.css ส่วน reportMonth* /
+ * Dashboard.module.css ส่วน collapsible / Dashboard.module.css ส่วน monthNav* — ไม่ได้คิดใหม่)
+ */
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.reportsWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ------------------------------------------------------------ ตัวเลือกเดือน (คอมแพกต์ ◀ label ▶) */
+.monthNavGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.monthNavButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--border-light);
+  background: var(--bg-surface-alt);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.monthNavButton:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.monthNavLabel {
+  min-width: 120px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* ------------------------------------------------------------ collapsible section chrome (3 ส่วน) */
+.panelCard {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  padding: 16px 20px;
+}
+
+.collapsibleHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  color: var(--text-primary);
+  text-align: left;
+  font-family: inherit;
+}
+
+.collapsibleHeader:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.collapsibleTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.rollupInline {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-align: right;
+}
+
+.collapsibleChevron {
+  display: flex;
+  align-items: center;
+  opacity: 0.6;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.collapsibleChevronOpen {
+  transform: rotate(180deg);
+}
+
+.panelBody {
+  padding-top: 12px;
+}
+
+/* ------------------------------------------------------------ คำนวณเงินเดือน — ปุ่มบันทึก */
+.salaryActionsRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.salarySaveButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  border: none;
+  background: var(--color-primary);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.salarySaveButton:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------ เปรียบเทียบรายเดือน */
+.comparisonStatus {
+  color: var(--text-secondary);
+  padding: 12px 0;
+}
+
+.comparisonHint {
+  margin: 0 0 14px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.comparisonTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.comparisonTable th,
+.comparisonTable td {
+  padding: 10px 8px;
+  text-align: right;
+  border-bottom: 1px solid var(--border-light);
+  white-space: nowrap;
+}
+
+.comparisonTable thead th {
+  text-align: right;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.comparisonTable thead th:first-child,
+.comparisonTable tbody th {
+  text-align: left;
+}
+
+.comparisonPartialChip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 193, 7, 0.16);
+  color: var(--warning-color);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.deltaCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.deltaVisible {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.deltaUp {
+  color: var(--secondary-color);
+}
+
+.deltaDown {
+  color: var(--danger-color);
+}
+
+.comparisonCards {
+  display: none;
+}
+
+.comparisonCard {
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.comparisonCard:last-child {
+  margin-bottom: 0;
+}
+
+.comparisonCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.comparisonCardMonth {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.comparisonCardList {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comparisonCardRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.comparisonCardRow dt {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.comparisonCardRow dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.comparisonCardNet {
+  padding-top: 6px;
+  border-top: 1px solid var(--border-light);
+}
+
+.comparisonCardNet dd {
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------ ปุ่ม/โมดัลดาวน์โหลด PDF (ย้ายจาก workspace.js) */
+.reportDownloadButton {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 18px 40px rgba(5, 10, 32, 0.45);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.reportDownloadButton:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 30px 60px rgba(5, 10, 32, 0.6);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.reportDownloadButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 14px 28px rgba(5, 10, 32, 0.35);
+}
+
+.reportMonthModalBackdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(2, 6, 23, 0.62);
+  z-index: 80;
+}
+
+.reportMonthModal {
+  width: min(540px, 100%);
+  max-height: 86vh;
+  overflow-y: auto;
+  background: rgba(6, 9, 27, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  box-shadow: 0 40px 120px rgba(2, 6, 23, 0.65);
+  backdrop-filter: blur(18px);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reportMonthModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.reportMonthModalTitle {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #f5f7ff;
+}
+
+.reportMonthModalHint {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.reportMonthActions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.reportMonthActions button {
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.reportMonthActions button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.reportMonthList {
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 2px;
+}
+
+.reportMonthItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 10px;
+  border-radius: 10px;
+  color: #f5f7ff;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  min-height: 44px;
+}
+
+.reportMonthItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.reportMonthItem input {
+  width: 16px;
+  height: 16px;
+  accent-color: #5d5bff;
+  cursor: pointer;
+}
+
+.reportMonthModalFooter {
+  margin-top: 4px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.reportMonthModalCancelButton,
+.reportMonthModalConfirmButton {
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  min-height: 44px;
+}
+
+.reportMonthModalCancelButton {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.reportMonthModalCancelButton:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.reportMonthModalConfirmButton {
+  background: var(--gradient-primary);
+  color: #fff;
+  border: none;
+}
+
+.reportMonthModalConfirmButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ================================================================
+   Mobile — breakpoint เดียวเท่านั้น (AC-RS-25)
+   ================================================================ */
+@media (max-width: 768px) {
+  .monthNavLabel {
+    min-width: 96px;
+    font-size: 0.9rem;
+  }
+
+  .comparisonTable {
+    display: none;
+  }
+
+  .comparisonCards {
+    display: block;
+  }
+
+  .reportMonthActions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .reportMonthActions button {
+    flex: 1;
+    min-width: 110px;
+  }
+
+  .reportMonthModal {
+    width: min(480px, 100%);
+  }
+
+  .reportMonthModalFooter {
+    flex-direction: column-reverse;
+  }
+
+  .reportMonthModalCancelButton,
+  .reportMonthModalConfirmButton {
+    width: 100%;
+  }
+}

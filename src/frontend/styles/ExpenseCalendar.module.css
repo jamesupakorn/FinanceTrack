@@ -60,9 +60,26 @@
   color: var(--text-primary);
 }
 
+/*
+ * แก้ไข bug-log-dashboard.md (AC-DB-23/26 root cause ร่วม + related finding เรื่องปฏิทินล้นขอบเดสก์ท็อป):
+ * เดิม "1fr 320px" ถูกออกแบบมาสำหรับเชลล์ modal กว้างคงที่ (.calendarModal { max-width: 960px }) เท่านั้น
+ * ตอนนี้ ExpenseCalendar ถูกฝังตรงใน DashboardCalendarSection ด้วย (ไม่ผ่าน modal — ADR-012) ซึ่งความกว้าง
+ * ที่ได้รับมาจาก .dashboardGrid เป็นแบบยืดหยุ่น (1fr) — คอลัมน์ "1fr" เดิมมี min-width อัตโนมัติ = min-content
+ * ของ .calendarGrid ข้างใน (7 คอลัมน์ ไม่มี min-width:0 เหมือนกัน ดูด้านล่าง) ทำให้คอลัมน์นี้ปฏิเสธที่จะแคบกว่า
+ * min-content นั้น แล้วดันทั้ง .calendarLayout กว้างเกินพื้นที่ที่ dashboard จัดสรรให้ — ผลคือปฏิทินล้นขอบ
+ * .content ที่ 1280px/1920px (ไม่กระทบ modal เพราะ 960px กว้างพอเสมออยู่แล้ว)
+ *
+ * ลองแล้วพบว่า "minmax(0, 1fr) minmax(0, 320px)" เฉย ๆ แก้ overflow ได้จริง แต่สลับปัญหา: อัลกอริทึม track
+ * sizing ของ CSS Grid ให้ track ที่ไม่ใช่ fr (คอลัมน์ day-detail 320px) "ชิง" พื้นที่ก่อนเสมอในขั้น Maximize
+ * Tracks (คอลัมน์ fr จะได้แค่เศษที่เหลือในขั้น Expand Flexible Tracks ทีหลัง) — ที่ 1280px วัดจริงคอลัมน์ปฏิทิน
+ * เหลือแค่ ~62px (7 วัน ๆ ละ ~14px อ่านไม่ออกเลย) เพราะ day-detail ชิงไป 320px เต็ม ๆ ก่อน จึงใส่ floor
+ * 240px ให้ฝั่งปฏิทิน (คอลัมน์ตัวเลข/จุดยังพอมีที่อ่านออก) แล้วปล่อยให้ day-detail (320px) หด "รอง" ลงมาแทน
+ * เมื่อพื้นที่ไม่พอ — ตรงข้ามกับที่คิดไว้ตอนแรกแต่ถูกต้องกว่า เพราะปฏิทินคือส่วนใช้งานหลัก ส่วน day-detail
+ * เดิมก็ออกแบบมารับความกว้างแปรผันอยู่แล้ว (การ์ด upcomingItem ที่ห่อ/wrap ได้)
+ */
 .calendarLayout {
   display: grid;
-  grid-template-columns: 1fr 320px;
+  grid-template-columns: minmax(240px, 1fr) minmax(0, 320px);
   gap: 20px;
   align-items: start;
 }
@@ -71,6 +88,7 @@
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
+  min-width: 0;
 }
 
 .calendarWeekday {
@@ -82,6 +100,8 @@
 
 .calendarCell {
   min-height: 64px;
+  min-width: 0; /* grid item ของ repeat(7, 1fr) — .calendarChip ข้างในเป็น white-space:nowrap ถ้าไม่ตัดตรงนี้
+                   min-content ของมันจะดันคอลัมน์กว้างเกิน 1fr ที่ได้รับ (เหมือน AC-DB-23 ของ tileGrid) */
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.02);
@@ -170,6 +190,17 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /*
+   * AC-DB-26 (bug-log-dashboard.md): จำนวนรายการของวันที่เลือกเป็นข้อมูลผันแปร (0 ถึงหลายรายการ) — ถ้าปล่อย
+   * ให้คอลัมน์นี้สูงเท่าที่เนื้อหาต้องการเสมอ ความสูงของ .calendarLayout (และ .calendarArea ทั้งก้อนใน
+   * dashboard) จะแปรผันไม่คงที่ตามข้อมูล ไม่มีสเกเลตันคงที่ใดจับคู่ได้ — ให้ align-self: stretch เพื่อยึด
+   * ความสูงตามคอลัมน์ซ้าย (ปฏิทิน+legend+footer ซึ่งสูงค่อนข้างคงที่อยู่แล้ว ไม่ขึ้นกับจำนวนรายการ) แล้ว
+   * scroll ภายในกรอบนั้นแทนถ้ารายการวันนั้นเยอะ — overflow-y:auto ยังทำให้ automatic minimum size ของ
+   * grid item นี้กลายเป็น 0 ตามสเปก CSS Grid (ไม่ใช่ min-content ของรายการทั้งหมด) จึงไม่ดันแถวให้สูงขึ้น
+   * เองด้วย (เข็มขัดนิรภัยซ้อนกับ align-self: stretch)
+   */
+  align-self: stretch;
+  overflow-y: auto;
 }
 
 .dayDetailTitle {
@@ -274,8 +305,15 @@
     grid-template-columns: 1fr;
   }
 
+  /*
+   * bug-log-dashboard.md — Pass 2, AC-DB-23 regression: ลด padding มือถือลงจาก 12px → 8px คู่กับการตัด
+   * padding ซ้าย-ขวาของ .calendarSection ออกใน Dashboard.module.css เพื่อคืนงบความกว้างให้กริด 7 คอลัมน์
+   * ของ .calendarGrid (ปุ่มวันที่ต้อง ≥44px) เปลี่ยนที่นี่กระทบทั้งสองบริบทที่ใช้ .calendarWrap ร่วมกัน
+   * (ฝังใน DashboardCalendarSection และใน ExpenseCalendarModal) แต่ฝั่ง modal มีงบกว้างเหลือเฟือ
+   * อยู่แล้ว (backdrop padding: 0 ที่มือถือ) จึงแค่ได้พื้นที่เพิ่มขึ้นอีกเล็กน้อย ไม่มีผลเสีย
+   */
   .calendarWrap {
-    padding: 12px;
+    padding: 8px;
   }
 
   .calendarCell {

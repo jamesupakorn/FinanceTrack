@@ -23,27 +23,16 @@ import ExpenseCalendar from './ExpenseCalendar';
 import { Icons } from './Icons';
 import { expenseAPI, creditCardAPI } from '../../shared/utils/frontend/apiUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
-import { formatCurrency, parseToNumber } from '../../shared/utils/frontend/numberUtils';
-import { resolveDueDayForMonth } from '../../shared/utils/dateUtils';
+import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
+import { buildMonthEvents } from '../../shared/utils/frontend/expenseEvents';
 import {
   addMonths,
   getCurrentMonthKey,
-  getDaysInMonthKey,
-  round2,
-  isRevolvingRowKey,
-  isInstallmentRowKey,
-  parseRevolvingRowKey,
-  parseInstallmentRowKey,
   PLAN_STATUS
 } from '../../shared/utils/creditCardUtils';
 import cardStyles from '../styles/CreditCard.module.css';
 import formStyles from '../styles/CreditCardForm.module.css';
 import calStyles from '../styles/ExpenseCalendar.module.css';
-
-// ฟิลด์ระบบที่ไม่ใช่แถวค่าใช้จ่าย — ชุดเดียวกับ EXPENSE_IGNORED_FIELDS ของ line_due_notify.js:51-58
-const IGNORED_ROW_KEYS = new Set([
-  '_id', 'month', 'userId', 'periodKey', 'accountSummary', 'totalActualPaid', 'bankAccounts'
-]);
 
 // selector กว้างไว้ก่อน แล้วค่อยกรองด้วยความจริงของ element ทีหลัง (ดู getTabbableElements)
 const FOCUSABLE_SELECTOR = [
@@ -78,7 +67,7 @@ function getTabbableElements(root) {
  * รูปแบบเดียวกับ ConfirmDialog ใน pages/credit-cards.js ใช้คลาสร่วมจาก CreditCardForm.module.css
  * ตัวเลขทุกตัวมาจาก minimumPreview ที่ server คำนวณให้ — ไม่คำนวณเงินเอง (ADR-011)
  */
-function RevolvingConfirmDialog({
+export function RevolvingConfirmDialog({
   open, dialogRef, restoreFocusRef, cardName, minPaymentDue, preview, busy, onCancel, onConfirm
 }) {
   const cancelButtonRef = useRef(null);
@@ -260,99 +249,13 @@ export default function ExpenseCalendarModal({ open, onClose }) {
   const planById = useMemo(() => new Map(plans.map(plan => [plan.id, plan])), [plans]);
 
   // ---------------------------------------------------------------- event derivation (ADR-012)
-  const calendarData = useMemo(() => {
-    const daysInMonth = getDaysInMonthKey(monthKey);
-    const eventsByDay = new Map();
-    const unscheduledEvents = [];
-    const pushDay = (day, event) => {
-      if (!eventsByDay.has(day)) eventsByDay.set(day, []);
-      eventsByDay.get(day).push(event);
-    };
-
-    // สถานะเทียบกับหน้าต่างข้อมูล 15 เดือน (KL-1 / BR-CC-019) — ดูตาราง 3 สถานะใน spec §Feature 2
-    const monthKeys = Object.keys(monthsMap).sort();
-    let windowState = 'in-window';
-    if (!Object.prototype.hasOwnProperty.call(monthsMap, monthKey) && monthKeys.length > 0) {
-      windowState = monthKey < monthKeys[0] ? 'pruned' : 'future';
-    }
-
-    const rows = (monthsMap[monthKey] && typeof monthsMap[monthKey] === 'object') ? monthsMap[monthKey] : {};
-    Object.entries(rows).forEach(([key, row]) => {
-      if (IGNORED_ROW_KEYS.has(key)) return;
-      if (!row || typeof row !== 'object') return;
-
-      const source = isRevolvingRowKey(key) ? 'revolving' : (isInstallmentRowKey(key) ? 'installment' : 'plain');
-      let card = null;
-      let plan = null;
-      let installmentNo = null;
-
-      if (source === 'revolving') {
-        const parsed = parseRevolvingRowKey(key);
-        card = parsed ? cardById.get(parsed.cardId) || null : null;
-      } else if (source === 'installment') {
-        const parsed = parseInstallmentRowKey(key);
-        if (parsed) {
-          plan = planById.get(parsed.planId) || null;
-          installmentNo = parsed.installmentNo;
-          card = plan ? cardById.get(plan.cardId) || null : null;
-        }
-      }
-
-      const event = {
-        id: `${monthKey}_${key}`,
-        type: 'expense',
-        source,
-        key,
-        name: row.name || 'รายการ',
-        amount: parseToNumber(row.actual),
-        account: row.account || '',
-        paid: row.paid === true || row.paid === 'true',
-        dueDay: row.dueDay,
-        card,
-        plan,
-        installmentNo
-      };
-
-      // dueDay แก้ไม่ได้/แก้ไม่ออก → ไม่ทิ้ง แต่ไปอยู่ถาดด้านล่างแทน (BR-003, edge case 22)
-      const day = resolveDueDayForMonth(row.dueDay, daysInMonth);
-      if (!day) {
-        unscheduledEvents.push(event);
-        return;
-      }
-      pushDay(day, event);
-    });
-
-    // วันสรุปยอด — สิ่งเดียวของบัตรที่ไม่มีแถวใน monthly_expense เลย มีทุกเดือนแม้ไม่มีรายจ่าย
-    cards.forEach(card => {
-      const statementDay = resolveDueDayForMonth(card.statementDay, daysInMonth);
-      if (statementDay) {
-        pushDay(statementDay, {
-          id: `${monthKey}_st_${card.id}`,
-          type: 'statement',
-          source: 'statement',
-          key: `st_${card.id}`,
-          card
-        });
-      }
-    });
-
-    let total = 0;
-    let paidTotal = 0;
-    eventsByDay.forEach(events => {
-      events.forEach(event => {
-        if (event.type !== 'expense') return;
-        total += event.amount;
-        if (event.paid) paidTotal += event.amount;
-      });
-    });
-
-    return {
-      eventsByDay,
-      unscheduledEvents,
-      windowState,
-      monthTotals: { total: round2(total), paid: round2(paidTotal), remaining: round2(total - paidTotal) }
-    };
-  }, [monthKey, monthsMap, cards, cardById, planById]);
+  // สกัดออกไปเป็น buildMonthEvents() ที่ expenseEvents.js แล้ว (P2 · dashboard) — ตรรกะเดิมทุกประการ
+  // ย้ายแบบคำต่อคำ ตรวจแล้วว่า deep-equal กับ memo เดิมบน fixture คงที่ (AC-DB-10) เพื่อให้
+  // DashboardCalendarSection.js เรียกใช้ตัวเดียวกันนี้ได้โดยไม่ derive เหตุการณ์ซ้ำ (BR-DASH-012)
+  const calendarData = useMemo(
+    () => buildMonthEvents({ monthKey, monthsMap, cards, plans }),
+    [monthKey, monthsMap, cards, cardById, planById]
+  );
 
   // ------------------------------------------------------------------- toggle handlers
   const setBusy = (key, busy) => {

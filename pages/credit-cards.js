@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import CreditCardDashboard from '../src/frontend/components/CreditCardDashboard';
 import CreditCardDetail from '../src/frontend/components/CreditCardDetail';
-import ExpenseCalendarModal from '../src/frontend/components/ExpenseCalendarModal';
+import Layout from '../src/frontend/components/Layout';
 import CreditCardForm from '../src/frontend/components/CreditCardForm';
 import InstallmentPlanForm from '../src/frontend/components/InstallmentPlanForm';
 import { Icons } from '../src/frontend/components/Icons';
@@ -69,7 +69,7 @@ function ConfirmDialog({ open, title, message, confirmLabel, onCancel, onConfirm
 
 export default function CreditCardsPage() {
   const router = useRouter();
-  const { currentUser, isReady } = useSession();
+  const { currentUser } = useSession();
 
   const [cards, setCards] = useState([]);
   const [totals, setTotals] = useState(null);
@@ -86,20 +86,16 @@ export default function CreditCardsPage() {
   const [editingPlan, setEditingPlan] = useState(null);
   const [lockedCardId, setLockedCardId] = useState(null);
   const [confirmState, setConfirmState] = useState(null);
-  const [calendarOpen, setCalendarOpen] = useState(false);
+  // calendarTrigger: นับขึ้นเพื่อสั่งให้ Layout เปิดโมดัลปฏิทินรวม (แพทเทิร์นเดียวกับ triggerSave — ADR-003)
+  // แทน calendarOpen เดิม เพราะโมดัลย้ายไปรวมอยู่ที่ Layout หนึ่งเดียวทั้งแอปแล้ว (AC-SH-13)
+  const [calendarTrigger, setCalendarTrigger] = useState(0);
 
   const selectedCardId = typeof router.query.card === 'string' ? router.query.card : null;
-
-  useEffect(() => {
-    if (isReady && !currentUser) {
-      router.replace('/profiles');
-    }
-  }, [isReady, currentUser, router]);
 
   // legacy deep link (ลิงก์ footer ข้อความ LINE เดิม / bookmark เก่า) — เปิดโมดัลปฏิทินอัตโนมัติ (AC-69)
   useEffect(() => {
     if (router.query.view === 'calendar') {
-      setCalendarOpen(true);
+      setCalendarTrigger(prev => prev + 1);
       router.replace({ pathname: '/credit-cards', query: {} }, undefined, { shallow: true });
     }
   }, [router.query.view, router]);
@@ -342,110 +338,96 @@ export default function CreditCardsPage() {
     }
   };
 
-  if (!isReady || !currentUser) {
-    return (
-      <div className={styles.guardContainer}>
-        <Icons.Lock size={48} color="var(--color-primary)" />
-        <p>กำลังตรวจสอบสิทธิ์ผู้ใช้...</p>
-      </div>
-    );
-  }
-
   return (
-    <div className={styles.page}>
-      <div className={styles.container}>
-        <header className={styles.pageHeader}>
-          <div className={styles.headerTitleGroup}>
-            <Icons.CreditCard size={20} color="var(--color-primary)" />
-            <h1 className={styles.pageTitle}>บัตรเครดิต &amp; แผนผ่อนชำระ</h1>
-          </div>
-          <div className={styles.headerActions}>
-            <button type="button" className={styles.primaryButton} onClick={handleOpenAddCard}>
-              <Icons.Plus size={16} /> <span>เพิ่มบัตร</span>
-            </button>
-            <button type="button" className={styles.ghostButton} onClick={() => setCalendarOpen(true)}>
-              <Icons.Calendar size={16} /> <span>ปฏิทิน</span>
-            </button>
-            <button type="button" className={styles.ghostButton} onClick={() => router.push('/edit')}>
-              <Icons.ChevronLeft size={16} /> <span>กลับหน้าแก้ไข</span>
-            </button>
-          </div>
-        </header>
+    <Layout
+      activeNav="credit-cards"
+      title="บัตรเครดิต & แผนผ่อนชำระ"
+      headerActions={(
+        <>
+          <button type="button" className={styles.primaryButton} onClick={handleOpenAddCard}>
+            <Icons.Plus size={16} /> <span>เพิ่มบัตร</span>
+          </button>
+          <button type="button" className={styles.ghostButton} onClick={() => setCalendarTrigger(prev => prev + 1)}>
+            <Icons.Calendar size={16} /> <span>ปฏิทิน</span>
+          </button>
+        </>
+      )}
+      calendarTrigger={calendarTrigger}
+      onCalendarClose={({ changed } = {}) => { if (changed) loadData({ silent: true }); }}
+    >
+      {/* .page ให้ครอบไว้เหมือนเดิม (ไม่ใช่แค่ .container) เพราะ ":focus-visible" ทั้งหมดของหน้านี้
+          (การ์ด/ปุ่ม/ฟอร์ม) ผูกกับ selector ".page :focus-visible" ใน CreditCard.module.css — ถอด
+          .page ออกจะทำให้ focus ring ของทั้งหน้าหายไป ไม่ใช่แค่ header (ปุ่ม header ย้ายไปอยู่ใน
+          Layout เองแล้ว จึงมี selector แยกที่ Layout.module.css: ".headerActionsRow button") */}
+      <div className={styles.page}>
+        <div className={styles.container}>
+          {selectedCardId ? (
+            <CreditCardDetail
+              card={selectedCard}
+              plans={selectedCardPlans}
+              pendingKeys={pendingKeys}
+              onBack={() => goTo({})}
+              onEditCard={handleOpenEditCard}
+              onDeleteCard={handleDeleteCard}
+              onAddPlanForCard={handleOpenAddPlan}
+              onRenamePlan={handleOpenEditPlan}
+              onEditPlan={handleOpenEditPlan}
+              onCancelPlan={handleCancelPlan}
+              onDeletePlan={handleDeletePlan}
+              onToggleInstallment={handleToggleInstallment}
+              onConfirmMinimum={handleConfirmMinimum}
+              onRevolvingChanged={() => loadData({ silent: true })}
+            />
+          ) : (
+            <CreditCardDashboard
+              cards={cards}
+              totals={totals}
+              plans={plans}
+              loading={loading}
+              error={error}
+              pendingKeys={pendingKeys}
+              planCreatedNote={planCreatedNote}
+              onRetry={() => loadData()}
+              onAddCard={handleOpenAddCard}
+              onEditCard={handleOpenEditCard}
+              onDeleteCard={handleDeleteCard}
+              onAddPlan={() => handleOpenAddPlan(null)}
+              onAddPlanForCard={handleOpenAddPlan}
+              onOpenCard={(cardId) => goTo({ card: cardId })}
+              onOpenCalendar={() => setCalendarTrigger(prev => prev + 1)}
+              onToggleInstallment={handleToggleInstallment}
+            />
+          )}
+        </div>
 
-        {selectedCardId ? (
-          <CreditCardDetail
-            card={selectedCard}
-            plans={selectedCardPlans}
-            pendingKeys={pendingKeys}
-            onBack={() => goTo({})}
-            onEditCard={handleOpenEditCard}
-            onDeleteCard={handleDeleteCard}
-            onAddPlanForCard={handleOpenAddPlan}
-            onRenamePlan={handleOpenEditPlan}
-            onEditPlan={handleOpenEditPlan}
-            onCancelPlan={handleCancelPlan}
-            onDeletePlan={handleDeletePlan}
-            onToggleInstallment={handleToggleInstallment}
-            onConfirmMinimum={handleConfirmMinimum}
-            onRevolvingChanged={() => loadData({ silent: true })}
-          />
-        ) : (
-          <CreditCardDashboard
-            cards={cards}
-            totals={totals}
-            plans={plans}
-            loading={loading}
-            error={error}
-            pendingKeys={pendingKeys}
-            planCreatedNote={planCreatedNote}
-            onRetry={() => loadData()}
-            onAddCard={handleOpenAddCard}
-            onEditCard={handleOpenEditCard}
-            onDeleteCard={handleDeleteCard}
-            onAddPlan={() => handleOpenAddPlan(null)}
-            onAddPlanForCard={handleOpenAddPlan}
-            onOpenCard={(cardId) => goTo({ card: cardId })}
-            onOpenCalendar={() => setCalendarOpen(true)}
-            onToggleInstallment={handleToggleInstallment}
-          />
-        )}
+        <CreditCardForm
+          open={cardFormOpen}
+          card={editingCard}
+          existingCards={cards}
+          submitting={submitting}
+          onClose={() => { setCardFormOpen(false); setEditingCard(null); }}
+          onSubmit={handleSubmitCard}
+        />
+
+        <InstallmentPlanForm
+          open={planFormOpen}
+          plan={editingPlan}
+          cards={cards}
+          lockedCardId={lockedCardId}
+          submitting={submitting}
+          onClose={() => { setPlanFormOpen(false); setEditingPlan(null); setLockedCardId(null); }}
+          onSubmit={handleSubmitPlan}
+        />
+
+        <ConfirmDialog
+          open={Boolean(confirmState)}
+          title={confirmState?.title}
+          message={confirmState?.message}
+          confirmLabel={confirmState?.confirmLabel}
+          onCancel={() => setConfirmState(null)}
+          onConfirm={confirmState?.onConfirm}
+        />
       </div>
-
-      <ExpenseCalendarModal
-        open={calendarOpen}
-        onClose={({ changed } = {}) => {
-          setCalendarOpen(false);
-          if (changed) loadData({ silent: true });
-        }}
-      />
-
-      <CreditCardForm
-        open={cardFormOpen}
-        card={editingCard}
-        existingCards={cards}
-        submitting={submitting}
-        onClose={() => { setCardFormOpen(false); setEditingCard(null); }}
-        onSubmit={handleSubmitCard}
-      />
-
-      <InstallmentPlanForm
-        open={planFormOpen}
-        plan={editingPlan}
-        cards={cards}
-        lockedCardId={lockedCardId}
-        submitting={submitting}
-        onClose={() => { setPlanFormOpen(false); setEditingPlan(null); setLockedCardId(null); }}
-        onSubmit={handleSubmitPlan}
-      />
-
-      <ConfirmDialog
-        open={Boolean(confirmState)}
-        title={confirmState?.title}
-        message={confirmState?.message}
-        confirmLabel={confirmState?.confirmLabel}
-        onCancel={() => setConfirmState(null)}
-        onConfirm={confirmState?.onConfirm}
-      />
-    </div>
+    </Layout>
   );
 }
