@@ -9,6 +9,7 @@ import DailyExpenseTable from '../src/frontend/components/DailyExpenseTable';
 
 import TaxTable from '../src/frontend/components/TaxTable';
 import MonthManager from '../src/frontend/components/MonthManager';
+import SalaryModal from '../src/frontend/components/SalaryModal';
 import { Icons } from '../src/frontend/components/Icons';
 import Layout from '../src/frontend/components/Layout';
 import { useTheme } from '../src/frontend/contexts/ThemeContext';
@@ -48,11 +49,11 @@ export default function WorkspacePage() {
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [activeTab, setActiveTab] = useState('income');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  // เครื่องคำนวณเงินเดือนย้ายไปหน้า /reports แล้ว (P4) การบันทึกเงินเดือนจึงไม่เกิดขึ้นที่หน้านี้อีกต่อไป
-  // — คงตัวนับนี้และ prop ที่รับมันไว้ (IncomeTable/TaxTable) เพราะไม่มีผลเสีย และการลบออกจะต้องแตะไฟล์
-  // ทั้งสองซึ่งเฟสนี้ห้ามแก้ (AC-WS-5); เมื่อผู้ใช้บันทึกเงินเดือนที่ /reports แล้วย้อนกลับมา รายรับ/ภาษี
-  // จะรีเฟรชเองอยู่แล้วตอน mount
-  const [salaryUpdateTrigger] = useState(0);
+  // เครื่องคำนวณเงินเดือนกลับมาอยู่ที่นี่แล้ว — เป็น modal ที่เปิดจากแถว "เงินเดือน" ใน IncomeTable
+  // (Amendment A3, ยกเลิกแผน /salary แยกหน้าของ A1) ตัวนับนี้จึง "ละลาย" กลับมาใช้งานจริงอีกครั้ง —
+  // ผูกกับปุ่มบันทึกของ modal เอง (SalaryModal → handleSalaryModalSaved) ไม่ใช่ Save All อีกต่อไป
+  const [salaryUpdateTrigger, setSalaryUpdateTrigger] = useState(0);
+  const [salaryModalOpen, setSalaryModalOpen] = useState(false);
   const [triggerSave, setTriggerSave] = useState(0);
   const [months, setMonths] = useState([]);
   const [isDirty, setIsDirty] = useState(false);
@@ -132,6 +133,19 @@ export default function WorkspacePage() {
     }
   }, [router.query.tab]);
 
+  // ทางเข้า modal เงินเดือนจากลิงก์ภายนอก (Dashboard Quick Action, ลิงก์ท้าย /reports) ผ่าน
+  // ?tab=income&salary=open — เปิด modal อัตโนมัติ + บังคับแท็บเป็น "รายรับ" เสมอ (E16/D-4: ลิงก์
+  // ที่ส่ง tab อื่นมาพร้อม salary=open ก็ต้องลงเอยที่แท็บรายรับ ไม่ใช่แท็บที่ส่งมา)
+  // ตัด salary ออกจาก URL "ตอนเปิด" ทันที ไม่ใช่ตอนปิด — reload ระหว่าง modal เปิดอยู่จะได้ไม่เปิดซ้ำ (E16)
+  React.useEffect(() => {
+    if (router.query.salary !== 'open') return;
+    setSalaryModalOpen(true);
+    setActiveTab('income');
+    const { salary, ...restQuery } = router.query;
+    router.replace({ pathname: '/workspace', query: { ...restQuery, tab: 'income' } }, undefined, { shallow: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.query.salary]);
+
   // useCallback ให้ reference คงที่ข้าม render (ไม่มี dependency ภายนอกที่ใช้จริง เพราะใช้แค่
   // setState แบบ updater function) — MonthManager ผูก effect ของตัวเองไว้กับ reference ของ
   // onDataRefresh (MonthManager.js:112) ถ้าไม่ memoize ที่นี่ ทุก re-render ของ WorkspacePage
@@ -197,11 +211,33 @@ export default function WorkspacePage() {
   const handleTabClick = (tabId) => {
     setActiveTab(tabId);
     tabContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // ตัด salary=open ทิ้งก่อน spread query เดิม ไม่งั้นสลับแท็บแล้วโดนเขียนกลับเข้า URL ซ้ำ (N-4)
+    const { salary, ...restQuery } = router.query;
     router.replace(
-      { pathname: '/workspace', query: { ...router.query, tab: tabId } },
+      { pathname: '/workspace', query: { ...restQuery, tab: tabId } },
       undefined,
       { shallow: true }
     );
+  };
+
+  // ต้องเช็ค isDirty ก่อนเปิด modal เสมอ ไม่ใช่แค่ป้องกันไว้เฉยๆ — พอบันทึกเงินเดือนสำเร็จ
+  // salaryUpdateTrigger จะดันให้ IncomeTable รีเฟรชค่าจากเซิร์ฟเวอร์ทั้งแถว ถ้าแถวอื่นมีค่าพิมพ์ค้าง
+  // (ยังไม่ได้ save) อยู่ ค่านั้นจะถูกเขียนทับหายไปเงียบๆ โดยไม่มี toast เตือนเลย (E9)
+  // ใช้ shape เดียวกับ handleBeforeNavigate (:197-202) ที่แก้ปัญหาเดียวกันตอนเปลี่ยนหน้า
+  const handleOpenSalaryModal = () => {
+    if (isDirty) {
+      handleSaveAll();
+    }
+    setSalaryModalOpen(true);
+  };
+
+  const handleCloseSalaryModal = () => {
+    setSalaryModalOpen(false);
+  };
+
+  const handleSalaryModalSaved = () => {
+    setSalaryUpdateTrigger(prev => prev + 1);
+    handleCloseSalaryModal();
   };
 
   return (
@@ -251,6 +287,7 @@ export default function WorkspacePage() {
               selectedMonth={selectedMonth}
               salaryUpdateTrigger={salaryUpdateTrigger}
               triggerSave={triggerSave}
+              onOpenSalaryModal={handleOpenSalaryModal}
               key={`income-${refreshTrigger}`}
             />
           </div>
@@ -330,7 +367,18 @@ export default function WorkspacePage() {
       </div>
 
     </div>
-    {selectedMonth && (
+    {/* modal เป็น sibling ของ .mainContent/.floatingBar ไม่ใช่ลูกของ .tabContent — .tabContent มี
+        onInput/onChange ที่ตั้ง isDirty=true จากทุก input ข้างใน ถ้า modal ซ้อนอยู่ในนั้น การพิมพ์ใน
+        modal จะไปตั้งค่า dirty ปลอมให้อีก 5 แท็บที่ไม่ได้แตะ (planner gate B-blocker บน Amendment A3) */}
+    <SalaryModal
+      open={salaryModalOpen}
+      selectedMonth={selectedMonth}
+      onClose={handleCloseSalaryModal}
+      onSaved={handleSalaryModalSaved}
+    />
+    {/* ซ่อน floating bar ระหว่างเปิด modal เงินเดือน — กันการกด "บันทึก" (Save All) ระหว่างที่ modal
+        กำลังบันทึกอยู่พร้อมกัน ซึ่งอาจแข่งกันเขียนทับค่า salary ใน income เดือนเดียวกัน (N-2) */}
+    {selectedMonth && !salaryModalOpen && (
       <div className={styles.floatingBar}>
         <button
           type="button"

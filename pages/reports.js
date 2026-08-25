@@ -1,19 +1,21 @@
 /**
  * หน้า: /reports — P4 · reports-settings
- * บ้านใหม่ของ SalaryCalculator + SummaryReport (ย้ายมาจาก /workspace แบบไม่แก้ทั้งคู่ — AC-RS-17)
- * บวกของใหม่ชิ้นเดียวของเฟสนี้: MonthComparison และปุ่ม Download Report PDF (ย้ายมาจาก workspace.js
- * พร้อม buildMonthlyReportPayload ที่สลับไปใช้ getMonthlySummaryModel — ปิด known inconsistency เดิม
- * ของ ADR-013, AC-RS-27/29)
+ * บ้านของ SummaryReport (ย้ายมาจาก /workspace แบบไม่แก้ — AC-RS-17) บวกของใหม่ชิ้นเดียวของเฟสนี้:
+ * MonthComparison และปุ่ม Download Report PDF (ย้ายมาจาก workspace.js พร้อม buildMonthlyReportPayload
+ * ที่สลับไปใช้ getMonthlySummaryModel — ปิด known inconsistency เดิมของ ADR-013, AC-RS-27/29)
  *
- * 3 ส่วนเนื้อหาเป็น collapsible ทั้งหมด (UX Review, AC-RS-30): สรุปรายเดือน default เปิด (ตัวเลขที่ผู้ใช้
- * มาเช็คหน้านี้), คำนวณเงินเดือน/เปรียบเทียบรายเดือน default พับ — กันไม่ให้ 4 ส่วนน้ำหนักเท่ากันกลาย
- * เป็นความรกที่ /workspace เพิ่งเอาออกไป ใช้แพทเทิร์น header+chevron+aria-expanded เดียวกับที่ /workspace
- * (เดิม) และ BudgetHealthPanel ใช้อยู่แล้ว ไม่ได้คิดใหม่
+ * Design Amendment A1 (superseded by A3): เครื่องคำนวณเงินเดือนเคยย้ายไปเป็นหน้าแยก /salary — แผนนั้น
+ * ถูกยกเลิกแล้ว กลับไปอยู่ในแท็บ "รายรับ" ของ /workspace แทน (pages/salary.js ตอนนี้เป็นแค่ redirect
+ * shim) หน้านี้จึงเหลือ 2 ส่วนเนื้อหา ไม่ใช่ 3 — ยังเป็น collapsible ทั้งคู่ (UX Review, AC-RS-30):
+ * สรุปรายเดือน default เปิด (ตัวเลขที่ผู้ใช้มาเช็คหน้านี้), เปรียบเทียบรายเดือน default พับ ใช้แพทเทิร์น
+ * header+chevron+aria-expanded เดียวกับที่ /workspace (เดิม) และ BudgetHealthPanel ใช้อยู่แล้ว ไม่ได้คิดใหม่
+ * ท้ายหน้ามีลิงก์ทางเข้าไปแท็บ "รายรับ" พร้อมเปิด SalaryModal ให้เลย (คำนวณเงินเดือน →) สำหรับผู้ใช้ที่
+ * เคยเจอเครื่องคำนวณอยู่ที่นี่ (E23, ปรับตาม A3)
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import Layout from '../src/frontend/components/Layout';
-import SalaryCalculator from '../src/frontend/components/SalaryCalculator';
 import SummaryReport from '../src/frontend/components/SummaryReport';
 import MonthComparison from '../src/frontend/components/MonthComparison';
 import { Icons } from '../src/frontend/components/Icons';
@@ -211,8 +213,6 @@ export default function ReportsPage() {
 
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [months, setMonths] = useState([]);
-  const [salaryTriggerSave, setSalaryTriggerSave] = useState(0);
-  const [summaryRefreshKey, setSummaryRefreshKey] = useState(0);
   const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   const [reportMonthModalOpen, setReportMonthModalOpen] = useState(false);
   const [selectedReportMonths, setSelectedReportMonths] = useState([]);
@@ -333,14 +333,6 @@ export default function ReportsPage() {
     return () => document.removeEventListener('keydown', handleEsc);
   }, [reportMonthModalOpen]);
 
-  // "บันทึกเงินเดือน" — bump ตัวนับเดียวกับ triggerSave pattern เดิม (ADR-003) SalaryCalculator เองเป็นคน
-  // เรียก salaryAPI.save + showToast('บันทึกข้อมูลเงินเดือนเรียบร้อย') อยู่แล้วภายในตัวมันเอง (AC-RS-18)
-  const handleSaveSalaryClick = () => setSalaryTriggerSave((prev) => prev + 1);
-
-  // หลังบันทึกเงินเดือนแล้ว บังคับ SummaryReport รีเฟรชตัวเอง (มันไม่มี prop อื่นให้สั่งรีเฟรชนอกจาก
-  // mount ใหม่ — ไฟล์ห้ามแก้ตาม AC-RS-17) เปลี่ยน key จึง remount แล้ว useEffect เดิมของมันยิง fetch ใหม่เอง
-  const handleSalaryUpdate = () => setSummaryRefreshKey((prev) => prev + 1);
-
   const monthLabel = selectedMonth ? getMonthLabel(selectedMonth) : '';
 
   const headerActions = (
@@ -369,26 +361,23 @@ export default function ReportsPage() {
         </div>
 
         <CollapsibleSection id="reports-summary" title="สรุปรายเดือน" defaultExpanded>
-          <SummaryReport key={`summary-${summaryRefreshKey}`} selectedMonth={selectedMonth} />
-        </CollapsibleSection>
-
-        <CollapsibleSection id="reports-salary" title="คำนวณเงินเดือน" defaultExpanded={false}>
-          <div className={styles.salaryActionsRow}>
-            <button type="button" className={styles.salarySaveButton} onClick={handleSaveSalaryClick}>
-              <Icons.Save size={14} />
-              บันทึกเงินเดือน
-            </button>
-          </div>
-          <SalaryCalculator
-            selectedMonth={selectedMonth}
-            triggerSave={salaryTriggerSave}
-            onSalaryUpdate={handleSalaryUpdate}
-          />
+          <SummaryReport selectedMonth={selectedMonth} />
         </CollapsibleSection>
 
         <CollapsibleSection id="reports-comparison" title="เปรียบเทียบรายเดือน (6 เดือนล่าสุด)" defaultExpanded={false}>
           <MonthComparison />
         </CollapsibleSection>
+
+        {/* ทางเข้าเครื่องคำนวณเงินเดือนจุดที่สอง (A1) — low-emphasis text link ไม่ใช่ปุ่ม ไม่แข่งกับ
+            Download Report PDF ใน headerActions */}
+        <Link
+          href="/workspace?tab=income&salary=open"
+          className={styles.salaryLinkFooter}
+          aria-describedby="reports-salary-link-hint"
+        >
+          คำนวณเงินเดือน →
+        </Link>
+        <p id="reports-salary-link-hint" className={styles.salaryLinkHint}>ย้ายไปอยู่ในแท็บรายรับแล้ว</p>
       </div>
 
       {reportMonthModalOpen && (

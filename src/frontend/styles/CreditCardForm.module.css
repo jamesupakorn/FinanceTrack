@@ -36,6 +36,11 @@
   max-width: 440px;
 }
 
+/* ใช้กับฟอร์มที่มีเนื้อหา 2 คอลัมน์ (เช่น SalaryModal) — 560px มาตรฐานแคบเกินไปจนล้น */
+.modalWide {
+  max-width: 900px;
+}
+
 .modalHeader {
   display: flex;
   align-items: center;
@@ -453,7 +458,8 @@
   }
 
   .modal,
-  .modalNarrow {
+  .modalNarrow,
+  .modalWide {
     max-width: none;
     border-radius: 0;
     max-height: 100vh;

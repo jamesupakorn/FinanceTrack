@@ -122,6 +122,14 @@
   border: 1px solid var(--border-light);
   border-radius: 20px;
   padding: 20px;
+  /*
+   * BUG-A2-1 (bug-log-reports-settings-a2.md): legend ล้นทับกันเมื่อ .ringSection ถูกวางใน
+   * container ที่แคบ (เช่น /reports' .chartsSection ที่มี padding ซ้อนหลายชั้น) — ปัญหาจริงคือ
+   * "ความกว้างของ .ringSection เอง" แคบ ไม่ใช่ viewport แคบ เพราะ component เดียวกันบน Dashboard ที่
+   * viewport เท่ากันยังกว้างพอ (ดูรายละเอียดตัวเลขใน BUG-A2-1) จึงใช้ container query แทน @media
+   * viewport — ผูก threshold เข้ากับความกว้างจริงของ .ringSection เอง ไม่แตะ Dashboard ที่ไม่เคยแคบขนาดนี้
+   */
+  container-type: inline-size;
 }
 
 .ringWrap {
@@ -223,6 +231,27 @@
   text-align: right;
   color: var(--text-light);
   font-size: 0.78rem;
+}
+
+/*
+ * BUG-A2-1: threshold มาจากการวัดจริง (Playwright, demo account) —
+ * /reports (.chartsSection) แตก (label ถูกบีบเป็น 0 กว้าง, ข้อความทับ .legendAmount) ตั้งแต่
+ * .ringSection กว้าง ≤ 314px (viewport 430px) ไล่ลงไปจนถึง 204px (viewport 320px)
+ * Dashboard เองยังปกติ (0/5 ทับกัน) จนถึง .ringSection กว้าง 343px (viewport 375px) และเริ่มพังเอง
+ * ที่ 328px (viewport 360px, นอกเหนือขอบเขต A2 — ระบุไว้แล้วใน bug-log ว่าเป็นขอบของ Dashboard เดิม)
+ * 330px จึงอยู่กึ่งกลางที่ครอบคลุมทุกกรณีของ /reports ที่ต้องแก้ โดยไม่แตะ Dashboard ที่ยังปกติอยู่ที่ 343px+
+ */
+@container (max-width: 330px) {
+  .legendRow {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .legendLabel {
+    /* กว้างเท่าที่เหลือหลัง marker (12px) + gap (10px) บนบรรทัดแรก ให้ marker+label อยู่แถวเดียวกัน
+       แล้วค่อยให้ amount/percent/type ห่อไปแถวถัดไปด้วยกัน (ยังไม่ทับกันแม้ label ยาว) */
+    flex-basis: calc(100% - 22px);
+  }
 }
 
 /* ------------------------------------------------------------ 3. Budget health (collapsible) */

@@ -157,10 +157,11 @@ const serializeItemsForSave = (items) => {
 const sumItems = (items) => items.reduce((sum, item) => sum + parseToNumber(item.value), 0);
 const hasInputValue = (value) => String(value ?? '').trim() !== '';
 
-const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, triggerSave }) => {
+const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, inModal = false }) => {
   const [incomeItems, setIncomeItems] = useState(() => buildPresetItems(incomePresetKeys));
   const [deductionItems, setDeductionItems] = useState(() => buildPresetItems(deductionPresetKeys));
   const [pendingScrollItem, setPendingScrollItem] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [calculatedResults, setCalculatedResults] = useState({
     รวมรายได้: 0,
     รวมหัก: 0,
@@ -274,12 +275,14 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, triggerSave }) => {
   };
 
   const saveSalaryData = async () => {
+    if (isSaving) return;
     try {
       if (!selectedMonth) {
         showToast('กรุณาเลือกเดือนที่ต้องการก่อน', 'info');
         return;
       }
 
+      setIsSaving(true);
       const incomePayload = serializeItemsForSave(incomeItems);
       const deductionPayload = serializeItemsForSave(deductionItems);
       const totalIncome = sumItems(incomeItems);
@@ -323,14 +326,10 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, triggerSave }) => {
     } catch (error) {
       console.error('Error saving salary data:', error);
       showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
-
-  useEffect(() => {
-    if (triggerSave) {
-      saveSalaryData();
-    }
-  }, [triggerSave]);
 
   const clearAll = () => {
     setIncomeItems((prev) => prev.map((item) => ({ ...item, value: '' })));
@@ -338,8 +337,11 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, triggerSave }) => {
   };
 
   return (
-    <div className={styles.salaryCalculator}>
-      <h2 className={styles.title}>คำนวณเงินเดือน - {selectedMonth ? getThaiMonthName(selectedMonth) : 'กรุณาเลือกเดือน'}</h2>
+    <div className={`${styles.salaryCalculator} ${inModal ? styles.inModal : ''}`.trim()}>
+      {/* เมื่ออยู่ใน modal ตัว shell (SalaryModal) เป็นคนแสดงหัวข้อ/เดือนแทนแล้ว — ไม่งั้นซ้อนกัน 2 หัวข้อ */}
+      {!inModal && (
+        <h2 className={styles.title}>คำนวณเงินเดือน - {selectedMonth ? getThaiMonthName(selectedMonth) : 'กรุณาเลือกเดือน'}</h2>
+      )}
 
       <div className={styles.salaryContent}>
         <div className={styles.incomeSection}>
@@ -478,13 +480,22 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, triggerSave }) => {
         </h3>
       </div>
 
-      {/* ปุ่มจัดการ */}
+      {/* ปุ่มจัดการ — บันทึกทันทีเมื่อกด ไม่ผูกกับ triggerSave ของ Save All อีกต่อไป (Amendment A3) */}
       <div className={styles.actionButtons}>
         <button
+          type="button"
+          onClick={saveSalaryData}
+          className={styles.saveBtn}
+          aria-label="บันทึกเงินเดือน"
+          disabled={isSaving}
+        >
+          {isSaving ? 'กำลังบันทึก...' : 'บันทึกเงินเดือน'}
+        </button>
+        <button
+          type="button"
           onClick={clearAll}
           className={styles.clearBtn}
           aria-label="ล้างข้อมูล"
-          tabIndex={0}
         >
           ล้างข้อมูล
         </button>

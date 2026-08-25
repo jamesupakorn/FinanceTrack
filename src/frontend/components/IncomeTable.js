@@ -27,7 +27,7 @@ const CUSTOM_LABEL_FALLBACK = 'รายรับใหม่';
 /**
  * ตารางแก้ไขรายรับรายเดือน
  */
-export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, triggerSave }) {
+export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, triggerSave, onOpenSalaryModal }) {
   const [editIncome, setEditIncome] = useState({});
   const [incomeLabels, setIncomeLabels] = useState({});
   const [persistedKeys, setPersistedKeys] = useState([]);
@@ -278,10 +278,17 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, trigge
                   <tr key={itemKey} className={styles.tableRow} data-income-key={itemKey}>
                     <td className={styles.tableCell}>
                       {isSalary ? (
-                        <div className={styles.salaryLabel}>
+                        <button
+                          type="button"
+                          className={styles.salaryTrigger}
+                          onClick={() => onOpenSalaryModal?.()}
+                          aria-haspopup="dialog"
+                          aria-label="แก้ไขเงินเดือน — เปิดเครื่องคำนวณเงินเดือน"
+                        >
                           <span>{label}</span>
                           <span className={styles.salaryBadge}>จากระบบเงินเดือน</span>
-                        </div>
+                          <Icons.Edit size={14} />
+                        </button>
                       ) : (
                         <div className={styles.nameCell}>
                           <input
@@ -343,10 +350,17 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, trigge
                   <div className={styles.cardRow}>
                     <span className={styles.cardLabel}>รายการ</span>
                     {isSalary ? (
-                      <div className={styles.salaryLabel}>
+                      <button
+                        type="button"
+                        className={styles.salaryTrigger}
+                        onClick={() => onOpenSalaryModal?.()}
+                        aria-haspopup="dialog"
+                        aria-label="แก้ไขเงินเดือน — เปิดเครื่องคำนวณเงินเดือน"
+                      >
                         <span>{label}</span>
                         <span className={styles.salaryBadge}>จากระบบเงินเดือน</span>
-                      </div>
+                        <Icons.Edit size={14} />
+                      </button>
                     ) : (
                       <input
                         type="text"
