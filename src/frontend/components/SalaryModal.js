@@ -47,15 +47,23 @@ export default function SalaryModal({ open, selectedMonth, onClose, onSaved }) {
   const triggerRef = useRef(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) return undefined;
     triggerRef.current = typeof document !== 'undefined' ? document.activeElement : null;
     const timer = setTimeout(() => {
       dialogRef.current?.querySelector('input, button:not([disabled])')?.focus();
     }, 40);
-    return () => clearTimeout(timer);
+    // คืน focus ให้ปุ่มที่เปิดตอนปิดจริงๆ (open → false) เท่านั้น — ผูกไว้ที่นี่ซึ่ง dep คือ [open]
+    // ล้วนๆ ไม่ใช่ effect ข้างล่างที่ dep มี onClose ด้วย (บทเรียนเดียวกับ ExpenseCalendarModal.js's
+    // RevolvingConfirmDialog: "ผูก dep กับ [open] เท่านั้นตามบทเรียน BUG-2") ถ้า onClose เป็น
+    // arrow function ใหม่ทุก render ของ parent (เช่น pages/workspace.js) effect ที่มี onClose ใน dep
+    // จะ teardown/re-run ทุกครั้ง แล้ว cleanup เดิมจะดึง focus ออกจาก dialog ทั้งที่ modal ยังเปิดอยู่
+    return () => {
+      clearTimeout(timer);
+      triggerRef.current?.focus?.();
+    };
   }, [open]);
 
-  // Escape ปิด · Tab วนอยู่ในโมดัล · คืน focus ให้ปุ่มที่เปิดเมื่อปิด (รูปแบบเดียวกับ CreditCardForm.js)
+  // Escape ปิด · Tab วนอยู่ในโมดัล (ไม่แตะ focus-restore ที่นี่ — อยู่ใน effect ข้างบนแล้ว)
   useEffect(() => {
     if (!open) return undefined;
     const handleKeyDown = (event) => {
@@ -80,7 +88,6 @@ export default function SalaryModal({ open, selectedMonth, onClose, onSaved }) {
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      triggerRef.current?.focus?.();
     };
   }, [open, onClose]);
 
