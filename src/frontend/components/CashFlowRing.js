@@ -1,7 +1,8 @@
 /**
  * คอมโพเนนต์: CashFlowRing
  * วงแหวนกระแสเงินสด — SVG มือวาดเอง ตาม ADR-015 (รายรับเป็นวงอ้างอิงรอบนอก ไม่ใช่เสี้ยวที่ 5)
- * เทคนิค stroke-dasharray/dashoffset + rotate เดียวกับ SummaryReport.js:160-197 (ไม่ได้คิดใหม่)
+ * เทคนิค stroke-dasharray/dashoffset + rotate สืบทอดมาจาก PieChart เดิมใน SummaryReport.js
+ * (ลบไปแล้วตอน A2 — /reports ใช้คอมโพเนนต์นี้เองแทน ผ่าน interactive=false)
  *
  * ตัวเลขทั้งหมดมาจาก getMonthlySummaryModel() — ไฟล์นี้ไม่คำนวณเงินเอง (BR-DASH-005)
  * legend เป็นส่วนหนึ่งของคอมโพเนนต์นี้ (ring + legend อยู่ด้วยกันเสมอตาม §2 ของ spec)
@@ -32,7 +33,7 @@ function sanitizeNumber(value) {
   return num === 0 ? 0 : num;
 }
 
-export default function CashFlowRing({ model, selected, onSelect, monthLabel }) {
+export default function CashFlowRing({ model, selected, onSelect, monthLabel, interactive = true }) {
   if (!model || !model.hasIncome) {
     return (
       <section className={styles.ringSection} aria-label="โครงสร้างกระแสเงินสดเดือนนี้">
@@ -109,7 +110,8 @@ export default function CashFlowRing({ model, selected, onSelect, monthLabel }) 
             {arcs.map((arc) => (
               <g key={arc.id}>
                 {/* hit ring โปร่งใสกว้างกว่าเส้นจริง — ให้แตะง่ายขึ้นบนมือถือ ไม่ใช่ทางเข้าถึงหลัก (legend คือทางเข้าถึงหลัก) */}
-                {arc.arcRatio > 0 && (
+                {/* interactive=false (เช่น /reports) ต้องไม่วาด hit ring เลย ไม่งั้นจะเหลือวงที่คลิกได้แต่มองไม่เห็น (AC-DB-32) */}
+                {interactive && arc.arcRatio > 0 && (
                   <circle
                     cx="120" cy="120" r={RADIUS_INNER}
                     fill="none"
@@ -170,6 +172,18 @@ export default function CashFlowRing({ model, selected, onSelect, monthLabel }) 
         </div>
         {segments.map((segment) => {
           const active = isSelected(segment.id);
+          // interactive=false (/reports): แถวเป็น <div> ธรรมดา ไม่มี onClick/aria-pressed — ใช้ class เดียวกับแถวรายรับที่ไม่ใช่ปุ่มอยู่แล้ว
+          if (!interactive) {
+            return (
+              <div key={segment.id} className={styles.legendRow}>
+                <span className={styles.legendMarker} aria-hidden="true" style={{ '--legend-color': segment.color }} />
+                <span className={styles.legendLabel}>{segment.label}</span>
+                <span className={styles.legendAmount}>{`${formatCurrency(segment.amount)} บาท`}</span>
+                <span className={styles.legendPercent}>{`${(segment.trueRatio * 100).toFixed(1)}%`}</span>
+                <span className={styles.legendType}>จ่ายออก</span>
+              </div>
+            );
+          }
           return (
             <button
               key={segment.id}

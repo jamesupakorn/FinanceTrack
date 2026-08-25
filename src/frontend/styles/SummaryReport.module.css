@@ -48,100 +48,6 @@
   box-shadow: 0 24px 80px rgba(2,6,23,0.55);
 }
 
-.chartsGrid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 48px;
-  margin-bottom: 32px;
-  max-width: 420px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.chartTitle {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 32px;
-  color: var(--text-primary);
-  text-align: center;
-}
-
-.chartSubtitle {
-  font-size: 1.1rem;
-  margin-bottom: 20px;
-  color: var(--text-secondary);
-  font-weight: 600;
-  letter-spacing: 0.3px;
-}
-
-.pieChartContainer {
-  background: rgba(9, 12, 32, 0.9);
-  border-radius: 24px;
-  padding: 28px;
-  box-shadow: 0 30px 100px rgba(2,6,23,0.6);
-  border: 1px solid rgba(255,255,255,0.08);
-  transition: all 0.3s ease;
-}
-
-.pieChartContainer:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px var(--shadow-md);
-}
-
-.chartLabel {
-  font-size: 14px;
-  fill: var(--text-secondary);
-  font-weight: 600;
-}
-
-.chartPercentage {
-  font-size: 20px;
-  font-weight: 800;
-  fill: var(--primary-color);
-}
-
-.chartLegend {
-  display: flex;
-  justify-content: center;
-  gap: 28px;
-  margin-top: 20px;
-}
-
-  .legendItem {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-    min-height: 44px;
-    min-width: 44px;
-    box-sizing: border-box;
-    border-radius: 8px;
-    outline: none;
-    transition: background 0.2s;
-  }
-  .legendItem:focus-visible {
-    outline: 2px solid var(--color-primary, #0969da);
-    outline-offset: 2px;
-    background: #e6f0fa;
-  }
-
-.legendColor {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.legendColor.income {
-  background: var(--secondary-color);
-}
-
-.legendColor.expense {
-  background: var(--danger-color);
-}
-
 /* Tables Section */
 .summaryTablesSection {
   position: relative;
@@ -313,6 +219,17 @@
   background: linear-gradient(135deg, rgba(217, 119, 6, 0.08) 0%, rgba(217, 119, 6, 0.04) 100%);
 }
 
+/* ป้ายอธิบายศัพท์ใต้ตารางสรุป (AC-RS-43) — โทนเดียวกับ MonthComparison's comparisonHint (Reports.module.css) */
+.summaryHint {
+  margin: 20px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
 /* Responsive Design */
 /* Large Tablets & Small Desktops */
 @media (max-width: 1024px) {
@@ -324,11 +241,7 @@
   .summaryContent {
     gap: 28px;
   }
-  
-  .chartsGrid {
-    gap: 20px;
-  }
-  
+
   .tablesGrid {
     gap: 20px;
   }
@@ -359,12 +272,6 @@
     padding: 32px;
   }
   
-  .chartsGrid {
-    grid-template-columns: 1fr;
-    gap: 32px;
-    max-width: 600px;
-  }
-  
   .tablesGrid {
     grid-template-columns: 1fr;
     gap: 24px;
@@ -381,28 +288,13 @@
     text-align: center;
   }
 
-  .pieChartContainer {
-    padding: 20px;
-    border-radius: 12px;
-  }
-
   .summaryTable {
     padding: 20px;
     border-radius: 12px;
   }
-  
-  .chartTitle {
-    font-size: 1.2rem;
-  }
-  
+
   .tableTitle {
     font-size: 1.3rem;
-  }
-  
-  .legendContainer {
-    flex-direction: column;
-    gap: 8px;
-    align-items: center;
   }
 }
 
@@ -425,9 +317,6 @@
   .summaryTablesSection {
     padding: 14px;
     border-radius: 12px;
-  }
-  .pieChartContainer {
-    max-height: 250px;
   }
   .summaryTable {
     padding: 8px;
@@ -473,7 +362,6 @@
     padding: 24px;
   }
   
-  .pieChartContainer,
   .summaryTable {
     padding: 16px;
   }
@@ -504,11 +392,6 @@
     padding: 20px;
   }
 
-  .chartTitle {
-    font-size: 1rem;
-    margin-bottom: 12px;
-  }
-
   .tableTitle {
     font-size: 1.1rem;
     margin-bottom: 16px;
@@ -519,37 +402,22 @@
     margin-bottom: 16px;
   }
 
-  .pieChartContainer,
   .summaryTable {
     padding: 12px;
     border-radius: 8px;
   }
-  
+
   .summaryItem {
     padding: 8px 10px;
     gap: 6px;
   }
-  
+
   .itemLabel {
     font-size: 13px;
   }
-  
+
   .itemValue {
     font-size: 14px;
-  }
-  
-  .legendContainer {
-    gap: 6px;
-  }
-  
-  .legendItem {
-    font-size: 12px;
-    gap: 6px;
-  }
-  
-  .legendColor {
-    width: 12px;
-    height: 12px;
   }
 }
 
@@ -563,12 +431,10 @@
     font-size: 1.2rem;
   }
   
-  .chartTitle,
   .tableTitle {
     font-size: 1rem;
   }
-  
-  .pieChartContainer,
+
   .summaryTable {
     padding: 10px;
   }

@@ -44,7 +44,15 @@ const QUICK_ACTIONS = [
   { id: 'add-expense', label: 'เพิ่มรายจ่าย', Icon: Icons.TrendingDown, href: '/workspace?tab=expense' },
   { id: 'open-workspace', label: 'เปิดบันทึกรายเดือน', Icon: Icons.Edit, href: '/workspace' },
   { id: 'view-credit-cards', label: 'ดูบัตรเครดิต', Icon: Icons.CreditCard, href: '/credit-cards' },
-  { id: 'open-calendar', label: 'เปิดปฏิทิน', Icon: Icons.Calendar, action: 'scroll-calendar' }
+  { id: 'open-calendar', label: 'เปิดปฏิทิน', Icon: Icons.Calendar, action: 'scroll-calendar' },
+  // ทางเข้าเครื่องคำนวณเงินเดือนจุดที่หนึ่ง (Amendment A3 — ยกเลิกแผนหน้าแยก /salary ของ A1 แล้ว)
+  // พาไปแท็บ "รายรับ" ใน /workspace แล้วเปิด SalaryModal ให้อัตโนมัติผ่าน ?salary=open
+  {
+    id: 'salary-calculator',
+    label: 'คำนวณเงินเดือน',
+    Icon: Icons.DollarSign,
+    href: '/workspace?tab=income&salary=open'
+  }
 ];
 
 const MONTH_RE = /^\d{4}-\d{2}$/;

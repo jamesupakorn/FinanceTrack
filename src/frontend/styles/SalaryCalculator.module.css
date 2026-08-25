@@ -37,6 +37,48 @@
   box-shadow: 0 45px 160px rgba(2, 6, 23, 0.9);
 }
 
+/*
+ * เมื่ออยู่ใน modal (SalaryModal) — ไม่ใช่หน้าเต็มอีกต่อไป ให้ตัด chrome ของ "การ์ดเดี่ยวกลางหน้า"
+ * ออกทั้งหมด (background/border/shadow/hover-lift) เพราะ modal shell (CreditCardForm.module.css
+ * .modal/.modalBody) เป็นคนให้พื้นผิวแทนแล้ว — ใช้ค่าเดียวกับ "Mobile Capture Polish" ด้านล่าง
+ * (ถอด chrome ตอนจอเล็กอยู่แล้ว) เพียงแต่ไม่ผูกกับ viewport อีกต่อไป
+ *
+ * .salaryContent เดิม collapse เป็น 1 คอลัมน์ที่ @media (max-width: 1200px) ซึ่งอิงความกว้างจอ —
+ * ผิดเมื่ออยู่ใน modal เพราะ modal แคบกว่าจอมาก (ดู B-1/B-2 ใน planner gate ของ Amendment A3)
+ * container query ด้านล่างแก้ปัญหานี้โดยอิงความกว้างของ .salaryCalculator เอง ไม่ใช่ viewport
+ */
+.salaryCalculator.inModal {
+  /* ต้อง visible ทับ overflow:hidden ของ .salaryCalculator ฐาน (บรรทัด 11, ไว้บังมุมโค้ง 38px ตอน
+     เป็นการ์ดเดี่ยวกลางหน้า) — ไม่งั้น flex item ใน .modalBody จะยุบ min-size เป็น 0 แล้ว "ตัด" เนื้อหา
+     ส่วนล่างทิ้งเงียบๆ (ปุ่มบันทึก/ล้างข้อมูลกดไม่ถึงเลยทั้งเมาส์และนิ้ว ทั้งที่ยัง Tab ไปถึงได้ — bug
+     มองไม่เห็นจากการอ่านโค้ดหรือ headless test เพราะ scrollIntoView สั่ง scrollTop ตรงๆ ได้เสมอ) */
+  overflow: visible;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: 0;
+  margin: 0;
+  container-type: inline-size;
+}
+
+.salaryCalculator.inModal:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.salaryCalculator.inModal::before,
+.salaryCalculator.inModal::after {
+  display: none;
+}
+
+@container (max-width: 640px) {
+  .inModal .salaryContent {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
 .title {
   font-size: 2.1rem;
   font-weight: 800;
@@ -391,6 +433,13 @@
 .saveBtn:active,
 .clearBtn:active {
   transform: translateY(-1px);
+}
+
+.saveBtn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 18px 55px rgba(2, 6, 23, 0.45);
 }
 
 /* Responsive Design */

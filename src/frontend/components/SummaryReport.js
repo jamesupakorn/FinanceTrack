@@ -1,49 +1,35 @@
 /**
  * คอมโพเนนต์: SummaryReport
- * แสดงสรุปรายรับ รายจ่าย เงินออม และกราฟภาพรวม
+ * แสดงสรุปรายรับ รายจ่าย เงินออม และโครงสร้างกระแสเงินสด (CashFlowRing) ของเดือนที่เลือก
+ * ตัวเลขทั้งหมดมาจาก getMonthlySummaryModel() เดียวกับ Dashboard/MonthComparison (BR-DASH-005) —
+ * ปิดข้อยกเว้นสุดท้ายของ BR-DASH-005 (Amendment A2) หลังจากที่ก่อนหน้านี้ไฟล์นี้ยังมี pipeline คำนวณยอด
+ * แยกเป็นของตัวเอง (ดูรายละเอียดใน spec-reports-settings.md §Amendment A2)
  * @param {object} props
  * @param {string} props.selectedMonth - เดือนที่เลือก (YYYY-MM)
+ * @param {number} [props.allocatableAmount] - ยอดที่ควรเก็บต่อเดือน (ยังไม่มีผู้เรียกส่งค่านี้จริง — D-4)
  */
 
 import React, { useState, useEffect } from 'react';
+import { round2 } from '../../shared/utils/creditCardUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
-import { incomeAPI, expenseAPI, savingsAPI, taxAPI, salaryAPI, savingsGoalsAPI } from '../../shared/utils/frontend/apiUtils';
-import { getSummaryData, getChartData } from '../../shared/utils/frontend/summaryUtils';
-import { splitExpenseTotals } from '../../shared/utils/frontend/monthlySummary';
+import { incomeAPI, expenseAPI, savingsAPI, taxAPI, salaryAPI, savingsGoalsAPI, dailyExpenseAPI } from '../../shared/utils/frontend/apiUtils';
+import { getMonthlySummaryModel } from '../../shared/utils/frontend/monthlySummary';
 import { formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
 import { useSession } from '../contexts/SessionContext';
+import CashFlowRing from './CashFlowRing';
 import styles from '../styles/SummaryReport.module.css';
 
 /**
  * รายงานสรุปภาพรวมการเงิน
  */
-const SummaryReport = ({ selectedMonth, onReportDataReady, allocatableAmount }) => {
+const SummaryReport = ({ selectedMonth, allocatableAmount }) => {
   const { currentUser } = useSession();
 
-  const [summaryData, setSummaryData] = useState({
-    ยอดรวมรายรับรายเดือน: 0,
-    ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด: 0,
-    ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง: 0,
-    ยอดรวมค่าใช้จ่ายรายเดือน_ยังไม่ชำระ: 0,
-    ยอดรวมเงินเก็บรายเดือน: 0,
-    ภาษีสะสมตั้งแต่เดือนแรก: 0,
-    ยอดเงินคงเหลือ: 0
-  });
+  // null = ยังไม่มีข้อมูล/กำลังโหลด/ทุก request ล้มเหลว (E25) — ห้ามตั้งเป็นก้อนศูนย์ เพราะ
+  // CashFlowRing's !model guard (CashFlowRing.js:36) เขียนมาให้รองรับ null โดยเฉพาะ
+  const [model, setModel] = useState(null);
 
   const [totalGoalsTarget, setTotalGoalsTarget] = useState(0);
-
-  // แยกรายจ่ายทั่วไป/บัตรเครดิตออกจากกัน (AC-SH-22) — ผลรวมของทั้งคู่ยังเท่ากับตัวเลขเดิม
-  // (summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง) เสมอ ไม่ได้แทนที่ ยอดเงินคงเหลือ/ตัวเลขอื่นใด
-  const [expenseSplit, setExpenseSplit] = useState({ generalExpense: 0, creditCard: 0 });
-
-  const [chartData, setChartData] = useState({
-    จ่ายจริง: {
-      รับ: 0,
-      จ่าย: 0,
-      เปอร์เซ็นต์รับ: 0,
-      เปอร์เซ็นต์จ่าย: 0
-    }
-  });
 
   const [effectiveMonth, setEffectiveMonth] = useState(selectedMonth || '');
 
@@ -54,12 +40,13 @@ const SummaryReport = ({ selectedMonth, onReportDataReady, allocatableAmount }) 
     return monthKey.split('-')[0];
   };
 
-  const isSummaryEmpty = (summary) => {
-    if (!summary) return true;
-    return Number(summary.ยอดรวมรายรับรายเดือน || 0) === 0
-      && Number(summary.ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด || 0) === 0
-      && Number(summary.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง || 0) === 0
-      && Number(summary.ยอดรวมเงินเก็บรายเดือน || 0) === 0;
+  // ทดสอบเดือนว่างแบบเดิม (4 เงื่อนไข) ยุบเหลือ 3 — เงื่อนไขที่ 4 เดิม (_ทั้งหมด) เป็นค่าซ้ำของ
+  // _จ่ายจริง อยู่แล้ว (summaryUtils.js:32-33) จึงหายไปเองเมื่อย้ายมาที่ model
+  const isSummaryEmpty = (m) => {
+    if (!m) return true;
+    return Number(m.totalIncome || 0) === 0
+      && Number((m.generalExpense || 0) + (m.creditCard || 0)) === 0
+      && Number(m.savings || 0) === 0;
   };
 
   const getLatestMonthWithData = async (currentMonth) => {
@@ -96,55 +83,41 @@ const SummaryReport = ({ selectedMonth, onReportDataReady, allocatableAmount }) 
       let yearToUse = parseYearFromMonth(monthToUse);
 
       const loadByMonth = async (monthKey, yearKey) => {
-        const [incomeData, expenseData, savingsData, taxData, salaryData] = await Promise.all([
+        // dailyExpenseAPI อยู่ในนี้ (ไม่ใช่นอก loadByMonth) เพื่อให้ fallback เดโม่ด้านล่างยิงซ้ำให้เดือน
+        // สำรองด้วย ไม่ใช่ค้างอยู่ที่เดือนว่างเดือนแรก (AC-RS-44)
+        const [incomeData, expenseData, savingsData, taxData, salaryData, dailyExpenseData] = await Promise.all([
           incomeAPI.getByMonth(monthKey),
           expenseAPI.getByMonth(monthKey),
           savingsAPI.getByMonth(monthKey),
           taxAPI.getByYear(yearKey),
-          salaryAPI.getByMonth(monthKey)
+          salaryAPI.getByMonth(monthKey),
+          dailyExpenseAPI.getByMonth(monthKey).catch(() => ({ totalMonthly: 0 }))
         ]);
-        const summary = getSummaryData({
+        return getMonthlySummaryModel({
+          month: monthKey,
           incomeData,
           expenseData,
           savingsData,
-          taxData,
+          dailyExpenseData,
           salaryData,
-          currentMonth: monthKey,
-          currentYear: yearKey
+          taxData
         });
-        // แยก รายจ่ายทั่วไป/บัตรเครดิต จาก expenseData ก้อนเดียวกันที่ getSummaryData ใช้อยู่แล้ว
-        const split = splitExpenseTotals(expenseData);
-        return { summary, split };
       };
 
-      let { summary, split } = await loadByMonth(monthToUse, yearToUse);
+      let currentModel = await loadByMonth(monthToUse, yearToUse);
 
-      if (currentUser?.isDemo && isSummaryEmpty(summary)) {
+      if (currentUser?.isDemo && isSummaryEmpty(currentModel)) {
         const fallbackMonth = await getLatestMonthWithData(currentMonth);
         if (fallbackMonth && fallbackMonth !== currentMonth) {
           monthToUse = fallbackMonth;
           yearToUse = parseYearFromMonth(monthToUse);
-          ({ summary, split } = await loadByMonth(monthToUse, yearToUse));
+          currentModel = await loadByMonth(monthToUse, yearToUse);
         }
       }
 
-      const computedChartData = getChartData({
-        totalIncome: summary.ยอดรวมรายรับรายเดือน,
-        totalExpenseActual: summary.ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง
-      });
-
       setEffectiveMonth(monthToUse);
-      setSummaryData(prev => ({ ...prev, ...summary }));
-      setExpenseSplit({ generalExpense: split.generalExpense, creditCard: split.creditCard });
-      setChartData(computedChartData);
-      if (typeof onReportDataReady === 'function') {
-        onReportDataReady({
-          summaryData: summary,
-          chartData: computedChartData,
-          reportMonth: monthToUse
-        });
-      }
-      // Fetch active goals total after chart is already rendered (truly non-blocking)
+      setModel(currentModel);
+      // Fetch active goals total after the model is already rendered (truly non-blocking)
       savingsGoalsAPI.getAll()
         .then(goalsRes => {
           const activeGoals = (goalsRes?.goals || [])
@@ -157,82 +130,15 @@ const SummaryReport = ({ selectedMonth, onReportDataReady, allocatableAmount }) 
     }
   };
 
-  // Simple SVG Pie Chart Component
-  const PieChart = ({ รับPercent, จ่ายPercent, title }) => {
-    const radius = 80;
-    const circumference = 2 * Math.PI * radius;
-    const รับOffset = circumference - (รับPercent / 100) * circumference;
-    
-    return (
-      <div className={styles.pieChartContainer}>
-        <h4 className={styles.chartSubtitle}>{title}</h4>
-        <svg width="200" height="200" viewBox="0 0 200 200">
-          {/* Background circle */}
-          <circle
-            cx="100"
-            cy="100"
-            r={radius}
-            fill="none"
-            stroke="var(--border-color)"
-            strokeWidth="40"
-          />
-          
-          {/* รับ (Income) segment - ใช้สีจากธีม */}
-          <circle
-            cx="100"
-            cy="100"
-            r={radius}
-            fill="none"
-            stroke="var(--secondary-color)"
-            strokeWidth="40"
-            strokeDasharray={circumference}
-            strokeDashoffset={รับOffset}
-            transform="rotate(-90 100 100)"
-            strokeLinecap="round"
-          />
-          
-          {/* จ่าย (Expense) segment - ใช้สีจากธีม */}
-          <circle
-            cx="100"
-            cy="100"
-            r={radius}
-            fill="none"
-            stroke="var(--danger-color)"
-            strokeWidth="40"
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference - (จ่ายPercent / 100) * circumference}
-            transform={`rotate(${(รับPercent / 100) * 360 - 90} 100 100)`}
-            strokeLinecap="round"
-          />
-          
-          {/* Center text */}
-          <text x="100" y="85" textAnchor="middle" className={styles.chartLabel}>รับ-จ่าย</text>
-          <text x="100" y="110" textAnchor="middle" className={styles.chartPercentage}>{รับPercent}%</text>
-        </svg>
-          <div className={styles.chartLegend}>
-            <div
-              className={styles.legendItem}
-              tabIndex={0}
-              aria-label={`รับ : ${รับPercent}%`}
-            >
-              <span className={`${styles.legendColor} ${styles.income}`}></span>
-              <span>รับ : {รับPercent}%</span>
-            </div>
-            <div
-              className={styles.legendItem}
-              tabIndex={0}
-              aria-label={`จ่าย : ${จ่ายPercent}%`}
-            >
-              <span className={`${styles.legendColor} ${styles.expense}`}></span>
-              <span>จ่าย : {จ่ายPercent}%</span>
-            </div>
-          </div>
-      </div>
-    );
-  };
-
   // Helper: format value for display
   const getDisplay = (value) => formatCurrency(value);
+
+  // ยอดเงินคงเหลือ คงสูตรเดิม (income − (general + creditCard)) เจตนา — ไม่ใช่ model.netCashFlow
+  // ซึ่งหักรายจ่ายประจำวัน/เงินออมด้วย เป็นคนละยอดกัน (AC-RS-42/BR-DASH-004) เหมือนกับที่
+  // pages/reports.js:151-152 (PDF path) ทำอยู่แล้ว
+  const remainingBalance = round2(
+    (model?.totalIncome || 0) - round2((model?.generalExpense || 0) + (model?.creditCard || 0))
+  );
 
   return (
     <div className={styles.summaryReport}>
@@ -243,16 +149,13 @@ const SummaryReport = ({ selectedMonth, onReportDataReady, allocatableAmount }) 
         </p>
       )}
       <div className={styles.summaryContent}>
-        {/* Pie Chart Section */}
+        {/* โครงสร้างกระแสเงินสด — CashFlowRing ตัวเดียวกับ Dashboard ในโหมดแสดงผลอย่างเดียว (Amendment A2) */}
         <div className={styles.chartsSection}>
-          <h3 className={styles.chartTitle}>% ของรายรับที่ใช้</h3>
-          <div className={styles.chartsGrid}>
-            <PieChart 
-              รับPercent={chartData.จ่ายจริง.เปอร์เซ็นต์รับ}
-              จ่ายPercent={chartData.จ่ายจริง.เปอร์เซ็นต์จ่าย}
-              title="ภาพรวมรายรับ-รายจ่าย"
-            />
-          </div>
+          <CashFlowRing
+            model={model}
+            interactive={false}
+            monthLabel={formatMonthLabelTH(effectiveMonth)}
+          />
         </div>
 
         {/* Summary Table Section */}
@@ -265,42 +168,42 @@ const SummaryReport = ({ selectedMonth, onReportDataReady, allocatableAmount }) 
                 <div
                   className={styles.summaryItem}
                   tabIndex={0}
-                  aria-label={`ยอดรวมรายรับรายเดือน: ${getDisplay(summaryData.ยอดรวมรายรับรายเดือน)}`}
+                  aria-label={`ยอดรวมรายรับรายเดือน: ${getDisplay(model?.totalIncome || 0)}`}
                 >
                   <span className={styles.itemLabel}>ยอดรวมรายรับรายเดือน</span>
-                  <span className={`${styles.itemValue} ${styles.income}`}>{getDisplay(summaryData.ยอดรวมรายรับรายเดือน)}</span>
+                  <span className={`${styles.itemValue} ${styles.income}`}>{getDisplay(model?.totalIncome || 0)}</span>
                 </div>
                 <div
                   className={styles.summaryItem}
                   tabIndex={0}
-                  aria-label={`รายจ่ายทั่วไป: ${getDisplay(expenseSplit.generalExpense)}`}
+                  aria-label={`รายจ่ายทั่วไป: ${getDisplay(model?.generalExpense || 0)}`}
                 >
                   <span className={styles.itemLabel}>รายจ่ายทั่วไป</span>
-                  <span className={styles.itemValue}>{getDisplay(expenseSplit.generalExpense)}</span>
+                  <span className={styles.itemValue}>{getDisplay(model?.generalExpense || 0)}</span>
                 </div>
                 <div
                   className={styles.summaryItem}
                   tabIndex={0}
-                  aria-label={`บัตรเครดิต: ${getDisplay(expenseSplit.creditCard)}`}
+                  aria-label={`บัตรเครดิต: ${getDisplay(model?.creditCard || 0)}`}
                 >
                   <span className={styles.itemLabel}>บัตรเครดิต</span>
-                  <span className={styles.itemValue}>{getDisplay(expenseSplit.creditCard)}</span>
+                  <span className={styles.itemValue}>{getDisplay(model?.creditCard || 0)}</span>
                 </div>
                 <div
                   className={styles.summaryItem}
                   tabIndex={0}
-                  aria-label={`ยอดค้างชำระ: ${getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ยังไม่ชำระ)}`}
+                  aria-label={`ยอดค้างชำระ: ${getDisplay(model?.unpaid?.total || 0)}`}
                 >
                   <span className={styles.itemLabel}>ยอดค้างชำระ</span>
-                  <span className={styles.itemValue}>{getDisplay(summaryData.ยอดรวมค่าใช้จ่ายรายเดือน_ยังไม่ชำระ)}</span>
+                  <span className={styles.itemValue}>{getDisplay(model?.unpaid?.total || 0)}</span>
                 </div>
                 <div
                   className={styles.summaryItem}
                   tabIndex={0}
-                  aria-label={`ยอดรวมเงินเก็บรายเดือน: ${getDisplay(summaryData.ยอดรวมเงินเก็บรายเดือน)}`}
+                  aria-label={`ยอดรวมเงินเก็บรายเดือน: ${getDisplay(model?.savings || 0)}`}
                 >
                   <span className={styles.itemLabel}>ยอดรวมเงินเก็บรายเดือน</span>
-                  <span className={styles.itemValue}>{getDisplay(summaryData.ยอดรวมเงินเก็บรายเดือน)}</span>
+                  <span className={styles.itemValue}>{getDisplay(model?.savings || 0)}</span>
                 </div>
                 <div
                   className={styles.summaryItem}
@@ -321,20 +224,26 @@ const SummaryReport = ({ selectedMonth, onReportDataReady, allocatableAmount }) 
                 <div
                   className={styles.summaryItem}
                   tabIndex={0}
-                  aria-label={`ยอดเงินคงเหลือ: ${getDisplay(summaryData.ยอดเงินคงเหลือ)}`}
+                  aria-label={`ยอดเงินคงเหลือ: ${getDisplay(remainingBalance)}`}
                 >
                   <span className={styles.itemLabel}>ยอดเงินคงเหลือ</span>
-                  <span className={`${styles.itemValue} ${styles.remaining}`}>{getDisplay(summaryData.ยอดเงินคงเหลือ)}</span>
+                  <span className={`${styles.itemValue} ${styles.remaining}`}>{getDisplay(remainingBalance)}</span>
                 </div>
                 <div
                   className={`${styles.summaryItem} ${styles.taxSection}`}
                   tabIndex={0}
-                  aria-label={`ภาษีสะสมตั้งแต่เดือนแรก: ${getDisplay(summaryData.ภาษีสะสมตั้งแต่เดือนแรก)}`}
+                  aria-label={`ภาษีสะสมตั้งแต่เดือนแรก: ${getDisplay(model?.taxAccumulated || 0)}`}
                 >
                   <span className={styles.itemLabel}>ภาษีสะสมตั้งแต่เดือนแรก</span>
-                  <span className={`${styles.itemValue} ${styles.tax}`}>{getDisplay(summaryData.ภาษีสะสมตั้งแต่เดือนแรก)}</span>
+                  <span className={`${styles.itemValue} ${styles.tax}`}>{getDisplay(model?.taxAccumulated || 0)}</span>
                 </div>
               </div>
+              {/* ป้ายอธิบายศัพท์ (AC-RS-43) — ตรงกลางวงแหวนกับแถวยอดเงินคงเหลือคือคนละยอด เจตนา ไม่ใช่ข้อผิดพลาด */}
+              <p className={styles.summaryHint}>
+                กระแสเงินสดสุทธิ (ตรงกลางวงแหวน) = รายรับ − รายจ่ายทั่วไป − รายจ่ายประจำวัน − เงินออม − บัตรเครดิต
+                {' · '}
+                ยอดเงินคงเหลือ = รายรับ − รายจ่ายทั่วไป − บัตรเครดิต (ยังไม่หักรายจ่ายประจำวันและเงินออม)
+              </p>
             </div>
           </div>
         </div>
