@@ -2,7 +2,7 @@ import { assertUserId } from '../../src/shared/utils/backend/userRequest.js';
 import { enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils.js';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource.js';
 
-const { getUserData, updateUserData, limitUserEntries } = require('../../src/backend/data/userUtils');
+import { getUserData, updateUserData, limitUserEntries } from '../../src/backend/data/userUtils.js';
 
 const COLLECTION_NAME = 'daily_expenses';
 const JSON_FILENAME = 'daily_expenses.json';

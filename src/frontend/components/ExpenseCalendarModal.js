@@ -8,14 +8,15 @@
  * ซึ่งรวมแถว cci_/ccr_ ไว้แล้วตั้งแต่ Feature 1 — ห้าม derive due-event จาก plans/cycles ตรง ๆ
  * เพราะจะนับซ้ำ (BR-CC-019 / AC-65) cards/plans ใช้แค่ตกแต่ง (ชื่อ/สี/งวด n/N) และเป็น action target
  *
- * focus trap / Esc / focus-restore คัดลอกรูปแบบมาจาก CreditCardForm.js:78-106 (ไม่ได้คิดใหม่)
- * ต่างจากต้นแบบ 2 จุด เพราะที่นี่มีกล่องยืนยันซ้อนอยู่ (RevolvingConfirmDialog):
+ * focus trap / Esc / focus-restore ใช้ getTabbableElements() จาก shared/utils/frontend/focusTrap.js
+ * (สกัดจากที่นี่ไปเป็นของกลางหลัง TD-M06 — เดิมคัดลอกรูปแบบมาจาก CreditCardForm.js:78-106)
+ * ต่างจาก CreditCardForm 2 จุด เพราะที่นี่มีกล่องยืนยันซ้อนอยู่ (RevolvingConfirmDialog):
  * 1) การคืน focus ให้ปุ่มที่เปิด แยกไปอยู่ใน effect ที่ผูกกับ [open] อย่างเดียว — ต้นแบบรวมไว้ใน
  *    cleanup ของ effect เดียวกับ keydown ได้เพราะ dep เปลี่ยนเฉพาะตอนปิด แต่ที่นี่ dep มี
  *    confirmState/handleClose ซึ่งเปลี่ยนระหว่างโมดัลยังเปิดอยู่ (React เรียก cleanup ทุกครั้งที่ dep เปลี่ยน)
  * 2) กล่องยืนยันเป็นเจ้าของปุ่ม Esc ของตัวเอง แต่ Tab ต้องถูกดักตลอดเวลา และดักที่กล่องบนสุด
  * 3) รายการ focusable ต้องกรองเหลือเฉพาะตัวที่ Tab ไปถึงได้จริง (getTabbableElements) เพราะปฏิทิน
- *    ใช้ roving tabindex บนปุ่มวัน ซึ่งต้นแบบไม่มี — selector ของต้นแบบอย่างเดียวจะทำให้ trap รั่ว
+ *    ใช้ roving tabindex บนปุ่มวัน ซึ่ง CreditCardForm ไม่มี — selector อย่างเดียวจะทำให้ trap รั่ว
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -25,6 +26,7 @@ import { expenseAPI, creditCardAPI } from '../../shared/utils/frontend/apiUtils'
 import { showToast } from '../../shared/utils/frontend/toast';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { buildMonthEvents } from '../../shared/utils/frontend/expenseEvents';
+import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
 import {
   addMonths,
   getCurrentMonthKey,
@@ -33,34 +35,6 @@ import {
 import cardStyles from '../styles/CreditCard.module.css';
 import formStyles from '../styles/CreditCardForm.module.css';
 import calStyles from '../styles/ExpenseCalendar.module.css';
-
-// selector กว้างไว้ก่อน แล้วค่อยกรองด้วยความจริงของ element ทีหลัง (ดู getTabbableElements)
-const FOCUSABLE_SELECTOR = [
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  'a[href]',
-  '[tabindex]'
-].join(', ');
-
-/**
- * element ที่ลำดับ Tab ของเบราว์เซอร์ไปถึงได้ "จริง" ตามลำดับ DOM
- *
- * ต้องกรองเอง ไม่ใช้แค่ selector: ตะแกรงวันของ ExpenseCalendar เป็น <button> ที่ใช้ roving tabindex
- * (tabIndex = -1 ทุกวันยกเว้นวันที่เลือก) selector อย่างเดียวจึงจับวันที่ Tab ไปไม่ถึงมาด้วยทั้งเดือน
- * ทำให้ last ของ focus trap กลายเป็นวันสุดท้ายของเดือน เงื่อนไขวนกลับไม่มีวันเป็นจริง แล้ว Tab
- * เดินหลุดออกไปโดนปุ่มของหน้าเบื้องหลัง (เช่น "บันทึก" ของ floating bar ใน /edit)
- * เกณฑ์จึงเป็น "tabIndex >= 0 และมองเห็นอยู่" ซึ่งครอบคลุม element ที่ตั้งใจข้ามจาก trap ทุกแบบ
- */
-function getTabbableElements(root) {
-  return Array.from(root.querySelectorAll(FOCUSABLE_SELECTOR)).filter(element => (
-    !element.disabled
-    && element.tabIndex >= 0
-    // display:none → ไม่มีทั้ง offsetParent และกล่องเรขาคณิต; position:fixed → ไม่มี offsetParent แต่ยังมีกล่อง
-    && (element.offsetParent !== null || element.getClientRects().length > 0)
-  ));
-}
 
 /**
  * กล่องยืนยัน "จ่ายขั้นต่ำ" — เพราะมันสร้างหนี้ยกไปเดือนหน้าพร้อมดอกเบี้ย (BR-CC-015)

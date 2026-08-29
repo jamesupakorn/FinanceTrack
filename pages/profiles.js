@@ -69,13 +69,23 @@ export default function ProfileGalleryPage({ initialProfiles = [] }) {
         setProfiles(nextProfiles);
       } catch (err) {
         console.error('โหลดผู้ใช้ไม่สำเร็จ', err);
-        setError(err.message || 'ไม่สามารถโหลดรายชื่อผู้ใช้');
+        // ถ้า SSR โหลดรายชื่อจริงมาได้แล้ว (initialProfiles ไม่ว่าง) ไม่แสดง error banner ทับหน้าที่
+        // ใช้งานได้จริง — เคยเกิด "โหลดสำเร็จ" + "error" พร้อมกันเมื่อ background refetch ล้มเหลวแต่
+        // ข้อมูลจาก SSR มีอยู่แล้ว (critique 2026-08-29 P1) log ไว้พอ ไม่ต้องเตือนผู้ใช้
+        if (initialProfiles.length === 0) {
+          setError(err.message === 'unauthorized' ? 'ไม่สามารถยืนยันตัวตนกับระบบได้' : 'ไม่สามารถโหลดรายชื่อผู้ใช้');
+        }
         setProfiles((currentProfiles) => currentProfiles.length ? currentProfiles : [DEMO_PROFILE]);
       } finally {
         setLoading(false);
       }
     };
-    fetchUsers();
+    // SSR (getServerSideProps) ให้ initialProfiles ที่สดใหม่ทุกครั้งอยู่แล้ว — ยิง fetch ซ้ำเฉพาะตอน
+    // SSR เองล้มเหลว/ว่างเปล่า ไม่ใช่ยิงทุกครั้งไม่มีเงื่อนไข (เดิมยิงซ้ำเสมอ แม้ SSR สำเร็จแล้ว ทำให้
+        // เกิด error banner ทับ grid ที่ใช้งานได้จริงเมื่อ background refetch ล้ม — critique 2026-08-29 P1)
+    if (initialProfiles.length === 0) {
+      fetchUsers();
+    }
   }, []);
 
   const handleProfileClick = (profile) => {

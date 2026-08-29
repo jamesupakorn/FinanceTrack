@@ -2,22 +2,21 @@
 /*
  * Quick utility script for appending a new profile to src/backend/data/users.json.
  * Usage:
- *   node scripts/createUser.js "Display Name" "plainPassword" [/avatars/u003.jpg] [customUserId]
+ *   node scripts/createUser.mjs "Display Name" "plainPassword" [/avatars/u003.jpg] [customUserId]
  */
 
-const fs = require('fs');
-const path = require('path');
-const bcrypt = require('bcryptjs');
-const {
+import fs from 'fs';
+import bcrypt from 'bcryptjs';
+import {
   loadUsers,
   generateUserId,
   resolveDataPath,
-} = require('../src/backend/data/userUtils');
+} from '../src/backend/data/userUtils.js';
 
 const args = process.argv.slice(2);
 
 function printUsage() {
-  console.log('Usage: node scripts/createUser.js "Display Name" "plainPassword" [/avatars/u003.jpg] [customUserId]');
+  console.log('Usage: node scripts/createUser.mjs "Display Name" "plainPassword" [/avatars/u003.jpg] [customUserId]');
 }
 
 if (args.length < 2) {

@@ -27,7 +27,7 @@ export const DEFAULT_BUDGET_THRESHOLDS = Object.freeze({
 });
 
 /**
- * รายชื่อ 5 คีย์ของ budgetThresholds — single source (derive จาก DEFAULT_BUDGET_THRESHOLDS แทนการพิมพ์
+ * รายชื่อ 4 คีย์ของ budgetThresholds — single source (derive จาก DEFAULT_BUDGET_THRESHOLDS แทนการพิมพ์
  * ซ้ำ) ใช้เป็น whitelist ที่จุดเขียนข้อมูล (pages/api/user-bank-accounts.js) และ pick-list ที่ฟอร์ม
  * (BudgetThresholdForm.js) — ห้ามประกาศ array นี้ซ้ำที่ไฟล์อื่น (AC-RS-14/M-3)
  */
@@ -61,8 +61,12 @@ export function normaliseBudgetThresholds(raw) {
   return result;
 }
 
-/** นิยามแถวของ evaluateBudgetHealth — label ภาษาไทย + ประเภทเกณฑ์ */
-const BUDGET_ROW_DEFS = [
+/**
+ * นิยามแถวของ evaluateBudgetHealth — label ภาษาไทย + ประเภทเกณฑ์
+ * export ไว้เป็นแหล่งเดียว (TD-M07) — BudgetThresholdForm.js (`/settings`) เดิมมี label ชุดของตัวเอง
+ * (`FIELD_DEFS`) ที่ดริฟต์ไปจากชุดนี้ 3 ใน 4 คีย์ ตอนนี้ import จากที่นี่แทน
+ */
+export const BUDGET_ROW_DEFS = [
   { id: 'generalExpense', label: 'บิลและรายจ่าย', kind: 'max' },
   { id: 'dailyExpense', label: 'ค่าใช้จ่ายรายวัน', kind: 'max' },
   { id: 'creditCard', label: 'บัตรเครดิต', kind: 'max' },

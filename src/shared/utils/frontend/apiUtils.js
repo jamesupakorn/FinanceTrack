@@ -248,15 +248,6 @@ export const savingsGoalsAPI = {
 	})
 };
 
-export const savingsAllocationAPI = {
-	get: async () => jsonFetch(buildUrl('/api/savings-allocation')),
-	save: async (buckets) => jsonFetch('/api/savings-allocation', {
-		method: 'PUT',
-		headers: { 'Content-Type': 'application/json' },
-		body: withUserPayload({ buckets })
-	})
-};
-
 export const dailyExpenseAPI = {
 	getByMonth: async (month) => jsonFetch(buildUrl('/api/daily_expenses', { month })),
 	save: async (month, items) => jsonFetch('/api/daily_expenses', {

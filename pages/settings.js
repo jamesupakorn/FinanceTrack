@@ -69,7 +69,8 @@ export default function SettingsPage() {
     <Layout activeNav="settings" title="ตั้งค่า">
       <section className={styles.settingsSection}>
         <h2 className={styles.sectionTitle}>เกณฑ์สุขภาพงบประมาณ</h2>
-        <p className={styles.sectionHint}>ใช้คำนวณสถานะในหน้าภาพรวม — เงินเหลือของเดือนยืนยันเพิ่มเข้าเงินออมได้จากหน้าภาพรวม</p>
+        <p className={styles.sectionHint}>เมื่อยอดใช้จ่ายหรือเงินออมของเดือนข้ามเกณฑ์ที่ตั้งไว้ แถบสถานะในหน้าภาพรวมจะเปลี่ยนสี เพื่อเตือนให้คุณรู้ทันที</p>
+        <p className={styles.sectionHint}>เงินเหลือของเดือนยืนยันเพิ่มเข้าเงินออมได้จากหน้าภาพรวมเช่นกัน</p>
 
         <BudgetThresholdForm
           values={thresholds}

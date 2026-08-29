@@ -16,15 +16,25 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BUDGET_THRESHOLD_KEYS, DEFAULT_BUDGET_THRESHOLDS } from '../../shared/utils/frontend/monthlySummary';
+import { BUDGET_THRESHOLD_KEYS, DEFAULT_BUDGET_THRESHOLDS, BUDGET_ROW_DEFS } from '../../shared/utils/frontend/monthlySummary';
 import styles from '../styles/Settings.module.css';
 
-const FIELD_DEFS = [
-  { key: 'generalExpense', label: 'รายจ่ายทั่วไป', prefix: 'ไม่เกิน', suffixText: '% ของรายรับ', kind: 'max' },
-  { key: 'dailyExpense', label: 'รายจ่ายประจำวัน', prefix: 'ไม่เกิน', suffixText: '%', kind: 'max' },
-  { key: 'creditCard', label: 'บัตรเครดิต', prefix: 'ไม่เกิน', suffixText: '%', kind: 'max' },
-  { key: 'savings', label: 'เงินออม', prefix: 'อย่างน้อย', suffixText: '%', kind: 'min' }
-];
+// prefix/suffixText เป็น UI-only ของฟอร์มนี้ — label/kind มาจาก BUDGET_ROW_DEFS แหล่งเดียว (TD-M07)
+// ทั้ง 4 เกณฑ์คำนวณเป็น % ของรายรับทั้งหมดเหมือนกัน (monthlySummary.js's getMonthlySummaryModel,
+// ratios.*) — เดิมมีแค่ generalExpense ที่ระบุตัวหาร ทำให้อีก 3 ช่องกำกวม (critique 2026-08-29 P1)
+const FIELD_PRESENTATION = {
+  generalExpense: { prefix: 'ไม่เกิน', suffixText: '% ของรายรับ' },
+  dailyExpense: { prefix: 'ไม่เกิน', suffixText: '% ของรายรับ' },
+  creditCard: { prefix: 'ไม่เกิน', suffixText: '% ของรายรับ' },
+  savings: { prefix: 'อย่างน้อย', suffixText: '% ของรายรับ' }
+};
+
+const FIELD_DEFS = BUDGET_ROW_DEFS.map(({ id, label, kind }) => ({
+  key: id,
+  label,
+  kind,
+  ...FIELD_PRESENTATION[id]
+}));
 
 const VALIDATION_MESSAGE = 'กรอกตัวเลข 0–100 เท่านั้น';
 const NUMERIC_ONE_DECIMAL_RE = /^\d+(\.\d)?$/;

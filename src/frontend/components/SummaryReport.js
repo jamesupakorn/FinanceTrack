@@ -6,7 +6,6 @@
  * แยกเป็นของตัวเอง (ดูรายละเอียดใน spec-reports-settings.md §Amendment A2)
  * @param {object} props
  * @param {string} props.selectedMonth - เดือนที่เลือก (YYYY-MM)
- * @param {number} [props.allocatableAmount] - ยอดที่ควรเก็บต่อเดือน (ยังไม่มีผู้เรียกส่งค่านี้จริง — D-4)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -22,7 +21,7 @@ import styles from '../styles/SummaryReport.module.css';
 /**
  * รายงานสรุปภาพรวมการเงิน
  */
-const SummaryReport = ({ selectedMonth, allocatableAmount }) => {
+const SummaryReport = ({ selectedMonth }) => {
   const { currentUser } = useSession();
 
   // null = ยังไม่มีข้อมูล/กำลังโหลด/ทุก request ล้มเหลว (E25) — ห้ามตั้งเป็นก้อนศูนย์ เพราะ
@@ -204,14 +203,6 @@ const SummaryReport = ({ selectedMonth, allocatableAmount }) => {
                 >
                   <span className={styles.itemLabel}>ยอดรวมเงินเก็บรายเดือน</span>
                   <span className={styles.itemValue}>{getDisplay(model?.savings || 0)}</span>
-                </div>
-                <div
-                  className={styles.summaryItem}
-                  tabIndex={0}
-                  aria-label={`ควรเก็บต่อเดือน: ${getDisplay(allocatableAmount ?? 0)}`}
-                >
-                  <span className={styles.itemLabel}>ควรเก็บต่อเดือน</span>
-                  <span className={`${styles.itemValue} ${styles.income}`}>{getDisplay(allocatableAmount ?? 0)}</span>
                 </div>
                 <div
                   className={styles.summaryItem}
