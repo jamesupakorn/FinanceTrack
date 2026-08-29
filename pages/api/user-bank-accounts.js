@@ -6,7 +6,10 @@ import {
   getUserBudgetThresholds,
   updateUserBudgetThresholds
 } from '../../lib/userStore';
-import { BUDGET_THRESHOLD_KEYS } from '../../src/shared/utils/frontend/monthlySummary';
+import {
+  BUDGET_THRESHOLD_KEYS,
+  normaliseBudgetThresholds
+} from '../../src/shared/utils/frontend/monthlySummary';
 
 /**
  * ตรวจสอบค่า budgetThresholds ดิบจาก request body ก่อน normalise/clamp ใด ๆ (M-2 — validate ก่อน
@@ -63,6 +66,12 @@ export default async function handler(req, res) {
       ]);
       return res.status(200).json({ bankAccounts, budgetThresholds });
     } catch (error) {
+      if (error?.message === 'User not found') {
+        return res.status(200).json({
+          bankAccounts: [],
+          budgetThresholds: normaliseBudgetThresholds()
+        });
+      }
       console.error('Failed to fetch user bank accounts:', error);
       return res.status(500).json({ error: 'Failed to fetch user bank accounts' });
     }
@@ -107,6 +116,9 @@ export default async function handler(req, res) {
 
       return res.status(200).json(responsePayload);
     } catch (error) {
+      if (error?.message === 'User not found') {
+        return res.status(404).json({ error: 'user not found' });
+      }
       console.error('Failed to update user bank accounts:', error);
       return res.status(500).json({ error: 'Failed to update user bank accounts' });
     }
