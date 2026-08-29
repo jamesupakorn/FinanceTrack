@@ -44,6 +44,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 22px;
   padding: 18px;
+  container-type: inline-size;
 }
 
 .calendarNav {
@@ -298,6 +299,26 @@
   min-height: 44px;
 }
 
+/* The embedded dashboard column can be narrow even when the viewport is not mobile. */
+@container (max-width: 700px) {
+  .calendarLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .calendarGrid {
+    gap: 2px;
+  }
+
+  .calendarCell {
+    min-height: 52px;
+    padding: 4px;
+  }
+
+  .calendarChip {
+    display: none;
+  }
+}
+
 /* ------------------------------------------------------------ mobile (768px) */
 
 @media (max-width: 768px) {
@@ -314,6 +335,14 @@
    */
   .calendarWrap {
     padding: 8px;
+  }
+
+  /*
+   * ที่ 375px เซลล์วันบางเดือนเหลือ ~42.7px (ต่ำกว่า touch target 44px) เพราะช่องว่างรวม 6 จุดของกริด
+   * กินพื้นที่มากเกินไปสำหรับคอลัมน์ 7 ช่อง จึงลด gap เฉพาะมือถือเพื่อเพิ่มความกว้างปุ่มโดยไม่แตะ breakpoint ใหม่
+   */
+  .calendarGrid {
+    gap: 2px;
   }
 
   .calendarCell {

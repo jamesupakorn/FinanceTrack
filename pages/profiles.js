@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import ModePasswordModal from '../src/frontend/components/ModePasswordModal';
 import { useSession } from '../src/frontend/contexts/SessionContext';
 import { withApiTokenHeaders } from '../src/shared/utils/frontend/apiToken';
 import styles from '../src/frontend/styles/ProfileGallery.module.css';
+import { loadUsers } from '../lib/userStore';
 
 const DEFAULT_DESCRIPTION = 'เลือกรูปโปรไฟล์ที่ต้องการใช้งาน แล้วกรอกรหัส PIN ของแต่ละผู้ใช้';
 const DEMO_PROFILE = {
@@ -31,11 +32,14 @@ function Avatar({ profile }) {
   );
 }
 
-export default function ProfileGalleryPage() {
+export default function ProfileGalleryPage({ initialProfiles = [] }) {
   const router = useRouter();
   const { currentUser, isReady, selectUser, logout } = useSession();
-  const [profiles, setProfiles] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [profiles, setProfiles] = useState(() => [
+    ...initialProfiles.filter(profile => profile.id !== DEMO_PROFILE.id),
+    DEMO_PROFILE
+  ]);
+  const [loading, setLoading] = useState(() => initialProfiles.length === 0);
   const [error, setError] = useState('');
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -44,7 +48,7 @@ export default function ProfileGalleryPage() {
 
   useEffect(() => {
     const fetchUsers = async () => {
-      setLoading(true);
+      if (profiles.length === 0) setLoading(true);
       try {
         const res = await fetch(`/api/users?ts=${Date.now()}`, {
           cache: 'no-store',
@@ -55,6 +59,9 @@ export default function ProfileGalleryPage() {
           throw new Error(data?.error || 'ไม่สามารถโหลดรายชื่อผู้ใช้');
         }
         const nextProfiles = Array.isArray(data.users) ? [...data.users] : [];
+        if (!nextProfiles.length) {
+          throw new Error('ไม่พบรายชื่อผู้ใช้');
+        }
         const hasDemo = nextProfiles.some(user => user.id === DEMO_PROFILE.id);
         if (!hasDemo) {
           nextProfiles.push(DEMO_PROFILE);
@@ -63,7 +70,7 @@ export default function ProfileGalleryPage() {
       } catch (err) {
         console.error('โหลดผู้ใช้ไม่สำเร็จ', err);
         setError(err.message || 'ไม่สามารถโหลดรายชื่อผู้ใช้');
-        setProfiles([DEMO_PROFILE]);
+        setProfiles((currentProfiles) => currentProfiles.length ? currentProfiles : [DEMO_PROFILE]);
       } finally {
         setLoading(false);
       }
@@ -208,4 +215,21 @@ export default function ProfileGalleryPage() {
       />
     </div>
   );
+}
+
+export async function getServerSideProps() {
+  try {
+    const allUsers = await loadUsers();
+    const profiles = allUsers
+      .filter(user => user && user.id && user.displayName)
+      .map(user => ({
+        id: user.id,
+        displayName: user.displayName,
+        avatar: user.avatar || ''
+      }));
+    return { props: { initialProfiles: profiles } };
+  } catch (error) {
+    console.error('โหลดรายชื่อผู้ใช้ฝั่งเซิร์ฟเวอร์ไม่สำเร็จ', error);
+    return { props: { initialProfiles: [] } };
+  }
 }

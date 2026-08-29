@@ -137,7 +137,10 @@ export default function UpcomingPayments({
   return (
     <section className={styles.upcomingSection}>
       <div className={styles.upcomingHeaderRow}>
-        <h2 className={styles.sectionTitle}>รายการที่จะครบกำหนด</h2>
+        <div>
+          <h2 className={styles.sectionTitle}>รายการที่จะครบกำหนด</h2>
+          <p className={styles.upcomingScope}>แสดงเฉพาะรายการที่ยังไม่ชำระภายใน 7 วันนับจากวันนี้</p>
+        </div>
         {filter && (
           <button type="button" className={styles.clearFilterButton} onClick={onClearFilter}>
             ล้างตัวกรอง
