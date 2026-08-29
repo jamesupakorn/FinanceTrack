@@ -43,20 +43,39 @@ function countStoredCycles(cycles, cardId) {
   return cycles.filter(cycle => cycle?.cardId === cardId).length;
 }
 
+/** normalise ค่าเดือนเป้าหมาย — ใช้ก่อน buildCardChains() เสมอ (เดิมทำอยู่ใน materialise()) */
+function resolveTargetMonth(throughMonth) {
+  return MONTH_KEY_RE.test(throughMonth || '') ? throughMonth : getCurrentMonthKey();
+}
+
+/**
+ * สร้างสายยอดหมุนเวียนของ "ทุกบัตร" ในเอกสาร ณ เดือนเป้าหมายเดียว (ไม่กรอง cardId)
+ * เรียก buildRevolvingCycles() ครั้งเดียวต่อบัตร แล้วให้ materialise()/summariseAll() ใช้ร่วมกัน
+ * แทนที่จะต่างคนต่างเรียกซ้ำด้วย asOfMonth เดียวกัน
+ * @returns {Map<string, array>} cardId → chain
+ */
+function buildCardChains(data, asOfMonth) {
+  const map = new Map();
+  data.cards.forEach(card => {
+    map.set(card.id, buildRevolvingCycles(card, data.cycles, { throughMonth: asOfMonth }));
+  });
+  return map;
+}
+
 /**
  * materialise สายยอดหมุนเวียนของทุกบัตร (หรือบัตรเดียวเมื่อระบุ cardId)
  * ตกแต่งด้วยชื่อ/สี/คีย์แถวของบัตร เพื่อให้ ExpenseTable ใช้ตกแต่งแถว ccr_ ได้ในคำขอเดียว
  * การตกแต่งทำที่ชั้น API เท่านั้น buildRevolvingCycles() ยังคงเป็น pure function ตามเดิม
+ * @param {Map<string, array>} cardChains - จาก buildCardChains(data, asOfMonth)
  * @returns {{cycles: array, truncated: boolean}}
  */
-function materialise(data, { cardId = '', month = '', throughMonth } = {}) {
-  const targetMonth = MONTH_KEY_RE.test(throughMonth || '') ? throughMonth : getCurrentMonthKey();
+function materialise(data, cardChains, { cardId = '', month = '' } = {}) {
   const cards = cardId ? data.cards.filter(card => card?.id === cardId) : data.cards;
 
   let truncated = false;
   const cycles = [];
   cards.forEach(card => {
-    const chain = buildRevolvingCycles(card, data.cycles, { throughMonth: targetMonth });
+    const chain = cardChains.get(card.id) || [];
     if (isRevolvingChainTruncated(chain)) truncated = true;
     chain.forEach(cycle => {
       if (month && cycle.month !== month) return;
@@ -73,10 +92,14 @@ function materialise(data, { cardId = '', month = '', throughMonth } = {}) {
   return { cycles, truncated };
 }
 
-/** ยอดรวมของทุกบัตร ณ เดือนหนึ่ง — คำนวณจากสายที่ materialise แล้วเท่านั้น */
-function summariseAll(data, asOfMonth) {
+/**
+ * ยอดรวมของทุกบัตร ณ เดือนหนึ่ง — คำนวณจากสายที่ materialise แล้วเท่านั้น
+ * @param {Map<string, array>} cardChains - จาก buildCardChains(data, asOfMonth), ครอบทุกบัตรเสมอ
+ *   (ไม่กรอง cardId — summariseAll ต้องรวมทุกบัตรเสมอ แม้ materialise() จะถูกกรองด้วย cardId ก็ตาม)
+ */
+function summariseAll(data, asOfMonth, cardChains) {
   const totals = data.cards.reduce((acc, card) => {
-    const chain = buildRevolvingCycles(card, data.cycles, { throughMonth: asOfMonth });
+    const chain = cardChains.get(card.id) || [];
     const summary = summariseRevolving(chain, { asOfMonth });
     acc.outstanding += summary.outstanding;
     acc.due += summary.due;
@@ -106,14 +129,15 @@ async function ownsCard(userId, cardId) {
 }
 
 /** สายของบัตรใบเดียวหลังการเขียน — ใช้เป็น response ของ POST/PATCH/DELETE */
-async function respondWithCardChain(res, userId, cardId, asOfMonth) {
-  const data = await getUserCreditData(userId);
-  const { cycles, truncated } = materialise(data, { cardId, throughMonth: asOfMonth });
+async function respondWithCardChain(res, data, cardId, asOfMonth) {
+  const targetMonth = resolveTargetMonth(asOfMonth);
+  const cardChains = buildCardChains(data, targetMonth);
+  const { cycles, truncated } = materialise(data, cardChains, { cardId });
   return res.status(200).json({
     success: true,
     cycles,
     truncated,
-    summary: summariseAll(data, asOfMonth)
+    summary: summariseAll(data, targetMonth, cardChains)
   });
 }
 
@@ -128,12 +152,13 @@ async function handleGet(req, res, userId) {
   }
 
   const asOfMonth = MONTH_KEY_RE.test(month) ? month : getCurrentMonthKey();
-  const { cycles, truncated } = materialise(data, { cardId, month, throughMonth: asOfMonth });
+  const cardChains = buildCardChains(data, asOfMonth);
+  const { cycles, truncated } = materialise(data, cardChains, { cardId, month });
 
   return res.status(200).json({
     cycles,
     truncated,
-    summary: summariseAll(data, asOfMonth)
+    summary: summariseAll(data, asOfMonth, cardChains)
   });
 }
 
@@ -154,7 +179,7 @@ async function handlePost(req, res, userId) {
 
   let failure = null;
 
-  await updateUserCreditData(userId, (data) => {
+  const data = await updateUserCreditData(userId, (data) => {
     const card = data.cards.find(item => item?.id === value.cardId);
     if (!card) {
       failure = { status: 404, body: { error: 'card not found' } };
@@ -196,7 +221,7 @@ async function handlePost(req, res, userId) {
   });
 
   if (failure) return res.status(failure.status).json(failure.body);
-  return respondWithCardChain(res, userId, value.cardId, value.month);
+  return respondWithCardChain(res, data, value.cardId, value.month);
 }
 
 async function handlePatch(req, res, userId) {
@@ -216,7 +241,7 @@ async function handlePatch(req, res, userId) {
 
   let failure = null;
 
-  await updateUserCreditData(userId, (data) => {
+  const data = await updateUserCreditData(userId, (data) => {
     const card = data.cards.find(item => item?.id === cardId);
     if (!card) {
       failure = { status: 404, body: { error: 'card not found' } };
@@ -263,7 +288,7 @@ async function handlePatch(req, res, userId) {
   });
 
   if (failure) return res.status(failure.status).json(failure.body);
-  return respondWithCardChain(res, userId, cardId, month);
+  return respondWithCardChain(res, data, cardId, month);
 }
 
 async function handleDelete(req, res, userId) {
@@ -279,7 +304,7 @@ async function handleDelete(req, res, userId) {
 
   let failure = null;
 
-  await updateUserCreditData(userId, (data) => {
+  const data = await updateUserCreditData(userId, (data) => {
     const card = data.cards.find(item => item?.id === cardId);
     if (!card) {
       failure = { status: 404, body: { error: 'card not found' } };
@@ -292,7 +317,7 @@ async function handleDelete(req, res, userId) {
   });
 
   if (failure) return res.status(failure.status).json(failure.body);
-  return respondWithCardChain(res, userId, cardId, month);
+  return respondWithCardChain(res, data, cardId, month);
 }
 
 export default async function handler(req, res) {

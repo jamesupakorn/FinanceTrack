@@ -92,14 +92,19 @@ export default function RevolvingBalanceSection({
     return () => { cancelled = true; };
   }, [cardId, applyChain]);
 
-  if (!card) return null;
+  // ต้องอยู่เหนือ `if (!card) return null;` เสมอ — hooks ห้ามถูกเรียกแบบมีเงื่อนไข
+  // cycles/month ไม่ผูกกับ card เลย จึง compute ได้แม้ card ยังไม่มา (ผลลัพธ์แค่ยังไม่ได้ใช้)
+  const { currentCycle, previousMonthCycle, history } = useMemo(() => {
+    const current = cycles.find(item => item.month === month) || EMPTY_CYCLE;
+    const previous = [...cycles]
+      .filter(item => item.month < month)
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .pop() || null;
+    const sortedHistory = [...cycles].sort((a, b) => b.month.localeCompare(a.month));
+    return { currentCycle: current, previousMonthCycle: previous, history: sortedHistory };
+  }, [cycles, month]);
 
-  const currentCycle = cycles.find(item => item.month === month) || EMPTY_CYCLE;
-  const previousMonthCycle = [...cycles]
-    .filter(item => item.month < month)
-    .sort((a, b) => a.month.localeCompare(b.month))
-    .pop() || null;
-  const history = [...cycles].sort((a, b) => b.month.localeCompare(a.month));
+  if (!card) return null;
 
   const runAction = async (task, successMessage, failureMessage) => {
     setBusy(true);

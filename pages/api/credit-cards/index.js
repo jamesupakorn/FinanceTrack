@@ -59,7 +59,7 @@ async function handlePost(req, res, userId) {
   let savedCard = null;
   let failure = null;
 
-  await updateUserCreditData(userId, (data) => {
+  const data = await updateUserCreditData(userId, (data) => {
     if (cardId) {
       const index = data.cards.findIndex(card => card?.id === cardId);
       if (index === -1) {
@@ -86,7 +86,6 @@ async function handlePost(req, res, userId) {
 
   if (failure) return res.status(failure.status).json(failure.body);
 
-  const data = await getUserCreditData(userId);
   return res.status(200).json({ success: true, card: summariseCard(savedCard, data.plans, data.cycles) });
 }
 

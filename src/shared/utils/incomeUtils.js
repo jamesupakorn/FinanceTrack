@@ -8,12 +8,3 @@ export function formatIncomeForSave(editIncome, parseToNumber) {
   });
   return numericIncome;
 }
-
-export function calculateIncomeTotal(editIncome, salaryNetIncome) {
-  let total = 0;
-  Object.keys(editIncome).forEach(key => {
-    total += parseFloat(editIncome[key]) || 0;
-  });
-  total += parseFloat(salaryNetIncome) || 0;
-  return total;
-}
