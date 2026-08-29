@@ -418,6 +418,56 @@
   text-decoration: none;
 }
 
+.transferableSavings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-light);
+}
+
+.transferableSavingsLabel,
+.transferableSavingsAmount,
+.transferableSavingsUnavailable {
+  margin: 0;
+}
+
+.transferableSavingsLabel,
+.transferableSavingsUnavailable {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.transferableSavingsAmount {
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.transferableSavingsButton {
+  min-height: 44px;
+  flex-shrink: 0;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 700;
+}
+
+.transferableSavingsButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.transferableSavingsButton:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 /* ------------------------------------------------------------ 4. Calendar section */
 .calendarSection {
   background: var(--bg-surface);
@@ -817,6 +867,15 @@
       "calendar"
       "quickactions";
     gap: 16px;
+  }
+
+  .transferableSavings {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .transferableSavingsButton {
+    width: 100%;
   }
 
   .tileGrid {

@@ -98,6 +98,7 @@ export default function DashboardPage() {
 
   const [ringFilter, setRingFilter] = useState(null);
   const [highlightedKey, setHighlightedKey] = useState(null);
+  const [isConfirmingTransfer, setIsConfirmingTransfer] = useState(false);
   const highlightTimerRef = useRef(null);
 
   const calendarHeadingRef = useRef(null);
@@ -150,6 +151,10 @@ export default function DashboardPage() {
     if (!currentUser || !selectedMonth || typeof window === 'undefined') return;
     localStorage.setItem(selectedMonthKey, selectedMonth);
   }, [currentUser, selectedMonth, selectedMonthKey]);
+
+  useEffect(() => {
+    setIsConfirmingTransfer(false);
+  }, [selectedMonth]);
 
   // ------------------------------------------------------------ เกณฑ์สุขภาพงบประมาณ (P4) — โหลดครั้งเดียว
   // ต่อผู้ใช้ (ไม่ใช่ทุกเดือน) ล้มเหลวแล้ว fallback เป็นค่าเริ่มต้นเงียบ ๆ ไม่มี error โชว์ผู้ใช้ เพราะเกณฑ์
@@ -298,6 +303,24 @@ export default function DashboardPage() {
   const handleNavigateMonth = useCallback((delta) => {
     setSelectedMonth((prev) => addMonths(prev, delta));
   }, []);
+
+  const handleConfirmTransfer = useCallback(async () => {
+    if (!selectedMonth || model.transferableSavings <= 0 || isConfirmingTransfer) return;
+    setIsConfirmingTransfer(true);
+    try {
+      const result = await savingsAPI.confirmTransfer(
+        selectedMonth,
+        model.transferableSavings,
+        model.savings + model.transferableSavings
+      );
+      showToast(result?.created === false ? 'เงินออมรายการนี้ถูกเพิ่มไว้แล้ว' : 'เพิ่มเงินเหลือเข้าเงินออมแล้ว');
+      await refreshData();
+    } catch (error) {
+      showToast(error.message || 'เพิ่มเงินออมไม่สำเร็จ', 'error');
+    } finally {
+      setIsConfirmingTransfer(false);
+    }
+  }, [selectedMonth, model.transferableSavings, isConfirmingTransfer, refreshData]);
 
   const scrollToCalendar = useCallback(() => {
     const el = calendarHeadingRef.current;
@@ -594,7 +617,12 @@ export default function DashboardPage() {
             ) : (
               <>
                 <CashFlowRing model={model} selected={ringFilter} onSelect={setRingFilter} monthLabel={monthLabel} />
-                <BudgetHealthPanel model={model} thresholds={budgetThresholds} />
+                <BudgetHealthPanel
+                  model={model}
+                  thresholds={budgetThresholds}
+                  onConfirmTransfer={handleConfirmTransfer}
+                  isConfirmingTransfer={isConfirmingTransfer}
+                />
               </>
             )}
           </div>

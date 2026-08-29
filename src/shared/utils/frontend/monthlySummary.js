@@ -23,8 +23,7 @@ export const DEFAULT_BUDGET_THRESHOLDS = Object.freeze({
   generalExpense: 50,   // เพดานสูงสุด % ของรายรับ
   dailyExpense: 15,     // เพดานสูงสุด
   creditCard: 15,       // เพดานสูงสุด
-  savings: 20,          // เป้าหมายขั้นต่ำ
-  buffer: 5             // เป้าหมายขั้นต่ำ
+  savings: 20           // เป้าหมายขั้นต่ำ
 });
 
 /**
@@ -62,13 +61,12 @@ export function normaliseBudgetThresholds(raw) {
   return result;
 }
 
-/** นิยาม 5 แถวของ evaluateBudgetHealth — label ภาษาไทย + ประเภทเกณฑ์ */
+/** นิยามแถวของ evaluateBudgetHealth — label ภาษาไทย + ประเภทเกณฑ์ */
 const BUDGET_ROW_DEFS = [
-  { id: 'generalExpense', label: 'รายจ่ายทั่วไป', kind: 'max' },
-  { id: 'dailyExpense', label: 'รายจ่ายรายวัน', kind: 'max' },
+  { id: 'generalExpense', label: 'บิลและรายจ่าย', kind: 'max' },
+  { id: 'dailyExpense', label: 'ค่าใช้จ่ายรายวัน', kind: 'max' },
   { id: 'creditCard', label: 'บัตรเครดิต', kind: 'max' },
-  { id: 'savings', label: 'เงินออม', kind: 'min' },
-  { id: 'buffer', label: 'เงินคงเหลือ', kind: 'min' }
+  { id: 'savings', label: 'เงินออม', kind: 'min' }
 ];
 
 /** แปลงค่าที่อาจมี comma (string) หรือเป็น number อยู่แล้ว → number เสมอ, ไม่ได้คืน 0 (ไม่ throw) */
@@ -181,6 +179,7 @@ export function getMonthlySummaryModel({
 
   const totalOutflow = round2(generalExpense + dailyExpense + savings + creditCard);
   const netCashFlow = round2(totalIncome - totalOutflow);
+  const transferableSavings = Math.max(0, netCashFlow);
 
   const hasIncome = totalIncome > 0;
   const ratios = hasIncome
@@ -189,7 +188,8 @@ export function getMonthlySummaryModel({
       dailyExpense: (dailyExpense / totalIncome) * 100,
       savings: (savings / totalIncome) * 100,
       creditCard: (creditCard / totalIncome) * 100,
-      buffer: (netCashFlow / totalIncome) * 100
+      netCashFlow: (netCashFlow / totalIncome) * 100,
+      transferableSavings: (transferableSavings / totalIncome) * 100
     }
     : null;
 
@@ -205,6 +205,7 @@ export function getMonthlySummaryModel({
     creditCardRevolving: split.creditCardRevolving,
     totalOutflow,
     netCashFlow,
+    transferableSavings,
     unpaid: {
       general: split.generalUnpaid,
       creditCard: split.creditCardUnpaid,
@@ -230,7 +231,7 @@ function classifyMinUsage(usage) {
 }
 
 /**
- * ประเมินสุขภาพงบประมาณ 5 แถว (BR-DASH-010) — pure, ไม่มี warning เมื่อยังไม่มีรายรับ (AC-SH-8)
+ * ประเมินสุขภาพงบประมาณ 4 แถว — pure, ไม่มี warning เมื่อยังไม่มีรายรับ
  */
 export function evaluateBudgetHealth(model, thresholds = DEFAULT_BUDGET_THRESHOLDS) {
   if (!model || !model.hasIncome || !model.ratios) {
@@ -246,8 +247,7 @@ export function evaluateBudgetHealth(model, thresholds = DEFAULT_BUDGET_THRESHOL
     generalExpense: model.generalExpense,
     dailyExpense: model.dailyExpense,
     creditCard: model.creditCard,
-    savings: model.savings,
-    buffer: model.netCashFlow
+    savings: model.savings
   };
 
   const rows = BUDGET_ROW_DEFS.map(({ id, label, kind }) => {

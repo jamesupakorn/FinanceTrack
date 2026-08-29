@@ -16,12 +16,12 @@ function sanitizeNumber(value) {
 }
 
 const TILE_DEFS = [
-  { id: 'totalIncome', label: 'รายรับ', pick: (m) => m.totalIncome, ratioKey: null },
-  { id: 'generalExpense', label: 'รายจ่ายทั่วไป', pick: (m) => m.generalExpense, ratioKey: 'generalExpense' },
-  { id: 'dailyExpense', label: 'รายจ่ายประจำวัน', pick: (m) => m.dailyExpense, ratioKey: 'dailyExpense' },
+  { id: 'totalIncome', label: 'รายได้', pick: (m) => m.totalIncome, ratioKey: null },
+  { id: 'generalExpense', label: 'บิลและรายจ่าย', pick: (m) => m.generalExpense, ratioKey: 'generalExpense' },
+  { id: 'dailyExpense', label: 'ค่าใช้จ่ายรายวัน', pick: (m) => m.dailyExpense, ratioKey: 'dailyExpense' },
   { id: 'savings', label: 'เงินออม', pick: (m) => m.savings, ratioKey: 'savings' },
-  { id: 'creditCard', label: 'บัตรเครดิตที่ต้องชำระ', pick: (m) => m.creditCard, ratioKey: 'creditCard' },
-  { id: 'netCashFlow', label: 'กระแสเงินสดสุทธิ', pick: (m) => m.netCashFlow, ratioKey: 'buffer', isNet: true }
+  { id: 'creditCard', label: 'บัตรเครดิต', pick: (m) => m.creditCard, ratioKey: 'creditCard' },
+  { id: 'netCashFlow', label: 'กระแสเงินสดสุทธิ', pick: (m) => m.netCashFlow, ratioKey: 'netCashFlow', isNet: true }
 ];
 
 export default function DashboardSummaryTiles({ model }) {
