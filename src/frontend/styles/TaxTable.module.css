@@ -640,3 +640,32 @@
     margin: 8px 0;
   }
 }
+
+/* Keep the yearly desktop table out of the mobile layout and contain all tax controls. */
+@media (max-width: 768px) {
+  .taxTable {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .yearSelector,
+  .addForm,
+  .addFormControls,
+  .mobileCardList,
+  .taxCard {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .tableSection,
+  .monthlyTable {
+    display: none !important;
+  }
+
+  .mobileCardList {
+    display: block !important;
+  }
+}

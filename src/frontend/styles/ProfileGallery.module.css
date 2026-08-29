@@ -204,6 +204,24 @@
     padding: 24px;
   }
   .profileGrid {
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .profileCard {
+    min-width: 0;
+    padding: 20px 12px;
+    gap: 12px;
+  }
+  .demoCard {
+    flex-direction: column;
+    text-align: center;
+    padding: 24px;
+  }
+  .demoCard .profileName,
+  .demoCard .demoDescription {
+    text-align: center;
+  }
+  .demoCard .badgeRow {
+    justify-content: center;
   }
 }

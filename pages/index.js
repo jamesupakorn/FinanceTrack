@@ -142,8 +142,14 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!currentUser) return;
     const stored = typeof window !== 'undefined' ? localStorage.getItem(selectedMonthKey) : null;
-    const initial = stored && MONTH_RE.test(stored) ? stored : getCurrentMonthKey();
+    const currentMonth = getCurrentMonthKey();
+    const initial = stored && MONTH_RE.test(stored) && stored <= currentMonth
+      ? stored
+      : currentMonth;
     setSelectedMonth(initial);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(selectedMonthKey, initial);
+    }
     hasLoadedRef.current = false; // ผู้ใช้เปลี่ยน → ถือเป็นการโหลดครั้งแรกใหม่ (E15)
   }, [currentUser?.id, selectedMonthKey]);
 
@@ -277,8 +283,8 @@ export default function DashboardPage() {
     dailyExpenseData,
     salaryData,
     taxData,
-    thresholds: DEFAULT_BUDGET_THRESHOLDS
-  }), [selectedMonth, incomeData, expenseData, savingsData, dailyExpenseData, salaryData, taxData]);
+    thresholds: budgetThresholds
+  }), [selectedMonth, incomeData, expenseData, savingsData, dailyExpenseData, salaryData, taxData, budgetThresholds]);
 
   const calendarData = useMemo(
     () => buildMonthEvents({ monthKey: selectedMonth, monthsMap, cards, plans }),
