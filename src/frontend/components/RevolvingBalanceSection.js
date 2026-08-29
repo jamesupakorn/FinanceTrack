@@ -9,7 +9,8 @@
  * พร็อพ:
  * - card {object} บัตรที่กำลังดู
  * - month {string} YYYY-MM เดือนที่ทำรายการ (ค่าเริ่มต้น = เดือนปัจจุบัน)
- * - defaultHistoryOpen {boolean} กางประวัติไว้เลยไหม (desktop = true)
+ * - isMobileView {boolean} จอปัจจุบันเป็น breakpoint มือถือไหม — ใช้กำหนดค่าเริ่มต้นของ historyOpen
+ *   (desktop = กางไว้เลย) และ sync ใหม่ทุกครั้งที่ breakpoint เปลี่ยนจริง (ไม่ใช่แค่ตอน mount)
  * - onConfirmMinimum {function({card, cycle, onConfirm})} ขอให้หน้าแม่เปิด ConfirmDialog
  * - onChanged {function} แจ้งหน้าแม่ให้โหลดยอดรวมของบัตรใหม่
  *
@@ -17,7 +18,7 @@
  * ปุ่มทุกปุ่มสูง ≥ 44px ผ่านคลาสที่มีอยู่แล้ว (.primaryButton / .paidPill / .scheduleToggle)
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getCurrentMonthKey, formatDayLabel } from '../../shared/utils/creditCardUtils';
 import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
 import { creditCardAPI } from '../../shared/utils/frontend/apiUtils';
@@ -43,7 +44,7 @@ const EMPTY_CYCLE = {
 export default function RevolvingBalanceSection({
   card,
   month = getCurrentMonthKey(),
-  defaultHistoryOpen = false,
+  isMobileView = false,
   onConfirmMinimum,
   onChanged
 }) {
@@ -52,7 +53,12 @@ export default function RevolvingBalanceSection({
   const [spendDraft, setSpendDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [historyOpen, setHistoryOpen] = useState(defaultHistoryOpen);
+  const [historyOpen, setHistoryOpen] = useState(!isMobileView);
+
+  useEffect(() => {
+    setHistoryOpen(!isMobileView);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobileView]);
 
   const cardId = card?.id;
 

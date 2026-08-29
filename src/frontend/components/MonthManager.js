@@ -128,26 +128,30 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
   // สร้างเดือนใหม่ (ข้อมูลเปล่า)
   const handleAddNewMonth = async () => {
     const nextMonth = getNextMonth(selectedMonth);
-    const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = await import('../../shared/utils/frontend/apiUtils');
-    // Save new month data
-    await Promise.all([
-      expenseAPI.save(nextMonth, {}),
-      incomeAPI.save(nextMonth, {}),
-      salaryAPI.save(nextMonth, {}, {}, ''),
-      savingsAPI.saveList ? savingsAPI.saveList(nextMonth, []) : Promise.resolve(),
-      investmentAPI.saveList ? investmentAPI.saveList(nextMonth, []) : Promise.resolve()
-    ]);
+    try {
+      const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = await import('../../shared/utils/frontend/apiUtils');
+      // Save new month data
+      await Promise.all([
+        expenseAPI.save(nextMonth, {}),
+        incomeAPI.save(nextMonth, {}),
+        salaryAPI.save(nextMonth, {}, {}, ''),
+        savingsAPI.saveList ? savingsAPI.saveList(nextMonth, []) : Promise.resolve(),
+        investmentAPI.saveList ? investmentAPI.saveList(nextMonth, []) : Promise.resolve()
+      ]);
 
-    // หมายเหตุ: เดิมมีขั้นตอนดึงรายชื่อเดือนทั้งหมดแล้วลบเดือนเก่าสุดถ้าเกิน 15 เดือนอยู่ตรงนี้
-    // แต่ expenseAPI/incomeAPI/savingsAPI/investmentAPI ไม่มี .delete() จริง (มีแค่ salaryAPI.delete)
-    // จึงไม่เคยลบข้อมูล 4 ใน 5 อย่างได้จริงมาก่อน — เอาออกเพราะตอนนี้ฝั่ง server (POST ของแต่ละ
-    // collection) บังคับหน้าต่าง 15 เดือนร่วมกันให้แล้วโดยอัตโนมัติทุกครั้งที่ save ด้านบน
-    // (ดู sharedMonthWindow.js) การเก็บ logic นี้ไว้จะกลายเป็น enforcement คู่ขนานที่อาจไม่ตรงกัน
+      // หมายเหตุ: เดิมมีขั้นตอนดึงรายชื่อเดือนทั้งหมดแล้วลบเดือนเก่าสุดถ้าเกิน 15 เดือนอยู่ตรงนี้
+      // แต่ expenseAPI/incomeAPI/savingsAPI/investmentAPI ไม่มี .delete() จริง (มีแค่ salaryAPI.delete)
+      // จึงไม่เคยลบข้อมูล 4 ใน 5 อย่างได้จริงมาก่อน — เอาออกเพราะตอนนี้ฝั่ง server (POST ของแต่ละ
+      // collection) บังคับหน้าต่าง 15 เดือนร่วมกันให้แล้วโดยอัตโนมัติทุกครั้งที่ save ด้านบน
+      // (ดู sharedMonthWindow.js) การเก็บ logic นี้ไว้จะกลายเป็น enforcement คู่ขนานที่อาจไม่ตรงกัน
 
-    onMonthSelected(nextMonth);
-    onDataRefresh();
-    setShowAddForm(false);
-    setNewMonthName('');
+      onMonthSelected(nextMonth);
+      onDataRefresh();
+      setShowAddForm(false);
+      setNewMonthName('');
+    } catch (err) {
+      showToast(err?.message || 'สร้างเดือนใหม่ไม่สำเร็จ', 'error');
+    }
   };
 
   // คัดลอกข้อมูลจากเดือนก่อนหน้า
@@ -156,46 +160,50 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
       showToast('กรุณาเลือกเดือนที่ต้องการก่อน', 'info');
       return;
     }
-    const prevMonth = getPrevMonth(selectedMonth);
-    const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI, dailyExpenseAPI } = await import('../../shared/utils/frontend/apiUtils');
-    const [expenseAll, incomeAll, salaryPrevDoc, savingsAll, investmentAll, dailyExpensePrevDoc] = await Promise.all([
-      expenseAPI.getAll(),
-      incomeAPI.getAll(),
-      // ใช้ endpoint เดียวกับที่ SalaryCalculator ใช้แสดงผล เพื่อให้ได้ค่าที่ "carry-forward" มาแล้วจริง ๆ
-      // (ไม่ใช้ getAll() + getMonthData() เพราะจะได้แค่ record ที่ persist จริง ไม่รวม carry-forward)
-      salaryAPI.getByMonth(prevMonth),
-      savingsAPI.getAll ? savingsAPI.getAll() : Promise.resolve({}),
-      investmentAPI.getAll ? investmentAPI.getAll() : Promise.resolve({}),
-      dailyExpenseAPI.getByMonth(prevMonth)
-    ]);
-    // ดึงข้อมูลเดือนก่อนหน้า
-    const expensePrevRaw = getMonthData(expenseAll, prevMonth);
-    const expensePrev = resetCopiedExpensePaidStatus(expensePrevRaw);
-    const incomePrev = getMonthData(incomeAll, prevMonth);
-    let savingsPrev = [];
-    if (savingsAll && savingsAll.savings_list && savingsAll.savings_list[prevMonth]) {
-      savingsPrev = JSON.parse(JSON.stringify(savingsAll.savings_list[prevMonth]));
+    try {
+      const prevMonth = getPrevMonth(selectedMonth);
+      const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI, dailyExpenseAPI } = await import('../../shared/utils/frontend/apiUtils');
+      const [expenseAll, incomeAll, salaryPrevDoc, savingsAll, investmentAll, dailyExpensePrevDoc] = await Promise.all([
+        expenseAPI.getAll(),
+        incomeAPI.getAll(),
+        // ใช้ endpoint เดียวกับที่ SalaryCalculator ใช้แสดงผล เพื่อให้ได้ค่าที่ "carry-forward" มาแล้วจริง ๆ
+        // (ไม่ใช้ getAll() + getMonthData() เพราะจะได้แค่ record ที่ persist จริง ไม่รวม carry-forward)
+        salaryAPI.getByMonth(prevMonth),
+        savingsAPI.getAll ? savingsAPI.getAll() : Promise.resolve({}),
+        investmentAPI.getAll ? investmentAPI.getAll() : Promise.resolve({}),
+        dailyExpenseAPI.getByMonth(prevMonth)
+      ]);
+      // ดึงข้อมูลเดือนก่อนหน้า
+      const expensePrevRaw = getMonthData(expenseAll, prevMonth);
+      const expensePrev = resetCopiedExpensePaidStatus(expensePrevRaw);
+      const incomePrev = getMonthData(incomeAll, prevMonth);
+      let savingsPrev = [];
+      if (savingsAll && savingsAll.savings_list && savingsAll.savings_list[prevMonth]) {
+        savingsPrev = JSON.parse(JSON.stringify(savingsAll.savings_list[prevMonth]));
+      }
+      let investmentPrev = [];
+      if (investmentAll && investmentAll[prevMonth]) {
+        investmentPrev = JSON.parse(JSON.stringify(investmentAll[prevMonth]));
+      }
+      const dailyExpensePrev = dailyExpensePrevDoc?.items || [];
+      await Promise.all([
+        expenseAPI.save(selectedMonth, expensePrev),
+        incomeAPI.save(selectedMonth, incomePrev),
+        salaryAPI.save(
+          selectedMonth,
+          salaryPrevDoc?.income || {},
+          salaryPrevDoc?.deduct || {},
+          salaryPrevDoc?.note || ''
+        ),
+        savingsAPI.saveList ? savingsAPI.saveList(selectedMonth, savingsPrev) : Promise.resolve(),
+        investmentAPI.saveList ? investmentAPI.saveList(selectedMonth, investmentPrev) : Promise.resolve(),
+        dailyExpenseAPI.save(selectedMonth, dailyExpensePrev)
+      ]);
+      onMonthSelected(selectedMonth);
+      onDataRefresh();
+    } catch (err) {
+      showToast(err?.message || 'คัดลอกข้อมูลจากเดือนก่อนหน้าไม่สำเร็จ', 'error');
     }
-    let investmentPrev = [];
-    if (investmentAll && investmentAll[prevMonth]) {
-      investmentPrev = JSON.parse(JSON.stringify(investmentAll[prevMonth]));
-    }
-    const dailyExpensePrev = dailyExpensePrevDoc?.items || [];
-    await Promise.all([
-      expenseAPI.save(selectedMonth, expensePrev),
-      incomeAPI.save(selectedMonth, incomePrev),
-      salaryAPI.save(
-        selectedMonth,
-        salaryPrevDoc?.income || {},
-        salaryPrevDoc?.deduct || {},
-        salaryPrevDoc?.note || ''
-      ),
-      savingsAPI.saveList ? savingsAPI.saveList(selectedMonth, savingsPrev) : Promise.resolve(),
-      investmentAPI.saveList ? investmentAPI.saveList(selectedMonth, investmentPrev) : Promise.resolve(),
-      dailyExpenseAPI.save(selectedMonth, dailyExpensePrev)
-    ]);
-    onMonthSelected(selectedMonth);
-    onDataRefresh();
   };
 
   const handleCustomMonth = () => {

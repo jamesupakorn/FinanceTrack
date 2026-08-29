@@ -99,9 +99,19 @@ async function handleDelete(req, res, userId) {
   let failure = null;
 
   await updateUserCreditData(userId, (data) => {
-    const exists = data.cards.some(card => card?.id === cardId);
-    if (!exists) {
+    const card = data.cards.find(item => item?.id === cardId);
+    if (!card) {
       failure = { status: 404, body: { error: 'card not found' } };
+      return data;
+    }
+
+    // บล็อกการลบถ้ายังมียอดหมุนเวียนค้าง (BR-CC-013) — เดียวกับ countBlockingPlans ด้านล่าง แต่สำหรับยอดหมุนเวียน
+    const summarised = summariseCard(card, data.plans, data.cycles);
+    if (summarised.revolvingOutstanding > 0) {
+      failure = {
+        status: 409,
+        body: { error: 'card has an outstanding revolving balance', revolvingOutstanding: summarised.revolvingOutstanding }
+      };
       return data;
     }
 

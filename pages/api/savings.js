@@ -130,6 +130,13 @@ export default async function handler(req, res) {
         let doc = await collection.findOne({ month, ...userFilter });
         if (!doc) {
           doc = await collection.findOne({ month, userId: { $exists: false } });
+          if (doc) {
+            try {
+              await collection.updateOne({ _id: doc._id }, { $set: { userId } });
+            } catch (err) {
+              console.error('Failed to claim legacy doc for user', userId, month, err);
+            }
+          }
         }
         // Always return default structure if not found, to match legacy JSON behavior
         const savingsList = doc && Array.isArray(doc.savings_list) ? doc.savings_list : [];
@@ -146,6 +153,13 @@ export default async function handler(req, res) {
         let allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
         if (!allDocs.length) {
           allDocs = await collection.find({ userId: { $exists: false }, month: { $exists: true } }).toArray();
+          if (allDocs.length) {
+            try {
+              await Promise.all(allDocs.map(d => collection.updateOne({ _id: d._id }, { $set: { userId } })));
+            } catch (err) {
+              console.error('Failed to claim legacy docs for user', userId, err);
+            }
+          }
         }
         const data = {};
         allDocs.forEach(doc => {

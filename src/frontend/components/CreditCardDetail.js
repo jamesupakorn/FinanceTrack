@@ -118,7 +118,7 @@ function describePlanInterest(plan) {
 function PlanCard({
   plan,
   card,
-  defaultScheduleOpen,
+  isMobileView,
   pendingKeys,
   onToggleInstallment,
   onRename,
@@ -126,8 +126,13 @@ function PlanCard({
   onCancel,
   onDelete
 }) {
-  const [scheduleOpen, setScheduleOpen] = useState(defaultScheduleOpen);
+  const [scheduleOpen, setScheduleOpen] = useState(!isMobileView);
   const [showAll, setShowAll] = useState(false);
+
+  useEffect(() => {
+    setScheduleOpen(!isMobileView);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobileView]);
 
   const schedule = Array.isArray(plan.schedule) ? plan.schedule : [];
   const nextUnpaidNo = plan.nextUnpaid?.no ?? null;
@@ -283,9 +288,24 @@ export default function CreditCardDetail({
   onConfirmMinimum,
   onRevolvingChanged
 }) {
-  const [defaultScheduleOpen] = useState(
-    () => !(typeof window !== 'undefined' && window.innerWidth < 768)
+  const [isMobileView, setIsMobileView] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 768
   );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const media = window.matchMedia('(max-width: 767px)');
+    const update = () => setIsMobileView(media.matches);
+    update();
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update);
+      return () => media.removeEventListener('change', update);
+    }
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
+
+  const defaultScheduleOpen = !isMobileView;
 
   const orderedPlans = useMemo(() => {
     const rank = (plan) => (plan.status === PLAN_STATUS.ONGOING ? 0 : 1);
@@ -395,7 +415,7 @@ export default function CreditCardDetail({
           {/* ยอดหมุนเวียนเป็นภาระหลักของบัตร จึงอยู่เหนือรายการแผนผ่อนซึ่งเป็นรายละเอียดย่อย */}
           <RevolvingBalanceSection
             card={card}
-            defaultHistoryOpen={defaultScheduleOpen}
+            isMobileView={isMobileView}
             onConfirmMinimum={onConfirmMinimum}
             onChanged={onRevolvingChanged}
           />
@@ -416,7 +436,7 @@ export default function CreditCardDetail({
                   key={plan.id}
                   plan={plan}
                   card={card}
-                  defaultScheduleOpen={defaultScheduleOpen}
+                  isMobileView={isMobileView}
                   pendingKeys={pendingKeys}
                   onToggleInstallment={onToggleInstallment}
                   onRename={onRenamePlan}
