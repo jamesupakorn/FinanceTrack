@@ -59,7 +59,26 @@ function BudgetRow({ row }) {
   );
 }
 
-export default function BudgetHealthPanel({ model, thresholds }) {
+function TransferableSavingsAction({ amount, onConfirm, isConfirming }) {
+  const available = amount > 0;
+  return (
+    <div className={styles.transferableSavings} aria-live="polite">
+      <div>
+        <p className={styles.transferableSavingsLabel}>เงินออมที่โอนได้</p>
+        <p className={styles.transferableSavingsAmount}>{`${formatCurrency(Math.max(0, amount))} ฿`}</p>
+      </div>
+      {available ? (
+        <button type="button" className={styles.transferableSavingsButton} onClick={onConfirm} disabled={isConfirming}>
+          {isConfirming ? 'กำลังเพิ่มเข้าเงินออม...' : 'เพิ่มเข้าเงินออม'}
+        </button>
+      ) : (
+        <p className={styles.transferableSavingsUnavailable}>เดือนนี้ยังไม่มีเงินเหลือพร้อมออม</p>
+      )}
+    </div>
+  );
+}
+
+export default function BudgetHealthPanel({ model, thresholds, onConfirmTransfer, isConfirmingTransfer }) {
   const [collapsed, setCollapsed] = useState(true); // พับเป็นค่าเริ่มต้นเสมอ ทั้งมือถือและเดสก์ท็อป (AC-DB-29)
   const health = evaluateBudgetHealth(model, thresholds);
   const rollupIcon = !health.available ? null : (health.attentionCount > 0 ? '⚠ ' : '✓ ');
@@ -95,6 +114,13 @@ export default function BudgetHealthPanel({ model, thresholds }) {
             </>
           )}
         </div>
+      )}
+      {health.available && (
+        <TransferableSavingsAction
+          amount={model.transferableSavings}
+          onConfirm={onConfirmTransfer}
+          isConfirming={isConfirmingTransfer}
+        />
       )}
     </section>
   );

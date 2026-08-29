@@ -118,6 +118,17 @@ export const savingsAPI = {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: withUserPayload({ month, total_savings })
+	}),
+	confirmTransfer: async (month, amount, savingsBase) => jsonFetch(API_URLS.SAVINGS, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({
+			month,
+			transfer: {
+				amount,
+				key: `transferable-savings:${month}:${Math.round(savingsBase * 100)}`
+			}
+		})
 	})
 };
 

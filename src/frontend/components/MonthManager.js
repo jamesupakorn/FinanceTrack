@@ -226,8 +226,8 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
       <div className={styles.currentMonthDisplay}>
         <div className={styles.monthSelectionRow}>
           <div className={styles.monthLabelGroup}>
-            <span className={styles.monthLabel}>เดือนที่กำลังดู</span>
-            <span className={styles.monthHint}>บันทึกไว้ตามบัญชีของคุณ</span>
+            <span className={styles.monthLabel}>เดือนที่กำลังวางแผน</span>
+            <span className={styles.monthHint}>เลือกเดือนเพื่อดูและวางแผนการเงิน</span>
           </div>
           <div className={styles.monthSelectWrapper}>
             <div className={styles.monthDisplayValue}>
@@ -250,8 +250,8 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
 
       <div className={styles.monthActions}>
         <div className={styles.monthLabelGroup}>
-          <span className={styles.monthLabel}>การจัดการเดือน</span>
-          <span className={styles.monthHint}>เตรียมข้อมูลก่อนเริ่มบันทึกหรือแก้ไขรายการ</span>
+          <span className={styles.monthLabel}>เริ่มต้นแผนของเดือน</span>
+          <span className={styles.monthHint}>สร้างเดือนใหม่หรือใช้ข้อมูลเดือนก่อนหน้าเป็นจุดเริ่มต้น</span>
         </div>
         <div className={styles.monthActionButtons}>
           <button

@@ -49,8 +49,12 @@ export function calculateSalarySummary(salaryData) {
 }
 
 // Savings summary calculation
-export function calculateTotalSavings(savingsList) {
-  return savingsList.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+export function calculateTotalSavings(savingsList = []) {
+  if (!Array.isArray(savingsList)) return 0;
+  return savingsList.reduce((sum, item) => {
+    const amount = item?.savings_amount ?? item?.amount ?? item?.จำนวนเงิน ?? 0;
+    return sum + (parseFloat(String(amount).replace(/,/g, '')) || 0);
+  }, 0);
 }
 
 export async function enforceMonthLimit(collection, limit = 15, options = {}) {

@@ -23,8 +23,7 @@ const FIELD_DEFS = [
   { key: 'generalExpense', label: 'รายจ่ายทั่วไป', prefix: 'ไม่เกิน', suffixText: '% ของรายรับ', kind: 'max' },
   { key: 'dailyExpense', label: 'รายจ่ายประจำวัน', prefix: 'ไม่เกิน', suffixText: '%', kind: 'max' },
   { key: 'creditCard', label: 'บัตรเครดิต', prefix: 'ไม่เกิน', suffixText: '%', kind: 'max' },
-  { key: 'savings', label: 'เงินออม', prefix: 'อย่างน้อย', suffixText: '%', kind: 'min' },
-  { key: 'buffer', label: 'เงินคงเหลือ', prefix: 'อย่างน้อย', suffixText: '%', kind: 'min' }
+  { key: 'savings', label: 'เงินออม', prefix: 'อย่างน้อย', suffixText: '%', kind: 'min' }
 ];
 
 const VALIDATION_MESSAGE = 'กรอกตัวเลข 0–100 เท่านั้น';
@@ -138,7 +137,7 @@ export default function BudgetThresholdForm({ values, loading, loadFailed, savin
     };
     return {
       capSum: readNumeric('generalExpense') + readNumeric('dailyExpense') + readNumeric('creditCard'),
-      goalSum: readNumeric('savings') + readNumeric('buffer')
+      goalSum: readNumeric('savings')
     };
   }, [draft]);
 
@@ -194,7 +193,7 @@ export default function BudgetThresholdForm({ values, loading, loadFailed, savin
       </div>
 
       <p className={styles.summaryLine}>
-        {`รวมเพดานรายจ่าย ${capSum}% · เป้าหมายเงินออม + คงเหลือ ${goalSum}%`}
+        {`รวมเพดานรายจ่าย ${capSum}% · เป้าหมายเงินออม ${goalSum}%`}
       </p>
 
       <div className={styles.formActions}>

@@ -84,9 +84,36 @@ function handleJsonSavingsGet(req, res, userId) {
  * @param {string} userId - รหัสผู้ใช้
  */
 function handleJsonSavingsPost(req, res, userId) {
-  const { month, total_savings, savings_list } = req.body;
+  const { month, total_savings, savings_list, transfer } = req.body;
   if (!month) {
     return res.status(400).json({ error: 'month required' });
+  }
+  if (transfer) {
+    const amount = Number(transfer.amount);
+    const transferKey = typeof transfer.key === 'string' ? transfer.key.trim() : '';
+    if (!Number.isFinite(amount) || amount <= 0 || !transferKey) {
+      return res.status(400).json({ error: 'valid transfer amount and key required' });
+    }
+    let created = false;
+    updateUserData(JSON_FILENAME, userId, (bucket) => {
+      const nextBucket = { ...bucket };
+      const existing = nextBucket[month] || { month, savings_list: [] };
+      const existingList = Array.isArray(existing.savings_list) ? existing.savings_list : [];
+      if (existingList.some(item => item?.transferKey === transferKey)) return nextBucket;
+      created = true;
+      nextBucket[month] = withGeneratedId({
+        ...existing,
+        month,
+        savings_list: [...existingList, {
+          savings_type: 'เงินออมจากเงินเหลือ',
+          savings_amount: amount,
+          transferKey,
+          source: 'transferable-savings'
+        }]
+      });
+      return enforceUserMonthLimit(nextBucket);
+    });
+    return res.status(201).json({ success: true, created });
   }
   const updateObj = { month, savings_list };
   if (typeof total_savings !== 'undefined') {
@@ -187,9 +214,36 @@ export default async function handler(req, res) {
       }
     }
   } else if (req.method === 'POST') {
-    const { month, total_savings, savings_list } = req.body;
+    const { month, total_savings, savings_list, transfer } = req.body;
     if (!month) {
       return res.status(400).json({ error: 'month required' });
+    }
+    if (transfer) {
+      const amount = Number(transfer.amount);
+      const transferKey = typeof transfer.key === 'string' ? transfer.key.trim() : '';
+      if (!Number.isFinite(amount) || amount <= 0 || !transferKey) {
+        return res.status(400).json({ error: 'valid transfer amount and key required' });
+      }
+      await collection.updateOne(
+        { month, ...userFilter },
+        { $setOnInsert: { month, ...userFilter, savings_list: [] } },
+        { upsert: true }
+      );
+      const result = await collection.updateOne(
+        { month, ...userFilter, 'savings_list.transferKey': { $ne: transferKey } },
+        {
+          $push: {
+            savings_list: {
+              savings_type: 'เงินออมจากเงินเหลือ',
+              savings_amount: amount,
+              transferKey,
+              source: 'transferable-savings'
+            }
+          }
+        }
+      );
+      await enforceMonthLimit(collection, 15, { filter: userFilter });
+      return res.status(201).json({ success: true, created: result.modifiedCount === 1 });
     }
     // สร้าง object สำหรับบันทึก โดยไม่ใส่ total_savings ถ้าไม่ได้ส่งมา
     const updateObj = { month, savings_list };
