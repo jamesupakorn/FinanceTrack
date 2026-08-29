@@ -11,6 +11,11 @@
   --nav-sidebar-width: 240px;
   --nav-bottom-height: 56px;
   --nav-safe-bottom: calc(var(--nav-bottom-height) + env(safe-area-inset-bottom, 0px));
+  /* ความสูงจริงของ .topBar บนมือถือตอนมี headerActions (ปุ่มบันทึก + ชิป) — /workspace/* เท่านั้นที่ใช้
+     (F1 · Amendment A5) ประกาศไว้ตัวเดียวคู่กับตัวแปรเรขาคณิตอื่น ๆ กันเลขคลาดกับความสูงจริงของ header
+     ~10px (padding บน) + ~36px (topBarTitleRow min-height) + ~10px (headerActionsRow margin-top)
+     + ~44px (ปุ่มบันทึก) ที่ Home.module.css ต้องใช้ตั้ง scroll-margin-top ให้ input ไม่โดนซ่อนใต้ header */
+  --topbar-safe-top: 100px;
 }
 
 .shell {

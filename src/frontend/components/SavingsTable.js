@@ -16,7 +16,7 @@ import styles from '../styles/SavingsTable.module.css';
 /**
  * ตารางเงินออมรายเดือน
  */
-export default function SavingsTable({ selectedMonth, triggerSave }) {
+export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved }) {
 
   const [savingsData, setSavingsData] = useState(null);
   const [รายการเงินออม, setรายการเงินออม] = useState([]);
@@ -70,9 +70,13 @@ export default function SavingsTable({ selectedMonth, triggerSave }) {
     }
   }, [selectedMonth, loadSavingsData]);
 
+  // เดิมรีเฟรช dropdown ตัวเลือกเป้าหมายตอนตัวนับ Save All ยิง (เพราะ SavingsGoalTracker เคยอยู่แท็บ
+  // เดียวกัน สร้างเป้าหมายใหม่แล้ว Save All จะรีเฟรชให้ที่นี่ด้วย) ตอนนี้แยกคนละ route แล้ว
+  // (/workspace/savings vs /workspace/savings/goals) จึงรีเฟรชตอน mount แทน — ผลลัพธ์เท่ากันหรือดีกว่า
+  // เพราะสลับไปมาระหว่างสอง route นี้คือ mount ใหม่ทุกครั้งอยู่แล้ว (Amendment A5)
   useEffect(() => {
     loadGoalOptions();
-  }, [loadGoalOptions, selectedMonth, triggerSave]);
+  }, [loadGoalOptions, selectedMonth]);
 
   useEffect(() => {
     if (pendingScrollIndex === null) return;
@@ -177,17 +181,20 @@ export default function SavingsTable({ selectedMonth, triggerSave }) {
       await savingsAPI.saveList(selectedMonth, numericSavings);
       await loadSavingsData(selectedMonth);
       showToast('บันทึกรายการเงินออมสำเร็จ');
+      onSaved?.();
     } catch (error) {
       console.error('Error saving savings list:', error);
       showToast('บันทึกไม่สำเร็จ กรุณาลองใหม่', 'error');
     }
   };
 
+  // ลงทะเบียนฟังก์ชันบันทึกกับ ref ของ WorkspaceShell แทนตัวนับ Save All เดิม (Amendment A5 —
+  // ดูคำอธิบายเต็มใน IncomeTable.js ที่จุดเดียวกัน)
   useEffect(() => {
-    if (triggerSave) {
-      handleSavingsSave();
-    }
-  }, [triggerSave]);
+    if (!onRegisterSave) return undefined;
+    onRegisterSave(handleSavingsSave);
+    return () => onRegisterSave(null);
+  }, [onRegisterSave, handleSavingsSave]);
 
   // ยอดรวมเงินเก็บคำนวณจากสถานะปัจจุบัน เพื่อสะท้อนผลการแก้ไขทันที
   const displayedTotalSavings = useMemo(() => {

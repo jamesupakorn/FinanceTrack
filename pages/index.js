@@ -39,19 +39,21 @@ import styles from '../src/frontend/styles/Dashboard.module.css';
 
 const SELECTED_MONTH_KEY = 'edit_selected_month'; // key เดียวกับ workspace (edit.js:31) — ตั้งใจให้ตรงกัน
 
+// href เจ็ดจุดนี้เปลี่ยนจาก /workspace?tab=... เป็น /workspace/... ตรง ๆ แล้ว (Amendment A5 —
+// /workspace/* กลายเป็น route family จริง 8 เส้นทาง ไม่ใช่ query param อีกต่อไป)
 const QUICK_ACTIONS = [
-  { id: 'add-income', label: 'เพิ่มรายรับ', Icon: Icons.TrendingUp, href: '/workspace?tab=income', primary: true },
-  { id: 'add-expense', label: 'เพิ่มรายจ่าย', Icon: Icons.TrendingDown, href: '/workspace?tab=expense' },
-  { id: 'open-workspace', label: 'เปิดบันทึกรายเดือน', Icon: Icons.Edit, href: '/workspace' },
+  { id: 'add-income', label: 'เพิ่มรายรับ', Icon: Icons.TrendingUp, href: '/workspace/income', primary: true },
+  { id: 'add-expense', label: 'เพิ่มรายจ่าย', Icon: Icons.TrendingDown, href: '/workspace/expense' },
+  { id: 'open-workspace', label: 'เปิดแผนการเงินรายเดือน', Icon: Icons.Edit, href: '/workspace/income' },
   { id: 'view-credit-cards', label: 'ดูบัตรเครดิต', Icon: Icons.CreditCard, href: '/credit-cards' },
   { id: 'open-calendar', label: 'เปิดปฏิทิน', Icon: Icons.Calendar, action: 'scroll-calendar' },
   // ทางเข้าเครื่องคำนวณเงินเดือนจุดที่หนึ่ง (Amendment A3 — ยกเลิกแผนหน้าแยก /salary ของ A1 แล้ว)
-  // พาไปแท็บ "รายรับ" ใน /workspace แล้วเปิด SalaryModal ให้อัตโนมัติผ่าน ?salary=open
+  // พาไปหน้า "รายรับ" ใน /workspace แล้วเปิด SalaryModal ให้อัตโนมัติผ่าน ?salary=open
   {
     id: 'salary-calculator',
     label: 'คำนวณเงินเดือน',
     Icon: Icons.DollarSign,
-    href: '/workspace?tab=income&salary=open'
+    href: '/workspace/income?salary=open'
   }
 ];
 

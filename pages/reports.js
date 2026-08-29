@@ -371,7 +371,7 @@ export default function ReportsPage() {
         {/* ทางเข้าเครื่องคำนวณเงินเดือนจุดที่สอง (A1) — low-emphasis text link ไม่ใช่ปุ่ม ไม่แข่งกับ
             Download Report PDF ใน headerActions */}
         <Link
-          href="/workspace?tab=income&salary=open"
+          href="/workspace/income?salary=open"
           className={styles.salaryLinkFooter}
           aria-describedby="reports-salary-link-hint"
         >

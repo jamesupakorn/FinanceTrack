@@ -41,7 +41,7 @@ export default function CashFlowRing({ model, selected, onSelect, monthLabel, in
         <div className={styles.ringEmpty}>
           <p>ยังคำนวณสัดส่วนไม่ได้</p>
           <p className={styles.ringEmptyDetail}>ยังไม่มีรายรับในเดือนนี้</p>
-          <a href="/workspace?tab=income" className={styles.ringEmptyLink}>เพิ่มรายรับ</a>
+          <a href="/workspace/income" className={styles.ringEmptyLink}>เพิ่มรายรับ</a>
         </div>
       </section>
     );

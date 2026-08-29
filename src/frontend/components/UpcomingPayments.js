@@ -17,8 +17,8 @@ import styles from '../styles/Dashboard.module.css';
 const FILTER_EMPTY_COPY = {
   generalExpense: { text: 'ไม่มีรายจ่ายทั่วไปที่ครบกำหนดในช่วงนี้' },
   creditCard: { text: 'ไม่มีรายการบัตรเครดิตที่ครบกำหนดในช่วงนี้' },
-  dailyExpense: { text: 'รายจ่ายประจำวันไม่มีวันครบกำหนด ดูรายละเอียดในบันทึกรายเดือน แท็บรายวัน', href: '/workspace?tab=daily' },
-  savings: { text: 'เงินออมไม่มีวันครบกำหนด', href: '/workspace?tab=savings' }
+  dailyExpense: { text: 'รายจ่ายประจำวันไม่มีวันครบกำหนด ดูรายละเอียดในหน้ารายจ่ายรายวัน', href: '/workspace/daily' },
+  savings: { text: 'เงินออมไม่มีวันครบกำหนด', href: '/workspace/savings' }
 };
 
 function matchesFilter(event, filter) {

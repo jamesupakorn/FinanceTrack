@@ -17,7 +17,7 @@ import styles from '../styles/TaxTable.module.css';
 /**
  * ตารางภาษีรายปี
  */
-export default function TaxTable({ selectedMonth, triggerSave, salaryUpdateTrigger }) {
+export default function TaxTable({ selectedMonth, salaryUpdateTrigger, onRegisterSave, onSaved }) {
   const handleAmountInputFocus = (event) => {
     event.target.select();
   };
@@ -126,16 +126,22 @@ export default function TaxTable({ selectedMonth, triggerSave, salaryUpdateTrigg
         monthly_provident: monthlyProvident
       });
       showToast('บันทึกข้อมูลภาษีสำเร็จ');
+      onSaved?.();
     } catch (e) {
       showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูลภาษี', 'error');
     }
   };
 
+  // ลงทะเบียนฟังก์ชันบันทึกกับ ref ของ WorkspaceShell แทนตัวนับ Save All เดิม (Amendment A5 —
+  // ดูคำอธิบายเต็มใน IncomeTable.js ที่จุดเดียวกัน) salaryUpdateTrigger ยังอยู่ในพารามิเตอร์เหมือนเดิม
+  // แต่ไม่มีใครส่งค่าให้จาก /workspace/tax อีกแล้ว (ผู้ผลิตตัวเดียวคือ modal เงินเดือนอยู่คนละ route แล้ว
+  // — /workspace/income) undefined ที่เสถียรทำให้ effect ด้านล่าง (dep [selectedYear, salaryUpdateTrigger])
+  // ยังรันตอน mount เหมือนเดิม ซึ่งเป็นการรีเฟรชที่มันต้องการอยู่แล้วพอดี ไม่ต้องแก้ effect นั้นเพิ่ม
   useEffect(() => {
-    if (triggerSave) {
-      handleSave();
-    }
-  }, [triggerSave]);
+    if (!onRegisterSave) return undefined;
+    onRegisterSave(handleSave);
+    return () => onRegisterSave(null);
+  }, [onRegisterSave, handleSave]);
   // State for provident fund and its tax
   const [monthlyProvident, setMonthlyProvident] = useState({
     '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',

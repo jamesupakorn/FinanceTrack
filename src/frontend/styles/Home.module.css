@@ -459,12 +459,54 @@
     border-radius: 24px;
   }
 
-  /* กันฟิลด์แถวสุดท้ายโดนบัง floating save bar + bottom nav เวลาคีย์บอร์ดมือถือเปิดอยู่ (AC-SH-17 / E11) */
+  /* กันฟิลด์แถวสุดท้ายโดนบัง floating bar + bottom nav เวลาคีย์บอร์ดมือถือเปิดอยู่ (AC-SH-17 / E11)
+     scroll-margin-top เพิ่มใหม่ (F1 · Amendment A5): ปุ่มบันทึกย้ายขึ้นไปอยู่ใน sticky header ของ
+     Layout แล้ว (~100px บนมือถือ) เบราว์เซอร์ไม่ชดเชย sticky overlay ให้ scrollIntoView เอง — ถ้าไม่มี
+     กติกานี้ ฟิลด์ที่ถูก scroll เข้ามากลางหน้าจะไปโผล่ "ใต้" header แทน (E44, AC-A5-22) */
   .tabContent input,
   .tabContent select,
   .tabContent textarea {
+    scroll-margin-top: calc(var(--topbar-safe-top) + 8px);
     scroll-margin-bottom: calc(var(--nav-safe-bottom) + 80px);
   }
+}
+
+/* Savings sub-nav — เห็นเฉพาะบน /workspace/savings* สามหน้า (เงินออม/เป้าหมาย/ลงทุน) เบากว่า
+   .tabNavigation ตั้งใจ (ไม่มี pill พื้นหลัง ใช้ underline บอก active แทน) เพราะเป็นตัวขยายของหัวข้อ
+   "เงินออม" ในแถวหลัก ไม่ใช่กลุ่มทางเลือกที่เท่ากัน (Amendment A5, J18) */
+.subTabNavigation {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: -20px 0 28px;
+}
+
+.subTabButton {
+  padding: 8px 4px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.55);
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.subTabButton:hover {
+  color: #fff;
+}
+
+.subTabButton.active {
+  color: #fff;
+  font-weight: 700;
+  border-bottom-color: var(--color-primary, #5d5bff);
+}
+
+.subTabButton:focus-visible {
+  outline: 2px solid var(--color-primary, #5d5bff);
+  outline-offset: 2px;
 }
 
 .tabHeader {
@@ -878,41 +920,10 @@
   text-align: center;
 }
 
-.floatingBarDivider {
-  width: 1px;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.15);
-  flex-shrink: 0;
-}
-
-.floatingBarSaveBtn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 18px;
-  min-height: 44px;
-  border-radius: 999px;
-  border: none;
-  background: var(--gradient-primary);
-  color: #021210;
-  font-size: 0.88rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: opacity 0.2s, transform 0.2s;
-  flex-shrink: 0;
-}
-
-.floatingBarSaveBtn:hover {
-  opacity: 0.88;
-  transform: translateY(-1px);
-}
-
-.floatingBarSaveBtn:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.7);
-  outline-offset: 2px;
-}
-
-/* ยกบาร์ขึ้นพ้น bottom nav ของ Layout เสมอบนมือถือ ไม่ให้ซ้อนทับกัน (AC-SH-17) */
+/* ยกบาร์ขึ้นพ้น bottom nav ของ Layout เสมอบนมือถือ ไม่ให้ซ้อนทับกัน (AC-SH-17) — ปุ่มบันทึกกับเส้นคั่น
+   (.floatingBarSaveBtn/.floatingBarDivider) ถูกลบออกแล้ว (F1 · Amendment A5): ปุ่มบันทึกย้ายไปอยู่ใน
+   Layout headerActions แล้ว บาร์นี้เหลือแค่ ◀ เดือน ▶ — ความสูง/ตำแหน่งของบาร์ไม่เปลี่ยน เพราะ
+   .floatingBarNavBtn (44px) เป็นตัวกำหนดความสูงอยู่แล้ว ไม่ใช่ปุ่มบันทึกที่เพิ่งลบไป (AC-A5-18) */
 @media (max-width: 768px) {
   .floatingBar {
     bottom: calc(var(--nav-safe-bottom) + 16px);
@@ -930,9 +941,69 @@
     min-width: 90px;
     font-size: 0.82rem;
   }
+}
 
-  .floatingBarSaveBtn {
-    padding: 7px 14px;
-    font-size: 0.82rem;
+/* ------------------------------------------------------------------------------------------------
+   ปุ่มบันทึก + ชิป "ยังไม่ได้บันทึก" ใน Layout headerActions ของ /workspace/* (F1 · Amendment A5)
+   render โดย WorkspaceShell.js ผ่าน Layout's headerActions prop — โฟกัสริงมาจาก
+   Layout.module.css's ".headerActionsRow button:focus-visible" อยู่แล้ว ไม่ต้องเพิ่มกติกาที่นี่
+   ------------------------------------------------------------------------------------------------ */
+.dirtyChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  min-height: 36px;
+  border-radius: 999px;
+  background: rgba(255, 176, 32, 0.16);
+  border: 1px solid rgba(255, 176, 32, 0.4);
+  color: #ffcf7a;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.headerSaveButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  min-height: 44px;
+  border-radius: 999px;
+  border: none;
+  background: var(--gradient-primary);
+  color: #021210;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.headerSaveButton:hover:not(:disabled) {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.headerSaveButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+  transform: none;
+}
+
+/* ป้ายเต็ม/ป้ายย่อสลับกันตาม breakpoint เดียว (768px) — aria-label ของปุ่มเป็นป้ายเต็มเสมอไม่ว่าจอไหน
+   (spec-monthly-workspace.md §Copy — A5: "บันทึกรายจ่ายรายวัน" ไม่พอที่ 390px ข้าง ๆ ชิป) */
+.headerSaveButtonShortLabel {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .headerSaveButtonFullLabel {
+    display: none;
+  }
+
+  .headerSaveButtonShortLabel {
+    display: inline;
   }
 }
