@@ -992,18 +992,18 @@
   transform: none;
 }
 
-/* ป้ายเต็ม/ป้ายย่อสลับกันตาม breakpoint เดียว (768px) — aria-label ของปุ่มเป็นป้ายเต็มเสมอไม่ว่าจอไหน
-   (spec-monthly-workspace.md §Copy — A5: "บันทึกรายจ่ายรายวัน" ไม่พอที่ 390px ข้าง ๆ ชิป) */
-.headerSaveButtonShortLabel {
-  display: none;
-}
-
-@media (max-width: 768px) {
-  .headerSaveButtonFullLabel {
-    display: none;
+/* ป้ายเต็มแสดงเสมอทุกจอ — เดิมสลับเป็นป้ายย่อ "บันทึก" ที่ ≤768px เพราะ "บันทึกรายจ่ายรายวัน"
+   ไม่พอที่ 390px ข้าง ๆ ชิป แต่ป้ายย่อทำให้ปุ่มดูกำกวมอีกครั้ง (ผู้ใช้แยกไม่ออกว่าบันทึกแค่ส่วนไหน) —
+   แก้ที่ต้นตอแทน: ลดขนาดตัวอักษร/padding ของทั้งปุ่มและชิปที่จอแคบแทนการตัดคำ (critique 2026-08-29 P1) */
+@media (max-width: 480px) {
+  .headerSaveButton {
+    padding: 8px 14px;
+    font-size: 0.8rem;
+    gap: 6px;
   }
 
-  .headerSaveButtonShortLabel {
-    display: inline;
+  .dirtyChip {
+    padding: 6px 10px;
+    font-size: 0.74rem;
   }
 }

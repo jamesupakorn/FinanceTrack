@@ -1,7 +1,6 @@
 import crypto from 'crypto';
 import { getMongoCollection, isJsonMode } from '../../lib/dataSource';
-
-const { updateUserLineId } = require('../../src/backend/data/userUtils');
+import { updateUserLineId } from '../../src/backend/data/userUtils.js';
 
 export const config = {
   api: {

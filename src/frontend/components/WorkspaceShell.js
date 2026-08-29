@@ -44,10 +44,10 @@ const getMonthLabel = (monthKey) => {
 
 // แถวนำทางหลัก — เงินออม/เป้าหมาย/ลงทุน สามหน้ารวมกันเป็นก้อนเดียวของแถวนี้ (เงินออม active ให้ทั้งสาม)
 const PRIMARY_NAV = [
-  { id: 'income', label: 'รายรับ', Icon: Icons.TrendingUp },
-  { id: 'expense', label: 'รายจ่าย', Icon: Icons.CreditCard },
-  { id: 'savings', label: 'เงินออม', Icon: Icons.PiggyBank },
-  { id: 'daily', label: 'รายวัน', Icon: Icons.CreditCard },
+  { id: 'income', label: 'รายได้', Icon: Icons.TrendingUp },
+  { id: 'expense', label: 'บิลและรายจ่าย', Icon: Icons.CreditCard },
+  { id: 'savings', label: 'ออมและเป้าหมาย', Icon: Icons.PiggyBank },
+  { id: 'daily', label: 'ค่าใช้จ่ายรายวัน', Icon: Icons.CreditCard },
   { id: 'tax', label: 'ภาษี', Icon: Icons.BarChart }
 ];
 const SAVINGS_GROUP = ['savings', 'goals', 'investment'];
@@ -389,9 +389,6 @@ export default function WorkspaceShell({ section, overlay, children }) {
         <Icons.Save size={16} />
         <span className={homeStyles.headerSaveButtonFullLabel}>
           {isSaving ? 'กำลังบันทึก...' : sectionMeta.saveLabel}
-        </span>
-        <span className={homeStyles.headerSaveButtonShortLabel}>
-          {isSaving ? 'กำลังบันทึก...' : 'บันทึก'}
         </span>
       </button>
     </>

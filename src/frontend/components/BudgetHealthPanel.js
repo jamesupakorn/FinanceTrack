@@ -1,6 +1,6 @@
 /**
  * คอมโพเนนต์: BudgetHealthPanel
- * 5 แถวสุขภาพงบประมาณ + rollup — อ่านจาก evaluateBudgetHealth() ล้วน ไม่คำนวณเกณฑ์เอง (BR-DASH-005)
+ * 4 แถวสุขภาพงบประมาณ + rollup — อ่านจาก evaluateBudgetHealth() ล้วน ไม่คำนวณเกณฑ์เอง (BR-DASH-005)
  *
  * Collapsible ตาม §UX Review ของ spec-dashboard.md — พับเก็บเป็นค่าเริ่มต้นเสมอทั้งมือถือและเดสก์ท็อป
  * ใช้แพทเทิร์น header+chevron+aria-expanded เดียวกับ SalaryCalculator/SummaryReport ใน pages/edit.js
@@ -10,7 +10,7 @@
  * (ไม่ re-derive ข้อความเอง) — ไอคอน/สีเลือกจาก row.status (คีย์ภาษาอังกฤษ) ตามตาราง UX_SPEC §Budget health
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { evaluateBudgetHealth } from '../../shared/utils/frontend/monthlySummary';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { Icons } from './Icons';
@@ -80,15 +80,28 @@ function TransferableSavingsAction({ amount, onConfirm, isConfirming }) {
 
 export default function BudgetHealthPanel({ model, thresholds, onConfirmTransfer, isConfirmingTransfer }) {
   const [collapsed, setCollapsed] = useState(true); // พับเป็นค่าเริ่มต้นเสมอ ทั้งมือถือและเดสก์ท็อป (AC-DB-29)
+  const [userToggled, setUserToggled] = useState(false);
   const health = evaluateBudgetHealth(model, thresholds);
   const rollupIcon = !health.available ? null : (health.attentionCount > 0 ? '⚠ ' : '✓ ');
+
+  // ยกเว้นจาก AC-DB-29 เพียงจุดเดียว: ถ้ามีหมวดที่ต้องระวัง เปิดให้อัตโนมัติครั้งแรก เพราะนี่คือ
+  // ข้อมูลที่มีความเสี่ยงสูงสุดในหน้านี้ ไม่ควรซ่อนไว้หลังการแตะแม้แต่บน desktop ที่มีพื้นที่พอ —
+  // ไม่ทับค่าที่ผู้ใช้กดเปลี่ยนเองแล้ว (userToggled)
+  useEffect(() => {
+    if (!userToggled && health.available && health.attentionCount > 0) {
+      setCollapsed(false);
+    }
+  }, [health.available, health.attentionCount, userToggled]);
 
   return (
     <section className={styles.panelCard}>
       <button
         type="button"
         className={styles.collapsibleHeader}
-        onClick={() => setCollapsed((prev) => !prev)}
+        onClick={() => {
+          setUserToggled(true);
+          setCollapsed((prev) => !prev);
+        }}
         aria-expanded={!collapsed}
       >
         <span className={styles.collapsibleTitle}>

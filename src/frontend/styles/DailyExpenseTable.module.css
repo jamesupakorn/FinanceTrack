@@ -158,6 +158,9 @@
 .addBtn {
   margin-top: 10px;
   padding: 7px 14px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
   border: 1px dashed var(--border-color, rgba(255,255,255,0.16));
   border-radius: 8px;
   background: transparent;
@@ -167,6 +170,7 @@
   transition: background 0.15s;
   width: 100%;
   text-align: left;
+  box-sizing: border-box;
 }
 
 .addBtn:hover {

@@ -791,6 +791,7 @@ details[open] .plannerHeader::before { content: '\25BC  '; }
 
   .goalAllocationInput {
     width: 92px;
+    min-height: 44px;
   }
 
   .plannerInputRow {
@@ -809,6 +810,7 @@ details[open] .plannerHeader::before { content: '\25BC  '; }
 
   .plannerGoalPercentInput {
     width: 100%;
+    min-height: 44px;
   }
 
   .plannerPercentageRow {

@@ -20,9 +20,7 @@
  */
 
 import { isJsonMode, getMongoCollection } from '../../../../lib/dataSource';
-import userUtils from '../../../backend/data/userUtils';
-
-const { getUserData, updateUserData } = userUtils;
+import { getUserData, updateUserData } from '../../../backend/data/userUtils.js';
 
 const COLLECTION_NAME = 'credit_cards';
 const JSON_FILENAME = 'credit_cards.json';

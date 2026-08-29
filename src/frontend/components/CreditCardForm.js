@@ -19,6 +19,7 @@ import { CARD_COLORS, validateCardInput } from '../../shared/utils/creditCardUti
 import { END_OF_MONTH_DUE_DAY } from '../../shared/utils/dateUtils';
 import { parseAndFormat } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
+import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
 import { Icons } from './Icons';
 import styles from '../styles/CreditCardForm.module.css';
 
@@ -84,9 +85,7 @@ export default function CreditCardForm({
         return;
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
-      const focusable = dialogRef.current.querySelectorAll(
-        'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      );
+      const focusable = getTabbableElements(dialogRef.current);
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];

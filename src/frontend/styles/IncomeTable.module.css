@@ -136,7 +136,7 @@
   width: 100%;
   max-width: none;
   padding: 32px;
-  overflow-x: visible;
+  overflow-x: auto;
   border-radius: 28px;
   background: linear-gradient(135deg, rgba(11, 15, 41, 0.92) 0%, rgba(4, 7, 22, 0.92) 100%);
   border: 1px solid rgba(255, 255, 255, 0.06);

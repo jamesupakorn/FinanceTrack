@@ -36,8 +36,7 @@ import {
   formatThaiDate,
   buildDueDateString
 } from '../../src/shared/utils/dateUtils.js';
-
-const { loadUsers, getUserData } = require('../../src/backend/data/userUtils');
+import { loadUsers, getUserData } from '../../src/backend/data/userUtils.js';
 
 const JSON_EXPENSE_FILE = 'monthly_expense.json';
 const DUE_SOON_DAYS = 3;

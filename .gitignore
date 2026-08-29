@@ -30,6 +30,8 @@ yarn-error.log*
 
 # backend data snapshots from DB
 src/backend/data/*.json
+# ...except the ESM-scope marker (TD-H01) — not app data, must stay tracked
+!src/backend/data/package.json
 
 # local pipeline notes
 .PIPELINE/

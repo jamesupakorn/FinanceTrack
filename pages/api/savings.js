@@ -15,12 +15,11 @@ import {
   withGeneratedId,
   getMongoCollection
 } from '../../lib/dataSource';
-
-const {
+import {
   getUserData,
   updateUserData,
   limitUserEntries,
-} = require('../../src/backend/data/userUtils');
+} from '../../src/backend/data/userUtils.js';
 
 const COLLECTION_NAME = 'savings';
 const JSON_FILENAME = 'savings.json';

@@ -10,11 +10,10 @@
 import { assertApiToken } from '../../src/shared/utils/backend/apiTokenAuth';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
 import crypto from 'crypto';
-
-const {
+import {
   getUserData,
   updateUserData,
-} = require('../../src/backend/data/userUtils');
+} from '../../src/backend/data/userUtils.js';
 
 const GOALS_JSON_FILE = 'savings-goals.json';
 const SAVINGS_JSON_FILE = 'savings.json';

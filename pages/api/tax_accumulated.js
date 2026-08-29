@@ -5,11 +5,10 @@ import {
 	withGeneratedId,
 	getMongoCollection
 } from '../../lib/dataSource';
-
-const {
+import {
 	getUserData,
 	updateUserData,
-} = require('../../src/backend/data/userUtils');
+} from '../../src/backend/data/userUtils.js';
 
 const COLLECTION_NAME = 'tax_accumulated';
 const JSON_FILENAME = 'tax_accumulated.json';

@@ -1,23 +1,14 @@
-let ENCODED_LINE_TOKEN, ENCODED_LINE_USERID;
-if (typeof window === 'undefined') {
-  // Node.js (backend)
-  ({ ENCODED_LINE_TOKEN, ENCODED_LINE_USERID } = require('../../frontend/config/password.enc'));
-} else {
-  // Frontend (browser)
-  // ต้อง import แบบ ES6 เท่านั้น (แต่ปกติใช้แค่ backend)
-}
-
-export function decodeBase64(encoded) {
-  if (typeof window !== 'undefined' && window.atob) {
-    return window.atob(encoded);
-  }
-  return Buffer.from(encoded, 'base64').toString('utf-8');
-}
-
+/**
+ * LINE credentials — read from env vars only (TD-C03, 2026-08-29). Previously read from a
+ * base64-"encoded" (not encrypted) file committed to git; migrated to `.env.local`
+ * (`LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_USER_ID`), matching the existing
+ * `LINE_CHANNEL_SECRET` pattern already used by `pages/api/line_webhook.js`. Server-only —
+ * consumed only by `sendLineMessage.js`, which is only ever called from `pages/api/*`.
+ */
 export function getLineToken() {
-  return decodeBase64(ENCODED_LINE_TOKEN);
+  return process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
 }
 
 export function getLineUserId() {
-  return decodeBase64(ENCODED_LINE_USERID);
+  return process.env.LINE_CHANNEL_USER_ID || '';
 }

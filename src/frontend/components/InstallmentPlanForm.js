@@ -426,7 +426,7 @@ export default function InstallmentPlanForm({
                   <>
                     <div className={styles.field}>
                       <label className={styles.label} htmlFor="ip-rate">
-                        อัตราดอกเบี้ยต่อปี (%) <span className={styles.required}>*</span>
+                        อัตราดอกเบี้ยผ่อนชำระต่อปี (%) <span className={styles.required}>*</span>
                       </label>
                       <input
                         id="ip-rate"
@@ -441,6 +441,9 @@ export default function InstallmentPlanForm({
                         aria-invalid={errors.annualRate ? 'true' : undefined}
                         aria-describedby={describedBy('annualRate')}
                       />
+                      <span className={styles.helper}>
+                        อัตรานี้มักอยู่ที่ 0.5–1.5% ต่อปี ไม่ใช่ตัวเลขเดียวกับอัตราดอกเบี้ยบัตรเครดิต (ซึ่งมักอยู่ที่ 16–25%)
+                      </span>
                       {errors.annualRate && <span id="plan-annualRate-error" className={styles.error}>{errors.annualRate}</span>}
                     </div>
 
@@ -470,6 +473,7 @@ export default function InstallmentPlanForm({
                       </div>
                       <span className={styles.helper}>
                         แบบคงที่: ดอกเบี้ยเท่ากันทุกงวด · ลดต้นลดดอก: งวดแรกดอกเบี้ยสูงกว่างวดหลัง แต่ยอดชำระรวมเท่ากันทุกงวด
+                        ไม่แน่ใจว่าบัตร/ร้านค้าคิดแบบไหน — ลองสลับดูได้ ตัวเลข &quot;ดอกเบี้ยรวม&quot; ด้านล่างจะปรับให้ทันที
                       </span>
                       {errors.calcMethod && <span id="plan-calcMethod-error" className={styles.error}>{errors.calcMethod}</span>}
                     </div>

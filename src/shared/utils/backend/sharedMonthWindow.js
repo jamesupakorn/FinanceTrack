@@ -14,13 +14,7 @@
 
 import { enforceMonthLimit } from './apiUtils';
 import { getMongoCollection } from '../../../../lib/dataSource';
-
-// require(), not import, for userUtils.js — matches the exact interop pattern already used by
-// every one of the 4 API handlers this module is called from (monthly_expense.js, monthly_income.js,
-// salary.js, investment.js all `const {...} = require('.../userUtils')` + ESM `import` for
-// apiUtils.js in the same file). This is the codebase's established, unavoidable CJS/ESM split
-// (TD-H01 in TECH_DEBT.md), not a new instance of it.
-const { getUserData, setUserData } = require('../../../backend/data/userUtils');
+import { getUserData, setUserData } from '../../../backend/data/userUtils.js';
 
 const SHARED_WINDOW_LIMIT = 15;
 const JSON_FILES = ['monthly_expense.json', 'monthly_income.json', 'salary.json', 'investment.json'];

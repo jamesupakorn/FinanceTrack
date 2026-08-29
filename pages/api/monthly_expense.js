@@ -28,11 +28,10 @@ import {
   enforceSharedMonthWindowJson,
   enforceSharedMonthWindowMongo
 } from '../../src/shared/utils/backend/sharedMonthWindow.js';
-
-const {
+import {
   getUserData,
   updateUserData,
-} = require('../../src/backend/data/userUtils');
+} from '../../src/backend/data/userUtils.js';
 
 const COLLECTION_NAME = 'monthly_expense'; // ชื่อ collection ใน MongoDB
 const JSON_FILENAME = 'monthly_expense.json'; // ไฟล์ JSON สำหรับโหมด file-based
