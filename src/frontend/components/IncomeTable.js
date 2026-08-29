@@ -278,17 +278,24 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, trigge
                   <tr key={itemKey} className={styles.tableRow} data-income-key={itemKey}>
                     <td className={styles.tableCell}>
                       {isSalary ? (
-                        <button
-                          type="button"
-                          className={styles.salaryTrigger}
-                          onClick={() => onOpenSalaryModal?.()}
-                          aria-haspopup="dialog"
-                          aria-label="แก้ไขเงินเดือน — เปิดเครื่องคำนวณเงินเดือน"
-                        >
-                          <span>{label}</span>
-                          <span className={styles.salaryBadge}>จากระบบเงินเดือน</span>
-                          <Icons.Edit size={14} />
-                        </button>
+                        onOpenSalaryModal ? (
+                          <button
+                            type="button"
+                            className={styles.salaryTrigger}
+                            onClick={() => onOpenSalaryModal?.()}
+                            aria-haspopup="dialog"
+                            aria-label="แก้ไขเงินเดือน — เปิดเครื่องคำนวณเงินเดือน"
+                          >
+                            <span>{label}</span>
+                            <span className={styles.salaryBadge}>จากระบบเงินเดือน</span>
+                            <Icons.Edit size={14} />
+                          </button>
+                        ) : (
+                          <div className={styles.salaryLabel}>
+                            <span>{label}</span>
+                            <span className={styles.salaryBadge}>จากระบบเงินเดือน</span>
+                          </div>
+                        )
                       ) : (
                         <div className={styles.nameCell}>
                           <input
@@ -350,17 +357,24 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, trigge
                   <div className={styles.cardRow}>
                     <span className={styles.cardLabel}>รายการ</span>
                     {isSalary ? (
-                      <button
-                        type="button"
-                        className={styles.salaryTrigger}
-                        onClick={() => onOpenSalaryModal?.()}
-                        aria-haspopup="dialog"
-                        aria-label="แก้ไขเงินเดือน — เปิดเครื่องคำนวณเงินเดือน"
-                      >
-                        <span>{label}</span>
-                        <span className={styles.salaryBadge}>จากระบบเงินเดือน</span>
-                        <Icons.Edit size={14} />
-                      </button>
+                      onOpenSalaryModal ? (
+                        <button
+                          type="button"
+                          className={styles.salaryTrigger}
+                          onClick={() => onOpenSalaryModal?.()}
+                          aria-haspopup="dialog"
+                          aria-label="แก้ไขเงินเดือน — เปิดเครื่องคำนวณเงินเดือน"
+                        >
+                          <span>{label}</span>
+                          <span className={styles.salaryBadge}>จากระบบเงินเดือน</span>
+                          <Icons.Edit size={14} />
+                        </button>
+                      ) : (
+                        <div className={styles.salaryLabel}>
+                          <span>{label}</span>
+                          <span className={styles.salaryBadge}>จากระบบเงินเดือน</span>
+                        </div>
+                      )
                     ) : (
                       <input
                         type="text"
