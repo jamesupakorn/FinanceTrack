@@ -60,7 +60,7 @@ export default function CreditCardForm({
         bankName: card.bankName || '',
         last4: card.last4 || '',
         color: CARD_COLORS.includes(card.color) ? card.color : CARD_COLORS[0],
-        creditLimit: card.creditLimit ? parseAndFormat(card.creditLimit) : '',
+        creditLimit: card.creditLimit === undefined || card.creditLimit === null ? '' : parseAndFormat(card.creditLimit),
         // ค่าเริ่มต้นเดียวกับที่ API ใส่ให้ตอนอ่าน — บัตรเก่าที่ไม่มีสองฟิลด์นี้จึงแสดงถูกต้อง
         annualRate: card.annualRate === undefined || card.annualRate === null ? '' : String(card.annualRate),
         minPaymentPercent: card.minPaymentPercent === undefined || card.minPaymentPercent === null

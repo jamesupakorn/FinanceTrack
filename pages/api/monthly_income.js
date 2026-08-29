@@ -191,9 +191,27 @@ export default async function handler(req, res) {
           || await collection.findOne({ obj: 'months', userId: { $exists: false } });
         if (monthsDoc && monthsDoc.months && monthsDoc.months[month]) {
           doc = { month, ...monthsDoc.months[month] };
+          // เอกสาร monthsDoc เก็บหลายเดือนรวมกัน — ทำสำเนาเฉพาะเดือนนี้ให้ผู้ใช้คนนี้ ไม่แก้เอกสารเดิม (ป้องกันแย่งเดือนอื่นของผู้ใช้อื่น)
+          try {
+            const { _id, userId: _legacyUserId, ...rest } = doc;
+            await collection.updateOne(
+              { month, ...userFilter },
+              { $set: { ...rest, month, ...userFilter } },
+              { upsert: true }
+            );
+          } catch (err) {
+            console.error('Failed to materialize legacy monthsDoc entry for user', userId, month, err);
+          }
         }
         if (!doc) {
           doc = await collection.findOne({ month, userId: { $exists: false } });
+          if (doc) {
+            try {
+              await collection.updateOne({ _id: doc._id }, { $set: { userId } });
+            } catch (err) {
+              console.error('Failed to claim legacy doc for user', userId, month, err);
+            }
+          }
         }
       }
       const monthData = doc ? { ...doc } : {};
@@ -218,6 +236,13 @@ export default async function handler(req, res) {
       let allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
       if (!allDocs.length) {
         allDocs = await collection.find({ userId: { $exists: false }, month: { $exists: true } }).toArray();
+        if (allDocs.length) {
+          try {
+            await Promise.all(allDocs.map(d => collection.updateOne({ _id: d._id }, { $set: { userId } })));
+          } catch (err) {
+            console.error('Failed to claim legacy docs for user', userId, err);
+          }
+        }
       }
       const data = {};
       allDocs.forEach(doc => {
@@ -244,6 +269,16 @@ export default async function handler(req, res) {
           if (!data[m]) {
             data[m] = { month: m, ...values };
             data[m].รวม = sumValues(values, ['รวม']);
+            // ทำสำเนาเฉพาะเดือนนี้ให้ผู้ใช้คนนี้ ไม่แก้เอกสาร monthsDoc เดิม (เดือนอื่นในเอกสารเดียวกันยังให้ผู้ใช้อื่น claim ได้)
+            try {
+              await collection.updateOne(
+                { month: m, ...userFilter },
+                { $set: { ...values, month: m, ...userFilter } },
+                { upsert: true }
+              );
+            } catch (err) {
+              console.error('Failed to materialize legacy monthsDoc entry for user', userId, m, err);
+            }
           }
         }
       }
@@ -257,14 +292,21 @@ export default async function handler(req, res) {
     const removalList = extractRemovalKeys(values);
     const labelUpdates = extractLabelUpdates(values);
     const cleanValues = sanitizeIncomePayload(values);
+    const removalSet = new Set(removalList);
+    const setValues = Object.fromEntries(
+      Object.entries(cleanValues).filter(([key]) => !removalSet.has(key))
+    );
+    const filteredLabelUpdates = Object.fromEntries(
+      Object.entries(labelUpdates).filter(([key]) => !removalSet.has(key))
+    );
     await collection.updateOne(
       { month, ...userFilter },
       (() => {
         const updateOps = {
-          $set: { ...cleanValues, month, ...userFilter }
+          $set: { ...setValues, month, ...userFilter }
         };
-        if (Object.keys(labelUpdates).length) {
-          Object.entries(labelUpdates).forEach(([key, value]) => {
+        if (Object.keys(filteredLabelUpdates).length) {
+          Object.entries(filteredLabelUpdates).forEach(([key, value]) => {
             updateOps.$set[`__labels.${key}`] = value;
           });
         }

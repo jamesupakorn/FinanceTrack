@@ -223,6 +223,14 @@ export default async function handler(req, res) {
           doc = await collection.findOne({ month, ...userFilter });
           if (!doc) {
             doc = await collection.findOne({ month, userId: { $exists: false } });
+            if (doc) {
+              try {
+                await collection.updateOne({ _id: doc._id }, { $set: { userId } });
+              } catch (err) {
+                console.error('Failed to claim legacy doc for user', userId, month, err);
+                // Non-fatal — the read below still succeeds with the (now stale) unscoped copy this request.
+              }
+            }
           }
         } catch (err) {
           console.error('Error fetching doc for month:', month, err);
@@ -285,6 +293,13 @@ export default async function handler(req, res) {
         let allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
         if (!allDocs.length) {
           allDocs = await collection.find({ userId: { $exists: false }, month: { $exists: true } }).toArray();
+          if (allDocs.length) {
+            try {
+              await Promise.all(allDocs.map(d => collection.updateOne({ _id: d._id }, { $set: { userId } })));
+            } catch (err) {
+              console.error('Failed to claim legacy docs for user', userId, err);
+            }
+          }
         }
         const withTotals = {};
         allDocs.forEach(doc => {
@@ -326,8 +341,12 @@ export default async function handler(req, res) {
         const removalList = extractRemovalKeys(payload);
         const cleanData = removeSummaryFields(payload);
         delete cleanData.__removeKeys;
+        const removalSet = new Set(removalList);
+        const setData = Object.fromEntries(
+          Object.entries(cleanData).filter(([key]) => !removalSet.has(key))
+        );
         const updateOps = {
-          $set: { ...cleanData, month, ...userFilter },
+          $set: { ...setData, month, ...userFilter },
         };
         if (removalList.length) {
           updateOps.$unset = removalList.reduce((acc, key) => {
