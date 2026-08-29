@@ -20,12 +20,15 @@
  * เคยเปิดปฏิทินจาก legacy deep link (`?view=calendar`) ได้เอง — ไม่มี prop นี้ทั้งสองพฤติกรรมจะหายไป
  * ใช้แพทเทิร์น counter เดียวกับ triggerSave (ADR-003) ที่โปรเจกต์นี้ใช้อยู่แล้ว ไม่ได้คิดรูปแบบใหม่
  *
- * prop เพิ่มเติมอีกตัว (onBeforeNavigate, P3 · monthly-workspace, UX Review): optional, ไม่มีผลใดๆ
+ * prop เพิ่มเติมอีกตัว (onBeforeNavigate, เดิม P3 · monthly-workspace, UX Review): optional, ไม่มีผลใดๆ
  * ถ้าไม่ส่งมา — handleNavClick ยังเรียก router.push(item.href) ตรงๆ เหมือนเดิมทุกประการ (หน้า index.js/
- * credit-cards.js ไม่ได้ส่ง prop นี้ จึงไม่ได้รับผลกระทบเลย) ถ้าส่งมา (มีแค่ pages/workspace.js เท่านั้น
- * ที่ส่ง) จะ await ก่อน push เพื่อให้หน้าที่มีข้อมูลยังไม่ได้บันทึกเซฟก่อนออกจากหน้า — ปิดช่องโหว่ข้อมูล
- * หายเงียบๆ ตอนกดเมนูนำทางออกจากหน้า (E4) ด้วยแพทเทิร์นเดียวกับ auto-save ตอนเปลี่ยนเดือน (ADR-006
- * Decision 6) ไม่ใช่แพทเทิร์นใหม่
+ * credit-cards.js ไม่ได้ส่ง prop นี้ จึงไม่ได้รับผลกระทบเลย) ถ้าส่งมา (มีแค่ WorkspaceShell.js เท่านั้น
+ * ที่ส่ง — ทุก route ใน /workspace/* ใช้เชลล์เดียวกัน) จะ await ก่อน push เสมอ
+ * ความหมายเปลี่ยนไปจาก P3 (Amendment A5, ADR-018 §6): เดิมคือ "auto-save ก่อนออก แล้วไปต่อเสมอ" ตอนนี้
+ * คืนค่า false ได้ (แปลว่า "ยังไปไม่ได้ — ผู้เรียกเปิด dialog เองแล้วและจะ push เองตอนผู้ใช้ยืนยัน")
+ * เพราะ Save All (ที่ auto-save เคยเรียก) ถูกถอดออกจาก /workspace/* ทั้งฟีเจอร์แล้ว — เหลือแค่ถามแทนที่
+ * จะเซฟให้เงียบๆ ปิดช่องโหว่ข้อมูลหายเงียบๆ ตอนกดเมนูนำทางออกจากหน้า (เดิม E4) ด้วยกลไกเดียวกับ
+ * UnsavedChangesDialog ที่คุมการนำทางจุดอื่นทั้งหมดของ /workspace/*
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -44,7 +47,7 @@ const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 ชั่วโมง — ค่า
 // รายการนำทางหลัก — sidebar (desktop) ใช้ทั้งหมด, bottom nav (mobile) ใช้ 4 ตัวแรก + "เพิ่มเติม"
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'ภาพรวม', mobileLabel: 'ภาพรวม', href: '/', Icon: Icons.BarChart },
-  { id: 'workspace', label: 'บันทึกรายเดือน', mobileLabel: 'รายเดือน', href: '/workspace', Icon: Icons.Edit },
+  { id: 'workspace', label: 'แผนการเงินรายเดือน', mobileLabel: 'แผนรายเดือน', href: '/workspace/income', Icon: Icons.Edit },
   { id: 'credit-cards', label: 'บัตรเครดิต', mobileLabel: 'บัตรเครดิต', href: '/credit-cards', Icon: Icons.CreditCard },
   { id: 'calendar', label: 'ปฏิทิน', mobileLabel: 'ปฏิทิน', action: 'calendar', Icon: Icons.Calendar },
   { id: 'reports', label: 'รายงาน', mobileLabel: 'รายงาน', href: '/reports', Icon: Icons.TrendingUp },
@@ -281,8 +284,13 @@ export default function Layout({
       return;
     }
     // onBeforeNavigate: optional, additive (P3 · monthly-workspace, UX Review — E4/AC-WS-15/16)
+    // คืนค่า false ได้ (Amendment A5, ADR-018 §6) แปลว่า "ยังไปไม่ได้ — เปิด dialog เองแล้ว" Layout
+    // จะไม่ push ต่อ ปล่อยให้ dialog ของผู้เรียกเป็นคน push เองตอนผู้ใช้กด "ออกโดยไม่บันทึก" ยังคง
+    // backward-compatible เพราะ implementation เดิมของ prop นี้ resolve เป็น undefined เสมอ
+    // (undefined !== false) — pages/index.js และ pages/credit-cards.js ที่ไม่ส่ง prop นี้จึงไม่กระทบ
     if (typeof onBeforeNavigate === 'function') {
-      await onBeforeNavigate(item.href);
+      const proceed = await onBeforeNavigate(item.href);
+      if (proceed === false) return;
     }
     router.push(item.href);
   };

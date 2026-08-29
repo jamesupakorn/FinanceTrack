@@ -132,7 +132,7 @@ const describeDueTiming = (dueDayValue, paid, monthKey) => {
   };
 };
 
-export default function ExpenseTable({ selectedMonth, triggerSave }) {
+export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved }) {
   const [editExpense, setEditExpense] = useState({});
   const [bankAccounts, setBankAccounts] = useState([]);
   const [previousMonthTotal, setPreviousMonthTotal] = useState(null);
@@ -419,17 +419,20 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
       setBankAccounts(mergedAccounts);
       setPersistedKeys(formatted.persistedKeys || []);
       showToast('บันทึกค่าใช้จ่ายสำเร็จ');
+      onSaved?.();
     } catch (error) {
       console.error('Error saving expense data:', error);
       showToast('บันทึกไม่สำเร็จ กรุณาลองใหม่', 'error');
     }
   };
 
+  // ลงทะเบียนฟังก์ชันบันทึกกับ ref ของ WorkspaceShell แทนตัวนับ Save All เดิม (Amendment A5 —
+  // ดูคำอธิบายเต็มใน IncomeTable.js ที่จุดเดียวกัน)
   useEffect(() => {
-    if (triggerSave) {
-      handleSave();
-    }
-  }, [triggerSave]);
+    if (!onRegisterSave) return undefined;
+    onRegisterSave(handleSave);
+    return () => onRegisterSave(null);
+  }, [onRegisterSave, handleSave]);
   // สามกลุ่ม: รายการมาตรฐาน → รายการที่ผู้ใช้เพิ่มเอง → แถวบัตรเครดิต (ท้ายสุดเสมอ)
   // ภายในกลุ่มบัตรเครดิต: ยอดหมุนเวียนมาก่อนงวดผ่อน เพราะยอดในใบแจ้งหนี้เป็นภาระหลักของบัตร
   const sortedExpenseKeys = useMemo(() => {

@@ -77,43 +77,52 @@ function ItemRow({ item, onChange, onDelete }) {
   );
 }
 
-export default function DailyExpenseTable({ selectedMonth, triggerSave }) {
+export default function DailyExpenseTable({ selectedMonth, onRegisterSave, onSaved }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (isCancelled) => {
     if (!selectedMonth) return;
     setLoading(true);
     try {
       const data = await dailyExpenseAPI.getByMonth(selectedMonth);
+      if (isCancelled()) return;
       const loaded = (data?.items || []).map(item => ({
         ...item,
         id: item.id || genId(),
       }));
       setItems(loaded);
     } catch {
+      if (isCancelled()) return;
       setItems([]);
     } finally {
-      setLoading(false);
+      if (!isCancelled()) setLoading(false);
     }
   }, [selectedMonth]);
 
   useEffect(() => {
-    loadData();
+    let cancelled = false;
+    loadData(() => cancelled);
+    return () => { cancelled = true; };
   }, [loadData]);
 
+  // เดิมเป็น IIFE ข้างใน effect ที่ฟังตัวนับ Save All — ดึงออกมาเป็นฟังก์ชันชื่อ handleSave เพราะ
+  // ตอนนี้ WorkspaceShell ต้องเรียกมันได้ตรง ๆ ผ่าน onRegisterSave (Amendment A5)
+  const handleSave = useCallback(async () => {
+    try {
+      await dailyExpenseAPI.save(selectedMonth, items);
+      showToast('บันทึกค่าใช้จ่ายรายวันเรียบร้อยแล้ว', 'success');
+      onSaved?.();
+    } catch (err) {
+      showToast(err?.message || 'บันทึกค่าใช้จ่ายรายวันไม่สำเร็จ', 'error');
+    }
+  }, [selectedMonth, items, onSaved]);
+
   useEffect(() => {
-    if (!triggerSave) return;
-    (async () => {
-      try {
-        await dailyExpenseAPI.save(selectedMonth, items);
-        showToast('บันทึกค่าใช้จ่ายรายวันเรียบร้อยแล้ว', 'success');
-      } catch (err) {
-        showToast(err?.message || 'บันทึกค่าใช้จ่ายรายวันไม่สำเร็จ', 'error');
-      }
-    })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [triggerSave]);
+    if (!onRegisterSave) return undefined;
+    onRegisterSave(handleSave);
+    return () => onRegisterSave(null);
+  }, [onRegisterSave, handleSave]);
 
   const handleChange = (id, field, value) => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));

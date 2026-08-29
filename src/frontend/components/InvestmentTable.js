@@ -11,9 +11,10 @@ import { investmentAPI } from '../../shared/utils/frontend/apiUtils';
 import { parseToNumber, formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import styles from '../styles/InvestmentTable.module.css';
 import { averagePercent, calcAmountFromPercent, sumPercent, mapInvestmentData } from '../../shared/utils/investmentUtils';
+import { showToast } from '../../shared/utils/frontend/toast';
 
 // InvestmentTable: แสดงและแก้ไขรายการลงทุนในแต่ละเดือน
-export default function InvestmentTable({ selectedMonth, onDataChange, triggerSave }) {
+export default function InvestmentTable({ selectedMonth, onDataChange, onRegisterSave, onSaved }) {
   const [baseAmount, setBaseAmount] = useState('');
   const [investments, setInvestments] = useState([]);
 
@@ -45,16 +46,19 @@ export default function InvestmentTable({ selectedMonth, onDataChange, triggerSa
     if (result) {
       if (typeof onDataChange === 'function') onDataChange();
       showToast('บันทึกสำเร็จ');
+      onSaved?.();
     } else {
       showToast('บันทึกไม่สำเร็จ', 'error');
     }
   };
 
+  // ลงทะเบียนฟังก์ชันบันทึกกับ ref ของ WorkspaceShell แทนตัวนับ Save All เดิม (Amendment A5 —
+  // ดูคำอธิบายเต็มใน IncomeTable.js ที่จุดเดียวกัน)
   useEffect(() => {
-    if (triggerSave) {
-      handleSave();
-    }
-  }, [triggerSave]);
+    if (!onRegisterSave) return undefined;
+    onRegisterSave(handleSave);
+    return () => onRegisterSave(null);
+  }, [onRegisterSave, handleSave]);
 
   // โหลดข้อมูลจาก backend เมื่อ selectedMonth เปลี่ยน
   useEffect(() => {

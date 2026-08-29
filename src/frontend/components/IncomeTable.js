@@ -27,7 +27,7 @@ const CUSTOM_LABEL_FALLBACK = 'รายรับใหม่';
 /**
  * ตารางแก้ไขรายรับรายเดือน
  */
-export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, triggerSave, onOpenSalaryModal }) {
+export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, onOpenSalaryModal, onRegisterSave, onSaved }) {
   const [editIncome, setEditIncome] = useState({});
   const [incomeLabels, setIncomeLabels] = useState({});
   const [persistedKeys, setPersistedKeys] = useState([]);
@@ -236,17 +236,22 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, trigge
       setIncomeLabels(formatted.labels || {});
       setPersistedKeys(formatted.persistedKeys || Object.keys(formatted.values || {}));
       showToast('บันทึกรายรับสำเร็จ');
+      onSaved?.();
     } catch (error) {
       console.error('Error saving income data:', error);
       showToast('บันทึกไม่สำเร็จ กรุณาลองใหม่', 'error');
     }
   };
 
+  // ลงทะเบียนฟังก์ชันบันทึกของตัวเองไว้กับ ref ของ WorkspaceShell (Amendment A5 — เดิมคือ effect ที่ฟัง
+  // ตัวนับ Save All ตาม ADR-003) handleSave เป็นฟังก์ชันใหม่ทุก render จึง effect นี้รันทุก render ก็จริง
+  // แต่ onRegisterSave เขียนแค่ ref ไม่มี setState จึงไม่ re-render ซ้อน (ห้ามเปลี่ยนเป็น setState เด็ดขาด
+  // — จะวนไม่จบ ดู ADR-018 §2 / AC-A5-23)
   useEffect(() => {
-    if (triggerSave) {
-      handleSave();
-    }
-  }, [triggerSave]);
+    if (!onRegisterSave) return undefined;
+    onRegisterSave(handleSave);
+    return () => onRegisterSave(null);
+  }, [onRegisterSave, handleSave]);
 
   return (
     <div className={styles.incomeContainer}>

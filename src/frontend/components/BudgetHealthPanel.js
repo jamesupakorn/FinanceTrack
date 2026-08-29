@@ -106,7 +106,7 @@ export default function BudgetHealthPanel({ model, thresholds, onConfirmTransfer
           {!health.available ? (
             <div className={styles.budgetUnavailable}>
               <p>{health.rollupMessage}</p>
-              <a href="/workspace?tab=income" className={styles.ringEmptyLink}>เพิ่มรายรับ</a>
+              <a href="/workspace/income" className={styles.ringEmptyLink}>เพิ่มรายรับ</a>
             </div>
           ) : (
             <>

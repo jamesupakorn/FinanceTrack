@@ -86,7 +86,7 @@ function ProgressBar({ percent, status }) {
   );
 }
 
-export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAllocatableChange, triggerSave }) {
+export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAllocatableChange, onRegisterSave, onSaved }) {
   const formRef = useRef(null);
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -398,6 +398,7 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
       await savingsGoalsAPI.saveAllocations(allocations);
       setLastSavedAllocationInputs(normalizeAllocationMap(allocationInputs, activeGoals));
       if (!silent) showToast('บันทึกสัดส่วนเงินออมเรียบร้อย');
+      onSaved?.();
     } catch (err) {
       if (!silent) showToast(err?.message || 'บันทึกสัดส่วนไม่สำเร็จ', 'error');
     } finally {
@@ -405,11 +406,18 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
     }
   };
 
+  // ลงทะเบียนฟังก์ชันบันทึกกับ ref ของ WorkspaceShell แทนตัวนับ Save All เดิม (Amendment A5)
+  // silent: false (ต่างจาก Save All เดิมที่ silent: true เสมอ) — ปุ่มนี้ตอนนี้เป็นปุ่มบันทึกของหน้า
+  // /workspace/savings/goals โดยตรงแล้ว ไม่ใช่ผู้เข้าร่วม batch save ที่ toast แทนใครไม่ได้อีกต่อไป
+  // (ADR-018 §2 — "การบันทึกเดียวในแอปที่ไม่มี feedback เลย" ถูกปิดแล้ว, AC-A5-15) ใช้ flag
+  // savingAllocation เดิม (:104, guard ที่ :384) ไม่เพิ่ม isSaving ตัวที่สอง — ซ้อนกับ isSaving ของ
+  // WorkspaceShell ได้อย่างไม่มีปัญหา (double-guard เฉย ๆ)
   useEffect(() => {
-    if (!triggerSave || triggerSave <= 0) return;
-    handleSaveAllocation({ silent: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [triggerSave]);
+    if (!onRegisterSave) return undefined;
+    onRegisterSave(() => handleSaveAllocation({ silent: false }));
+    return () => onRegisterSave(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onRegisterSave, handleSaveAllocation]);
 
   return (
     <div className={styles.container}>

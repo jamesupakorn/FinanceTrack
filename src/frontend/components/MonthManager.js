@@ -1,25 +1,21 @@
 /**
  * คอมโพเนนต์: MonthManager
  * จัดการการเลือกเดือนและการเพิ่มเดือนใหม่
- * รวมเดือนจากหลายแหล่งข้อมูล (รายรับ/รายจ่าย/เงินเดือน/ลงทุน)
+ * รายชื่อเดือนสำหรับ <select> รับมาจาก props.months (ค้นพบแล้วโดย WorkspaceShell) แทนการ fetch เอง
+ * (Amendment A5 / AC-A5-9 — ดูคอมเมนต์ที่ประกาศ monthOptions ด้านล่าง)
  * @param {object} props
  * @param {string} props.selectedMonth - เดือนที่เลือก (YYYY-MM)
  * @param {function} props.onMonthSelected - callback เมื่อเลือกเดือน
  * @param {function} props.onDataRefresh - callback เมื่อข้อมูลเปลี่ยน
+ * @param {string[]} props.months - รายชื่อเดือน (YYYY-MM) ที่ WorkspaceShell ค้นพบแล้ว เรียงใหม่ -> เก่า
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { getNextMonth } from '../../shared/utils/frontend/numberUtils';
 import { getMonthData, getPrevMonth, formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import styles from '../styles/MonthManager.module.css';
-
-// หาค่าเดือนปัจจุบัน (YYYY-MM)
-const getCurrentMonth = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-};
 
 // รีเซ็ตสถานะ paid ของข้อมูลรายจ่ายให้เป็น false ทั้งหมด
 const resetCopiedExpensePaidStatus = (expenseData) => {
@@ -42,10 +38,20 @@ const resetCopiedExpensePaidStatus = (expenseData) => {
 /**
  * ตัวจัดการเลือกเดือน
  */
-const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
+const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, months }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newMonthName, setNewMonthName] = useState('');
-  const [monthOptions, setMonthOptions] = useState([]);
+
+  // ตัวเลือกเดือนของ <select> — มาจาก props.months (WorkspaceShell ค้นพบแล้วครั้งเดียวต่อ session ผ่าน
+  // fetchMonths + monthsCache ของมันเอง) ไม่ fetch 5-endpoint union ซ้ำเองอีกต่อไป (AC-A5-9 fix)
+  // เดิม MonthManager มี fetch อิสระของตัวเองตรงนี้ สมัย P3 (หน้าเดียวหลายแท็บ) ไม่มีปัญหาเพราะ
+  // MonthManager mount ครั้งเดียวต่อการเข้าหน้า แต่ภายใต้สถาปัตยกรรม per-route ของ A5 คอมโพเนนต์นี้เป็นลูก
+  // ของ WorkspaceShell ซึ่ง mount ใหม่ทุกครั้งที่สลับ section — fetch คู่ขนานนี้จึงยิงซ้ำทุกครั้งที่นำทาง
+  // (16 request ส่วนเกินจาก 6 การนำทางที่วัดได้จริง) ใช้เดือนที่พ่อแม่ค้นพบแล้วแทน ไม่มี fetch ของตัวเอง
+  const monthOptions = useMemo(
+    () => (months || []).map(month => ({ value: month, label: formatMonthLabelTH(month) })),
+    [months]
+  );
 
   // ถ้า selectedMonth ไม่มีใน monthOptions ให้เลือกเดือนล่าสุดอัตโนมัติ
   useEffect(() => {
@@ -57,59 +63,6 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
       }
     }
   }, [monthOptions, selectedMonth, onMonthSelected]);
-
-  // ดึงและรวมเดือนจากทุกแหล่งข้อมูล
-  useEffect(() => {
-    let isMounted = true;
-    const fetchMonths = async () => {
-      const { expenseAPI, incomeAPI, salaryAPI, investmentAPI } = await import('../../shared/utils/frontend/apiUtils');
-      const [expenseData, incomeData, salaryData, investmentData] = await Promise.all([
-        expenseAPI.getAll(),
-        incomeAPI.getAll(),
-        salaryAPI.getAll(),
-        investmentAPI.getAll()
-      ]);
-      // รวมเดือนจากทุกแหล่ง
-      const getMonths = data => (data?.months ? Object.keys(data.months) : []);
-      const getSalaryMonths = data => (data?.months
-        ? Object.entries(data.months)
-          .filter(([, doc]) => {
-            if (!doc || typeof doc !== 'object') return false;
-            const note = typeof doc.note === 'string' ? doc.note.trim() : '';
-            const summary = doc.summary || {};
-            const hasSummary = [summary.total_income, summary.total_deduct, summary.net_income]
-              .some(value => Number(value) > 0);
-            const income = doc.income || {};
-            const deduct = doc.deduct || {};
-            const hasIncome = Object.values(income).some(value => Number(value) > 0);
-            const hasDeduct = Object.values(deduct).some(value => Number(value) > 0);
-            return hasSummary || hasIncome || hasDeduct || note.length > 0;
-          })
-          .map(([month]) => month)
-        : []);
-      const getInvestmentMonths = data => (data && typeof data === 'object'
-        ? Object.keys(data).filter(key => key !== 'months')
-        : []);
-      const allMonthsSet = new Set([
-        ...getMonths(expenseData),
-        ...getMonths(incomeData),
-        ...getSalaryMonths(salaryData),
-        ...getInvestmentMonths(investmentData)
-      ]);
-      const validMonthRegex = /^\d{4}-\d{2}$/;
-      const allMonths = Array.from(allMonthsSet)
-        .filter(month => validMonthRegex.test(month))
-        .sort((a, b) => b.localeCompare(a));
-      const monthsToUse = allMonths.length ? allMonths : [getCurrentMonth()];
-      const options = monthsToUse.map(month => ({
-        value: month,
-        label: formatMonthLabelTH(month)
-      }));
-      if (isMounted) setMonthOptions(options);
-    };
-    fetchMonths();
-    return () => { isMounted = false; };
-  }, [showAddForm, onDataRefresh]);
 
   useEffect(() => {
     if (!showAddForm || typeof document === 'undefined') {
