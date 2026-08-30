@@ -153,9 +153,9 @@
     border-radius: 8px;
   }
   .summaryItem:focus-visible {
-    outline: 2px solid var(--color-primary, #0969da);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
-    background: #e6f0fa;
+    background: var(--bg-surface-alt);
   }
 
 .summaryItem:last-child {

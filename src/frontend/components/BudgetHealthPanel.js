@@ -95,24 +95,26 @@ export default function BudgetHealthPanel({ model, thresholds, onConfirmTransfer
 
   return (
     <section className={styles.panelCard}>
-      <button
-        type="button"
-        className={styles.collapsibleHeader}
-        onClick={() => {
-          setUserToggled(true);
-          setCollapsed((prev) => !prev);
-        }}
-        aria-expanded={!collapsed}
-      >
-        <span className={styles.collapsibleTitle}>
-          <Icons.BarChart size={18} />
-          สุขภาพงบประมาณ
-        </span>
-        <span className={styles.rollupInline}>{`${rollupIcon || ''}${health.rollupMessage}`}</span>
-        <span className={`${styles.collapsibleChevron} ${!collapsed ? styles.collapsibleChevronOpen : ''}`}>
-          <Icons.ChevronDown size={18} />
-        </span>
-      </button>
+      <h2 className={styles.collapsibleHeadingReset}>
+        <button
+          type="button"
+          className={styles.collapsibleHeader}
+          onClick={() => {
+            setUserToggled(true);
+            setCollapsed((prev) => !prev);
+          }}
+          aria-expanded={!collapsed}
+        >
+          <span className={styles.collapsibleTitle}>
+            <Icons.BarChart size={18} />
+            สุขภาพงบประมาณ
+          </span>
+          <span className={styles.rollupInline}>{`${rollupIcon || ''}${health.rollupMessage}`}</span>
+          <span className={`${styles.collapsibleChevron} ${!collapsed ? styles.collapsibleChevronOpen : ''}`}>
+            <Icons.ChevronDown size={18} />
+          </span>
+        </button>
+      </h2>
 
       {!collapsed && (
         <div className={styles.panelBody}>

@@ -262,6 +262,15 @@
   padding: 16px 20px;
 }
 
+/* ครอบปุ่ม collapsible header ด้วย <h2> เพื่อให้ผู้ใช้ screen reader เจอหัวข้อนี้ตอนกด navigate by
+   heading — reset ให้ h2 ไม่มีสไตล์ของตัวเอง เพราะ .collapsibleHeader (ปุ่มข้างใน) คุมภาพทั้งหมดอยู่แล้ว
+   (critique 2026-08-29 P2) */
+.collapsibleHeadingReset {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
 .collapsibleHeader {
   display: flex;
   align-items: center;
