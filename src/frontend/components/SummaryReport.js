@@ -215,9 +215,11 @@ const SummaryReport = ({ selectedMonth }) => {
                 <div
                   className={styles.summaryItem}
                   tabIndex={0}
-                  aria-label={`ยอดเงินคงเหลือ: ${getDisplay(remainingBalance)}`}
+                  aria-label={`ยอดเงินคงเหลือก่อนหักรายจ่ายรายวันและเงินออม: ${getDisplay(remainingBalance)}`}
                 >
-                  <span className={styles.itemLabel}>ยอดเงินคงเหลือ</span>
+                  <span className={styles.itemLabel}>
+                    ยอดเงินคงเหลือ<small className={styles.itemLabelQualifier}>ก่อนหักรายจ่ายรายวัน/ออม</small>
+                  </span>
                   <span className={`${styles.itemValue} ${styles.remaining}`}>{getDisplay(remainingBalance)}</span>
                 </div>
                 <div

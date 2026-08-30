@@ -175,6 +175,16 @@
   font-weight: 500;
 }
 
+/* ตัวขยายความสั้น ๆ ต่อท้ายชื่อรายการ ใช้แยก "ยอดเงินคงเหลือ" จาก "กระแสเงินสดสุทธิ" กลางวงแหวนให้เห็นชัด
+   ตั้งแต่มองแวบแรก ไม่ต้องรอเลื่อนไปอ่าน footnote (critique 2026-08-29 P1) */
+.itemLabelQualifier {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-light);
+  margin-top: 2px;
+}
+
 .itemValue {
   font-weight: 700;
   text-align: right;
@@ -373,11 +383,9 @@
 
 /* Mobile Portrait */
 @media (max-width: 480px) {
-  .summaryReport {
-    padding: 16px;
-    margin: 8px 0;
-    border-radius: 8px;
-  }
+  /* .summaryReport's padding/margin/border-radius removed from this block (critique 2026-08-29 P1) —
+     confirmed dead: the later max-width:480px block below always overrides it in cascade order with
+     background:transparent/border:none/padding:0, so these three properties never actually rendered. */
 
   .reportTitle {
     font-size: 1.4rem;
