@@ -33,6 +33,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, onOpen
   const [persistedKeys, setPersistedKeys] = useState([]);
   const [salaryNetIncome, setSalaryNetIncome] = useState(0);
   const [pendingScrollKey, setPendingScrollKey] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const defaultIncomeOrder = useMemo(() => DEFAULT_INCOME_ITEMS.map(item => item.key), []);
   const incomeKeyThaiMap = useMemo(() => {
@@ -48,10 +49,12 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, onOpen
       setIncomeLabels({});
       setPersistedKeys([]);
       setSalaryNetIncome(0);
+      setIsLoading(false);
       return;
     }
 
     let cancelled = false;
+    setIsLoading(true);
 
     const loadIncome = async () => {
       try {
@@ -83,8 +86,11 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, onOpen
       }
     };
 
-    loadIncome();
-    loadSalary();
+    // รอทั้งสอง endpoint ก่อนปิด loading — เดิมไม่มี isLoading เลย ช่วงระหว่างรอ fetch จะขึ้น
+    // "ยังไม่มีข้อมูลรายรับ" หลอกผู้ใช้ว่าข้อมูลหาย (critique 2026-08-29 P2)
+    Promise.allSettled([loadIncome(), loadSalary()]).then(() => {
+      if (!cancelled) setIsLoading(false);
+    });
 
     return () => {
       cancelled = true;
@@ -432,6 +438,8 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, onOpen
             </div>
           </div>
         </>
+      ) : isLoading ? (
+        <div className={styles.emptyState}>กำลังโหลดข้อมูล...</div>
       ) : (
         <div className={styles.emptyState}>ยังไม่มีข้อมูลรายรับสำหรับเดือนนี้</div>
       )}
