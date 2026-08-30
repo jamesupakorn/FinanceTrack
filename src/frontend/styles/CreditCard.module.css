@@ -535,6 +535,16 @@
   font-weight: 600;
 }
 
+/* แถวข้อมูลกำหนดการ (วันสรุปยอด/วันครบกำหนด) เบาลงเล็กน้อยจากแถวการเงิน (วงเงิน/ใช้ไป/คงเหลือ) —
+   เดิมทุกแถวในพาเนลนี้มีน้ำหนักภาพเท่ากันหมด ตัวเลขที่เกี่ยวกับการตัดสินใจจริงไม่ได้โดดกว่า metadata
+   (critique 2026-08-29 P3) */
+.detailRowMeta .detailRowLabel,
+.detailRowMeta .detailRowValue {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-light);
+}
+
 .planList {
   display: flex;
   flex-direction: column;

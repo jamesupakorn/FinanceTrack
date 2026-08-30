@@ -389,11 +389,11 @@ export default function CreditCardDetail({
               </>
             )}
 
-            <div className={styles.detailRow}>
+            <div className={`${styles.detailRow} ${styles.detailRowMeta}`}>
               <span className={styles.detailRowLabel}>สรุปยอด</span>
               <span className={styles.detailRowValue}>{formatDayLabel(card.statementDay)}</span>
             </div>
-            <div className={styles.detailRow}>
+            <div className={`${styles.detailRow} ${styles.detailRowMeta}`}>
               <span className={styles.detailRowLabel}>ครบกำหนด</span>
               <span className={styles.detailRowValue}>{formatDayLabel(card.dueDay)}</span>
             </div>
