@@ -17,7 +17,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import Layout from '../src/frontend/components/Layout';
 import { Icons } from '../src/frontend/components/Icons';
-import DashboardSummaryTiles from '../src/frontend/components/DashboardSummaryTiles';
 import CashFlowRing from '../src/frontend/components/CashFlowRing';
 import BudgetHealthPanel from '../src/frontend/components/BudgetHealthPanel';
 import DashboardCalendarSection from '../src/frontend/components/DashboardCalendarSection';
@@ -482,20 +481,6 @@ export default function DashboardPage() {
       <div role="status" aria-busy="true">
         <span className={cardStyles.srOnly}>กำลังโหลดภาพรวม...</span>
         <div className={styles.dashboardGrid}>
-          <div className={styles.tilesArea}>
-            <div className={styles.tileGrid}>
-              {/*
-                * 168px ไม่ใช่ตัวเลขสุ่ม — คือความสูงจริงของการ์ดหนึ่งใบเมื่อ .tileLabel/.tileAmount
-                * (Dashboard.module.css) จองที่ไว้ 2 บรรทัดเสมอ (ป้ายยาวสุด "บัตรเครดิตที่ต้องชำระ" +
-                * จำนวนเงินที่ตัดบรรทัดก่อน "บาท") วัดจริงด้วย Playwright ที่ 1280px ระหว่างแก้ AC-DB-26
-                * ใน bug-log-dashboard.md — ถ้าแก้ padding/font-size ของ .tile* ในอนาคต ต้องวัดค่านี้ใหม่
-                */}
-              {Array.from({ length: 6 }).map((_, index) => (
-                // eslint-disable-next-line react/no-array-index-key
-                <div key={index} className={cardStyles.skeleton} style={{ minHeight: 168, borderRadius: 16 }} />
-              ))}
-            </div>
-          </div>
           <div className={styles.insightsArea}>
             {/*
               * AC-DB-26: insights จริงคือ 2 การ์ดแยก (ringSection + panelCard ของ Budget Health ที่พับเก็บ
@@ -612,11 +597,6 @@ export default function DashboardPage() {
         )}
 
         <div className={styles.dashboardGrid}>
-          <div className={styles.tilesArea}>
-            <h2 className={cardStyles.srOnly}>สรุปยอดเดือนนี้</h2>
-            <DashboardSummaryTiles model={model} />
-          </div>
-
           <div className={styles.insightsArea}>
             {isCarryoverOnly ? (
               <div className={styles.carryoverNote}>

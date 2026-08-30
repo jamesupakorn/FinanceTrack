@@ -7,11 +7,14 @@
  */
 
 /* ------------------------------------------------------------ ผังหลัก 2 คอลัมน์ */
+/* tiles (DashboardSummaryTiles) ถูกลบออกทั้งก้อน (critique 2026-08-29 P2, verified live) — ตัวเลข
+   เดียวกันซ้ำอยู่แล้วใน ring legend (CashFlowRing) insights จึงขยายมาครองแถวบนของคอลัมน์ซ้ายแทน tiles
+   เดิม ไม่ใช่แค่ปล่อยว่าง */
 .dashboardGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-areas:
-    "tiles calendar"
+    "insights calendar"
     "insights calendar"
     "insights upcoming"
     "quickactions quickactions";
@@ -31,9 +34,8 @@
                    wrapping/truncating inside it (AC-DB-23 / AC-DB-26) */
 }
 
-/* .tilesArea/.calendarArea/.upcomingArea/.quickActionsArea ก็เป็น grid item ของ dashboardGrid ตัวเดียวกัน
+/* .calendarArea/.upcomingArea/.quickActionsArea ก็เป็น grid item ของ dashboardGrid ตัวเดียวกัน
    ต้องมี min-width: 0 เหมือนกันทั้งชุด — ไม่งั้นเนื้อหาข้างในตัวใดตัวหนึ่งดันคอลัมน์กว้างเกิน 1fr ที่ได้รับ */
-.tilesArea { grid-area: tiles; min-width: 0; }
 .calendarArea { grid-area: calendar; min-width: 0; }
 .upcomingArea { grid-area: upcoming; min-width: 0; }
 .quickActionsArea { grid-area: quickactions; min-width: 0; }
@@ -56,64 +58,6 @@
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--text-primary);
-}
-
-/* ------------------------------------------------------------ 1. Summary tiles */
-.tileGrid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-}
-
-.tile {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-light);
-  border-radius: 16px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 90px;
-  min-width: 0; /* same tileGrid trap one level down — .tile is a repeat(3,1fr)/repeat(2,1fr) item */
-}
-
-.tileLabel {
-  font-size: 0.82rem;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  /*
-   * AC-DB-26 (bug-log-dashboard.md): ป้ายชื่อยาวสุด "บัตรเครดิตที่ต้องชำระ" ตัดขึ้น 2 บรรทัดเสมอที่ความกว้าง
-   * คอลัมน์ desktop จริง (~150px, tileGrid 3 คอลัมน์) จองพื้นที่ไว้ 2 บรรทัดล่วงหน้าเสมอ (ไม่ใช่แค่ตอนป้ายยาว
-   * พอ) เพื่อให้ความสูงการ์ดไม่ขึ้นกับความยาวข้อความ ณ runtime — สเกเลตันจะจับคู่ความสูงนี้ได้แน่นอน แทนที่จะ
-   * เดาความสูงจาก placeholder สั้น ๆ แล้วมาต่างกันตอนข้อมูลจริงมาถึง
-   */
-  min-height: 3.2em; /* 2 บรรทัด ที่ line-height 1.6 (สูตรเดียวกับ .tileAmount ด้านล่าง — line-height ×
-                         จำนวนบรรทัด = 1.6 × 2 = 3.2em เสมอ ไม่ว่า font-size ของ element จะต่างกันแค่ไหน) */
-}
-
-.tileAmount {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  line-height: 1.6;
-  /*
-   * เหตุผลเดียวกับ .tileLabel ข้างบน — จำนวนเงินจริง (เช่น "193,195.00 บาท") ตัดบรรทัดที่ช่องว่างก่อน "บาท"
-   * เกือบทุกครั้งที่คอลัมน์แคบระดับนี้ ("0.00 บาท" สั้นพอจะอยู่บรรทัดเดียว แต่เป็นข้อยกเว้น ไม่ใช่ค่าปกติ)
-   * จองพื้นที่ 2 บรรทัดไว้ล่วงหน้าเสมอด้วยเหตุผลเดียวกัน ป้องกัน insightsArea/upcomingArea ขยับ > 8px
-   * ตอนสเกเลตันสลับเป็นข้อมูลจริง (AC-DB-26)
-   */
-  min-height: 3.2em; /* 2 บรรทัด ที่ line-height 1.6 * font-size 1.25rem */
-  /* ตัวเลขจำนวนเงินเป็นสตริงยาวไม่มีช่องว่างให้ตัดบรรทัด (เช่น "193,195.00") — ถ้าคอลัมน์แคบกว่านี้จริง ๆ
-     (จอเล็กมาก/ฟอนต์ผู้ใช้ขยาย) ให้ตัดขึ้นบรรทัดใหม่แทนการดันกล่อง/หน้าล้นขอบจอ (AC-DB-23) */
-  overflow-wrap: anywhere;
-}
-
-.tileAmountPositive { color: var(--secondary-color); }
-.tileAmountDanger { color: var(--danger-color); }
-
-.tileRatio {
-  font-size: 0.78rem;
-  color: var(--text-light);
 }
 
 /* ------------------------------------------------------------ 2. Cash-flow ring */
@@ -876,7 +820,6 @@
   .dashboardGrid {
     grid-template-columns: 1fr;
     grid-template-areas:
-      "tiles"
       "insights"
       "upcoming"
       "calendar"
@@ -891,10 +834,6 @@
 
   .transferableSavingsButton {
     width: 100%;
-  }
-
-  .tileGrid {
-    grid-template-columns: repeat(2, 1fr);
   }
 
   .quickActionsGrid {
