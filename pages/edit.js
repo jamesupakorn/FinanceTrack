@@ -288,9 +288,14 @@ export default function EditPage() {
       const normalizedMonths = allMonths.length ? allMonths : [currentMonth];
       setMonths(normalizedMonths);
       const hasMonthFromData = normalizedMonths.length > 0;
+      // กู้คืนเดือนที่ผู้ใช้ดูล่าสุดจาก localStorage แทนที่จะกระโดดไปเดือนปัจจุบันเสมอ
+      const storedMonth = typeof window !== 'undefined' ? localStorage.getItem(selectedMonthKey) : null;
+      const preferredMonth = selectedMonth || storedMonth;
       const monthToSelect = hasMonthFromData
-        ? (normalizedMonths.includes(currentMonth) ? currentMonth : normalizedMonths[0])
-        : currentMonth;
+        ? (preferredMonth && normalizedMonths.includes(preferredMonth)
+          ? preferredMonth
+          : (normalizedMonths.includes(currentMonth) ? currentMonth : normalizedMonths[0]))
+        : (preferredMonth || currentMonth);
       const shouldUpdateSelection = !selectedMonth || (hasMonthFromData && !normalizedMonths.includes(selectedMonth));
       if (shouldUpdateSelection && monthToSelect) {
         setSelectedMonth(monthToSelect);

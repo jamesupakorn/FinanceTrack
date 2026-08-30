@@ -195,13 +195,9 @@ export default async function handler(req, res) {
     if (month) {
       let doc = await collection.findOne({ month, ...userFilter });
       if (!doc) {
-        const monthsDoc = await collection.findOne({ obj: 'months', ...userFilter })
-          || await collection.findOne({ obj: 'months', userId: { $exists: false } });
+        const monthsDoc = await collection.findOne({ obj: 'months', ...userFilter });
         if (monthsDoc && monthsDoc.months && monthsDoc.months[month]) {
           doc = { month, ...monthsDoc.months[month] };
-        }
-        if (!doc) {
-          doc = await collection.findOne({ month, userId: { $exists: false } });
         }
       }
       const monthData = doc ? { ...doc } : {};
@@ -224,9 +220,6 @@ export default async function handler(req, res) {
       return res.status(200).json(response);
     } else {
       let allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
-      if (!allDocs.length) {
-        allDocs = await collection.find({ userId: { $exists: false }, month: { $exists: true } }).toArray();
-      }
       const data = {};
       allDocs.forEach(doc => {
         const monthData = { ...doc };
@@ -245,8 +238,7 @@ export default async function handler(req, res) {
           รวม
         };
       });
-      const monthsDoc = await collection.findOne({ obj: 'months', ...userFilter })
-        || await collection.findOne({ obj: 'months', userId: { $exists: false } });
+      const monthsDoc = await collection.findOne({ obj: 'months', ...userFilter });
       if (monthsDoc && monthsDoc.months) {
         for (const [m, values] of Object.entries(monthsDoc.months)) {
           if (!data[m]) {
