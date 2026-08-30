@@ -394,12 +394,7 @@
 .tabNavigation {
   margin-bottom: 40px;
   display: flex;
-  /* justify-content: center เดิม ใช้ไม่ได้กับแถวที่ scroll ได้ — เบราว์เซอร์ center เนื้อหาที่ล้นก่อน
-     แล้วค่อย clip ทำให้ scrollLeft:0 (ตำแหน่งเริ่มต้นตอนโหลดหน้า) แสดงเนื้อหา "กลาง" แถวแทนที่จะเป็น
-     "รายได้" ตัวแรกซ้ายสุด (คือ "มือถือดูแปลกๆ" ที่เจอจริง — scrollLeft ยืนยันว่าเป็น 0 อยู่แล้ว ไม่ใช่
-     auto-scroll แต่เป็นผลจาก justify-content เอง) flex-start ใช้ได้ถูกต้องทั้งตอนเนื้อหาพอดี/ล้ม container
-     เสมอ ไม่มีเงื่อนไขซ่อนแบบนี้อีก (design session 2026-08-30) */
-  justify-content: flex-start;
+  justify-content: center;
   gap: 12px;
   background-color: rgba(6, 9, 27, 0.82);
   padding: 12px;
