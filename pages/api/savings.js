@@ -127,10 +127,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     const { month } = req.query;
       if (month) {
-        let doc = await collection.findOne({ month, ...userFilter });
-        if (!doc) {
-          doc = await collection.findOne({ month, userId: { $exists: false } });
-        }
+        const doc = await collection.findOne({ month, ...userFilter });
         // Always return default structure if not found, to match legacy JSON behavior
         const savingsList = doc && Array.isArray(doc.savings_list) ? doc.savings_list : [];
         const รวมเงินเก็บ = calculateTotalSavings(savingsList);
@@ -143,10 +140,7 @@ export default async function handler(req, res) {
     } else {
       // ดึงข้อมูลทุกเดือน (robust: skip doc ที่ไม่มี month, log error, กัน exception)
       try {
-        let allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
-        if (!allDocs.length) {
-          allDocs = await collection.find({ userId: { $exists: false }, month: { $exists: true } }).toArray();
-        }
+        const allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
         const data = {};
         allDocs.forEach(doc => {
           if (!doc || !doc.month) {

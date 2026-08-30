@@ -138,9 +138,6 @@ export default async function handler(req, res) {
         let doc;
         try {
           doc = await collection.findOne({ month, ...userFilter });
-          if (!doc) {
-            doc = await collection.findOne({ month, userId: { $exists: false } });
-          }
         } catch (err) {
           console.error('Error fetching doc for month:', month, err);
           return res.status(500).json({ error: 'Database query error' });
@@ -190,9 +187,6 @@ export default async function handler(req, res) {
         }
       } else {
         let allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
-        if (!allDocs.length) {
-          allDocs = await collection.find({ userId: { $exists: false }, month: { $exists: true } }).toArray();
-        }
         const withTotals = {};
         allDocs.forEach(doc => {
           // ข้าม document ที่เป็น metadata หรือโครงสร้างไม่ถูกต้อง

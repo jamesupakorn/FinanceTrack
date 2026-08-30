@@ -21,6 +21,12 @@ const getCurrentMonth = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 };
 
+const isValidMonth = (month) => {
+  if (!/^\d{4}-\d{2}$/.test(month)) return false;
+  const [, monthNumber] = month.split('-').map(Number);
+  return monthNumber >= 1 && monthNumber <= 12;
+};
+
 // รีเซ็ตสถานะ paid ของข้อมูลรายจ่ายให้เป็น false ทั้งหมด
 const resetCopiedExpensePaidStatus = (expenseData) => {
   if (!expenseData || typeof expenseData !== 'object') return {};
@@ -44,8 +50,10 @@ const resetCopiedExpensePaidStatus = (expenseData) => {
  */
 const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showCopyConfirmation, setShowCopyConfirmation] = useState(false);
   const [newMonthName, setNewMonthName] = useState('');
   const [monthOptions, setMonthOptions] = useState([]);
+  const [pendingAction, setPendingAction] = useState('');
 
   // ถ้า selectedMonth ไม่มีใน monthOptions ให้เลือกเดือนล่าสุดอัตโนมัติ
   useEffect(() => {
@@ -112,7 +120,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
   }, [showAddForm, onDataRefresh]);
 
   useEffect(() => {
-    if (!showAddForm || typeof document === 'undefined') {
+    if ((!showAddForm && !showCopyConfirmation) || typeof document === 'undefined') {
       return undefined;
     }
 
@@ -123,115 +131,104 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
     return () => {
       body.style.overflow = previousOverflow;
     };
-  }, [showAddForm]);
+  }, [showAddForm, showCopyConfirmation]);
 
-  // สร้างเดือนใหม่ (ข้อมูลเปล่า)
-  const handleAddNewMonth = async () => {
-    const nextMonth = getNextMonth(selectedMonth);
-    const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = await import('../../shared/utils/frontend/apiUtils');
-    // Save new month data
-    await Promise.all([
-      expenseAPI.save(nextMonth, {}),
-      incomeAPI.save(nextMonth, {}),
-      salaryAPI.save(nextMonth, {}, {}, ''),
-      savingsAPI.saveList ? savingsAPI.saveList(nextMonth, []) : Promise.resolve(),
-      investmentAPI.saveList ? investmentAPI.saveList(nextMonth, []) : Promise.resolve()
-    ]);
-
-    // Fetch all months after adding new month
-    const [expenseData, incomeData, salaryData] = await Promise.all([
-      expenseAPI.getAll(),
-      incomeAPI.getAll(),
-      salaryAPI.getAll()
-    ]);
-    const getMonths = data => (data?.months ? Object.keys(data.months) : []);
-    const allMonthsSet = new Set([
-      ...getMonths(expenseData),
-      ...getMonths(incomeData),
-      ...getMonths(salaryData)
-    ]);
-    const validMonthRegex = /^\d{4}-\d{2}$/;
-    const allMonths = Array.from(allMonthsSet)
-      .filter(month => validMonthRegex.test(month))
-      .sort((a, b) => b.localeCompare(a)); // new -> old
-
-    // If more than 15 months, delete the oldest
-    if (allMonths.length > 15) {
-      const oldestMonth = allMonths[allMonths.length - 1];
-      await Promise.all([
-        expenseAPI.delete ? expenseAPI.delete(oldestMonth) : Promise.resolve(),
-        incomeAPI.delete ? incomeAPI.delete(oldestMonth) : Promise.resolve(),
-        salaryAPI.delete ? salaryAPI.delete(oldestMonth) : Promise.resolve(),
-        savingsAPI.delete ? savingsAPI.delete(oldestMonth) : Promise.resolve(),
-        investmentAPI.delete ? investmentAPI.delete(oldestMonth) : Promise.resolve()
-      ]);
+  const createEmptyMonth = async (month) => {
+    if (!isValidMonth(month)) {
+      showToast('รูปแบบเดือนไม่ถูกต้อง กรุณาเลือกเดือนที่ถูกต้อง', 'error');
+      return false;
     }
 
-    onMonthSelected(nextMonth);
-    onDataRefresh();
-    setShowAddForm(false);
-    setNewMonthName('');
+    if (monthOptions.some(option => option.value === month)) {
+      showToast(`มีข้อมูลเดือน ${formatMonthLabelTH(month)} อยู่แล้ว`, 'info');
+      return false;
+    }
+
+    setPendingAction('create');
+    const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = await import('../../shared/utils/frontend/apiUtils');
+    try {
+      await Promise.all([
+        expenseAPI.save(month, {}),
+        incomeAPI.save(month, {}),
+        salaryAPI.save(month, {}, {}, ''),
+        savingsAPI.saveList ? savingsAPI.saveList(month, []) : Promise.resolve(),
+        investmentAPI.saveList ? investmentAPI.saveList(month, []) : Promise.resolve()
+      ]);
+
+      onMonthSelected(month);
+      onDataRefresh();
+      setShowAddForm(false);
+      setNewMonthName('');
+      showToast(`เพิ่มเดือน ${formatMonthLabelTH(month)} แล้ว`, 'success');
+      return true;
+    } catch (error) {
+      showToast(error.message || 'ไม่สามารถเพิ่มเดือนได้', 'error');
+      return false;
+    } finally {
+      setPendingAction('');
+    }
   };
 
-  // คัดลอกข้อมูลจากเดือนก่อนหน้า
-  const handleCopyPrevMonth = async () => {
-    if (!selectedMonth || !/^\d{4}-\d{2}$/.test(selectedMonth)) {
+  // สร้างเดือนใหม่ (ข้อมูลเปล่า)
+  const handleAddNewMonth = () => createEmptyMonth(getNextMonth(selectedMonth));
+
+  const handleCopyPrevMonth = () => {
+    if (!isValidMonth(selectedMonth)) {
       showToast('กรุณาเลือกเดือนที่ต้องการก่อน', 'info');
       return;
     }
-    const prevMonth = getPrevMonth(selectedMonth);
-    const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI, dailyExpenseAPI } = await import('../../shared/utils/frontend/apiUtils');
-    const [expenseAll, incomeAll, salaryPrevDoc, savingsAll, investmentAll, dailyExpensePrevDoc] = await Promise.all([
-      expenseAPI.getAll(),
-      incomeAPI.getAll(),
-      // ใช้ endpoint เดียวกับที่ SalaryCalculator ใช้แสดงผล เพื่อให้ได้ค่าที่ "carry-forward" มาแล้วจริง ๆ
-      // (ไม่ใช้ getAll() + getMonthData() เพราะจะได้แค่ record ที่ persist จริง ไม่รวม carry-forward)
-      salaryAPI.getByMonth(prevMonth),
-      savingsAPI.getAll ? savingsAPI.getAll() : Promise.resolve({}),
-      investmentAPI.getAll ? investmentAPI.getAll() : Promise.resolve({}),
-      dailyExpenseAPI.getByMonth(prevMonth)
-    ]);
-    // ดึงข้อมูลเดือนก่อนหน้า
-    const expensePrevRaw = getMonthData(expenseAll, prevMonth);
-    const expensePrev = resetCopiedExpensePaidStatus(expensePrevRaw);
-    const incomePrev = getMonthData(incomeAll, prevMonth);
-    let savingsPrev = [];
-    if (savingsAll && savingsAll.savings_list && savingsAll.savings_list[prevMonth]) {
-      savingsPrev = JSON.parse(JSON.stringify(savingsAll.savings_list[prevMonth]));
+
+    setShowCopyConfirmation(true);
+  };
+
+  const confirmCopyPrevMonth = async () => {
+    setShowCopyConfirmation(false);
+    setPendingAction('copy');
+    try {
+      const prevMonth = getPrevMonth(selectedMonth);
+      const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI, dailyExpenseAPI } = await import('../../shared/utils/frontend/apiUtils');
+      const [expenseAll, incomeAll, salaryPrevDoc, savingsAll, investmentAll, dailyExpensePrevDoc] = await Promise.all([
+        expenseAPI.getAll(),
+        incomeAPI.getAll(),
+        salaryAPI.getByMonth(prevMonth),
+        savingsAPI.getAll ? savingsAPI.getAll() : Promise.resolve({}),
+        investmentAPI.getAll ? investmentAPI.getAll() : Promise.resolve({}),
+        dailyExpenseAPI.getByMonth(prevMonth)
+      ]);
+      const expensePrev = resetCopiedExpensePaidStatus(getMonthData(expenseAll, prevMonth));
+      const incomePrev = getMonthData(incomeAll, prevMonth);
+      const savingsPrev = savingsAll?.savings_list?.[prevMonth]
+        ? JSON.parse(JSON.stringify(savingsAll.savings_list[prevMonth]))
+        : [];
+      const investmentPrev = investmentAll?.[prevMonth]
+        ? JSON.parse(JSON.stringify(investmentAll[prevMonth]))
+        : [];
+      const dailyExpensePrev = dailyExpensePrevDoc?.items || [];
+      await Promise.all([
+        expenseAPI.save(selectedMonth, expensePrev),
+        incomeAPI.save(selectedMonth, incomePrev),
+        salaryAPI.save(selectedMonth, salaryPrevDoc?.income || {}, salaryPrevDoc?.deduct || {}, salaryPrevDoc?.note || ''),
+        savingsAPI.saveList ? savingsAPI.saveList(selectedMonth, savingsPrev) : Promise.resolve(),
+        investmentAPI.saveList ? investmentAPI.saveList(selectedMonth, investmentPrev) : Promise.resolve(),
+        dailyExpenseAPI.save(selectedMonth, dailyExpensePrev)
+      ]);
+      onMonthSelected(selectedMonth);
+      onDataRefresh();
+      showToast(`คัดลอกข้อมูลจาก ${formatMonthLabelTH(prevMonth)} แล้ว`, 'success');
+    } catch (error) {
+      showToast(error.message || 'ไม่สามารถคัดลอกข้อมูลได้', 'error');
+    } finally {
+      setPendingAction('');
     }
-    let investmentPrev = [];
-    if (investmentAll && investmentAll[prevMonth]) {
-      investmentPrev = JSON.parse(JSON.stringify(investmentAll[prevMonth]));
-    }
-    const dailyExpensePrev = dailyExpensePrevDoc?.items || [];
-    await Promise.all([
-      expenseAPI.save(selectedMonth, expensePrev),
-      incomeAPI.save(selectedMonth, incomePrev),
-      salaryAPI.save(
-        selectedMonth,
-        salaryPrevDoc?.income || {},
-        salaryPrevDoc?.deduct || {},
-        salaryPrevDoc?.note || ''
-      ),
-      savingsAPI.saveList ? savingsAPI.saveList(selectedMonth, savingsPrev) : Promise.resolve(),
-      investmentAPI.saveList ? investmentAPI.saveList(selectedMonth, investmentPrev) : Promise.resolve(),
-      dailyExpenseAPI.save(selectedMonth, dailyExpensePrev)
-    ]);
-    onMonthSelected(selectedMonth);
-    onDataRefresh();
   };
 
   const handleCustomMonth = () => {
-    if (newMonthName.trim()) {
-      // สร้างเดือนใหม่จากที่กรอก (format: YYYY-MM)
-      if (/^\d{4}-\d{2}$/.test(newMonthName)) {
-          onMonthSelected(newMonthName);
-        setShowAddForm(false);
-        setNewMonthName('');
-      } else {
-        showToast('รูปแบบไม่ถูกต้อง กรุณากรอก YYYY-MM เช่น 2025-10', 'error');
-      }
+    const month = newMonthName.trim();
+    if (!isValidMonth(month)) {
+      showToast('รูปแบบไม่ถูกต้อง กรุณากรอก YYYY-MM เช่น 2025-10', 'error');
+      return;
     }
+    return createEmptyMonth(month);
   };
 
   // Debug log
@@ -273,6 +270,8 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
             onClick={() => setShowAddForm(!showAddForm)}
             className={`${styles.addMonthBtn} ${styles.actionButton}`}
             aria-label="เพิ่มเดือนใหม่"
+            disabled={Boolean(pendingAction)}
+            aria-busy={pendingAction === 'create'}
             tabIndex={0}
           >
             <span className={styles.actionButtonTitle}>+ เพิ่มเดือนใหม่</span>
@@ -282,6 +281,8 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
             onClick={handleCopyPrevMonth}
             className={`${styles.addMonthBtn} ${styles.addMonthBtnMargin} ${styles.actionButton}`}
             aria-label="คัดลอกข้อมูลจากเดือนก่อนหน้า"
+            disabled={Boolean(pendingAction)}
+            aria-busy={pendingAction === 'copy'}
             tabIndex={0}
           >
             <span className={styles.actionButtonTitle}>ดึงข้อมูลจากเดือนก่อนหน้า</span>
@@ -306,6 +307,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
               onClick={handleAddNewMonth}
               className={styles.quickAddBtn}
               aria-label={`เพิ่มเดือนถัดไป (${getNextMonth(selectedMonth)})`}
+              disabled={Boolean(pendingAction)}
               tabIndex={0}
             >
               เดือนถัดไป ({getNextMonth(selectedMonth)})
@@ -324,6 +326,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
                 onClick={handleCustomMonth}
                 className={styles.customAddBtn}
                 aria-label="เพิ่มเดือนที่กรอกเอง"
+                disabled={Boolean(pendingAction)}
                 tabIndex={0}
               >
                 เพิ่ม
@@ -337,6 +340,34 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh }) => {
             >
               ยกเลิก
             </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {showCopyConfirmation && typeof document !== 'undefined' && createPortal(
+        <div className={styles.addMonthForm} aria-modal="true" aria-describedby="copy-month-description" aria-labelledby="copy-month-title" role="alertdialog">
+          <div className={`${styles.formContent} ${styles.copyConfirmContent}`}>
+            <h4 id="copy-month-title">เขียนทับข้อมูลเดือนนี้?</h4>
+            <p id="copy-month-description">
+              ข้อมูลของ {formatMonthLabelTH(selectedMonth)} จะถูกแทนที่ด้วยข้อมูลจาก {formatMonthLabelTH(getPrevMonth(selectedMonth))}
+            </p>
+            <div className={styles.copyConfirmActions}>
+              <button
+                className={styles.cancelBtn}
+                onClick={() => setShowCopyConfirmation(false)}
+                type="button"
+              >
+                ยกเลิก
+              </button>
+              <button
+                className={styles.quickAddBtn}
+                onClick={confirmCopyPrevMonth}
+                type="button"
+              >
+                เขียนทับและคัดลอก
+              </button>
+            </div>
           </div>
         </div>,
         document.body
