@@ -8,7 +8,7 @@ export async function sendLineMessage(message, userId = null) {
   const token = getLineToken();
   const to = userId || getLineUserId();
   if (!token || !to || !message) {
-    console.error('ข้อมูลไม่ครบถ้วน', { token, to, message });
+    console.error('ข้อมูลไม่ครบถ้วน', { hasToken: Boolean(token), to, message });
     throw new Error('ข้อมูลไม่ครบถ้วน');
   }
   const payload = {

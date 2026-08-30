@@ -210,11 +210,10 @@ export default function EditPage() {
     return () => clearInterval(interval);
   }, [router, currentUser, sessionKey, logout, clearStoredMonth]);
   const { theme } = useTheme();
-  const isMobileInit = typeof window !== 'undefined' && window.innerWidth < 768;
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [activeTab, setActiveTab] = useState('income');
-  const [salaryCollapsed, setSalaryCollapsed] = useState(isMobileInit);
-  const [summaryCollapsed, setSummaryCollapsed] = useState(isMobileInit);
+  const [salaryCollapsed, setSalaryCollapsed] = useState(false);
+  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [salaryUpdateTrigger, setSalaryUpdateTrigger] = useState(0);
   const [triggerSave, setTriggerSave] = useState(0);
@@ -233,6 +232,13 @@ export default function EditPage() {
   const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   const [reportMonthModalOpen, setReportMonthModalOpen] = useState(false);
   const [selectedReportMonths, setSelectedReportMonths] = useState([]);
+  React.useEffect(() => {
+    if (window.innerWidth < 768) {
+      setSalaryCollapsed(true);
+      setSummaryCollapsed(true);
+    }
+  }, []);
+
   React.useEffect(() => {
     if (isReady && !currentUser) {
       router.replace('/profiles');
@@ -351,6 +357,20 @@ export default function EditPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDirty, selectedMonth]);
+
+  const handleTabSelected = (tabId) => {
+    if (tabId === activeTab) return;
+    if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current);
+    if (isDirty) {
+      setTriggerSave(prev => prev + 1);
+      navTimeoutRef.current = setTimeout(() => {
+        setActiveTab(tabId);
+        setIsDirty(false);
+      }, 300);
+      return;
+    }
+    setActiveTab(tabId);
+  };
 
   const handlePrevMonth = () => {
     if (currentMonthIndex < months.length - 1) {
@@ -681,7 +701,7 @@ export default function EditPage() {
           <button
             key={tab.id}
             onClick={() => {
-              setActiveTab(tab.id);
+              handleTabSelected(tab.id);
               tabContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }}
             className={`${styles.tabButton} ${activeTab === tab.id ? styles.active : ''}`}
@@ -746,6 +766,7 @@ export default function EditPage() {
             />
             <InvestmentTable
               selectedMonth={selectedMonth}
+              triggerSave={triggerSave}
               key={`investment-${refreshTrigger}`}
             />
 
