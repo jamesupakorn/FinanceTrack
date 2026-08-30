@@ -385,12 +385,6 @@
 }
 
 /* Tab Navigation */
-/* เดิม .tabNavigation/.tabButton ถูกกำหนดซ้ำใน 5 media block ที่ทับซ้อนกัน (1024/768/640/420-375/480px)
-   ผลคือ .tabButton min-width: calc(50% - Npx) ที่ตั้งใจให้เรียง 2 ต่อแถวบนมือถือ แต่ label ภาษาไทยยาว ๆ
-   ("บิลและรายจ่าย" + ไอคอน + padding) กว้างเกิน 50% จริง ทำให้ flex-wrap ดันแต่ละปุ่มไปอยู่แถวเดียวเต็ม
-   ความกว้างแทน กลายเป็นสแต็กแนวตั้ง 5 แถวที่ต้องเลื่อนผ่าน (พบจาก screenshot จริง ไม่ใช่แค่คาดเดา) —
-   เปลี่ยนมาใช้แนวเดียว เลื่อนแนวนอนได้ (overflow-x) แทน ไม่มีการห่อบรรทัดอีกต่อไปไม่ว่าจอกว้างแค่ไหน
-   (design session 2026-08-30, ตาม breakpoint เดียว 768px ของโปรเจกต์) */
 .tabNavigation {
   margin-bottom: 40px;
   display: flex;
@@ -402,14 +396,6 @@
   box-shadow: 0 30px 80px rgba(2,6,23,0.45);
   border: 1px solid rgba(255,255,255,0.08);
   transition: all 0.3s ease;
-  overflow-x: auto;
-  scroll-snap-type: x proximity;
-  scrollbar-width: none; /* Firefox */
-}
-
-.tabNavigation::-webkit-scrollbar {
-  display: none; /* Chrome/Safari — ซ่อนแถบเลื่อนแต่ยัง scroll ได้ ปุ่มที่ active เห็นชัดว่าอยู่ตำแหน่งไหน
-                    อยู่แล้วจากสี ไม่ต้องพึ่ง scrollbar เป็นตัวบอกตำแหน่ง */
 }
 
 .tabButton {
@@ -428,9 +414,6 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  flex-shrink: 0; /* กัน label ยาวถูกบีบ — ความกว้างจริงของแต่ละปุ่มคงที่ตามเนื้อหา แถวทั้งหมด scroll แทน */
-  min-height: 44px;
-  scroll-snap-align: start;
 }
 
 .tabButton svg {
@@ -558,6 +541,7 @@
 
   .tabNavigation {
     gap: 10px;
+    flex-wrap: wrap;
     border-radius: 32px;
   }
   .tabButton {
@@ -607,10 +591,13 @@
     box-shadow: 0 12px 32px rgba(9,24,64,0.2);
   }
   .tabNavigation {
+    flex-wrap: wrap;
     gap: 8px;
+    justify-content: center;
     border-radius: 28px;
   }
   .tabButton {
+    min-width: calc(50% - 6px);
     padding: 12px 18px;
     font-size: 14px;
     border-radius: 999px;
@@ -633,6 +620,7 @@
     padding: 18px;
   }
   .tabButton {
+    min-width: calc(50% - 6px);
     padding: 10px 16px;
     font-size: 13px;
     gap: 5px;
@@ -651,12 +639,17 @@
     max-width: 100%;
   }
   .tabNavigation {
+    flex-wrap: wrap;
     gap: 8px;
     padding: 10px;
+    justify-content: center;
   }
   .tabButton {
     padding: 11px 16px;
     font-size: 13px;
+    min-width: auto;
+    flex: 1;
+    min-width: calc(50% - 4px);
   }
   .tabButton svg {
     width: 15px;
@@ -680,6 +673,8 @@
     border-radius: 20px;
   }
   .tabButton {
+    min-width: 100%;
+    margin-bottom: 6px;
     padding: 12px 18px;
     font-size: 14px;
     gap: 6px;
@@ -718,6 +713,11 @@
 }
 
 @media (max-width: 480px) {
+  .tabButton {
+    margin-bottom: 0;
+    min-width: 0;
+  }
+
   .tabContent {
     /* padding จริงที่มีผลคือก้อนล่างสุดของ media query นี้ (มี .tabContent อีกรอบ, ตั้ง padding ทับ
        อยู่แล้วในโค้ดเดิม) — ค่า padding ที่นี่จึงไม่มีผลกับ bottom offset ของ AC-SH-17 ไม่ต้องแก้ตรงนี้ */
@@ -772,11 +772,57 @@
   }
 }
 
-/* เดิม "Mobile Tab Redesign" ที่นี่เปลี่ยน .tabNavigation เป็น CSS grid 2 คอลัมน์ที่ ≤640px แล้วมี
-   ≤480px ต่อท้ายยุบเหลือ 1 คอลัมน์ (ทับ display:flex ของ base rule ทั้งหมด) — คือสาเหตุจริงของการ
-   สแต็กแนวตั้งเต็มความกว้างที่เจอจาก screenshot เพราะโทรศัพท์ส่วนใหญ่มีความกว้างจอ ≤480px ในแนวตั้งอยู่แล้ว
-   ลบออกให้ base rule's overflow-x scroll (ด้านบนของไฟล์นี้) เป็นตัวคุมพฤติกรรม mobile แทนทุกขนาดจอ
-   (design session 2026-08-30) */
+/* Mobile Tab Redesign */
+@media (max-width: 640px) {
+  .tabNavigation {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 0;
+    margin-bottom: 14px;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .tabButton {
+    min-width: 0;
+    width: 100%;
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(8, 12, 32, 0.72);
+    font-size: 0.95rem;
+    justify-content: center;
+    white-space: nowrap;
+    box-shadow: none;
+  }
+
+  .tabButton svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .tabButton.active {
+    box-shadow: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .tabNavigation {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .tabButton {
+    padding: 10px;
+    font-size: 0.92rem;
+  }
+}
 
 /* Collapsible Section Header */
 .collapsibleHeader {
