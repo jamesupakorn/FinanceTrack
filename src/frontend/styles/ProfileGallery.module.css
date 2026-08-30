@@ -190,9 +190,16 @@
   font-weight: 600;
 }
 
+/* grid-template-columns ย้ายมาที่ 768px แทน 540px เดิม — โปรเจกต์นี้ใช้ breakpoint เดียวคือ 768px
+   ทุกที่ (CLAUDE.md §2.4/§6); เดิมช่วง 541-768px หลุดไปใช้ auto-fit ของ base rule ซึ่งให้ 3+ คอลัมน์บน
+   จอแท็บเล็ต ไม่ตรงกับที่ตั้งใจ "2 คอลัมน์บนมือถือ" (critique 2026-08-29 P3) */
 @media (max-width: 768px) {
   .panel {
     padding: 32px;
+  }
+  .profileGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
   }
 }
 
@@ -202,10 +209,6 @@
   }
   .panel {
     padding: 24px;
-  }
-  .profileGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
   }
   .profileCard {
     min-width: 0;
