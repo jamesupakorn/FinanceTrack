@@ -5,7 +5,9 @@
  * `onSave(thresholds)`/`onRetryLoad()` กลับไปให้หน้าแม่ทำ I/O จริง (ตาม pattern เดียวกับที่โปรเจกต์นี้
  * แยก presentational form ออกจาก page ที่ถือ state การเชื่อม API — ไม่ได้คิดรูปแบบใหม่)
  *
- * ช่องตัวเลขเป็น type="text" + inputMode="numeric" เสมอ (ADR-006 Decision 2 — ห้าม type="number")
+ * ช่องตัวเลขเป็น type="text" เสมอ (ADR-006 Decision 2 — ห้าม type="number") + inputMode="decimal"
+ * เพราะรับทศนิยม 1 ตำแหน่งได้จริง (ADR-006 อนุญาตทั้ง decimal/numeric แล้วแต่ช่อง — เดิมที่นี่ใช้
+ * "numeric" ซึ่งทำให้คีย์บอร์ดมือถือไม่มีจุดทศนิยม ขัดกับ regex ด้านล่างที่รับทศนิยม — critique 2026-08-29 P2)
  * validate ตอน blur ไม่ใช่ทุกคีย์ (บทเรียนเดิมของโปรเจกต์ — พิมพ์แล้วโดน normalize จะหลุดโฟกัส,
  * CLAUDE.md §3.4) ตัวเลข 0–100 ทศนิยมไม่เกิน 1 ตำแหน่งเท่านั้น — ไม่มี cross-field validation
  * (ผลรวมเกิน 100% เป็นทางเลือกที่ถูกต้อง แสดงเป็นบรรทัดข้อมูล ไม่ใช่ error — §/settings composition)
@@ -57,13 +59,20 @@ function buildDraftFromValues(values) {
   return draft;
 }
 
-export default function BudgetThresholdForm({ values, loading, loadFailed, saving, onSave, onRetryLoad }) {
+export default function BudgetThresholdForm({ values, loading, loadFailed, saving, onSave, onRetryLoad, onDirtyChange }) {
   const [draft, setDraft] = useState(() => buildDraftFromValues(values));
   const [errors, setErrors] = useState({});
   const [isDirty, setIsDirty] = useState(false);
   const inputRefs = useRef({});
   const initializedRef = useRef(false);
   const [pulseKey, setPulseKey] = useState(null);
+
+  // แจ้งหน้าแม่ทุกครั้งที่ isDirty เปลี่ยน เพื่อให้ Layout's onBeforeNavigate เตือนก่อนออกจากหน้าถ้ายัง
+  // ไม่ได้บันทึก — เดิมฟอร์มนี้ไม่มี guard เลย ต่างจากทุกฟอร์มอื่นในแอปที่ผูก onBeforeNavigate ไว้แล้ว
+  // (critique 2026-08-29 P3)
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   // เติม draft จากค่าที่โหลดมาจริงครั้งแรก (หรือหลังกด "ลองอีกครั้ง") — ไม่ทับ draft ที่ผู้ใช้กำลังพิมพ์อยู่
   // loading=true (รอบโหลดใหม่เริ่ม/retry) รีเซ็ต flag เพื่อให้ populate ใหม่รอบถัดไปที่ loading กลับเป็น
@@ -182,7 +191,7 @@ export default function BudgetThresholdForm({ values, loading, loadFailed, savin
                   id={fieldId}
                   ref={(el) => { inputRefs.current[key] = el; }}
                   type="text"
-                  inputMode="numeric"
+                  inputMode="decimal"
                   className={`${styles.fieldInput} ${hasError ? styles.fieldInputError : ''}`}
                   value={draft[key]}
                   disabled={loading}
