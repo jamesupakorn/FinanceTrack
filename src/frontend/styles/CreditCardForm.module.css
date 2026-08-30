@@ -203,6 +203,14 @@
   color: var(--text-secondary);
   display: flex;
   align-items: center;
+  gap: 8px;
+}
+
+/* ไอคอนล็อก inline ในช่องที่ถูกล็อกเพราะแผนมีงวดชำระแล้ว — เดิมมีแค่ banner บนสุด ผู้ใช้ที่เลื่อนตรงไป
+   แก้ช่องใดช่องหนึ่งเห็นแค่กล่อง readonly เฉยๆ ไม่รู้ว่าเป็นนโยบายหรือบั๊ก (critique 2026-08-29 P2) */
+.readonlyField svg {
+  flex-shrink: 0;
+  opacity: 0.7;
 }
 
 .helper {

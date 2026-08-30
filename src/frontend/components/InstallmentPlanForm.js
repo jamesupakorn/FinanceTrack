@@ -288,7 +288,10 @@ export default function InstallmentPlanForm({
                 ราคาสินค้า (บาท) <span className={styles.required}>*</span>
               </label>
               {financialsLocked ? (
-                <div className={styles.readonlyField}>{formatCurrency(plan.totalPrice)}</div>
+                <div className={styles.readonlyField}>
+                  <Icons.Lock size={14} />
+                  {formatCurrency(plan.totalPrice)}
+                </div>
               ) : (
                 <input
                   id="ip-price"
@@ -315,7 +318,10 @@ export default function InstallmentPlanForm({
                 จำนวนงวด <span className={styles.required}>*</span>
               </label>
               {financialsLocked ? (
-                <div className={styles.readonlyField}>{`${plan.months} งวด`}</div>
+                <div className={styles.readonlyField}>
+                  <Icons.Lock size={14} />
+                  {`${plan.months} งวด`}
+                </div>
               ) : (
                 <>
                   <select
@@ -354,7 +360,10 @@ export default function InstallmentPlanForm({
               เริ่มผ่อนเดือน <span className={styles.required}>*</span>
             </label>
             {financialsLocked ? (
-              <div className={styles.readonlyField}>{formatMonthKeyTH(plan.startMonth)}</div>
+              <div className={styles.readonlyField}>
+                <Icons.Lock size={14} />
+                {formatMonthKeyTH(plan.startMonth)}
+              </div>
             ) : (
               <select
                 id="ip-start"
