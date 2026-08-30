@@ -165,7 +165,7 @@ export default function MonthComparison() {
               <td>{row.dailyFailed ? '—' : formatCurrency(row.model.dailyExpense)}</td>
               <td>{formatCurrency(row.model.savings)}</td>
               <td>{formatCurrency(row.model.creditCard)}</td>
-              <td>{formatCurrency(row.model.netCashFlow)}</td>
+              <td className={styles.comparisonHeadlineCell}>{formatCurrency(row.model.netCashFlow)}</td>
               <td><DeltaBadge delta={row.delta} /></td>
             </tr>
           ))}

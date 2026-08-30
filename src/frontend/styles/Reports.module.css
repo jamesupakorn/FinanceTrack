@@ -188,6 +188,22 @@
   text-align: left;
 }
 
+/* zebra + hover ช่วยให้ scan แถวของเดือนที่ต้องการง่ายขึ้นในตาราง 8 คอลัมน์ ตัวเลขชิดขวาแน่นทั้งแถว —
+   เดิมไม่มีตัวช่วยสายตาเลยนอกจากเส้นใต้บาง ๆ (critique 2026-08-29 P3) */
+.comparisonTable tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.comparisonTable tbody tr:hover {
+  background: var(--bg-surface-alt);
+}
+
+/* กระแสเงินสดสุทธิคือตัวเลขหัวเรื่องของแถว ให้เด่นกว่าคอลัมน์รายละเอียดอื่น ๆ */
+.comparisonHeadlineCell {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
 .comparisonPartialChip {
   display: inline-block;
   margin-left: 8px;
