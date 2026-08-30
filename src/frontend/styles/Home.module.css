@@ -971,7 +971,11 @@
   min-height: 44px;
   border-radius: 999px;
   border: none;
-  background: var(--gradient-primary);
+  /* เดิมใช้ --gradient-primary (#5d5bff -> #00d4ff): คำนวณ contrast จริงแล้วปลายสีม่วงให้ ~4.0:1 (ต่ำกว่า
+     4.5:1 AA เล็กน้อย) ส่วนปลายสีฟ้าให้ ~10.8:1 — ตัวอักษรอยู่กลางปุ่มจึงผ่านในทางปฏิบัติ (~6.4:1) แต่
+     เพื่อไม่ต้องพึ่งตำแหน่งตัวอักษรพอดี ใช้สีทึบที่จุดกึ่งกลาง gradient แทน รับประกัน 6.37:1 ทุกตำแหน่ง
+     (critique 2026-08-29 P1) */
+  background: #2e97ff;
   color: #021210;
   font-size: 0.9rem;
   font-weight: 700;
