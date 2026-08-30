@@ -24,6 +24,14 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+
+  // ยังไม่ได้บันทึกแล้วกดออกจากหน้า — เตือนด้วย native confirm (ฟอร์มเดียว ค่าเดียว ไม่คุ้มสร้างโมดัล
+  // เต็มรูปแบบแบบ UnsavedChangesDialog ของ /workspace ที่ออกแบบมาสำหรับ 7 section พร้อมกัน)
+  const handleBeforeNavigate = useCallback(() => {
+    if (!isDirty) return true;
+    return window.confirm('เกณฑ์ที่แก้ไว้ยังไม่ได้บันทึก ถ้าออกตอนนี้การแก้ไขจะหายไป ต้องการออกหรือไม่?');
+  }, [isDirty]);
 
   const loadThresholds = useCallback(async () => {
     if (!currentUser) return;
@@ -66,7 +74,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <Layout activeNav="settings" title="ตั้งค่า">
+    <Layout activeNav="settings" title="ตั้งค่า" onBeforeNavigate={handleBeforeNavigate}>
       <section className={styles.settingsSection}>
         <h2 className={styles.sectionTitle}>เกณฑ์สุขภาพงบประมาณ</h2>
         <p className={styles.sectionHint}>เมื่อยอดใช้จ่ายหรือเงินออมของเดือนข้ามเกณฑ์ที่ตั้งไว้ แถบสถานะในหน้าภาพรวมจะเปลี่ยนสี เพื่อเตือนให้คุณรู้ทันที</p>
@@ -79,6 +87,7 @@ export default function SettingsPage() {
           saving={saving}
           onSave={handleSave}
           onRetryLoad={loadThresholds}
+          onDirtyChange={setIsDirty}
         />
       </section>
     </Layout>
