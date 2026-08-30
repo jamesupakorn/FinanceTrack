@@ -9,11 +9,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { investmentAPI } from '../../shared/utils/frontend/apiUtils';
 import { parseToNumber, formatCurrency } from '../../shared/utils/frontend/numberUtils';
+import { showToast } from '../../shared/utils/frontend/toast';
 import styles from '../styles/InvestmentTable.module.css';
 import { averagePercent, calcAmountFromPercent, sumPercent, mapInvestmentData } from '../../shared/utils/investmentUtils';
 
 // InvestmentTable: แสดงและแก้ไขรายการลงทุนในแต่ละเดือน
 export default function InvestmentTable({ selectedMonth, onDataChange, triggerSave }) {
+  const lastSaveTriggerRef = useRef(triggerSave);
   const [baseAmount, setBaseAmount] = useState('');
   const [investments, setInvestments] = useState([]);
 
@@ -41,19 +43,24 @@ export default function InvestmentTable({ selectedMonth, onDataChange, triggerSa
   // ฟังก์ชันบันทึกข้อมูลการลงทุน
   const handleSave = async () => {
     if (!selectedMonth) return;
-    const result = await investmentAPI.saveList(selectedMonth, investments);
-    if (result) {
-      if (typeof onDataChange === 'function') onDataChange();
-      showToast('บันทึกสำเร็จ');
-    } else {
+    try {
+      const result = await investmentAPI.saveList(selectedMonth, investments);
+      if (result) {
+        if (typeof onDataChange === 'function') onDataChange();
+        showToast('บันทึกสำเร็จ');
+        return;
+      }
+      showToast('บันทึกไม่สำเร็จ', 'error');
+    } catch (error) {
+      console.error('Error saving investment data:', error);
       showToast('บันทึกไม่สำเร็จ', 'error');
     }
   };
 
   useEffect(() => {
-    if (triggerSave) {
-      handleSave();
-    }
+    if (triggerSave === lastSaveTriggerRef.current) return;
+    lastSaveTriggerRef.current = triggerSave;
+    if (triggerSave) handleSave();
   }, [triggerSave]);
 
   // โหลดข้อมูลจาก backend เมื่อ selectedMonth เปลี่ยน

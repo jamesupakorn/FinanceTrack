@@ -5,7 +5,7 @@
  * @param {string} props.selectedMonth - เดือนที่เลือก (YYYY-MM)
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatCurrency, parseAndFormat, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { mapSavingsApiToList } from '../../shared/utils/savingsUtils';
 import { savingsAPI, savingsGoalsAPI } from '../../shared/utils/frontend/apiUtils';
@@ -17,6 +17,7 @@ import styles from '../styles/SavingsTable.module.css';
  * ตารางเงินออมรายเดือน
  */
 export default function SavingsTable({ selectedMonth, triggerSave }) {
+  const lastSaveTriggerRef = useRef(triggerSave);
 
   const [savingsData, setSavingsData] = useState(null);
   const [รายการเงินออม, setรายการเงินออม] = useState([]);
@@ -184,9 +185,9 @@ export default function SavingsTable({ selectedMonth, triggerSave }) {
   };
 
   useEffect(() => {
-    if (triggerSave) {
-      handleSavingsSave();
-    }
+    if (triggerSave === lastSaveTriggerRef.current) return;
+    lastSaveTriggerRef.current = triggerSave;
+    if (triggerSave) handleSavingsSave();
   }, [triggerSave]);
 
   // ยอดรวมเงินเก็บคำนวณจากสถานะปัจจุบัน เพื่อสะท้อนผลการแก้ไขทันที

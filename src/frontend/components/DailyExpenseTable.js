@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { dailyExpenseAPI } from '../../shared/utils/frontend/apiUtils';
 import { formatCurrency, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
@@ -78,6 +78,7 @@ function ItemRow({ item, onChange, onDelete }) {
 }
 
 export default function DailyExpenseTable({ selectedMonth, triggerSave }) {
+  const lastSaveTriggerRef = useRef(triggerSave);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -103,6 +104,8 @@ export default function DailyExpenseTable({ selectedMonth, triggerSave }) {
   }, [loadData]);
 
   useEffect(() => {
+    if (triggerSave === lastSaveTriggerRef.current) return;
+    lastSaveTriggerRef.current = triggerSave;
     if (!triggerSave) return;
     (async () => {
       try {

@@ -88,6 +88,7 @@ function ProgressBar({ percent, status }) {
 
 export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAllocatableChange, triggerSave }) {
   const formRef = useRef(null);
+  const lastSaveTriggerRef = useRef(triggerSave);
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -406,6 +407,8 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
   };
 
   useEffect(() => {
+    if (triggerSave === lastSaveTriggerRef.current) return;
+    lastSaveTriggerRef.current = triggerSave;
     if (!triggerSave || triggerSave <= 0) return;
     handleSaveAllocation({ silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -6,7 +6,7 @@
  * @param {number} props.salaryUpdateTrigger - ตัวกระตุ้นให้รีเฟรชข้อมูลเงินเดือน
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   formatCurrency,
   parseAndFormat,
@@ -28,6 +28,7 @@ const CUSTOM_LABEL_FALLBACK = 'รายรับใหม่';
  * ตารางแก้ไขรายรับรายเดือน
  */
 export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, triggerSave }) {
+  const lastSaveTriggerRef = useRef(triggerSave);
   const [editIncome, setEditIncome] = useState({});
   const [incomeLabels, setIncomeLabels] = useState({});
   const [persistedKeys, setPersistedKeys] = useState([]);
@@ -243,9 +244,9 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, trigge
   };
 
   useEffect(() => {
-    if (triggerSave) {
-      handleSave();
-    }
+    if (triggerSave === lastSaveTriggerRef.current) return;
+    lastSaveTriggerRef.current = triggerSave;
+    if (triggerSave) handleSave();
   }, [triggerSave]);
 
   return (

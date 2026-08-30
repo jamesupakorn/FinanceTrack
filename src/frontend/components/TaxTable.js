@@ -7,7 +7,7 @@
  */
 
 // ...imports and component definition...
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { formatCurrency, handleNumberInput, handleNumberBlur, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { createDefault12MonthsObject, sumAccumulated, sumYearly, getSortedYears } from '../../shared/utils/taxUtils';
 import { taxAPI, salaryAPI } from '../../shared/utils/frontend/apiUtils';
@@ -18,6 +18,7 @@ import styles from '../styles/TaxTable.module.css';
  * ตารางภาษีรายปี
  */
 export default function TaxTable({ selectedMonth, triggerSave, salaryUpdateTrigger }) {
+  const lastSaveTriggerRef = useRef(triggerSave);
   const handleAmountInputFocus = (event) => {
     event.target.select();
   };
@@ -132,9 +133,9 @@ export default function TaxTable({ selectedMonth, triggerSave, salaryUpdateTrigg
   };
 
   useEffect(() => {
-    if (triggerSave) {
-      handleSave();
-    }
+    if (triggerSave === lastSaveTriggerRef.current) return;
+    lastSaveTriggerRef.current = triggerSave;
+    if (triggerSave) handleSave();
   }, [triggerSave]);
   // State for provident fund and its tax
   const [monthlyProvident, setMonthlyProvident] = useState({

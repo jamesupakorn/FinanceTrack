@@ -15,7 +15,7 @@
  * - selectedMonth {string} เดือนที่เลือก (YYYY-MM)
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   formatCurrency,
   parseToNumber,
@@ -38,6 +38,7 @@ import {
 } from '../../shared/utils/dateUtils';
 import BankAccountTable from './BankAccountTable';
 import { expenseAPI } from '../../shared/utils/frontend/apiUtils';
+import { withApiTokenHeaders } from '../../shared/utils/frontend/apiToken';
 import { useSession } from '../contexts/SessionContext';
 import { showToast } from '../../shared/utils/frontend/toast';
 import styles from '../styles/ExpenseTable.module.css';
@@ -131,6 +132,7 @@ const describeDueTiming = (dueDayValue, paid, monthKey) => {
 };
 
 export default function ExpenseTable({ selectedMonth, triggerSave }) {
+  const lastSaveTriggerRef = useRef(triggerSave);
   const [editExpense, setEditExpense] = useState({});
   const [bankAccounts, setBankAccounts] = useState([]);
   const [previousMonthTotal, setPreviousMonthTotal] = useState(null);
@@ -364,9 +366,10 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
       // อัปเดตบัญชีในโปรไฟล์ user (เพื่อให้เดือนหน้าใช้เป็นค่าเริ่มต้น)
       if (currentUser?.id) {
         try {
+          // ต้องแนบ Bearer token เพราะ endpoint นี้ผ่าน assertApiToken (เดียวกับ TD-H05)
           await fetch('/api/user-bank-accounts', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: withApiTokenHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ bankAccounts: normalizedAccounts, userId: currentUser.id })
           });
         } catch (error) {
@@ -394,9 +397,9 @@ export default function ExpenseTable({ selectedMonth, triggerSave }) {
   };
 
   useEffect(() => {
-    if (triggerSave) {
-      handleSave();
-    }
+    if (triggerSave === lastSaveTriggerRef.current) return;
+    lastSaveTriggerRef.current = triggerSave;
+    if (triggerSave) handleSave();
   }, [triggerSave]);
   const sortedExpenseKeys = useMemo(() => {
     const keys = Object.keys(editExpense || {});
