@@ -39,15 +39,15 @@
   gap: 12px;
   padding: 12px 16px;
   border-radius: 12px;
-  border: 1px solid rgba(235, 87, 87, 0.35);
-  background: rgba(235, 87, 87, 0.08);
+  border: 1px solid color-mix(in srgb, var(--danger-color) 35%, transparent);
+  background: color-mix(in srgb, var(--danger-color) 8%, transparent);
   color: var(--text-primary);
   font-size: 0.85rem;
 }
 
 .retryButton {
   flex-shrink: 0;
-  min-height: 36px;
+  min-height: 44px;
   padding: 6px 14px;
   border-radius: 999px;
   border: 1px solid var(--border-light);
@@ -130,7 +130,7 @@
 }
 
 .fieldInputError {
-  border-color: rgba(235, 87, 87, 0.7);
+  border-color: color-mix(in srgb, var(--danger-color) 70%, transparent);
 }
 
 .fieldSuffix {
@@ -148,7 +148,7 @@
 .fieldError {
   grid-column: 1 / -1;
   font-size: 0.78rem;
-  color: #ff9db6;
+  color: var(--danger-color);
 }
 
 /* ------------------------------------------------------------ summary line + actions */
