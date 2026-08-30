@@ -435,8 +435,10 @@
 
 .rowDeleteButton {
   border: none;
-  background: rgba(255, 122, 162, 0.18);
-  color: #ff7aa2;
+  background: color-mix(in srgb, var(--danger-color) 18%, transparent);
+  color: var(--danger-color);
+  min-height: 44px;
+  min-width: 44px;
   padding: 8px 12px;
   border-radius: 10px;
   font-weight: 600;
