@@ -35,9 +35,11 @@ function Avatar({ profile }) {
 export default function ProfileGalleryPage({ initialProfiles = [] }) {
   const router = useRouter();
   const { currentUser, isReady, selectUser, logout } = useSession();
+  // Demo ขึ้นก่อนเสมอ — เป็นทางเข้าไม่มีความเสี่ยง (ไม่ต้องรหัสผ่าน) ที่ผู้มาเยือนครั้งแรกควรเห็นก่อน
+  // บัญชีจริง ไม่ใช่หลังสุดที่ต้องเลื่อนผ่านทุกบัญชีก่อน (critique 2026-08-29 P2)
   const [profiles, setProfiles] = useState(() => [
-    ...initialProfiles.filter(profile => profile.id !== DEMO_PROFILE.id),
-    DEMO_PROFILE
+    DEMO_PROFILE,
+    ...initialProfiles.filter(profile => profile.id !== DEMO_PROFILE.id)
   ]);
   const [loading, setLoading] = useState(() => initialProfiles.length === 0);
   const [error, setError] = useState('');
@@ -64,7 +66,7 @@ export default function ProfileGalleryPage({ initialProfiles = [] }) {
         }
         const hasDemo = nextProfiles.some(user => user.id === DEMO_PROFILE.id);
         if (!hasDemo) {
-          nextProfiles.push(DEMO_PROFILE);
+          nextProfiles.unshift(DEMO_PROFILE);
         }
         setProfiles(nextProfiles);
       } catch (err) {
