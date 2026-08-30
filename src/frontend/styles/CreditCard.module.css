@@ -256,7 +256,7 @@
 }
 
 .upcomingOverdue {
-  border-left-color: #eb5757;
+  border-left-color: var(--danger-color);
 }
 
 .upcomingTopRow {
@@ -369,7 +369,7 @@
 }
 
 .utilFillDanger {
-  background: #eb5757;
+  background: var(--danger-color);
 }
 
 .utilText {

@@ -12,7 +12,7 @@
  * `/credit-cards?view=calendar` ยังคงรองรับเป็น legacy deep link ที่เปิดโมดัลนี้อัตโนมัติ (AC-69)
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import CreditCardDashboard from '../src/frontend/components/CreditCardDashboard';
 import CreditCardDetail from '../src/frontend/components/CreditCardDetail';
@@ -29,15 +29,48 @@ import { addMonths, PLAN_STATUS } from '../src/shared/utils/creditCardUtils';
 import styles from '../src/frontend/styles/CreditCard.module.css';
 import formStyles from '../src/frontend/styles/CreditCardForm.module.css';
 
-/** กล่องยืนยันสำหรับ action ที่ทำลายข้อมูล — action อื่นทั้งหมดใช้ toast */
+/** กล่องยืนยันสำหรับ action ที่ทำลายข้อมูล — action อื่นทั้งหมดใช้ toast
+ *  Tab-trap + focus-restore ตามแพทเทิร์นเดียวกับ InstallmentPlanForm/CreditCardForm (critique
+ *  2026-08-29 P2 — เดิมมีแค่ Escape listener คีย์บอร์ด/screen reader tab ออกไปหลังโมดัลได้) */
 function ConfirmDialog({ open, title, message, confirmLabel, onCancel, onConfirm, busy }) {
+  const dialogRef = useRef(null);
+  const confirmButtonRef = useRef(null);
+  const triggerRef = useRef(null);
+
   useEffect(() => {
     if (!open) return undefined;
-    const handleEsc = (event) => {
-      if (event.key === 'Escape') onCancel?.();
+    triggerRef.current = typeof document !== 'undefined' ? document.activeElement : null;
+    const timer = setTimeout(() => confirmButtonRef.current?.focus(), 40);
+    return () => clearTimeout(timer);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        onCancel?.();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = dialogRef.current.querySelectorAll(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
-    document.addEventListener('keydown', handleEsc);
-    return () => document.removeEventListener('keydown', handleEsc);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      triggerRef.current?.focus?.();
+    };
   }, [open, onCancel]);
 
   if (!open) return null;
@@ -46,7 +79,7 @@ function ConfirmDialog({ open, title, message, confirmLabel, onCancel, onConfirm
     <div className={formStyles.backdrop} role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onCancel?.();
     }}>
-      <div className={`${formStyles.modal} ${formStyles.modalNarrow}`} role="alertdialog" aria-modal="true" aria-label={title}>
+      <div ref={dialogRef} className={`${formStyles.modal} ${formStyles.modalNarrow}`} role="alertdialog" aria-modal="true" aria-label={title}>
         <div className={formStyles.modalHeader}>
           <h2 className={formStyles.modalTitle}>{title}</h2>
           <button type="button" className={formStyles.closeButton} onClick={onCancel} aria-label="ปิด">
@@ -58,7 +91,7 @@ function ConfirmDialog({ open, title, message, confirmLabel, onCancel, onConfirm
         </div>
         <div className={formStyles.modalFooter}>
           <button type="button" className={formStyles.secondaryButton} onClick={onCancel}>ยกเลิก</button>
-          <button type="button" className={formStyles.dangerButton} onClick={onConfirm} disabled={busy}>
+          <button type="button" ref={confirmButtonRef} className={formStyles.dangerButton} onClick={onConfirm} disabled={busy}>
             {busy ? 'กำลังดำเนินการ...' : (confirmLabel || 'ยืนยัน')}
           </button>
         </div>
