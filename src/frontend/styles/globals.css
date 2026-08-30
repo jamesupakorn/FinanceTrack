@@ -20,6 +20,11 @@
 
   --color-primary: #5d5bff;
   --primary-color: #5d5bff;
+  /* --color-primary lightened just enough to clear 4.5:1 (WCAG AA) as small/normal-weight text on
+     --bg-surface — verified 5.05:1 by computing actual luminance, not eyeballed (critique 2026-08-29
+     P1). --color-primary itself stays unchanged since it's mostly used as a background/large element
+     fill elsewhere, where the ratio is already fine; use this token specifically for text links. */
+  --color-primary-text: #7574ff;
   --secondary-color: #4df0c3;
   --danger-color: #ff7aa2;
   --warning-color: #facc6b;

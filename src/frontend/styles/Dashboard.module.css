@@ -421,7 +421,7 @@
   align-self: flex-start;
   min-height: 44px;
   padding: 0 4px;
-  color: var(--color-primary);
+  color: var(--color-primary-text, #7574ff);
   font-size: 0.85rem;
   font-weight: 600;
   text-decoration: none;
@@ -543,7 +543,7 @@
 .viewCalendarLink {
   border: none;
   background: none;
-  color: var(--color-primary);
+  color: var(--color-primary-text, #7574ff);
   font-weight: 600;
   cursor: pointer;
   text-decoration: underline;
