@@ -14,6 +14,10 @@ export default function BankAccountTable({ accountSummary, prevAccountSummary = 
   const safeAccounts = Array.isArray(accounts) ? accounts : [];
   const hasPrevData = Object.values(prevAccountSummary).some(v => parseToNumber(v) > 0);
 
+  // ใช้ key ที่ trim แล้วตอน lookup เพื่อให้ตรงกับ key ที่ getAccountSummary สร้างไว้
+  // (accounts/safeAccounts เก็บ string ดิบไว้เหมือนเดิม ไม่แตะ เพื่อไม่กระทบ rename UX)
+  const normalizeKey = (value) => String(value || '').trim();
+
   const handleRenameAccount = (index, value) => {
     if (typeof onChangeAccounts !== 'function') return;
     const next = [...safeAccounts];
@@ -45,8 +49,8 @@ export default function BankAccountTable({ accountSummary, prevAccountSummary = 
     onChangeAccounts([...safeAccounts, 'บัญชีใหม่']);
   };
 
-  const totalCurrent = safeAccounts.reduce((s, a) => s + parseToNumber(accountSummary?.[a]), 0);
-  const totalPrev = safeAccounts.reduce((s, a) => s + parseToNumber(prevAccountSummary?.[a]), 0);
+  const totalCurrent = safeAccounts.reduce((s, a) => s + parseToNumber(accountSummary?.[normalizeKey(a)]), 0);
+  const totalPrev = safeAccounts.reduce((s, a) => s + parseToNumber(prevAccountSummary?.[normalizeKey(a)]), 0);
   const totalAll = totalCurrent + totalPrev;
 
   return (
@@ -75,8 +79,8 @@ export default function BankAccountTable({ accountSummary, prevAccountSummary = 
           </thead>
           <tbody>
             {safeAccounts.map((account, index) => {
-              const current = parseToNumber(accountSummary?.[account]) || 0;
-              const prev = parseToNumber(prevAccountSummary?.[account]) || 0;
+              const current = parseToNumber(accountSummary?.[normalizeKey(account)]) || 0;
+              const prev = parseToNumber(prevAccountSummary?.[normalizeKey(account)]) || 0;
               const total = current + prev;
               return (
                 <tr key={`bank-account-row-${index}`} className={styles.tableRow}>
