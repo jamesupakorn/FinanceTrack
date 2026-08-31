@@ -152,6 +152,15 @@
   box-shadow: 0 10px 28px rgba(25, 73, 168, 0.35);
 }
 
+/* ปุ่มสร้าง/คัดลอกเดือนทั้งหมดถูก disable พร้อมกันระหว่างที่มีงานหนึ่งกำลังทำงาน (double-submit guard) */
+.addMonthBtn:disabled,
+.quickAddBtn:disabled,
+.customAddBtn:disabled {
+  cursor: wait;
+  opacity: 0.6;
+  transform: none;
+}
+
 .addMonthBtnMargin {
   margin-top: 0;
   margin-bottom: 0;
@@ -373,6 +382,31 @@
 
 .cancelBtn:active {
   background: rgba(255,255,255,0.22);
+}
+
+/* กล่องยืนยันเขียนทับ (copy-confirm) — ใช้ .formContent เป็นฐาน ไม่มีปุ่มปิดมุมบน จึงไม่ต้องเว้นที่ให้ */
+.copyConfirmContent h4 {
+  margin-top: 0;
+}
+
+.copyConfirmContent p {
+  color: rgba(255,255,255,0.72);
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.copyConfirmActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.copyConfirmActions .quickAddBtn,
+.copyConfirmActions .cancelBtn {
+  margin: 0;
 }
 
 /* Responsive Design */
@@ -608,5 +642,10 @@
 
   .monthActionButtons {
     gap: 10px;
+  }
+
+  /* ปุ่มยืนยัน 2 ปุ่มเรียงข้างกันแคบเกินบนจอเล็ก (ข้อความไทยตัดคำ) — ซ้อนแนวตั้งแทน */
+  .copyConfirmActions {
+    grid-template-columns: 1fr;
   }
 }

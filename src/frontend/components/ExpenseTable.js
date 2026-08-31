@@ -40,6 +40,7 @@ import {
 import { isCreditCardRowKey, isRevolvingRowKey } from '../../shared/utils/creditCardUtils';
 import BankAccountTable from './BankAccountTable';
 import { expenseAPI, creditCardAPI } from '../../shared/utils/frontend/apiUtils';
+import { withApiTokenHeaders } from '../../shared/utils/frontend/apiToken';
 import { useSession } from '../contexts/SessionContext';
 import { showToast } from '../../shared/utils/frontend/toast';
 import styles from '../styles/ExpenseTable.module.css';
@@ -398,7 +399,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved })
         try {
           await fetch('/api/user-bank-accounts', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: withApiTokenHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ bankAccounts: normalizedAccounts, userId: currentUser.id })
           });
         } catch (error) {

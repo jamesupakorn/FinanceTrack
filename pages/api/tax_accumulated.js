@@ -99,19 +99,7 @@ export default async function handler(req, res) {
 	if (req.method === 'GET') {
 		const { year } = req.query;
 		if (year) {
-			let doc = await collection.findOne({ year, ...userFilter });
-			if (!doc) {
-				const legacyDoc = await collection.findOne({ year, userId: { $exists: false } });
-				if (legacyDoc) {
-					const { _id, userId: legacyUser, ...rest } = legacyDoc;
-					await collection.updateOne(
-						{ year, ...userFilter },
-						{ $set: { ...rest, year, ...userFilter } },
-						{ upsert: true }
-					);
-					doc = { ...rest, year, ...userFilter };
-				}
-			}
+			const doc = await collection.findOne({ year, ...userFilter });
 			if (!doc) {
 				return res.status(200).json({ [year]: { accumulated_tax: 0, monthly_tax: {}, monthly_income: {}, monthly_provident: {} } });
 			}
@@ -120,10 +108,7 @@ export default async function handler(req, res) {
 			delete sanitized.userId;
 			return res.status(200).json({ [year]: sanitized });
 		}
-		let allDocs = await collection.find({ ...userFilter }).toArray();
-		if (!allDocs.length) {
-			allDocs = await collection.find({ userId: { $exists: false } }).toArray();
-		}
+		const allDocs = await collection.find({ ...userFilter }).toArray();
 		const data = { tax_by_year: {} };
 		allDocs.forEach(doc => {
 			const sanitized = ensureMonthlyProvident({ ...doc });
@@ -186,13 +171,7 @@ async function mutateTaxYear(userId, year, mutator) {
 	const filter = { year, ...userFilter };
 	let data = await collection.findOne(filter);
 	if (!data) {
-		const legacyDoc = await collection.findOne({ year, userId: { $exists: false } });
-		if (legacyDoc) {
-			const { _id, userId: legacyUser, ...rest } = legacyDoc;
-			data = { ...rest, year, ...userFilter };
-		} else {
-			data = buildDefaultYearDoc(year);
-		}
+		data = buildDefaultYearDoc(year);
 	}
 	mutator(data);
 	const { _id, ...payload } = data;

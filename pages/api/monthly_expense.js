@@ -220,17 +220,6 @@ export default async function handler(req, res) {
         let doc;
         try {
           doc = await collection.findOne({ month, ...userFilter });
-          if (!doc) {
-            doc = await collection.findOne({ month, userId: { $exists: false } });
-            if (doc) {
-              try {
-                await collection.updateOne({ _id: doc._id }, { $set: { userId } });
-              } catch (err) {
-                console.error('Failed to claim legacy doc for user', userId, month, err);
-                // Non-fatal — the read below still succeeds with the (now stale) unscoped copy this request.
-              }
-            }
-          }
         } catch (err) {
           console.error('Error fetching doc for month:', month, err);
           return res.status(500).json({ error: 'Database query error' });
@@ -289,17 +278,7 @@ export default async function handler(req, res) {
           return res.status(500).json({ error: 'Error serializing response' });
         }
       } else {
-        let allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
-        if (!allDocs.length) {
-          allDocs = await collection.find({ userId: { $exists: false }, month: { $exists: true } }).toArray();
-          if (allDocs.length) {
-            try {
-              await Promise.all(allDocs.map(d => collection.updateOne({ _id: d._id }, { $set: { userId } })));
-            } catch (err) {
-              console.error('Failed to claim legacy docs for user', userId, err);
-            }
-          }
-        }
+        const allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
         const withTotals = {};
         allDocs.forEach(doc => {
           // ข้าม document ที่เป็น metadata หรือโครงสร้างไม่ถูกต้อง

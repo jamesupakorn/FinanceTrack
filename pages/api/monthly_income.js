@@ -186,11 +186,11 @@ export default async function handler(req, res) {
     if (month) {
       let doc = await collection.findOne({ month, ...userFilter });
       if (!doc) {
-        const monthsDoc = await collection.findOne({ obj: 'months', ...userFilter })
-          || await collection.findOne({ obj: 'months', userId: { $exists: false } });
+        const monthsDoc = await collection.findOne({ obj: 'months', ...userFilter });
         if (monthsDoc && monthsDoc.months && monthsDoc.months[month]) {
           doc = { month, ...monthsDoc.months[month] };
-          // เอกสาร monthsDoc เก็บหลายเดือนรวมกัน — ทำสำเนาเฉพาะเดือนนี้ให้ผู้ใช้คนนี้ ไม่แก้เอกสารเดิม (ป้องกันแย่งเดือนอื่นของผู้ใช้อื่น)
+          // เอกสาร monthsDoc (ของผู้ใช้คนนี้เอง) เก็บหลายเดือนรวมกัน — ทำสำเนาเฉพาะเดือนนี้ออกมาเป็น doc เดี่ยว
+          // ไม่แก้เอกสารเดิม เพราะเดือนอื่นในเอกสารเดียวกันยังต้องอ่านได้ตามปกติ
           try {
             const { _id, userId: _legacyUserId, ...rest } = doc;
             await collection.updateOne(
@@ -200,16 +200,6 @@ export default async function handler(req, res) {
             );
           } catch (err) {
             console.error('Failed to materialize legacy monthsDoc entry for user', userId, month, err);
-          }
-        }
-        if (!doc) {
-          doc = await collection.findOne({ month, userId: { $exists: false } });
-          if (doc) {
-            try {
-              await collection.updateOne({ _id: doc._id }, { $set: { userId } });
-            } catch (err) {
-              console.error('Failed to claim legacy doc for user', userId, month, err);
-            }
           }
         }
       }
@@ -232,17 +222,7 @@ export default async function handler(req, res) {
       };
       return res.status(200).json(response);
     } else {
-      let allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
-      if (!allDocs.length) {
-        allDocs = await collection.find({ userId: { $exists: false }, month: { $exists: true } }).toArray();
-        if (allDocs.length) {
-          try {
-            await Promise.all(allDocs.map(d => collection.updateOne({ _id: d._id }, { $set: { userId } })));
-          } catch (err) {
-            console.error('Failed to claim legacy docs for user', userId, err);
-          }
-        }
-      }
+      const allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
       const data = {};
       allDocs.forEach(doc => {
         const monthData = { ...doc };
@@ -261,14 +241,13 @@ export default async function handler(req, res) {
           รวม
         };
       });
-      const monthsDoc = await collection.findOne({ obj: 'months', ...userFilter })
-        || await collection.findOne({ obj: 'months', userId: { $exists: false } });
+      const monthsDoc = await collection.findOne({ obj: 'months', ...userFilter });
       if (monthsDoc && monthsDoc.months) {
         for (const [m, values] of Object.entries(monthsDoc.months)) {
           if (!data[m]) {
             data[m] = { month: m, ...values };
             data[m].รวม = sumValues(values, ['รวม']);
-            // ทำสำเนาเฉพาะเดือนนี้ให้ผู้ใช้คนนี้ ไม่แก้เอกสาร monthsDoc เดิม (เดือนอื่นในเอกสารเดียวกันยังให้ผู้ใช้อื่น claim ได้)
+            // ทำสำเนาเฉพาะเดือนนี้ออกมาเป็น doc เดี่ยว ไม่แก้เอกสาร monthsDoc เดิมของผู้ใช้คนนี้
             try {
               await collection.updateOne(
                 { month: m, ...userFilter },
