@@ -1,8 +1,33 @@
-@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* Global Styles - FinanceTrack */
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   LEGACY BRIDGE — "midnight glass" palette, retired by the Graphite redesign (UX_SPEC §3.0) but
+   kept here verbatim on purpose.
 
-/* Midnight glass palette */
+   Why this block still exists: 21 `*.module.css` files not yet migrated to Tailwind read these
+   exact custom-property names (492 references total, confirmed by grep during the Foundation
+   pass's architecture review — e.g. `var(--danger-color)`, `var(--border-color)`,
+   `var(--color-primary)`, `var(--shadow-md)`). Deleting this block today would resolve every one
+   of those `var()` calls to an invalid value on every page not yet redesigned — every delete
+   button, error state, input border and primary-action fill outside the current pass would lose
+   its colour immediately, weeks before that page's own migration pass is even scheduled
+   (`spec.md` E14: "a page migrated to Tailwind sitting next to a page still on CSS Modules — both
+   must render correctly during the transition").
+
+   Deletion plan: this is a temporary bridge, not a permanent second palette. Each per-page pass
+   deletes the handful of entries here it was the last consumer of, the same incremental discipline
+   ADR-019 rule 5 already uses for `*.module.css` files themselves. When no `*.module.css` file
+   references any name below, delete this whole block.
+
+   Note — `--text-primary` / `--text-secondary` exist under this same name in the NEW token block
+   below with different hex values (this block: near-white/near-lavender; new block: neutral
+   graphite grey). The new block is declared after this one, so it wins by CSS cascade order for
+   any element that reads `var(--text-primary)` — intentional, not a bug. Both are visually close
+   enough (near-white on dark) that no unmigrated page reads as broken; see
+   `architecture-review-foundation.md`'s Validation section for the full reasoning.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
 :root {
   --bg-color: #03081a;
   --bg-primary: #03081a;
@@ -40,6 +65,106 @@
   --shadow-strong: rgba(2, 6, 23, 0.72);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   GRAPHITE DESIGN TOKENS — UX_SPEC-full-redesign-2026-08.md §3, verbatim.
+   This is the redesign's actual palette/scale. It is the single source of truth for every
+   Tailwind-migrated surface; `tailwind.config.js` implements the colour/spacing/radius/font-family
+   subset of this same list. These CSS custom properties exist for contexts Tailwind's utility
+   classes cannot reach directly — inline styles, SVG fill/stroke, chart libraries, and anything
+   else that isn't a `className`.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* ── §3.1 Colour — Surfaces (opaque, never rgba over a gradient) ── */
+  --bg-canvas: #0A0A0B;
+  --bg-sunken: #08080A;
+  --surface-1: #121214;
+  --surface-2: #1A1A1D;
+  --surface-3: #232327;
+
+  /* ── §3.1 Colour — Text. --text-tertiary is the dimmest text permitted anywhere (5.47:1) —
+     there is no fourth, dimmer level. This block's --text-primary/--text-secondary override the
+     legacy bridge's same-named tokens above (later wins by source order — see the note above). ── */
+  --text-primary: #F4F4F5;
+  --text-secondary: #A1A1AA;
+  --text-tertiary: #8A8A93;
+  --text-on-accent: #0A0A0B;
+
+  /* ── §3.1 Colour — Accent. Single brand accent, ≤10% of surface area (ADR-006 Decision 1). ── */
+  --accent: #D4A857;
+  --accent-muted: rgba(212, 168, 87, 0.14);
+
+  /* ── §3.1 Colour — Money semantics. Independent of --accent, so an accent-hue swap never
+     changes what a number means. ── */
+  --pos: #4ADE80;
+  --neg: #F87171;
+  --warn: #FBBF24;
+  --info: #7FB4E8;
+
+  /* ── §3.1 Colour — Structure. --border-subtle/--border-default are decorative only (below the
+     3:1 WCAG 1.4.11 floor); --border-interactive is mandatory on every input/select/checkbox/radio
+     and unfilled button boundary. ── */
+  --border-subtle: #232327;
+  --border-default: #2E2E33;
+  --border-interactive: #6E6E78;
+
+  /* ── §3.2 Typography — family. Self-hosted via next/font (pages/_app.js); the `variable` option
+     there sets these same two custom-property names, scoped to the app's root wrapper, so they
+     resolve to the real self-hosted font inside the app shell and fall back to this literal stack
+     everywhere else (e.g. before that wrapper renders, or in a context outside it). ── */
+  --font-sans: 'Anuphan', 'IBM Plex Sans Thai', 'Noto Sans Thai', -apple-system,
+    BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-numeric: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ── §3.2 Typography — scale. One scale, mobile-first, no per-breakpoint redefinition (Goal 2).
+     The three display sizes are fluid via clamp(); everything else is fixed. Line-height/weight
+     per token (not expressible as a single CSS value) — xs:1.5/500, sm:1.55/400-500, base:1.6/400,
+     lg:1.5/500, xl:1.4/600, 2xl:1.3/600, 3xl:1.2/700. --text-base is the mandatory minimum for
+     every <input> (prevents iOS focus zoom, K7). No size below 12px, no line-height below 1.4,
+     anywhere (Thai diacritic legibility, N6). ── */
+  --text-xs: 0.75rem;   /* 12px */
+  --text-sm: 0.875rem;  /* 14px */
+  --text-base: 1rem;    /* 16px */
+  --text-lg: 1.125rem;  /* 18px */
+  --text-xl: 1.375rem;  /* 22px */
+  --text-2xl: clamp(1.625rem, 1.4rem + 1.1vw, 2rem);     /* 26px → 32px */
+  --text-3xl: clamp(2rem, 1.6rem + 2vw, 2.75rem);        /* 32px → 44px */
+
+  /* ── §3.3 Spacing — 4px base, 8 deliberately non-linear steps. No spacing token is redefined at
+     any breakpoint; page gutters instead scale continuously via clamp(). ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --gutter: clamp(1rem, 0.5rem + 2vw, 2rem);  /* 16px @ 375 → 32px @ 1024+ */
+  --gap-card: var(--space-4);                  /* between cards, all viewports */
+  --max-content: 1200px;                       /* a max-width cap — not a breakpoint */
+
+  /* ── §3.4 Radius. 24px is retired — at this surface scale it read as soft rather than precise. ── */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* ── §3.5 Elevation. Depth is primarily the surface step (--surface-1 → -2 → -3); shadow is
+     secondary and always neutral black — no coloured shadow, no glow, no backdrop-filter. ── */
+  --elev-0: none;
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --elev-2: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --elev-3: 0 16px 40px rgba(0, 0, 0, 0.55);
+
+  /* ── §3.6 Motion. No overshoot/bounce easing (ADR-006 Decision 2). Transition opacity/transform
+     only — never height/width/top/left. ── */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 280ms;
+}
+
 /* Global Reset */
 * {
   margin: 0;
@@ -49,343 +174,44 @@
 
 /* Body และ HTML */
 html, body {
-  font-family: 'Prompt', 'Sarabun', 'Noto Sans Thai', 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
   line-height: 1.6;
   scroll-behavior: smooth;
   overflow-x: hidden;
 }
 
 body {
-  background-color: var(--bg-primary);
-  background-image: radial-gradient(circle at 20% 20%, rgba(25, 53, 121, 0.35), transparent 55%),
-    radial-gradient(circle at 80% 0%, rgba(0, 212, 255, 0.18), transparent 45%),
-    radial-gradient(circle at 50% 100%, rgba(93, 91, 255, 0.25), transparent 55%),
-    linear-gradient(160deg, #050913 0%, #03081a 55%, #020510 100%);
+  /* Flat, opaque canvas — no gradient, no image, no background-attachment (UX_SPEC §3.0/§3.5:
+     the "midnight glass" radial-gradient wash and background-attachment: fixed are retired in
+     full). Still-unmigrated pages keep their own look via the legacy bridge block above; this is
+     just the page canvas underneath them. */
+  background-color: var(--bg-canvas);
   color: var(--text-primary);
   min-height: 100vh;
   transition: background-color 0.3s ease, color 0.3s ease;
-  background-attachment: fixed;
 }
 
-/* Animation */
+/* Animation — still consumed by Home.module.css (`.fadeIn` / entry transitions) */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Responsive Design System */
-/* Desktop First - Base styles */
-:root {
-  /* Typography Scale */
-  --font-size-xs: 0.75rem;    /* 12px */
-  --font-size-sm: 0.875rem;   /* 14px */
-  --font-size-base: 1rem;     /* 16px */
-  --font-size-lg: 1.125rem;   /* 18px */
-  --font-size-xl: 1.25rem;    /* 20px */
-  --font-size-2xl: 1.5rem;    /* 24px */
-  --font-size-3xl: 1.875rem;  /* 30px */
-  --font-size-4xl: 2.25rem;   /* 36px */
-  
-  /* Spacing Scale */
-  --space-1: 0.25rem;   /* 4px */
-  --space-2: 0.5rem;    /* 8px */
-  --space-3: 0.75rem;   /* 12px */
-  --space-4: 1rem;      /* 16px */
-  --space-5: 1.25rem;   /* 20px */
-  --space-6: 1.5rem;    /* 24px */
-  --space-8: 2rem;      /* 32px */
-  --space-10: 2.5rem;   /* 40px */
-  --space-12: 3rem;     /* 48px */
-  --space-16: 4rem;     /* 64px */
-  --space-20: 5rem;     /* 80px */
-  
-  /* Border Radius Scale */
-  --radius-sm: 0.25rem;   /* 4px */
-  --radius-md: 0.5rem;    /* 8px */
-  --radius-lg: 0.75rem;   /* 12px */
-  --radius-xl: 1rem;      /* 16px */
-  --radius-2xl: 1.5rem;   /* 24px */
-}
-
-/* Large Desktops (1280px+) */
-@media (min-width: 1280px) {
-  :root {
-    --font-size-base: 1.125rem;  /* 18px */
-    --font-size-lg: 1.25rem;     /* 20px */
-    --font-size-xl: 1.375rem;    /* 22px */
-    --font-size-2xl: 1.625rem;   /* 26px */
-    --font-size-3xl: 2rem;       /* 32px */
-    --font-size-4xl: 2.5rem;     /* 40px */
-  }
-}
-
-/* Large Tablets (1024px) */
-@media (max-width: 1024px) {
-  :root {
-    --font-size-3xl: 1.75rem;   /* 28px */
-    --font-size-4xl: 2rem;      /* 32px */
-    --space-10: 2rem;           /* 32px */
-    --space-12: 2.5rem;         /* 40px */
-    --space-16: 3rem;           /* 48px */
-    --space-20: 4rem;           /* 64px */
-  }
-}
-
-/* Tablets (768px) */
-@media (max-width: 768px) {
-  :root {
-    --font-size-lg: 1rem;       /* 16px */
-    --font-size-xl: 1.125rem;   /* 18px */
-    --font-size-2xl: 1.375rem;  /* 22px */
-    --font-size-3xl: 1.5rem;    /* 24px */
-    --font-size-4xl: 1.75rem;   /* 28px */
-    --space-8: 1.5rem;          /* 24px */
-    --space-10: 1.75rem;        /* 28px */
-    --space-12: 2rem;           /* 32px */
-    --space-16: 2.5rem;         /* 40px */
-    --space-20: 3rem;           /* 48px */
-  }
-
-  h1 { font-size: var(--font-size-4xl); }
-  h2 { font-size: var(--font-size-3xl); }
-  h3 { font-size: var(--font-size-2xl); }
-  h4 { font-size: var(--font-size-xl); }
-  h5 { font-size: var(--font-size-lg); }
-  h6 { font-size: var(--font-size-base); }
-}
-
-/* Mobile Large (640px) */
-@media (max-width: 640px) {
-  :root {
-    --font-size-2xl: 1.25rem;   /* 20px */
-    --font-size-3xl: 1.375rem;  /* 22px */
-    --font-size-4xl: 1.5rem;    /* 24px */
-    --space-6: 1.25rem;         /* 20px */
-    --space-8: 1.25rem;         /* 20px */
-    --space-10: 1.5rem;         /* 24px */
-    --space-12: 1.75rem;        /* 28px */
-    --space-16: 2rem;           /* 32px */
-    --space-20: 2.5rem;         /* 40px */
-  }
-}
-
-/* Mobile iPhone 15 (390px) - Specific optimization */
-@media (max-width: 420px) and (min-width: 375px) {
-  :root {
-    --font-size-sm: 0.8rem;     /* 12.8px */
-    --font-size-base: 0.9rem;   /* 14.4px */
-    --font-size-lg: 0.95rem;    /* 15.2px */
-    --font-size-xl: 1rem;       /* 16px */
-    --font-size-2xl: 1.125rem;  /* 18px */
-    --font-size-3xl: 1.25rem;   /* 20px */
-    --font-size-4xl: 1.35rem;   /* 21.6px */
-    --space-5: 0.875rem;        /* 14px */
-    --space-6: 1rem;            /* 16px */
-    --space-8: 1rem;            /* 16px */
-    --space-10: 1.125rem;       /* 18px */
-    --space-12: 1.375rem;       /* 22px */
-    --space-16: 1.625rem;       /* 26px */
-    --space-20: 1.875rem;       /* 30px */
-  }
-  
-  body {
-    font-size: 14px;
-  }
-}
-
-/* Mobile Portrait (480px) */
-@media (max-width: 480px) {
-  :root {
-    --font-size-sm: 0.8rem;     /* 12.8px */
-    --font-size-base: 0.9rem;   /* 14.4px */
-    --font-size-lg: 0.95rem;    /* 15.2px */
-    --font-size-xl: 1rem;       /* 16px */
-    --font-size-2xl: 1.125rem;  /* 18px */
-    --font-size-3xl: 1.25rem;   /* 20px */
-    --font-size-4xl: 1.375rem;  /* 22px */
-    --space-5: 1rem;            /* 16px */
-    --space-6: 1rem;            /* 16px */
-    --space-8: 1rem;            /* 16px */
-    --space-10: 1.25rem;        /* 20px */
-    --space-12: 1.5rem;         /* 24px */
-    --space-16: 1.75rem;        /* 28px */
-    --space-20: 2rem;           /* 32px */
-  }
-
-  h1 { font-size: var(--font-size-4xl); line-height: 1.2; }
-  h2 { font-size: var(--font-size-3xl); line-height: 1.3; }
-  h3 { font-size: var(--font-size-2xl); line-height: 1.3; }
-  h4 { font-size: var(--font-size-xl); line-height: 1.4; }
-  h5 { font-size: var(--font-size-lg); line-height: 1.4; }
-  h6 { font-size: var(--font-size-base); line-height: 1.4; }
-}
-
-/* Mobile Small (375px) */
-@media (max-width: 375px) {
-  :root {
-    --font-size-xs: 0.7rem;     /* 11.2px */
-    --font-size-sm: 0.75rem;    /* 12px */
-    --font-size-base: 0.85rem;  /* 13.6px */
-    --font-size-lg: 0.9rem;     /* 14.4px */
-    --font-size-xl: 0.95rem;    /* 15.2px */
-    --font-size-2xl: 1rem;      /* 16px */
-    --font-size-3xl: 1.125rem;  /* 18px */
-    --font-size-4xl: 1.25rem;   /* 20px */
-  }
-
-  h1, h2, h3, h4, h5, h6 {
-    line-height: 1.2;
-    margin-bottom: var(--space-2);
-  }
-}
-
-/* Touch Target Optimization for Mobile */
+/* Touch Target Optimization for Mobile — kept: protects K1/K7 (44px targets, 16px inputs) on the
+   21 still-CSS-Modules pages, which don't yet express this via Tailwind utilities of their own. */
 @media (max-width: 768px) {
   button, input[type="button"], input[type="submit"] {
     min-height: 44px;
     min-width: 44px;
   }
-  
+
   select {
     min-height: 40px;
   }
-  
+
   input[type="text"], input[type="number"], input[type="email"], textarea {
     min-height: 40px;
     font-size: 16px; /* Prevents zoom on iOS */
-  }
-}
-
-/* Debug Helper - แสดงขนาดหน้าจอปัจจุบัน (เฉพาะ development) */
-@media (max-width: 375px) {
-  body::before {
-    /* content: "📱 Mobile Small (≤375px)"; */
-    position: fixed;
-    top: 0;
-    right: 0;
-    background: rgba(239, 68, 68, 0.9);
-    color: white;
-    padding: 4px 8px;
-    font-size: 11px;
-    font-weight: bold;
-    z-index: 9999;
-    border-radius: 0 0 0 4px;
-  }
-}
-
-@media (min-width: 376px) and (max-width: 480px) {
-  body::before {
-    /* content: "📱 Mobile (376px-480px)"; */
-    position: fixed;
-    top: 0;
-    right: 0;
-    background: rgba(245, 101, 101, 0.9);
-    color: white;
-    padding: 4px 8px;
-    font-size: 11px;
-    font-weight: bold;
-    z-index: 9999;
-    border-radius: 0 0 0 4px;
-  }
-}
-
-@media (min-width: 481px) and (max-width: 640px) {
-  body::before {
-    /* content: "📱 Mobile Large (481px-640px)"; */
-    position: fixed;
-    top: 0;
-    right: 0;
-    background: rgba(251, 146, 60, 0.9);
-    color: white;
-    padding: 4px 8px;
-    font-size: 11px;
-    font-weight: bold;
-    z-index: 9999;
-    border-radius: 0 0 0 4px;
-  }
-}
-
-@media (min-width: 641px) and (max-width: 768px) {
-  body::before {
-    /* content: "📱 Tablet Portrait (641px-768px)"; */
-    position: fixed;
-    top: 0;
-    right: 0;
-    background: rgba(250, 204, 21, 0.9);
-    color: black;
-    padding: 4px 8px;
-    font-size: 11px;
-    font-weight: bold;
-    z-index: 9999;
-    border-radius: 0 0 0 4px;
-  }
-}
-
-@media (min-width: 769px) and (max-width: 1024px) {
-  body::before {
-    /* content: "💻 Tablet Landscape (769px-1024px)"; */
-    position: fixed;
-    top: 0;
-    right: 0;
-    background: rgba(132, 204, 22, 0.9);
-    color: white;
-    padding: 4px 8px;
-    font-size: 11px;
-    font-weight: bold;
-    z-index: 9999;
-    border-radius: 0 0 0 4px;
-  }
-}
-
-@media (min-width: 1025px) and (max-width: 1280px) {
-  body::before {
-    /* content: "🖥️ Desktop (1025px-1280px)"; */
-    position: fixed;
-    top: 0;
-    right: 0;
-    background: rgba(59, 130, 246, 0.9);
-    color: white;
-    padding: 4px 8px;
-    font-size: 11px;
-    font-weight: bold;
-    z-index: 9999;
-    border-radius: 0 0 0 4px;
-  }
-}
-
-@media (min-width: 1281px) {
-  body::before {
-    /* content: "🖥️ Desktop Large (≥1281px)"; */
-    position: fixed;
-    top: 0;
-    right: 0;
-    background: rgba(79, 70, 229, 0.9);
-    color: white;
-    padding: 4px 8px;
-    font-size: 11px;
-    font-weight: bold;
-    z-index: 9999;
-    border-radius: 0 0 0 4px;
-  }
-}
-
-/* Mobile UX baseline override */
-@media (max-width: 768px) {
-  body {
-    background-attachment: scroll;
-  }
-
-}
-
-@media (max-width: 480px) {
-  :root {
-    --font-size-sm: 0.875rem;
-    --font-size-base: 1rem;
-    --font-size-lg: 1.0625rem;
-  }
-
-  body {
-    font-size: 16px;
   }
 }
 
