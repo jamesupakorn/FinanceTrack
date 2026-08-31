@@ -160,18 +160,6 @@ export default async function handler(req, res) {
 			if (month) {
 				let doc = await collection.findOne({ month, ...userFilter });
 				if (!doc) {
-					const legacyDoc = await collection.findOne({ month, userId: { $exists: false } });
-					if (legacyDoc) {
-						const { _id, userId: legacyUser, ...rest } = legacyDoc;
-						await collection.updateOne(
-							{ month, ...userFilter },
-							{ $set: { ...rest, month, ...userFilter } },
-							{ upsert: true }
-						);
-						doc = { ...rest, month, ...userFilter };
-					}
-				}
-				if (!doc) {
 					// เดินย้อนกลับจนเจอเดือนที่มีข้อมูลจริง ข้ามเดือนว่าง (blank record) ไป
 					// จำนวน doc ถูกจำกัดด้วยเพดาน 15 เดือนต่อ user (BR-002) จึงดึงมาทั้งหมดแล้วกรองใน JS ได้อย่างปลอดภัย
 					const priorDocs = await collection
@@ -205,10 +193,7 @@ export default async function handler(req, res) {
 				});
 			} else {
 			// return all
-			let allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
-			if (!allDocs.length) {
-				allDocs = await collection.find({ userId: { $exists: false }, month: { $exists: true } }).toArray();
-			}
+			const allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
 			const allData = {};
 			allDocs.forEach(doc => {
 				// Ensure summary is present

@@ -69,31 +69,11 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     const { month } = req.query;
     if (month) {
-      let doc = await collection.findOne({ month, ...userFilter });
-      if (!doc) {
-        doc = await collection.findOne({ month, userId: { $exists: false } });
-        if (doc) {
-          try {
-            await collection.updateOne({ _id: doc._id }, { $set: { userId } });
-          } catch (err) {
-            console.error('Failed to claim legacy doc for user', userId, month, err);
-          }
-        }
-      }
+      const doc = await collection.findOne({ month, ...userFilter });
       return res.status(200).json(mapInvestmentDoc(doc));
     } else {
       // ดึงข้อมูลทุกเดือน
-      let allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
-      if (!allDocs.length) {
-        allDocs = await collection.find({ userId: { $exists: false }, month: { $exists: true } }).toArray();
-        if (allDocs.length) {
-          try {
-            await Promise.all(allDocs.map(d => collection.updateOne({ _id: d._id }, { $set: { userId } })));
-          } catch (err) {
-            console.error('Failed to claim legacy docs for user', userId, err);
-          }
-        }
-      }
+      const allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
       const data = {};
       allDocs.forEach(doc => {
         data[doc.month] = mapInvestmentDoc(doc);
