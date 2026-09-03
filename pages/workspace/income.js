@@ -54,12 +54,13 @@ export default function WorkspaceIncomePage() {
         />
       )}
     >
-      {({ selectedMonth, refreshTrigger, registerSave, markClean, guard }) => (
+      {({ selectedMonth, refreshTrigger, registerSave, markClean, markDirty, guard }) => (
         <IncomeTable
           selectedMonth={selectedMonth}
           salaryUpdateTrigger={salaryUpdateTrigger}
           onRegisterSave={registerSave}
           onSaved={markClean}
+          markDirty={markDirty}
           onOpenSalaryModal={() => guard(() => setSalaryModalOpen(true), SALARY_MODAL_GUARD_COPY)}
           key={`income-${refreshTrigger}`}
         />
