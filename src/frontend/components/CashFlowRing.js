@@ -8,11 +8,15 @@
  * legend เป็นส่วนหนึ่งของคอมโพเนนต์นี้ (ring + legend อยู่ด้วยกันเสมอตาม §2 ของ spec)
  * ปุ่ม legend 4 แถว (รายจ่ายทั่วไป/รายจ่ายประจำวัน/เงินออม/บัตรเครดิต) เป็นตัวกรองรายการ "ครบกำหนด"
  * แถวรายรับเป็นแค่ตัวบอก ไม่ใช่ปุ่ม (มันคือฐาน 100% ของกราฟเอง)
+ *
+ * Graphite redesign (Dashboard pass) — Tailwind only, no *.module.css. ใช้ร่วมกับ /reports
+ * (SummaryReport.js, interactive=false) ดังนั้น container-query fix ของ BUG-A2-1 (legend ล้นทับกัน
+ * เมื่อ .ringSection ถูกวางในคอนเทนเนอร์แคบ) ต้องอยู่รอดการย้าย — ทำผ่าน Tailwind v3.4 arbitrary-
+ * property/variant syntax (container-type/@container) แทน @media เดิม ไม่เพิ่ม dependency ใหม่
+ * (architecture-review-dashboard-graphite.md Finding 2)
  */
 
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
-import styles from '../styles/Dashboard.module.css';
-import cardStyles from '../styles/CreditCard.module.css';
 
 const RADIUS_OUTER = 104;
 const RADIUS_INNER = 84;
@@ -20,12 +24,19 @@ const STROKE_INNER = 26;
 const GAP_PX = 2;
 const MIN_ARC_RATIO = 0.015; // เสี้ยวที่มียอด > 0 วาดอย่างน้อย 1.5% เสมอ ไม่งั้นมองไม่เห็นเลย (ADR-015)
 
+// สี segment = money semantics ใหม่ (UX_SPEC §3.1) — ไม่ผูกกับ accent จึงเปลี่ยน accent hue แล้วความหมาย
+// ตัวเลขไม่เปลี่ยน แถวเป็น <circle stroke=...>/<text fill=...> ที่ className ไปไม่ถึง จึงยังอ่านจาก
+// var(--neg)/var(--warn)/var(--pos)/var(--info) ที่ globals.css ประกาศไว้ (ตรงกับที่ architecture review
+// Finding 2 note ไว้ว่า SVG stroke/fill ต้องคง var() ไว้ แค่ชี้ไป token ใหม่)
 const SEGMENT_DEFS = [
-  { id: 'generalExpense', label: 'รายจ่ายทั่วไป', ratioKey: 'generalExpense', color: 'var(--danger-color)' },
-  { id: 'dailyExpense', label: 'รายจ่ายประจำวัน', ratioKey: 'dailyExpense', color: 'var(--warning-color)' },
-  { id: 'savings', label: 'เงินออม', ratioKey: 'savings', color: 'var(--secondary-color)' },
-  { id: 'creditCard', label: 'บัตรเครดิต', ratioKey: 'creditCard', color: 'var(--info-color)' }
+  { id: 'generalExpense', label: 'รายจ่ายทั่วไป', ratioKey: 'generalExpense', color: 'var(--neg)' },
+  { id: 'dailyExpense', label: 'รายจ่ายประจำวัน', ratioKey: 'dailyExpense', color: 'var(--warn)' },
+  { id: 'savings', label: 'เงินออม', ratioKey: 'savings', color: 'var(--pos)' },
+  { id: 'creditCard', label: 'บัตรเครดิต', ratioKey: 'creditCard', color: 'var(--info)' }
 ];
+
+// ปุ่ม/แถว legend ที่โต้ตอบได้ทั้งหมดใช้กติกาเดียวกัน: 44px ขั้นต่ำ (K1) + focus ring ชัดเจน (K4/N1 §3.1 Focus)
+const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 
 function sanitizeNumber(value) {
   const num = Number(value);
@@ -33,15 +44,30 @@ function sanitizeNumber(value) {
   return num === 0 ? 0 : num;
 }
 
+// แถว legend หนึ่งแถว — ใช้ทั้งกับ <div> (interactive=false, /reports) และ <button> (interactive=true, /)
+// รูปแบบ C4 (§5 component vocabulary): ชื่อซ้าย + จำนวนเงิน/เปอร์เซ็นต์ขวา, tabular-nums เสมอ (N3)
+// container query (BUG-A2-1): เมื่อ .ringSection แคบ ≤330px (เช่น /reports .chartsSection) ห่อบรรทัดแทนทับกัน
+const LEGEND_ROW_BASE =
+  'flex min-h-14 items-center gap-space-3 rounded-sm border-l-2 border-transparent px-space-2 py-space-2 ' +
+  'text-sm text-primary [@container(max-width:330px)]:flex-wrap [@container(max-width:330px)]:gap-y-1';
+
 export default function CashFlowRing({ model, selected, onSelect, monthLabel, interactive = true }) {
   if (!model || !model.hasIncome) {
     return (
-      <section className={styles.ringSection} aria-label="โครงสร้างกระแสเงินสดเดือนนี้">
-        <h2 className={styles.sectionTitle}>โครงสร้างกระแสเงินสดเดือนนี้</h2>
-        <div className={styles.ringEmpty}>
+      <section
+        className="rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5 [container-type:inline-size]"
+        aria-label="โครงสร้างกระแสเงินสดเดือนนี้"
+      >
+        <h2 className="mb-space-4 text-xl font-semibold text-primary">โครงสร้างกระแสเงินสดเดือนนี้</h2>
+        <div className="rounded-md border border-dashed border-border-default p-space-5 text-center text-secondary">
           <p>ยังคำนวณสัดส่วนไม่ได้</p>
-          <p className={styles.ringEmptyDetail}>ยังไม่มีรายรับในเดือนนี้</p>
-          <a href="/workspace/income" className={styles.ringEmptyLink}>เพิ่มรายรับ</a>
+          <p className="mb-space-3 mt-space-1 text-sm text-tertiary">ยังไม่มีรายรับในเดือนนี้</p>
+          <a
+            href="/workspace/income"
+            className={`inline-flex min-h-11 items-center rounded-full bg-accent px-space-4 font-semibold text-on-accent no-underline ${FOCUS_RING}`}
+          >
+            เพิ่มรายรับ
+          </a>
         </div>
       </section>
     );
@@ -85,10 +111,10 @@ export default function CashFlowRing({ model, selected, onSelect, monthLabel, in
     + `, กระแสเงินสดสุทธิ ${netCashFlow >= 0 ? 'บวก' : 'ลบ'} ${formatCurrency(Math.abs(netCashFlow))} บาท`;
 
   return (
-    <section className={styles.ringSection}>
-      <h2 className={styles.sectionTitle}>โครงสร้างกระแสเงินสดเดือนนี้</h2>
+    <section className="rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5 [container-type:inline-size]">
+      <h2 className="mb-space-4 text-xl font-semibold text-primary">โครงสร้างกระแสเงินสดเดือนนี้</h2>
 
-      <div className={styles.ringWrap}>
+      <div className="mb-space-4 flex justify-center">
         <svg
           width="220"
           height="220"
@@ -100,11 +126,11 @@ export default function CashFlowRing({ model, selected, onSelect, monthLabel, in
           <circle
             cx="120" cy="120" r={RADIUS_OUTER}
             fill="none"
-            stroke={overIncome ? 'var(--danger-color)' : 'var(--border-color)'}
+            stroke={overIncome ? 'var(--neg)' : 'var(--border-default)'}
             strokeWidth="6"
           />
           {/* รางด้านใน */}
-          <circle cx="120" cy="120" r={RADIUS_INNER} fill="none" stroke="var(--border-light)" strokeWidth={STROKE_INNER} />
+          <circle cx="120" cy="120" r={RADIUS_INNER} fill="none" stroke="var(--surface-2)" strokeWidth={STROKE_INNER} />
 
           <g aria-hidden="true">
             {arcs.map((arc) => (
@@ -140,20 +166,21 @@ export default function CashFlowRing({ model, selected, onSelect, monthLabel, in
 
           <text x="120" y="112" textAnchor="middle" fontSize="13" fill="var(--text-secondary)">กระแสเงินสดเดือนนี้</text>
           <text
+            className="tabular-nums"
             x="120" y="138" textAnchor="middle" fontSize="26" fontWeight="600"
-            fill={netCashFlow >= 0 ? 'var(--secondary-color)' : 'var(--danger-color)'}
+            fill={netCashFlow >= 0 ? 'var(--pos)' : 'var(--neg)'}
           >
             {`${netCashFlow >= 0 ? '+' : '−'}${formatCurrency(Math.abs(netCashFlow))} ฿`}
           </text>
           {overIncome && (
-            <text x="120" y="156" textAnchor="middle" fontSize="12" fill="var(--danger-color)">
+            <text className="tabular-nums" x="120" y="156" textAnchor="middle" fontSize="12" fill="var(--neg)">
               {`เกินรายรับ ${formatCurrency(overAmount)} ฿`}
             </text>
           )}
         </svg>
 
         {/* รายการตัวเลข 5 ค่าเดียวกันสำหรับ screen reader อ่านทีละตัว (AC-DB-22) */}
-        <ul className={cardStyles.srOnly}>
+        <ul className="sr-only">
           <li>{`รายรับ ${formatCurrency(totalIncome)} บาท`}</li>
           {segments.map((s) => (
             <li key={s.id}>{`${s.label} ${formatCurrency(s.amount)} บาท คิดเป็น ${(s.trueRatio * 100).toFixed(1)}% ของรายรับ`}</li>
@@ -162,25 +189,25 @@ export default function CashFlowRing({ model, selected, onSelect, monthLabel, in
         </ul>
       </div>
 
-      <div className={styles.ringLegend}>
-        <div className={styles.legendRow}>
-          <span className={styles.legendMarkerStatic} aria-hidden="true" style={{ '--legend-color': 'var(--text-secondary)' }} />
-          <span className={styles.legendLabel}>รายรับ</span>
-          <span className={styles.legendAmount}>{`${formatCurrency(totalIncome)} บาท`}</span>
-          <span className={styles.legendPercent}>100%</span>
-          <span className={styles.legendType}>รับเข้า</span>
+      <div className="flex flex-col gap-space-1">
+        <div className={LEGEND_ROW_BASE}>
+          <span className="h-3 w-3 shrink-0 rounded-xs bg-secondary" aria-hidden="true" />
+          <span className="min-w-0 flex-1 [@container(max-width:330px)]:basis-[calc(100%-22px)]">รายรับ</span>
+          <span className="whitespace-nowrap text-secondary tabular-nums">{`${formatCurrency(totalIncome)} บาท`}</span>
+          <span className="min-w-12 text-right text-secondary tabular-nums">100%</span>
+          <span className="min-w-14 text-right text-xs text-tertiary">รับเข้า</span>
         </div>
         {segments.map((segment) => {
           const active = isSelected(segment.id);
-          // interactive=false (/reports): แถวเป็น <div> ธรรมดา ไม่มี onClick/aria-pressed — ใช้ class เดียวกับแถวรายรับที่ไม่ใช่ปุ่มอยู่แล้ว
+          // interactive=false (/reports): แถวเป็น <div> ธรรมดา ไม่มี onClick/aria-pressed
           if (!interactive) {
             return (
-              <div key={segment.id} className={styles.legendRow}>
-                <span className={styles.legendMarker} aria-hidden="true" style={{ '--legend-color': segment.color }} />
-                <span className={styles.legendLabel}>{segment.label}</span>
-                <span className={styles.legendAmount}>{`${formatCurrency(segment.amount)} บาท`}</span>
-                <span className={styles.legendPercent}>{`${(segment.trueRatio * 100).toFixed(1)}%`}</span>
-                <span className={styles.legendType}>จ่ายออก</span>
+              <div key={segment.id} className={LEGEND_ROW_BASE}>
+                <span className="h-3 w-3 shrink-0 rounded-xs" aria-hidden="true" style={{ backgroundColor: segment.color }} />
+                <span className="min-w-0 flex-1 [@container(max-width:330px)]:basis-[calc(100%-22px)]">{segment.label}</span>
+                <span className="whitespace-nowrap text-secondary tabular-nums">{`${formatCurrency(segment.amount)} บาท`}</span>
+                <span className="min-w-12 text-right text-secondary tabular-nums">{`${(segment.trueRatio * 100).toFixed(1)}%`}</span>
+                <span className="min-w-14 text-right text-xs text-tertiary">จ่ายออก</span>
               </div>
             );
           }
@@ -188,15 +215,17 @@ export default function CashFlowRing({ model, selected, onSelect, monthLabel, in
             <button
               key={segment.id}
               type="button"
-              className={`${styles.legendRow} ${styles.legendRowButton} ${active ? styles.legendRowActive : ''}`}
+              className={`${LEGEND_ROW_BASE} w-full cursor-pointer bg-transparent text-left font-sans hover:bg-surface-2 ${FOCUS_RING} ${
+                active ? 'border-l-accent bg-accent-muted font-semibold' : ''
+              }`}
               onClick={() => handleToggle(segment.id)}
               aria-pressed={active}
             >
-              <span className={styles.legendMarker} aria-hidden="true" style={{ '--legend-color': segment.color }} />
-              <span className={styles.legendLabel}>{segment.label}</span>
-              <span className={styles.legendAmount}>{`${formatCurrency(segment.amount)} บาท`}</span>
-              <span className={styles.legendPercent}>{`${(segment.trueRatio * 100).toFixed(1)}%`}</span>
-              <span className={styles.legendType}>จ่ายออก</span>
+              <span className="h-3 w-3 shrink-0 rounded-xs" aria-hidden="true" style={{ backgroundColor: segment.color }} />
+              <span className="min-w-0 flex-1 [@container(max-width:330px)]:basis-[calc(100%-22px)]">{segment.label}</span>
+              <span className="whitespace-nowrap text-secondary tabular-nums">{`${formatCurrency(segment.amount)} บาท`}</span>
+              <span className="min-w-12 text-right text-secondary tabular-nums">{`${(segment.trueRatio * 100).toFixed(1)}%`}</span>
+              <span className="min-w-14 text-right text-xs text-tertiary">จ่ายออก</span>
             </button>
           );
         })}

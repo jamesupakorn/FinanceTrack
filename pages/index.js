@@ -1,7 +1,7 @@
 /**
  * หน้า: / (ภาพรวม) — P2 · dashboard
- * แทนที่เนื้อหาชั่วคราวของ P1 ด้วยแดชบอร์ดจริง: 6 การ์ดสรุปยอด, วงแหวนกระแสเงินสด, สุขภาพงบประมาณ
- * (พับเก็บเริ่มต้น), ปฏิทินค่าใช้จ่ายแบบฝังตรง, รายการที่จะครบกำหนด, กระดิ่งแจ้งเตือน, ทางลัด
+ * แทนที่เนื้อหาชั่วคราวของ P1 ด้วยแดชบอร์ดจริง: การ์ด "ครบกำหนด", วงแหวนกระแสเงินสด, สุขภาพงบประมาณ
+ * (พับเก็บเริ่มต้น), ปฏิทินค่าใช้จ่ายแบบฝังตรง (พับเก็บเริ่มต้นที่ base tier), กระดิ่งแจ้งเตือน, ทางลัด
  *
  * ทุกยอดเงินมาจาก getMonthlySummaryModel()/evaluateBudgetHealth() (P1) ทุกเหตุการณ์ปฏิทิน/รายการ
  * ครบกำหนดมาจาก expenseEvents.js ตัวเดียวกับปฏิทิน — หน้านี้ไม่คำนวณเงินหรือ derive เหตุการณ์เอง
@@ -11,6 +11,15 @@
  * ใช้ร่วมกันทั้งปฏิทินที่ฝัง (DashboardCalendarSection) และรายการที่จะครบกำหนด (UpcomingPayments)
  * — ไม่ใช่สำเนาที่สาม (ExpenseCalendarModal.js ยังมีสำเนาของตัวเองแยกเพราะเป็นอินสแตนซ์อิสระ ตามที่
  * architecture review ของ spec-dashboard.md ยอมรับไว้แล้วว่าเป็นการซ้ำที่ตั้งใจ)
+ *
+ * Graphite redesign (Dashboard pass) — Tailwind only (UX_SPEC §6.3 base / §6.4 lg), ไม่มี
+ * Dashboard.module.css/CreditCard.module.css อีกต่อไป (architecture-review-dashboard-graphite.md
+ * Finding 1) ลำดับ DOM จริงตอนนี้คือ "ครบกำหนด" ก่อน (journey J1) แล้วตามด้วยวงแหวน/สุขภาพงบประมาณ/
+ * ปฏิทิน/ทางลัด — จัดด้วย JSX order ตรง ๆ ที่ base tier แล้วค่อยจัดผัง 2 คอลัมน์ด้วย CSS grid เฉพาะที่ lg
+ * (Finding 4 — ไม่ใช้ grid-template-areas ที่ base tier เหมือนเดิมอีกต่อไป) ยังคง import
+ * ExpenseCalendar.module.css (calStyles) สำหรับ "รูปร่างสเกเลตัน" ของปฏิทินเต็มที่ lg เท่านั้น (ปฏิทินเอง
+ * ยังอยู่นอก scope ของ pass นี้ — ยังเป็น CSS Modules ต่อไป การอ้างอิงคลาสจริงของมันเพื่อให้สเกเลตันตรง
+ * ความสูงจริงไม่ใช่ CreditCard.module.css coupling ที่ Finding 1 พูดถึง)
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -32,11 +41,16 @@ import { getMonthlySummaryModel, DEFAULT_BUDGET_THRESHOLDS } from '../src/shared
 import { buildMonthEvents, collectUpcomingPayments } from '../src/shared/utils/frontend/expenseEvents';
 import { formatMonthLabelTH } from '../src/shared/utils/frontend/monthUtils';
 import { getCurrentMonthKey, addMonths, PLAN_STATUS } from '../src/shared/utils/creditCardUtils';
-import cardStyles from '../src/frontend/styles/CreditCard.module.css';
 import calStyles from '../src/frontend/styles/ExpenseCalendar.module.css';
-import styles from '../src/frontend/styles/Dashboard.module.css';
 
 const SELECTED_MONTH_KEY = 'edit_selected_month'; // key เดียวกับ workspace (edit.js:31) — ตั้งใจให้ตรงกัน
+
+const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
+// การ์ด/แผงหลักทุกใบใช้กติกาเดียวกัน (C1 §5 component vocabulary) — surface-1 + radius-md + border-default
+// + elev-1 + padding space-4 (base) / space-5 (md+)
+const CARD = 'rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5';
+// grid item ทุกตัวต้อง min-w-0 กัน string เงินไทยยาว ๆ ดันคอลัมน์กว้างเกิน track ของตัวเอง (bug-log-dashboard.md)
+const GRID_ITEM = 'min-w-0';
 
 // href เจ็ดจุดนี้เปลี่ยนจาก /workspace?tab=... เป็น /workspace/... ตรง ๆ แล้ว (Amendment A5 —
 // /workspace/* กลายเป็น route family จริง 8 เส้นทาง ไม่ใช่ query param อีกต่อไป)
@@ -435,18 +449,32 @@ export default function DashboardPage() {
   const monthLabel = selectedMonth ? formatMonthLabelTH(selectedMonth) : '';
 
   const headerControls = (
-    <div className={styles.headerControls}>
-      <div className={styles.monthNavGroup}>
-        <button type="button" className={styles.monthNavButton} onClick={() => handleNavigateMonth(-1)} aria-label="เดือนก่อนหน้า">
+    <div className="flex w-full flex-wrap items-center justify-between gap-space-3 md:w-auto md:justify-start">
+      <div className="flex items-center gap-space-2">
+        <button
+          type="button"
+          className={`inline-flex h-11 w-11 items-center justify-center rounded-full border border-border-default bg-surface-2 text-primary ${FOCUS_RING}`}
+          onClick={() => handleNavigateMonth(-1)}
+          aria-label="เดือนก่อนหน้า"
+        >
           <Icons.ChevronLeft size={18} />
         </button>
-        <span className={styles.monthNavLabel}>{monthLabel}</span>
-        <button type="button" className={styles.monthNavButton} onClick={() => handleNavigateMonth(1)} aria-label="เดือนถัดไป">
+        <span className="min-w-[96px] text-center text-sm font-bold text-primary md:min-w-[120px] md:text-base">{monthLabel}</span>
+        <button
+          type="button"
+          className={`inline-flex h-11 w-11 items-center justify-center rounded-full border border-border-default bg-surface-2 text-primary ${FOCUS_RING}`}
+          onClick={() => handleNavigateMonth(1)}
+          aria-label="เดือนถัดไป"
+        >
           <Icons.ChevronRight size={18} />
         </button>
       </div>
       <NotificationBell upcoming={upcoming} onSelectItem={handleSelectUpcomingItem} />
-      <a href="/settings" className={styles.settingsGearButton} aria-label="ตั้งค่า">
+      <a
+        href="/settings"
+        className={`inline-flex h-11 w-11 items-center justify-center rounded-full border border-border-default bg-surface-2 text-primary no-underline ${FOCUS_RING}`}
+        aria-label="ตั้งค่า"
+      >
         <Icons.Settings size={18} />
       </a>
     </div>
@@ -454,16 +482,20 @@ export default function DashboardPage() {
 
   // isTrulyEmpty ไม่มีปฏิทินให้เลื่อนไปหา (ไม่ได้ render DashboardCalendarSection เลย) จึงตัด "เปิดปฏิทิน" ออก
   const renderQuickActions = ({ includeCalendarAction = true } = {}) => (
-    <section className={styles.quickActionsSection} aria-label="ทางลัด">
-      <h2 className={styles.sectionTitle}>ทางลัด</h2>
-      <div className={styles.quickActionsGrid}>
+    <section className={CARD} aria-label="ทางลัด">
+      <h2 className="mb-space-4 text-xl font-semibold text-primary">ทางลัด</h2>
+      <div className="grid grid-cols-2 gap-space-3 md:grid-cols-3 lg:grid-cols-6">
         {QUICK_ACTIONS
           .filter((item) => includeCalendarAction || item.action !== 'scroll-calendar')
           .map(({ id, label, Icon, href, action, primary }) => (
             <button
               key={id}
               type="button"
-              className={`${styles.quickActionButton} ${primary ? styles.quickActionButtonPrimary : ''}`}
+              className={`flex min-h-11 flex-col items-start gap-space-2 rounded-md border p-space-4 text-left font-semibold transition-transform duration-base hover:-translate-y-0.5 ${FOCUS_RING} ${
+                primary
+                  ? 'border-transparent bg-accent text-on-accent'
+                  : 'border-border-default bg-surface-2 text-primary hover:bg-accent-muted'
+              }`}
               onClick={() => (action === 'scroll-calendar' ? scrollToCalendar() : router.push(href))}
             >
               <Icon size={22} />
@@ -476,103 +508,168 @@ export default function DashboardPage() {
 
   let body;
   if (loading) {
-    // สเกเลตันขนาดจริงของทุกส่วน (AC-DB-26) — ใช้ dashboardGrid เดียวกับเนื้อหาจริงเพื่อไม่ให้ layout กระโดด
+    // สเกเลตันขนาดจริงของทุกส่วน (AC-DB-26) — ต้องแบ่งตาม tier เพราะ DashboardCalendarSection พับเก็บ
+    // เป็นค่าเริ่มต้นที่ base tier (ความสูงจริงคือแค่แถวหัวข้อเดียว ไม่ใช่ตาราง 42 ช่องอีกต่อไป) แต่ขยายเสมอ
+    // ที่ lg (ความสูงจริงคือตารางเต็ม) — สเกเลตันของปฏิทินจึงมีสองรูปแบบคู่กัน สลับด้วย CSS responsive
+    // class เดียวกับที่ DashboardCalendarSection ใช้จริง (hidden lg:block / block lg:hidden)
     body = (
       <div role="status" aria-busy="true">
-        <span className={cardStyles.srOnly}>กำลังโหลดภาพรวม...</span>
-        <div className={styles.dashboardGrid}>
-          <div className={styles.insightsArea}>
-            {/*
-              * AC-DB-26: insights จริงคือ 2 การ์ดแยก (ringSection + panelCard ของ Budget Health ที่พับเก็บ
-              * เป็นค่าเริ่มต้นเสมอ — AC-DB-29) ไม่ใช่บล็อกเดียวยาว ๆ — ห่อด้วยคลาสจริงจาก Dashboard.module.css
-              * เพื่อให้ padding/gap ตรงกับของจริง แถวสรุปกระแสเงินสด (ringLegend) มี 5 แถวคงที่เสมอ (รายรับ +
-              * รายจ่ายทั่วไป/รายจ่ายประจำวัน/เงินออม/บัตรเครดิต — ชุดคงที่จาก DashboardSummaryTiles/CashFlowRing
-              * ไม่ผันตามข้อมูลผู้ใช้) จึงจับคู่ได้แน่นอน ต่างจาก panelCard ที่พับเก็บ (สูงคงที่ 1 แถวหัวข้อเสมอ)
-              */}
-            <div className={styles.ringSection}>
-              <div className={cardStyles.skeleton} style={{ height: 22, width: '65%', borderRadius: 6, marginBottom: 16 }} />
-              <div className={cardStyles.skeleton} style={{ width: 220, height: 220, borderRadius: '50%', margin: '0 auto 16px' }} />
-              <div className={styles.ringLegend}>
-                {Array.from({ length: 5 }).map((_, index) => (
+        <span className="sr-only">กำลังโหลดภาพรวม...</span>
+        <div className="flex flex-col gap-space-4 lg:grid lg:grid-cols-12 lg:items-start lg:gap-space-5">
+          {/* 1. ครบกำหนด (J1) */}
+          <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-5 lg:row-start-1`}>
+            <div className={CARD}>
+              <div className="mb-space-4 h-6 w-2/3 animate-pulse rounded-sm bg-surface-2" />
+              <div className="flex flex-col gap-space-3">
+                {Array.from({ length: 3 }).map((_, index) => (
                   // eslint-disable-next-line react/no-array-index-key
-                  <div key={index} className={cardStyles.skeleton} style={{ height: 44, borderRadius: 10 }} />
+                  <div key={index} className="h-[88px] animate-pulse rounded-md bg-surface-2" />
                 ))}
               </div>
             </div>
-            <div className={styles.panelCard}>
-              <div className={cardStyles.skeleton} style={{ height: 44, borderRadius: 10 }} />
-            </div>
           </div>
-          <div className={styles.calendarArea}>
-            {/*
-              * AC-DB-26 (bug-log-dashboard.md): เดิมสเกเลตันมีแค่ตาราง 42 ช่อง ไม่มี nav/legend/footer/
-              * แผงรายละเอียดวัน (day-detail) เลย ทำให้ต่ำกว่าความสูงจริงมาก (วัดจริงต่างกันหลักร้อย px)
-              * แล้วดัน upcomingArea ที่อยู่แถวถัดไปในคอลัมน์เดียวกันของ dashboardGrid ลงไปกระโดด — ใช้คลาส
-              * ".calendarWrap/.calendarNav/.calendarLayout" ตัวจริงจาก ExpenseCalendar.module.css ห่อ
-              * เนื้อหาหลอกไว้แทน เพื่อให้ผัง 2 คอลัมน์ (ปฏิทิน + day-detail 320px) เหมือนของจริงเป๊ะ ๆ โดยไม่ต้อง
-              * เดาตัวเลข px เอง (ทั้งสองที่ import ExpenseCalendar.module.css ตัวเดียวกันอยู่แล้ว)
-              * หมายเหตุ: เดือนที่มีรายการ/บัตรจำนวนมากผิดปกติ (legend หลายบรรทัด, day-detail มีหลายรายการ)
-              * ยังอาจขยับเกิน 8px ได้อยู่ดี เพราะความสูงจริงขึ้นกับจำนวนข้อมูลผันแปร ไม่ใช่ค่าคงที่ — ข้อจำกัด
-              * เดียวกับ upcomingArea/รายการ "ครบกำหนด" ด้านล่าง ไม่มีสเกเลตันคงที่ใดจับคู่ความยาวลิสต์ผันแปรได้
-              * เป๊ะ 100% ต้องแก้ที่สถาปัตยกรรม (เช่น max-height + scroll ภายใน) ถ้าจะการันตีทุกกรณี
-              */}
-            <div className={calStyles.calendarWrap}>
-              <div className={calStyles.calendarNav}>
-                <div className={cardStyles.skeleton} style={{ width: 44, height: 44, borderRadius: 12 }} />
-                <div className={cardStyles.skeleton} style={{ width: 140, height: 22, borderRadius: 6 }} />
-                <div className={cardStyles.skeleton} style={{ width: 44, height: 44, borderRadius: 12 }} />
-              </div>
-              <div className={calStyles.calendarLayout}>
-                <div>
-                  {/* แถวหัวตัวย่อวัน (อา/จ/อ/...) เป็น grid row แรกใน .calendarGrid จริง (ไม่ใช่แถวแยก) —
-                      .calendarSkeletonGrid ไม่มีแถวนี้ ทำให้ขาดไปราว 30px ต่อความสูงจริงเสมอถ้าไม่จำลองไว้ */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
-                    {Array.from({ length: 7 }).map((_, index) => (
-                      // eslint-disable-next-line react/no-array-index-key
-                      <div key={index} className={cardStyles.skeleton} style={{ height: 15, borderRadius: 4 }} />
-                    ))}
-                  </div>
-                  <div className={calStyles.calendarSkeletonGrid}>
-                    {Array.from({ length: 42 }).map((_, index) => (
-                      // eslint-disable-next-line react/no-array-index-key
-                      <div key={index} className={cardStyles.skeleton} />
-                    ))}
-                  </div>
-                  <div className={cardStyles.skeleton} style={{ height: 18, width: '55%', borderRadius: 6, marginTop: 14 }} />
-                  <div className={cardStyles.skeleton} style={{ height: 62, borderRadius: 10, marginTop: 14 }} />
-                </div>
-                <div>
-                  <div className={cardStyles.skeleton} style={{ height: 20, width: '70%', borderRadius: 6, marginBottom: 10 }} />
-                  {Array.from({ length: 3 }).map((_, index) => (
-                    // eslint-disable-next-line react/no-array-index-key
-                    <div key={index} className={cardStyles.skeleton} style={{ height: 70, borderRadius: 16, marginBottom: 10 }} />
-                  ))}
-                </div>
+
+          {/* 2. วงแหวนกระแสเงินสด */}
+          <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-5 lg:row-start-2`}>
+            <div className={CARD}>
+              {/* h-[31px], not h-6 (24px) — real <h2 className="text-xl"> is 30.8px under the fontSize
+                  scale (§3.2), not Tailwind's stock 20px text-xl (Stage 4 round-2 finding) */}
+              <div className="mb-space-4 h-[31px] w-2/3 animate-pulse rounded-sm bg-surface-2" />
+              <div className="mx-auto mb-space-4 h-[220px] w-[220px] animate-pulse rounded-full bg-surface-2" />
+              <div className="flex flex-col gap-space-1">
+                {/* h-[79px] md:h-14 — CashFlowRing's own [@container(max-width:330px)] threshold wraps
+                    each legend row to two lines at base tier (measured 79.375px live), but the ring
+                    card is wide enough at md+ that no row wraps (measured 56px = h-14, was regressed to
+                    a flat h-[76px] with no tier split in the previous pass — Stage 4 round-2 finding) */}
+                {Array.from({ length: 5 }).map((_, index) => (
+                  // eslint-disable-next-line react/no-array-index-key
+                  <div key={index} className="h-[79px] animate-pulse rounded-sm bg-surface-2 md:h-14" />
+                ))}
               </div>
             </div>
           </div>
-          <div className={styles.upcomingArea}>
-            {Array.from({ length: 3 }).map((_, index) => (
-              // eslint-disable-next-line react/no-array-index-key
-              <div key={index} className={cardStyles.skeleton} style={{ height: 72, borderRadius: 16, marginBottom: 10 }} />
-            ))}
+
+          {/* 3. สุขภาพงบประมาณ — พับเก็บเป็นค่าเริ่มต้นทุก tier รวม lg (AC-DB-29) แต่ TransferableSavingsAction
+              (BudgetHealthPanel.js:148-154) render อยู่นอก !collapsed guard เสมอ ไม่ว่าจะพับหรือกาง — สเกเลตัน
+              นี้จึงจงใจ target แค่ baseline "พับ" เท่านั้น (h-11 หัวข้อ + บล็อกนี้) ไม่ไล่ตามความสูงตอน
+              auto-expand (attentionCount > 0) อีกต่อไป — กรณีนั้นความสูงแปรผันตามจำนวนแถวที่ต้องระวัง
+              ประมาณล่วงหน้าไม่ได้จริง (สเปกเก่าเคยลองไล่ตามและพลาดหลัก 500-700px ทุกครั้ง) ผู้ใช้ตัดสินใจแล้วว่า
+              ให้ BudgetHealthPanel เองรับผิดชอบ "การขยับความสูงให้นุ่มนวล" ตอน auto-expand ด้วยแอนิเมชันแทน
+              (ดู BudgetHealthPanel.js) — ไม่ใช่หน้าที่ของสเกเลตันอีกต่อไป (BUG-DG-2 resolution, Stage 4 round 3)
+              h-[121px] md:h-[66px] — TransferableSavingsAction (บล็อกเดียวที่ค้ำความสูงขั้นต่ำ) เป็น flex-col
+              ที่ base แต่ md:flex-row (BudgetHealthPanel.js) จึงเตี้ยลงที่ md+ เดิมสเกเลตันมีแค่ค่าเดียว
+              (base-tier only) ทำให้ overshoot ที่ md+ (Stage 4 round-2 finding) — เอา mt-space-4 เดิมออกด้วย
+              เพราะ TransferableSavingsAction จริงมี pt-space-4 เป็น padding ภายในตัวเองอยู่แล้ว (ไม่ใช่ margin
+              ภายนอก) ระยะห่างนี้จึงถูกนับซ้ำสองชั้นในสเกเลตันเดิม */}
+          <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-5 lg:row-start-3`}>
+            <div className={CARD}>
+              <div className="h-11 animate-pulse rounded-sm bg-surface-2" />
+              <div className="h-[121px] animate-pulse rounded-md bg-surface-2 md:h-[66px]" />
+            </div>
+          </div>
+
+          {/* 4. ปฏิทิน — สองรูปแบบคู่กันตาม tier (ดูหมายเหตุด้านบน) */}
+          <div className={`${GRID_ITEM} lg:col-start-6 lg:col-span-7 lg:row-start-1 lg:row-span-3`}>
+            <div className={CARD}>
+              {/* base/md: พับเก็บ — แถวหัวข้อเดียว */}
+              <div className="h-11 animate-pulse rounded-sm bg-surface-2 lg:hidden" />
+              {/* lg: ขยายเสมอ — ใช้ calStyles.calendarWrap/calendarNav/calendarLayout/calendarLegend/
+                  calendarFooter ตัวจริงเพื่อสืบทอด padding/margin ของแต่ละส่วนอัตโนมัติ (ไม่ต้องเดา margin
+                  เองอีกที) calStyles.calendarLayout เองมี container-type ที่สืบทอดมาจาก calendarWrap อยู่แล้ว
+                  จึงพับเป็นคอลัมน์เดียวเองโดยอัตโนมัติผ่าน @container query จริงเมื่อคอลัมน์ dashboard แคบ
+                  (ไม่ต้อง hardcode "single-column" เป็น flex-col เหมือนรอบก่อน) วันในตารางไม่ได้ใช้ calStyles.
+                  calendarSkeletonGrid ตัวเดียวกับ ExpenseCalendarModal.js เพราะบริบทกว้างต่างกัน (modal กว้าง
+                  960px ใช้เซลล์ 64px ได้จริง ส่วนคอลัมน์ dashboard ที่ lg แคบแค่ ~510-650px ทำให้
+                  ExpenseCalendar.module.css:303's @container(max-width:700px) บังคับเซลล์จริงเหลือแค่ ~52px
+                  gap 2px เสมอที่นี่ — วัดสดจริงคือ 47px/แถวโดยเฉลี่ย ไม่ใช่ 64px) จึงสร้างกริดของตัวเองแยกด้วย
+                  Tailwind ล้วน ๆ แทนที่จะแก้ CSS module ที่ใช้ร่วมกับ modal (จะกระทบ modal โดยไม่ตั้งใจ) —
+                  ตัวเลขทั้งหมดวัดสดจากบัญชีสาธิตจริงที่ lg (1280px), Stage 4 round 3 */}
+              <div className="hidden lg:block">
+                <div className="mb-space-4 h-[31px] w-1/3 animate-pulse rounded-sm bg-surface-2" />
+                <div className={calStyles.calendarWrap}>
+                  <div className={calStyles.calendarNav}>
+                    <div className="h-11 w-11 animate-pulse rounded-md bg-surface-2" />
+                    <div className="h-6 w-[140px] animate-pulse rounded-sm bg-surface-2" />
+                    <div className="h-11 w-11 animate-pulse rounded-md bg-surface-2" />
+                  </div>
+                  <div className={calStyles.calendarLayout}>
+                    <div>
+                      {/* กริดวัน (หัวข้อวัน + 5 แถววันรวมเป็น 6 แถว) — เซลล์ 47px/gap 2px ไม่ใช่ 64px/4px
+                          ของ calStyles.calendarSkeletonGrid (นั่นคาลิเบรตสำหรับบริบท modal ที่กว้างกว่า) */}
+                      <div className="grid grid-cols-7 gap-[2px]">
+                        {Array.from({ length: 42 }).map((_, index) => (
+                          // eslint-disable-next-line react/no-array-index-key
+                          <div key={index} className="h-[47px] animate-pulse rounded-sm bg-surface-2" />
+                        ))}
+                      </div>
+                      <div className={calStyles.calendarLegend}>
+                        <div className="h-4 w-[220px] animate-pulse rounded-sm bg-surface-2" />
+                      </div>
+                      <div className={calStyles.calendarFooter}>
+                        <div className="h-5 w-[160px] animate-pulse rounded-sm bg-surface-2" />
+                        <div className="mt-1 h-4 w-[200px] animate-pulse rounded-sm bg-surface-2" />
+                      </div>
+                    </div>
+                    <div className="h-[111px] animate-pulse rounded-md bg-surface-2" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 5. ทางลัด */}
+          <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-12 lg:row-start-4`}>
+            <div className={CARD}>
+              <div className="mb-space-4 h-[31px] w-1/3 animate-pulse rounded-sm bg-surface-2" />
+              {/* ความสูงจริงต่อไทล์ไม่เท่ากันทุกไทล์ — ขึ้นกับว่า label ของไทล์นั้นตัดบรรทัดหรือไม่ (2 บรรทัด
+                  ที่ความกว้างคอลัมน์แคบ) วัดสดจากบัญชีสาธิตจริง: ที่ base (grid-cols-2, 3 แถว) มีแค่แถวกลาง
+                  (ไทล์ open-workspace — "เปิดแผนการเงินรายเดือน" ตัด 2 บรรทัด) สูง 115px ส่วนอีก 2 แถวสูง
+                  90px ที่ md (grid-cols-3) กว้างพอไม่มีไทล์ไหนตัดบรรทัด ทุกไทล์ 90px ที่ lg (grid-cols-6, แถว
+                  เดียว) แถวเดียวกันทั้งหมดจึงถูกไทล์ที่ยาวที่สุดดันความสูงทั้งแถวเป็น 115px เท่ากันหมด (CSS
+                  Grid ให้ความสูง track = max ของไทล์ในแถวนั้นเสมอ ไม่ต้องบังคับทุกไทล์ให้ตัวเลขเดียวกันเอง —
+                  ระบุแค่ไทล์ที่ตัดบรรทัดจริง ที่เหลือ CSS จะดันตามให้เอง) Stage 4 round 3
+                  เลือกไทล์ด้วย item.id ไม่ใช่ตำแหน่ง index — สลับลำดับ QUICK_ACTIONS แล้วสเกเลตันยังชี้ไทล์
+                  ที่ label ยาวจริงตัวเดิม (ค่าที่ render ออกมาเท่ากับเดิมทุกประการวันนี้ เพราะ open-workspace
+                  อยู่ที่ index 2 พอดี) — Stage 5 review */}
+              <div className="grid grid-cols-2 gap-space-3 md:grid-cols-3 lg:grid-cols-6">
+                {QUICK_ACTIONS.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`animate-pulse rounded-md bg-surface-2 lg:h-[115px] ${
+                      item.id === 'open-workspace' ? 'h-[115px] md:h-[90px]' : 'h-[90px]'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
     );
   } else if (fullError) {
     body = (
-      <div className={cardStyles.errorState} role="alert">
+      <div role="alert" className="flex flex-wrap items-center justify-between gap-space-3 rounded-md border border-neg/35 bg-neg/10 p-space-4 text-neg">
         <span>โหลดข้อมูลภาพรวมไม่สำเร็จ</span>
-        <button type="button" className={cardStyles.ghostButton} onClick={refreshData}>ลองอีกครั้ง</button>
+        <button
+          type="button"
+          className={`min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-semibold text-primary ${FOCUS_RING}`}
+          onClick={refreshData}
+        >
+          ลองอีกครั้ง
+        </button>
       </div>
     );
   } else if (isTrulyEmpty) {
+    // ไม่ห่อข้อความว่างด้วย CARD อีกต่อไป — เดิมซ้อน renderQuickActions()'s section (การ์ดของมันเอง) ไว้
+    // ข้างในการ์ดอีกใบ ผิดกติกา C1 "never nest a card inside a card" (Stage 4 finding) ข้อความว่างจึงเป็น
+    // เนื้อหาเปล่า ๆ ไม่มี surface/border/shadow ของตัวเอง แล้วปล่อยให้ renderQuickActions() เป็นการ์ดใบเดียว
     body = (
-      <div className={styles.pageEmptyState}>
-        <Icons.BarChart size={40} color="var(--color-primary)" />
-        <h2 className={styles.sectionTitle}>ยังไม่มีข้อมูลของเดือนนี้</h2>
-        <p>เริ่มจากบันทึกรายรับของเดือนนี้ แล้วภาพรวมจะคำนวณให้อัตโนมัติ</p>
+      <div className="flex flex-col gap-space-4">
+        <div className="flex flex-col items-center gap-space-3 py-space-7 text-center md:py-space-8">
+          <Icons.BarChart size={40} color="var(--accent)" />
+          <h2 className="text-xl font-semibold text-primary">ยังไม่มีข้อมูลของเดือนนี้</h2>
+          <p className="text-secondary">เริ่มจากบันทึกรายรับของเดือนนี้ แล้วภาพรวมจะคำนวณให้อัตโนมัติ</p>
+        </div>
         {renderQuickActions({ includeCalendarAction: false })}
       </div>
     );
@@ -580,13 +677,19 @@ export default function DashboardPage() {
     body = (
       <>
         {partialErrorFields.length > 0 && !noticeDismissed && (
-          <div className={styles.errorNotice} role="alert">
+          <div role="alert" className="mb-space-4 flex flex-wrap items-center justify-between gap-space-3 rounded-md border border-neg bg-neg/10 p-space-4 text-primary">
             <span>{`โหลดข้อมูลบางส่วนไม่สำเร็จ: ${partialErrorFields.join(', ')}`}</span>
-            <div>
-              <button type="button" className={styles.errorNoticeRetry} onClick={refreshData}>ลองอีกครั้ง</button>
+            <div className="flex items-center gap-space-2">
               <button
                 type="button"
-                className={styles.errorNoticeDismiss}
+                className={`min-h-11 rounded-full border border-neg bg-transparent px-space-4 font-semibold text-primary ${FOCUS_RING}`}
+                onClick={refreshData}
+              >
+                ลองอีกครั้ง
+              </button>
+              <button
+                type="button"
+                className={`min-h-11 min-w-11 rounded-full border-none bg-transparent text-secondary ${FOCUS_RING}`}
                 onClick={() => setNoticeDismissed(true)}
                 aria-label="ปิดข้อความแจ้งเตือน"
               >
@@ -596,26 +699,46 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className={styles.dashboardGrid}>
-          <div className={styles.insightsArea}>
-            {isCarryoverOnly ? (
-              <div className={styles.carryoverNote}>
+        {/* ลำดับ DOM จริง (ไม่ใช่แค่ผังภาพ) ตาม UX_SPEC §6.3: ครบกำหนด (J1) → วงแหวน → สุขภาพงบประมาณ →
+            ปฏิทิน → ทางลัด — จัดผัง 2 คอลัมน์ด้วย CSS grid เฉพาะที่ lg (§6.4) เท่านั้น (Finding 4) */}
+        <div className="flex flex-col gap-space-4 lg:grid lg:grid-cols-12 lg:items-start lg:gap-space-5">
+          <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-5 lg:row-start-1`}>
+            <UpcomingPayments
+              upcoming={upcoming}
+              filter={ringFilter}
+              onClearFilter={() => setRingFilter(null)}
+              onViewCalendar={scrollToCalendar}
+              pendingKeys={pendingKeys}
+              onToggleInstallment={handleToggleInstallment}
+              onRevolvingFull={handleRevolvingFull}
+              onRevolvingMinimum={handleRevolvingMinimumClick}
+              highlightedKey={highlightedKey}
+            />
+          </div>
+
+          {isCarryoverOnly ? (
+            <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-5 lg:row-start-2`}>
+              <div className="rounded-md border border-dashed border-border-default bg-surface-1 p-space-4 text-center text-secondary">
                 ยังไม่มีข้อมูลรายรับ/รายจ่ายอื่นสำหรับเดือนนี้
               </div>
-            ) : (
-              <>
+            </div>
+          ) : (
+            <>
+              <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-5 lg:row-start-2`}>
                 <CashFlowRing model={model} selected={ringFilter} onSelect={setRingFilter} monthLabel={monthLabel} />
+              </div>
+              <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-5 lg:row-start-3`}>
                 <BudgetHealthPanel
                   model={model}
                   thresholds={budgetThresholds}
                   onConfirmTransfer={handleConfirmTransfer}
                   isConfirmingTransfer={isConfirmingTransfer}
                 />
-              </>
-            )}
-          </div>
+              </div>
+            </>
+          )}
 
-          <div className={styles.calendarArea}>
+          <div className={`${GRID_ITEM} lg:col-start-6 lg:col-span-7 lg:row-start-1 lg:row-span-3`}>
             <DashboardCalendarSection
               headingRef={calendarHeadingRef}
               monthKey={selectedMonth}
@@ -633,21 +756,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className={styles.upcomingArea}>
-            <UpcomingPayments
-              upcoming={upcoming}
-              filter={ringFilter}
-              onClearFilter={() => setRingFilter(null)}
-              onViewCalendar={scrollToCalendar}
-              pendingKeys={pendingKeys}
-              onToggleInstallment={handleToggleInstallment}
-              onRevolvingFull={handleRevolvingFull}
-              onRevolvingMinimum={handleRevolvingMinimumClick}
-              highlightedKey={highlightedKey}
-            />
-          </div>
-
-          <div className={styles.quickActionsArea}>
+          <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-12 lg:row-start-4`}>
             {renderQuickActions()}
           </div>
         </div>
