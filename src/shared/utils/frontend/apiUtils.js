@@ -249,7 +249,10 @@ export const savingsGoalsAPI = {
 };
 
 export const dailyExpenseAPI = {
-	getByMonth: async (month) => jsonFetch(buildUrl('/api/daily_expenses', { month })),
+	// raw:true skips the fixed-only carry-forward the endpoint applies for the normal editing
+	// view when a month has no saved doc yet — used by MonthManager's "copy from previous
+	// month" so it copies what was actually saved, not a synthesized preview.
+	getByMonth: async (month, { raw } = {}) => jsonFetch(buildUrl('/api/daily_expenses', { month, raw: raw ? '1' : undefined })),
 	save: async (month, items) => jsonFetch('/api/daily_expenses', {
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
@@ -264,6 +267,11 @@ export const dailyExpenseAPI = {
  */
 export const userSettingsAPI = {
 	get: async () => jsonFetch(buildUrl('/api/user-bank-accounts')),
+	saveMonthlySummaryEnabled: async (enabled) => jsonFetch('/api/user-bank-accounts', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ monthlySummaryEnabled: enabled })
+	}),
 	saveThresholds: async (budgetThresholds) => jsonFetch('/api/user-bank-accounts', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
