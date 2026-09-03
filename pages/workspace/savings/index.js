@@ -7,11 +7,12 @@ import SavingsTable from '../../../src/frontend/components/SavingsTable';
 export default function WorkspaceSavingsPage() {
   return (
     <WorkspaceShell section="savings">
-      {({ selectedMonth, refreshTrigger, registerSave, markClean }) => (
+      {({ selectedMonth, refreshTrigger, registerSave, markClean, markDirty }) => (
         <SavingsTable
           selectedMonth={selectedMonth}
           onRegisterSave={registerSave}
           onSaved={markClean}
+          markDirty={markDirty}
           key={`savings-${refreshTrigger}`}
         />
       )}
