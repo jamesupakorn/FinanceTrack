@@ -62,12 +62,31 @@ module.exports = {
         }
       },
 
-      // ── §3.2 Typography — family only here; the fluid clamp() scale lives in globals.css (§3.2 says
-      // "no per-breakpoint redefinition", which a Tailwind fontSize scale can't express as cleanly as
-      // clamp() can, so text-2xl/text-3xl stay as CSS custom properties for now). ──
-      // var(--font-sans)/var(--font-numeric) resolve to next/font's self-hosted family inside the app
-      // shell (set on pages/_app.js's root wrapper); the literal names after it are the same fallback
-      // chain globals.css's :root token block defines, for any element outside that scope.
+      // ── §3.2 Typography — fontSize. Stage-4 Foundation-pass amendment (Dashboard Graphite fix-forward
+      // pass): this key didn't exist before, so every text-* utility silently fell back to Tailwind's
+      // stock scale instead of §3.2's exact values — text-xl compiled to 1.25rem/20px where §3.2
+      // specifies 1.375rem/22px, and text-xs computed to 12px at line-height 1.33, below §3.2's 1.4
+      // floor (N6). Every <h2> on Dashboard (text-xl font-semibold) was 2px under spec, and this would
+      // have silently propagated to all 12 remaining pages if not fixed here. Values mirror globals.css's
+      // --text-* custom-property block 1:1 (kept there too, for any plain-CSS/CSS-Module context that
+      // isn't reachable by a Tailwind utility class). Tailwind's [size, {lineHeight, letterSpacing,
+      // fontWeight}] tuple format supports a raw clamp() string directly in the size slot, so text-2xl/
+      // text-3xl's fluid sizes are expressed here too — no "can't express clamp() cleanly" limitation.
+      // letterSpacing -0.01em only at >= text-xl, per §3.2 ("no positive tracking on Thai; 0 below xl").
+      fontSize: {
+        xs: ['0.75rem', { lineHeight: '1.5', fontWeight: '500' }],
+        sm: ['0.875rem', { lineHeight: '1.55', fontWeight: '400' }],
+        base: ['1rem', { lineHeight: '1.6', fontWeight: '400' }],
+        lg: ['1.125rem', { lineHeight: '1.5', fontWeight: '500' }],
+        xl: ['1.375rem', { lineHeight: '1.4', fontWeight: '600', letterSpacing: '-0.01em' }],
+        '2xl': ['clamp(1.625rem, 1.4rem + 1.1vw, 2rem)', { lineHeight: '1.3', fontWeight: '600', letterSpacing: '-0.01em' }],
+        '3xl': ['clamp(2rem, 1.6rem + 2vw, 2.75rem)', { lineHeight: '1.2', fontWeight: '700', letterSpacing: '-0.01em' }]
+      },
+
+      // ── §3.2 Typography — family. var(--font-sans)/var(--font-numeric) resolve to next/font's
+      // self-hosted family inside the app shell (set on pages/_app.js's root wrapper); the literal
+      // names after it are the same fallback chain globals.css's :root token block defines, for any
+      // element outside that scope. ──
       fontFamily: {
         sans: [
           'var(--font-sans)',
