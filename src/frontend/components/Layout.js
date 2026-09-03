@@ -14,6 +14,11 @@
  * getTabbableElements/FOCUSABLE_SELECTOR ("ตัวจริง" ที่แก้บั๊กแล้ว) มาจาก
  * ExpenseCalendarModal.js:49-74 ตรงตามที่ UX_SPEC กำกับไว้ (ห้ามใช้รูปแบบเก่าที่ CreditCardForm.js:87)
  *
+ * Graphite redesign (income-expense-graphite pass, architecture-review Finding 1) — เฉพาะ 3 บริเวณ
+ * ที่เคยพึ่ง Home.module.css เท่านั้นถูก migrate เป็น Tailwind ที่นี่: เมนูผู้ใช้ (บรรทัดนี้ลงไปหา
+ * userDropdown), guard overlay ตอน isLocked, และ action toast ท้ายไฟล์ — sidebar/top bar
+ * structure/bottom nav/bottom sheet/ทั้งสองโมดัลยังอยู่บน Layout.module.css เดิมทั้งหมด ไม่แตะ
+ *
  * props ที่นอกเหนือจากที่ spec ระบุไว้ (calendarTrigger, onCalendarClose): เพิ่มเพื่อคงพฤติกรรมเดิมที่
  * edit.js/credit-cards.js มีอยู่แล้วก่อนรวมโมดัลเป็นหนึ่งเดียว — ทั้งสองหน้าเคย refresh ข้อมูลของตัวเอง
  * เมื่อปิดปฏิทินแล้วมีการเปลี่ยนแปลง (edit.js:868-871, credit-cards.js:416-419) และ credit-cards.js
@@ -38,8 +43,9 @@ import { Icons } from './Icons';
 import ChangePasswordModal from './ChangePasswordModal';
 import ExpenseCalendarModal from './ExpenseCalendarModal';
 import { withApiTokenHeaders } from '../../shared/utils/frontend/apiToken';
-import homeStyles from '../styles/Home.module.css';
 import styles from '../styles/Layout.module.css';
+
+const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 
 const SESSION_KEY = 'edit_last_activity';
 const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 ชั่วโมง — ค่าเดิมจาก edit.js
@@ -340,10 +346,10 @@ export default function Layout({
         <header className={styles.topBar}>
           <div className={styles.topBarTitleRow}>
             <h1 className={styles.topBarTitle}>{title}</h1>
-            <div className={styles.userMenuWrapper} ref={userMenuRef}>
+            <div className={`${styles.userMenuWrapper} relative`} ref={userMenuRef}>
               <button
                 type="button"
-                className={homeStyles.userMenuButton}
+                className={`flex items-center gap-space-2 rounded-full border border-border-default bg-surface-2 px-space-4 py-space-2 text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING} [&[data-open=true]_svg]:rotate-180 [&_svg]:transition-transform [&_svg]:duration-fast`}
                 onClick={() => setUserMenuOpen(prev => !prev)}
                 aria-haspopup="true"
                 aria-expanded={userMenuOpen}
@@ -353,30 +359,41 @@ export default function Layout({
                 <Icons.ChevronDown size={16} />
               </button>
               {userMenuOpen && (
-                <div className={homeStyles.userDropdown} role="menu">
-                  <button type="button" className={`${homeStyles.userMenuItem} ${homeStyles.userMenuAccent}`} onClick={handleOpenChangePassword}>
-                    <Icons.Edit size={16} />
-                    <div>
-                      <p>เปลี่ยนรหัสผ่าน</p>
-                      <span>อัปเดตรหัสเพื่อความปลอดภัย</span>
-                    </div>
-                  </button>
-                  <button type="button" className={homeStyles.userMenuItem} onClick={handleSwitchProfile}>
-                    <Icons.Settings size={16} />
-                    <div>
-                      <p>สลับผู้ใช้</p>
-                      <span>กลับไปหน้าเลือกโปรไฟล์</span>
+                <div
+                  role="menu"
+                  className="absolute right-0 top-[calc(100%+8px)] z-20 flex min-w-[240px] flex-col gap-space-1 rounded-lg border border-border-default bg-surface-3 p-space-3 shadow-elev-2 md:min-w-[260px]"
+                >
+                  <button
+                    type="button"
+                    className={`flex items-start gap-space-3 rounded-md p-space-3 text-left text-info transition-colors duration-fast ease-graphite hover:bg-accent-muted ${FOCUS_RING}`}
+                    onClick={handleOpenChangePassword}
+                  >
+                    <span className="mt-[2px] shrink-0"><Icons.Edit size={16} color="var(--info)" /></span>
+                    <div className="flex flex-col gap-[2px]">
+                      <p className="text-sm font-semibold text-primary">เปลี่ยนรหัสผ่าน</p>
+                      <span className="text-xs text-secondary">อัปเดตรหัสเพื่อความปลอดภัย</span>
                     </div>
                   </button>
                   <button
                     type="button"
-                    className={`${homeStyles.userMenuItem} ${homeStyles.userMenuDanger}`}
+                    className={`flex items-start gap-space-3 rounded-md p-space-3 text-left transition-colors duration-fast ease-graphite hover:bg-surface-2 ${FOCUS_RING}`}
+                    onClick={handleSwitchProfile}
+                  >
+                    <span className="mt-[2px] shrink-0 text-secondary"><Icons.Settings size={16} /></span>
+                    <div className="flex flex-col gap-[2px]">
+                      <p className="text-sm font-semibold text-primary">สลับผู้ใช้</p>
+                      <span className="text-xs text-secondary">กลับไปหน้าเลือกโปรไฟล์</span>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    className={`flex items-start gap-space-3 rounded-md p-space-3 text-left transition-colors duration-fast ease-graphite hover:bg-neg/10 ${FOCUS_RING}`}
                     onClick={handleLogoutClick}
                   >
-                    <Icons.Lock size={16} />
-                    <div>
-                      <p>ออกจากระบบ</p>
-                      <span>ปิดเซสชันและล็อกระบบ</span>
+                    <span className="mt-[2px] shrink-0"><Icons.Lock size={16} color="var(--neg)" /></span>
+                    <div className="flex flex-col gap-[2px]">
+                      <p className="text-sm font-semibold text-neg">ออกจากระบบ</p>
+                      <span className="text-xs text-secondary">ปิดเซสชันและล็อกระบบ</span>
                     </div>
                   </button>
                 </div>
@@ -393,8 +410,8 @@ export default function Layout({
         {/* ------------------------------------------------------------ เนื้อหาหลัก */}
         <main id="main" className={`${styles.content} ${contentClassName || ''}`}>
           {isLocked ? (
-            <div className={homeStyles.guardContainer}>
-              <Icons.Lock size={48} color="var(--color-primary)" />
+            <div className="flex min-h-screen flex-col items-center justify-center gap-space-4 text-secondary">
+              <Icons.Lock size={48} color="var(--accent)" />
               <p>กำลังตรวจสอบสิทธิ์ผู้ใช้...</p>
             </div>
           ) : children}
@@ -476,9 +493,15 @@ export default function Layout({
       )}
 
       {passwordToast && (
-        <div className={`${homeStyles.actionToast} ${passwordToast.type === 'success' ? homeStyles.actionToastSuccess : ''}`}>
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed right-space-4 top-space-4 z-[60] flex items-center gap-space-3 rounded-lg border bg-surface-3 px-space-4 py-space-3 text-primary shadow-elev-2 ${
+            passwordToast.type === 'success' ? 'border-pos/50 text-pos' : 'border-border-default'
+          }`}
+        >
           <Icons.Check size={20} />
-          <span>{passwordToast.message}</span>
+          <span className="text-sm font-semibold text-primary">{passwordToast.message}</span>
         </div>
       )}
 

@@ -13,6 +13,13 @@
  *
  * พร็อพ:
  * - selectedMonth {string} เดือนที่เลือก (YYYY-MM)
+ * - markDirty {function} (Graphite, K17) เรียกเป็นคำสั่งแรกใน handleAddExpenseItem/handleDeleteExpenseItem
+ *   — ปุ่มเหล่านี้เป็น onClick ไม่ใช่ input/change จึงไม่โดน bubbled listener ของ WorkspaceShell.js จับเอง
+ *
+ * Graphite redesign (income-expense-graphite pass) — Tailwind only (UX_SPEC §5.1 C11 / §6.5 base /
+ * §6.6 lg). แถวบัตรเครดิต (cci_/ccr_) ไม่ใช่ C11 — อ่านอย่างเดียวยกเว้นปุ่มชำระ, มี 3 สัญญาณเสมอ
+ * (ล็อก + ชิป "บัตรเครดิต" + พื้น --surface-2, ไม่ใช้สีอย่างเดียวสื่อความหมาย — N2/E5) formatExpenseForSave
+ * (การตัด cci_/ccr_ ก่อนบันทึก, Constraint 8/9) ไม่ถูกแตะเลยในพาสนี้
  */
 
 import { Fragment, useState, useEffect, useMemo } from 'react';
@@ -43,7 +50,7 @@ import { expenseAPI, creditCardAPI } from '../../shared/utils/frontend/apiUtils'
 import { withApiTokenHeaders } from '../../shared/utils/frontend/apiToken';
 import { useSession } from '../contexts/SessionContext';
 import { showToast } from '../../shared/utils/frontend/toast';
-import styles from '../styles/ExpenseTable.module.css';
+import { Icons } from './Icons';
 
 const DEFAULT_EXPENSE_KEY_ORDER = DEFAULT_EXPENSE_ITEMS.map(item => item.key);
 const DEFAULT_EXPENSE_LABEL_MAP = DEFAULT_EXPENSE_ITEMS.reduce((acc, item) => {
@@ -53,6 +60,22 @@ const DEFAULT_EXPENSE_LABEL_MAP = DEFAULT_EXPENSE_ITEMS.reduce((acc, item) => {
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const DUE_SOON_THRESHOLD_DAYS = 5;
+
+const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
+const INPUT = `h-11 w-full rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-base text-primary outline-none ${FOCUS_RING}`;
+const SELECT = `h-11 w-full rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-sm text-primary outline-none ${FOCUS_RING}`;
+const REMOVE_BTN = `flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border-interactive bg-surface-2 text-neg ${FOCUS_RING}`;
+const CARD = 'rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1';
+
+// C8 chip — data-status ตัวไหน สีอะไร (N2: ทุกสถานะมี glyph/ตัวอักษรกำกับเสมอ ไม่ใช้สีอย่างเดียว)
+const DUE_BADGE_TONE = {
+  overdue: 'border-neg/40 bg-neg/10 text-neg',
+  dueToday: 'border-warn/40 bg-warn/10 text-warn',
+  dueSoon: 'border-info/40 bg-info/10 text-info',
+  future: 'border-pos/35 bg-pos/10 text-pos',
+  done: 'border-pos/40 bg-pos/15 text-pos',
+  none: 'border-dashed border-border-default text-secondary'
+};
 
 const getPreviousMonthKey = (monthKey) => {
   if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return null;
@@ -133,7 +156,7 @@ const describeDueTiming = (dueDayValue, paid, monthKey) => {
   };
 };
 
-export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved }) {
+export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, markDirty }) {
   const [editExpense, setEditExpense] = useState({});
   const [bankAccounts, setBankAccounts] = useState([]);
   const [previousMonthTotal, setPreviousMonthTotal] = useState(null);
@@ -328,6 +351,8 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved })
   };
 
   const handleAddExpenseItem = () => {
+    markDirty?.(); // K17 — คำสั่งแรกเสมอ: ปุ่มนี้เป็น onClick ไม่ใช่ input/change (spec.md §Files "The
+                    // C11 dirty signal")
     const uniqueKey = `custom_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     setEditExpense(prev => ({
       ...prev,
@@ -343,6 +368,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved })
   };
 
   const handleDeleteExpenseItem = (item) => {
+    markDirty?.(); // K17 — เดียวกับข้างบน
     setEditExpense(prev => {
       const updated = { ...prev };
       delete updated[item];
@@ -390,10 +416,10 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved })
       if (removedKeys.length > 0) {
         prepared.__removeKeys = removedKeys;
       }
-      
+
       // บันทึกข้อมูลค่าใช้จ่ายรายเดือน
       await expenseAPI.save(selectedMonth, prepared);
-      
+
       // อัปเดตบัญชีในโปรไฟล์ user (เพื่อให้เดือนหน้าใช้เป็นค่าเริ่มต้น)
       if (currentUser?.id) {
         try {
@@ -406,7 +432,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved })
           console.warn('Warning: Could not update user bank accounts:', error);
         }
       }
-      
+
       // รีเฟรชข้อมูลหลังบันทึก
       const data = await expenseAPI.getByMonth(selectedMonth);
       const formatted = formatExpenseData(data || {}, selectedMonth);
@@ -542,11 +568,11 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved })
     if (monthDiffValue < 0) return 'positive';
     return 'neutral';
   }, [monthDiffValue]);
-  const monthDiffChipClass = monthDiffStatus === 'positive'
-    ? styles.diffChipPositive
+  const monthDiffChipTone = monthDiffStatus === 'positive'
+    ? 'border-pos/40 bg-pos/10 text-pos'
     : monthDiffStatus === 'negative'
-      ? styles.diffChipNegative
-      : styles.diffChipNeutral;
+      ? 'border-neg/40 bg-neg/10 text-neg'
+      : 'border-border-default bg-surface-2 text-secondary';
   const monthDiffLabel = monthDiffValue === null
     ? 'ยังไม่มีข้อมูลเดือนก่อน'
     : monthDiffValue === 0
@@ -569,71 +595,91 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved })
     ? `${dueInsights.upcomingCount} รายการยังไม่จ่าย`
     : 'ยังไม่มีรายการค้างชำระ';
 
+  const DueBadge = ({ status, children }) => (
+    <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-space-2 py-[2px] text-xs font-medium ${DUE_BADGE_TONE[status] || DUE_BADGE_TONE.none}`}>
+      {children}
+    </span>
+  );
+
   return (
-    <div className={styles.expenseTable}>
-      <div className={styles.sectionHeader}>
+    <div>
+      <div className="mb-space-4 flex flex-wrap items-start justify-between gap-space-3">
         <div>
-          <h3 className={styles.sectionTitle}>รายการค่าใช้จ่าย</h3>
-          <p className={styles.sectionSubtitle}>บันทึกยอดค่าใช้จ่ายรายเดือนแบบยอดเดียว</p>
+          <h3 className="text-lg font-medium text-primary">รายการค่าใช้จ่าย</h3>
+          <p className="mt-space-1 text-sm text-secondary">บันทึกยอดค่าใช้จ่ายรายเดือนแบบยอดเดียว</p>
         </div>
-        <button type="button" className={styles.addItemButton} onClick={handleAddExpenseItem}>
+        <button
+          type="button"
+          className="min-h-11 shrink-0 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+          onClick={handleAddExpenseItem}
+        >
           + เพิ่มรายการค่าใช้จ่าย
         </button>
       </div>
+
       {hasExpenseRows && (
-        <div className={styles.overviewRow}>
-          <div className={styles.overviewCard}>
-            <p className={styles.overviewLabel}>ยอดค่าใช้จ่ายรวม</p>
-            <p className={styles.overviewValue}>{formatCurrency(totalActualValue)}</p>
-            <span className={styles.overviewHint}>
+        <div className="mb-space-5 grid grid-cols-1 gap-space-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={CARD}>
+            <p className="text-xs text-secondary">ยอดค่าใช้จ่ายรวม</p>
+            <p className="mt-space-1 font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary">{formatCurrency(totalActualValue)}</p>
+            <p className="mt-space-1 text-xs text-tertiary">
               {typeof previousMonthTotal === 'number'
                 ? `เทียบเดือนก่อน ${monthDiffLabel} (เดือนก่อน ${formatCurrency(previousMonthTotal)})`
                 : 'สรุปยอดค่าใช้จ่ายทั้งหมดในเดือนนี้'}
+            </p>
+            <span className={`mt-space-2 inline-flex w-fit items-center rounded-full border px-space-2 py-[2px] text-xs font-medium ${monthDiffChipTone}`}>
+              เปลี่ยนแปลง {monthDiffPercentText}
             </span>
-            <span className={`${styles.diffChip} ${monthDiffChipClass}`}>เปลี่ยนแปลง {monthDiffPercentText}</span>
           </div>
-          <div className={`${styles.overviewCard} ${styles.overviewAccent}`}>
-            <p className={styles.overviewLabel}>กำหนดชำระถัดไป</p>
-            <p className={`${styles.overviewValue} ${styles.nextDueValue}`}>{dueInsights.nextDueLabel}</p>
-            <span className={styles.overviewHint}>{dueInsights.nextDueName}</span>
-            <span className={`${styles.diffChip} ${styles.diffChipNegative}`}>เลยกำหนด {formatCurrency(dueInsights.overdueTotal)}</span>
-            <span className={`${styles.diffChip} ${styles.diffChipNeutral}`}>ยังไม่ถึงกำหนด {formatCurrency(dueInsights.pendingTotal)}</span>
-            <div className={styles.overviewMeta}>
+
+          <div className={`${CARD} border-info/30`}>
+            <p className="text-xs text-secondary">กำหนดชำระถัดไป</p>
+            <p className="mt-space-1 text-lg font-semibold text-primary">{dueInsights.nextDueLabel}</p>
+            <p className="mt-space-1 text-xs text-tertiary">{dueInsights.nextDueName}</p>
+            <div className="mt-space-2 flex flex-wrap gap-space-2">
+              <span className="inline-flex items-center rounded-full border border-neg/40 bg-neg/10 px-space-2 py-[2px] text-xs font-medium text-neg">
+                เลยกำหนด {formatCurrency(dueInsights.overdueTotal)}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-border-default bg-surface-2 px-space-2 py-[2px] text-xs font-medium text-secondary">
+                ยังไม่ถึงกำหนด {formatCurrency(dueInsights.pendingTotal)}
+              </span>
+            </div>
+            <div className="mt-space-2 flex flex-wrap gap-space-2 text-xs text-secondary">
               <span>{upcomingSummaryText}</span>
-              {dueInsights.urgentCount > 0 && (
-                <span className={styles.urgentHighlight}>{`เร่งด่วน ${dueInsights.urgentCount}`}</span>
-              )}
-              {dueInsights.overdueCount > 0 && (
-                <span className={styles.overdueHighlight}>{`เกินกำหนด ${dueInsights.overdueCount}`}</span>
-              )}
+              {dueInsights.urgentCount > 0 && <span className="font-medium text-warn">เร่งด่วน {dueInsights.urgentCount}</span>}
+              {dueInsights.overdueCount > 0 && <span className="font-medium text-neg">เกินกำหนด {dueInsights.overdueCount}</span>}
             </div>
           </div>
+
           {prevMonthUnpaid && (
-            <div className={`${styles.overviewCard} ${styles.overviewWarn}`}>
-              <p className={styles.overviewLabel}>ค้างจ่ายเดือนก่อน</p>
-              <p className={`${styles.overviewValue} ${styles.warnValue}`}>{formatCurrency(prevMonthUnpaid.total)}</p>
-              <span className={styles.overviewHint}>{formatMonthKeyTH(prevMonthUnpaid.monthKey)} · {prevMonthUnpaid.count} รายการ</span>
-              <span className={`${styles.diffChip} ${styles.diffChipNegative}`}>ยังไม่ได้ชำระ</span>
+            <div className={`${CARD} border-warn/30`}>
+              <p className="text-xs text-secondary">ค้างจ่ายเดือนก่อน</p>
+              <p className="mt-space-1 text-lg font-semibold text-warn">{formatCurrency(prevMonthUnpaid.total)}</p>
+              <p className="mt-space-1 text-xs text-tertiary">{formatMonthKeyTH(prevMonthUnpaid.monthKey)} · {prevMonthUnpaid.count} รายการ</p>
+              <span className="mt-space-2 inline-flex w-fit items-center rounded-full border border-neg/40 bg-neg/10 px-space-2 py-[2px] text-xs font-medium text-neg">
+                ยังไม่ได้ชำระ
+              </span>
             </div>
           )}
         </div>
       )}
+
       {isLoading && !hasExpenseRows && (
-        <div className={styles.loadingState} role="status" aria-live="polite">กำลังโหลดข้อมูล...</div>
+        <div role="status" aria-live="polite" className="rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">กำลังโหลดข้อมูล...</div>
       )}
+
       {hasExpenseRows && (
         <>
-          {/* Desktop Table */}
-          <div className={styles.hideOnMobile}>
-            <div className={styles.tableContainer}>
-              <table className={styles.table}>
-              <thead className={styles.tableHeader}>
-                <tr>
-                  <th className={styles.tableHeaderCell}>รายการค่าใช้จ่าย</th>
-                  <th className={`${styles.tableHeaderCell} ${styles.right}`}>ยอดค่าใช้จ่าย</th>
-                  <th className={styles.tableHeaderCell}>บัญชีที่ใช้จ่าย</th>
-                  <th className={styles.tableHeaderCell}>วันครบกำหนด</th>
-                  <th className={`${styles.tableHeaderCell} ${styles.center}`}>สถานะชำระ / ยอดค้าง</th>
+          {/* md+: C5 table */}
+          <div className="hidden overflow-x-auto rounded-md border border-border-default md:block">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-border-subtle bg-surface-2">
+                  <th className="p-space-3 text-left text-xs font-medium text-secondary">รายการค่าใช้จ่าย</th>
+                  <th className="p-space-3 text-right text-xs font-medium text-secondary">ยอดค่าใช้จ่าย</th>
+                  <th className="p-space-3 text-left text-xs font-medium text-secondary">บัญชีที่ใช้จ่าย</th>
+                  <th className="p-space-3 text-left text-xs font-medium text-secondary">วันครบกำหนด</th>
+                  <th className="p-space-3 text-center text-xs font-medium text-secondary">สถานะชำระ</th>
                 </tr>
               </thead>
               <tbody>
@@ -648,48 +694,48 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved })
                   const isCreditCardRow = isCreditCardRowKey(item);
                   const meta = installmentMeta[item];
 
-                  // แถวบัตรเครดิต: ชื่อ/ยอด/บัญชี/วันครบกำหนดเป็นข้อความอ่านอย่างเดียว
-                  // แก้ไม่ได้เพราะค่าถูกสร้างใหม่จากแผนผ่อน/ยอดหมุนเวียนทุกครั้งที่โหลด
-                  // เหลือแค่ paid ที่กดได้
+                  // แถวบัตรเครดิต: ชื่อ/ยอด/บัญชี/วันครบกำหนดเป็นข้อความอ่านอย่างเดียว — ไม่ใช่ C11
+                  // (E5/§6.5) 3 สัญญาณ: ล็อกกลอน + ชิป "บัตรเครดิต" + พื้น --surface-2 เหลือแค่ paid ที่กดได้
                   if (isCreditCardRow) {
                     return (
                       <Fragment key={item}>
                         {item === firstCreditCardKey && (
-                          <tr className={styles.tableRow}>
-                            <td className={`${styles.tableCell} ${styles.installmentDivider}`} colSpan={5}>
+                          <tr>
+                            <td className="border-t border-dashed border-border-default p-space-3 text-xs font-medium text-tertiary" colSpan={5}>
                               บัตรเครดิต (ซิงก์อัตโนมัติ)
                             </td>
                           </tr>
                         )}
-                        <tr className={`${styles.tableRow} ${styles.lockedRow}`} data-expense-key={item}>
-                          <td className={styles.tableCell}>
-                            <span className={styles.readonlyValue} title={displayName}>🔒 {displayName}</span>
+                        <tr className="border-b border-border-subtle bg-info/5" data-expense-key={item}>
+                          <td className="p-space-3 align-middle">
+                            <span className="flex items-center gap-space-2 text-secondary" title={displayName}>
+                              <span aria-hidden="true">🔒</span>{displayName}
+                            </span>
                             {meta && (
-                              <>
-                                <span className={styles.cardSourceBadge}>💳 {meta.cardName}</span>
-                                <Link href={`/credit-cards?card=${meta.cardId}`} className={styles.cardSourceLink}>
+                              <div className="mt-space-1 flex flex-col gap-space-1">
+                                <span className="inline-flex w-fit items-center gap-1 rounded-full border border-info/35 bg-info/15 px-space-2 py-[2px] text-xs font-medium text-info">
+                                  💳 {meta.cardName}
+                                </span>
+                                <Link href={`/credit-cards?card=${meta.cardId}`} className={`text-xs text-accent underline-offset-2 hover:underline ${FOCUS_RING}`}>
                                   จัดการที่หน้าบัตรเครดิต →
                                 </Link>
-                              </>
+                              </div>
                             )}
                           </td>
-                          <td className={`${styles.tableCell} ${styles.right}`}>
-                            <span className={styles.readonlyValue}>{formatCurrency(row.actual)}</span>
+                          <td className="p-space-3 text-right align-middle">
+                            <span className="font-[family-name:var(--font-numeric)] tabular-nums text-secondary">{formatCurrency(row.actual)}</span>
                           </td>
-                          <td className={styles.tableCell}>
-                            <span className={styles.readonlyValue}>{selectedAccount}</span>
-                          </td>
-                          <td className={`${styles.tableCell} ${styles.dateCell}`}>
-                            <span className={styles.readonlyValue}>{formatDueDayText(row.dueDay) || 'ไม่ระบุ'}</span>
-                          </td>
-                          <td className={`${styles.tableCell} ${styles.center} ${styles.checkboxCell}`}>
-                            <label className={styles.checkboxLabel}>
-                              <input
-                                type="checkbox"
-                                checked={paid}
-                                onChange={e => handleExpenseChange(item, 'paid', e.target.checked)}
-                              />
-                            </label>
+                          <td className="p-space-3 align-middle text-secondary">{selectedAccount}</td>
+                          <td className="p-space-3 align-middle text-secondary">{formatDueDayText(row.dueDay) || 'ไม่ระบุ'}</td>
+                          <td className="p-space-3 text-center align-middle">
+                            <button
+                              type="button"
+                              className={`mx-auto flex h-11 items-center gap-space-2 rounded-full border px-space-3 text-xs font-semibold ${FOCUS_RING} ${paid ? 'border-pos/40 bg-pos/15 text-pos' : 'border-border-interactive bg-surface-2 text-secondary'}`}
+                              onClick={() => handleExpenseChange(item, 'paid', !paid)}
+                              aria-pressed={paid}
+                            >
+                              {paid ? '✓ จ่ายแล้ว' : '○ ยังไม่จ่าย'}
+                            </button>
                           </td>
                         </tr>
                       </Fragment>
@@ -697,91 +743,93 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved })
                   }
 
                   return (
-                    <tr key={item} className={styles.tableRow} data-expense-key={item}>
-                      <td className={styles.tableCell}>
-                        <div className={styles.nameCell}>
+                    <tr key={item} className="border-b border-border-subtle last:border-b-0" data-expense-key={item}>
+                      <td className="p-space-3 align-middle">
+                        <div className="flex min-w-0 items-center gap-space-3">
                           <input
                             type="text"
                             value={displayName}
                             onChange={e => handleExpenseChange(item, 'name', e.target.value)}
                             onBlur={e => handleExpenseBlur(item, 'name', e.target.value)}
-                            className={styles.nameInput}
+                            className={`${INPUT} flex-1`}
                             placeholder="ชื่อรายการ"
                           />
                           <button
                             type="button"
-                            className={styles.rowDeleteButton}
+                            className={REMOVE_BTN}
                             onClick={() => handleDeleteExpenseItem(item)}
+                            aria-label={`ลบ ${displayName}`}
                           >
-                            ลบ
+                            <Icons.X size={16} />
                           </button>
                         </div>
                       </td>
-                      <td className={`${styles.tableCell} ${styles.right}`}>
+                      <td className="p-space-3 align-middle">
                         <input
                           type="text"
+                          inputMode="decimal"
                           value={row.actual ?? ''}
                           onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'actual', val))}
                           onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'actual', val))}
                           onFocus={handleAmountInputFocus}
-                          className={styles.expenseInput}
+                          className={`${INPUT} text-right font-[family-name:var(--font-numeric)] tabular-nums`}
                         />
                       </td>
-                      <td className={styles.tableCell}>
+                      <td className="p-space-3 align-middle">
                         <select
                           value={selectedAccount}
                           onChange={e => handleExpenseChange(item, 'account', e.target.value)}
-                          className={styles.dateInput}
+                          className={SELECT}
                         >
                           {bankAccounts.map((account) => (
                             <option key={account} value={account}>{account}</option>
                           ))}
                         </select>
                       </td>
-                      <td className={`${styles.tableCell} ${styles.dateCell}`}>
-                        <div className={styles.dueDateWrapper}>
+                      <td className="min-w-[150px] p-space-3 align-middle">
+                        <div className="flex flex-col gap-space-2">
                           <select
                             value={row.dueDay || END_OF_MONTH_DUE_DAY}
                             onChange={e => handleExpenseChange(item, 'dueDay', e.target.value)}
-                            className={styles.dateInput}
+                            className={SELECT}
                           >
                             <option value={END_OF_MONTH_DUE_DAY}>วันสิ้นเดือน</option>
                             {dueDayOptions.map(day => (
                               <option key={day} value={day}>{day}</option>
                             ))}
                           </select>
-                          <div className={styles.dueMeta}>
-                            <span className={styles.dueBadge} data-status={dueInfo.status}>{dueInfo.badge}</span>
-                            {dueInfo.helper && <span className={styles.dueHelper}>{dueInfo.helper}</span>}
+                          <div className="flex flex-wrap items-center gap-space-2">
+                            <DueBadge status={dueInfo.status}>{dueInfo.badge}</DueBadge>
+                            {dueInfo.helper && <span className="text-xs text-tertiary">{dueInfo.helper}</span>}
                           </div>
                         </div>
                       </td>
-                      <td className={`${styles.tableCell} ${styles.center} ${styles.checkboxCell}`}>
-                        <label className={styles.checkboxLabel}>
-                          <input
-                            type="checkbox"
-                            checked={paid}
-                            onChange={e => handleExpenseChange(item, 'paid', e.target.checked)}
-                          />
-                        </label>
+                      <td className="p-space-3 text-center align-middle">
+                        <button
+                          type="button"
+                          className={`mx-auto flex h-11 items-center gap-space-2 rounded-full border px-space-3 text-xs font-semibold ${FOCUS_RING} ${paid ? 'border-pos/40 bg-pos/15 text-pos' : 'border-border-interactive bg-surface-2 text-secondary'}`}
+                          onClick={() => handleExpenseChange(item, 'paid', !paid)}
+                          aria-pressed={paid}
+                        >
+                          {paid ? '✓ จ่ายแล้ว' : '○ ยังไม่จ่าย'}
+                        </button>
                       </td>
                     </tr>
                   );
                 })}
-                <tr className={styles.totalRow}>
-                  <td className={styles.totalCell}>ยอดรวม</td>
-                  <td className={`${styles.totalCell} ${styles.right}`}>{formatCurrency(totalActualValue)}</td>
-                  <td className={styles.totalCell}></td>
-                  <td className={`${styles.totalCell} ${styles.center}`}>รวมค้างชำระ</td>
-                  <td className={`${styles.totalCell} ${styles.center}`}>{formatCurrency(totalUnpaidValue)}</td>
+                <tr className="bg-surface-2">
+                  <td className="p-space-3 text-sm font-semibold text-primary">ยอดรวม</td>
+                  <td className="p-space-3 text-right font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums text-primary">{formatCurrency(totalActualValue)}</td>
+                  <td className="p-space-3" />
+                  <td className="p-space-3 text-sm font-semibold text-secondary">รวมค้างชำระ</td>
+                  <td className="p-space-3 text-center font-[family-name:var(--font-numeric)] text-sm font-semibold tabular-nums text-neg">{formatCurrency(totalUnpaidValue)}</td>
                 </tr>
               </tbody>
-              </table>
-            </div>
+            </table>
           </div>
 
-          {/* Mobile Card List */}
-          <div className={styles.mobileCardList + ' ' + styles.hideOnDesktop}>
+          {/* base tier: C4/C11 cards */}
+          <div className="flex flex-col gap-space-3 md:hidden">
             {sortedExpenseKeys.map(item => {
               const row = editExpense[item] || {};
               const paid = row.paid === true || row.paid === 'true';
@@ -793,35 +841,39 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved })
               const isCreditCardRow = isCreditCardRowKey(item);
               const meta = installmentMeta[item];
 
-              // แถวบัตรเครดิต: อ่านอย่างเดียว ไม่มีปุ่มลบ เหลือแค่ปุ่ม paid ที่กดได้
               if (isCreditCardRow) {
                 return (
                   <Fragment key={item}>
                     {item === firstCreditCardKey && (
-                      <div className={styles.installmentDivider}>บัตรเครดิต (ซิงก์อัตโนมัติ)</div>
+                      <p className="mt-space-2 text-xs font-medium text-tertiary">บัตรเครดิต (ซิงก์อัตโนมัติ)</p>
                     )}
                     <div
-                      className={`${styles.expenseCard} ${styles.lockedRow} ${paid ? styles.expenseCardPaid : ''}`}
+                      className={`min-h-14 rounded-md border border-info/30 bg-surface-2 p-space-4 [scroll-margin-top:calc(var(--topbar-safe-top,90px)+8px)] ${paid ? 'opacity-70' : ''}`}
                       data-expense-key={item}
                     >
-                      <div className={styles.cardHeaderRow}>
-                        <span className={styles.readonlyValue} title={displayName}>{displayName}</span>
-                        <span aria-hidden="true">🔒</span>
+                      <div className="flex items-center justify-between gap-space-2">
+                        <span className="flex items-center gap-space-2 font-medium text-secondary" title={displayName}>
+                          <span aria-hidden="true">🔒</span>{displayName}
+                        </span>
+                        <span className="inline-flex w-fit shrink-0 items-center gap-1 rounded-full border border-info/35 bg-info/15 px-space-2 py-[2px] text-xs font-medium text-info">
+                          บัตรเครดิต
+                        </span>
                       </div>
-                      {meta && <span className={styles.cardSourceBadge}>💳 {meta.cardName}</span>}
-                      <span className={`${styles.readonlyValue} ${styles.readonlyAmount}`}>{formatCurrency(row.actual)}</span>
-                      <span className={styles.readonlyValue}>
+                      {meta && <span className="mt-space-1 inline-flex w-fit items-center gap-1 text-xs text-tertiary">💳 {meta.cardName}</span>}
+                      <p className="mt-space-2 font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums text-primary">{formatCurrency(row.actual)}</p>
+                      <p className="mt-space-1 text-xs text-secondary">
                         {`ครบกำหนด ${formatDueDayText(row.dueDay) || 'ไม่ระบุ'} · ${selectedAccount}`}
-                      </span>
+                      </p>
                       <button
                         type="button"
-                        className={`${styles.paidToggle} ${paid ? styles.paidToggleOn : ''}`}
+                        className={`mt-space-3 flex min-h-11 w-full items-center justify-center rounded-sm border px-space-4 text-sm font-semibold ${FOCUS_RING} ${paid ? 'border-pos/40 bg-pos/15 text-pos' : 'border-border-interactive bg-surface-1 text-secondary'}`}
                         onClick={() => handleExpenseChange(item, 'paid', !paid)}
+                        aria-pressed={paid}
                       >
                         {paid ? '✓ ชำระแล้ว' : 'ยังไม่ชำระ — แตะเพื่อยืนยัน'}
                       </button>
                       {meta && (
-                        <Link href={`/credit-cards?card=${meta.cardId}`} className={styles.cardSourceLink}>
+                        <Link href={`/credit-cards?card=${meta.cardId}`} className={`mt-space-2 inline-block text-xs text-accent underline-offset-2 hover:underline ${FOCUS_RING}`}>
                           จัดการที่หน้าบัตรเครดิต →
                         </Link>
                       )}
@@ -831,41 +883,44 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved })
               }
 
               return (
-                <div className={`${styles.expenseCard} ${paid ? styles.expenseCardPaid : ''}`} key={item} data-expense-key={item}>
-                  {/* ชื่อ + ลบ */}
-                  <div className={styles.cardHeaderRow}>
+                <div
+                  className={`min-h-14 rounded-md border border-border-default bg-surface-2 p-space-4 [scroll-margin-top:calc(var(--topbar-safe-top,90px)+8px)] ${paid ? 'opacity-70' : ''}`}
+                  key={item}
+                  data-expense-key={item}
+                >
+                  <div className="flex items-center gap-space-2">
                     <input
                       type="text"
                       value={displayName}
                       onChange={e => handleExpenseChange(item, 'name', e.target.value)}
                       onBlur={e => handleExpenseBlur(item, 'name', e.target.value)}
-                      className={styles.cardNameInput}
+                      className={`${INPUT} flex-1 font-medium`}
                       placeholder="ชื่อรายการ"
                     />
                     <button
                       type="button"
-                      className={styles.cardDeleteBtn}
+                      className={REMOVE_BTN}
                       onClick={() => handleDeleteExpenseItem(item)}
+                      aria-label={`ลบ ${displayName}`}
                     >
-                      ✕
+                      <Icons.X size={16} />
                     </button>
                   </div>
-                  {/* ยอด */}
                   <input
                     type="text"
+                    inputMode="decimal"
                     value={row.actual ?? ''}
                     onChange={e => handleNumberInput(e.target.value, (val) => handleExpenseChange(item, 'actual', val))}
                     onBlur={e => handleNumberBlur(e.target.value, (val) => handleExpenseBlur(item, 'actual', val))}
                     onFocus={handleAmountInputFocus}
-                    className={styles.cardAmountInput}
+                    className={`${INPUT} mt-space-3 text-right font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums`}
                     placeholder="0.00"
                   />
-                  {/* บัญชี + วันครบ */}
-                  <div className={styles.cardMetaRow}>
+                  <div className="mt-space-3 flex gap-space-2">
                     <select
                       value={selectedAccount}
                       onChange={e => handleExpenseChange(item, 'account', e.target.value)}
-                      className={styles.cardSelect}
+                      className={`${SELECT} flex-1`}
                     >
                       {bankAccounts.map((account) => (
                         <option key={account} value={account}>{account}</option>
@@ -874,7 +929,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved })
                     <select
                       value={row.dueDay || END_OF_MONTH_DUE_DAY}
                       onChange={e => handleExpenseChange(item, 'dueDay', e.target.value)}
-                      className={styles.cardSelect}
+                      className={`${SELECT} flex-1`}
                     >
                       <option value={END_OF_MONTH_DUE_DAY}>สิ้นเดือน</option>
                       {dueDayOptions.map(day => (
@@ -882,40 +937,49 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved })
                       ))}
                     </select>
                   </div>
-                  {dueInfo.helper && (
-                    <span className={styles.dueHelper}>{dueInfo.helper}</span>
-                  )}
-                  {/* toggle full-width */}
+                  {dueInfo.helper && <p className="mt-space-2 text-xs text-tertiary">{dueInfo.helper}</p>}
                   <button
                     type="button"
-                    className={`${styles.paidToggle} ${paid ? styles.paidToggleOn : ''}`}
+                    className={`mt-space-3 flex min-h-11 w-full items-center justify-center rounded-sm border px-space-4 text-sm font-semibold ${FOCUS_RING} ${paid ? 'border-pos/40 bg-pos/15 text-pos' : 'border-border-interactive bg-surface-1 text-secondary'}`}
                     onClick={() => handleExpenseChange(item, 'paid', !paid)}
+                    aria-pressed={paid}
                   >
                     {paid ? '✓ ชำระแล้ว' : 'ยังไม่ชำระ — แตะเพื่อยืนยัน'}
                   </button>
                 </div>
               );
             })}
-            {/* Total summary card */}
-            <div className={styles.expenseCard + ' ' + styles.totalCard}>
-              <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดรวม</span></div>
-              <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดค่าใช้จ่าย</span><span>{formatCurrency(totalActualValue)}</span></div>
-              <div className={styles.cardRow}><span className={styles.cardLabel}>ยอดค้างชำระ</span><span>{formatCurrency(totalUnpaidValue)}</span></div>
+            {/* Total summary card — K16 live total */}
+            <div className={`${CARD} border-accent/40 bg-accent-muted`}>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-secondary">ยอดค่าใช้จ่าย</span>
+                <span className="font-[family-name:var(--font-numeric)] font-semibold tabular-nums text-primary">{formatCurrency(totalActualValue)}</span>
+              </div>
+              <div className="mt-space-2 flex items-center justify-between text-sm">
+                <span className="text-secondary">ยอดค้างชำระ</span>
+                <span className="font-[family-name:var(--font-numeric)] font-semibold tabular-nums text-neg">{formatCurrency(totalUnpaidValue)}</span>
+              </div>
             </div>
           </div>
+
           {/* ตารางสรุปค่าใช้จ่ายแต่ละบัญชี (ใช้งานได้ทุกผู้ใช้) */}
           {shouldShowAccountTable && (
-            <BankAccountTable
-              accountSummary={accountSummary}
-              prevAccountSummary={prevAccountSummary}
-              accounts={bankAccounts}
-              onChangeAccounts={handleBankAccountsChange}
-            />
+            <div className="mt-space-5">
+              <BankAccountTable
+                accountSummary={accountSummary}
+                prevAccountSummary={prevAccountSummary}
+                accounts={bankAccounts}
+                onChangeAccounts={handleBankAccountsChange}
+                markDirty={markDirty}
+              />
+            </div>
           )}
         </>
       )}
       {!isLoading && !hasExpenseRows && (
-        <div className={styles.emptyState}>ยังไม่มีรายการค่าใช้จ่ายในเดือนนี้ กด "เพิ่มรายการ" เพื่อเริ่มต้น</div>
+        <div className="rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">
+          ยังไม่มีรายการค่าใช้จ่ายในเดือนนี้ กด &quot;เพิ่มรายการ&quot; เพื่อเริ่มต้น
+        </div>
       )}
     </div>
   );
