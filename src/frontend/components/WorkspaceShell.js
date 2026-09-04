@@ -475,7 +475,7 @@ export default function WorkspaceShell({ section, overlay, children }) {
         </p>
 
         <nav
-          className="mb-space-4 flex gap-space-2 overflow-x-auto pb-space-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex-col lg:overflow-visible lg:pb-0"
+          className="mb-space-4 flex gap-space-2 overflow-x-auto pb-space-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           aria-label="ส่วนของบันทึกรายเดือน"
         >
           {PRIMARY_NAV.map((item) => {
@@ -488,7 +488,7 @@ export default function WorkspaceShell({ section, overlay, children }) {
                   active
                     ? 'border-accent text-primary font-semibold'
                     : 'border-transparent text-secondary hover:text-primary'
-                } lg:w-full lg:justify-start lg:border-b-0 lg:border-l-2`}
+                }`}
                 aria-current={active ? 'page' : undefined}
                 onClick={(event) => handleNavLinkClick(event, item.id, active)}
               >
