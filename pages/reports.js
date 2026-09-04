@@ -7,17 +7,30 @@
  * Design Amendment A1 (superseded by A3): เครื่องคำนวณเงินเดือนเคยย้ายไปเป็นหน้าแยก /salary — แผนนั้น
  * ถูกยกเลิกแล้ว กลับไปอยู่ในแท็บ "รายรับ" ของ /workspace แทน (pages/salary.js ตอนนี้เป็นแค่ redirect
  * shim) หน้านี้จึงเหลือ 2 ส่วนเนื้อหา ไม่ใช่ 3 — ยังเป็น collapsible ทั้งคู่ (UX Review, AC-RS-30):
- * สรุปรายเดือน default เปิด (ตัวเลขที่ผู้ใช้มาเช็คหน้านี้), เปรียบเทียบรายเดือน default พับ ใช้แพทเทิร์น
- * header+chevron+aria-expanded เดียวกับที่ /workspace (เดิม) และ BudgetHealthPanel ใช้อยู่แล้ว ไม่ได้คิดใหม่
+ * สรุปรายเดือน default เปิด (ตัวเลขที่ผู้ใช้มาเช็คหน้านี้), เปรียบเทียบรายเดือน default พับ
  * ท้ายหน้ามีลิงก์ทางเข้าไปแท็บ "รายรับ" พร้อมเปิด SalaryModal ให้เลย (คำนวณเงินเดือน →) สำหรับผู้ใช้ที่
  * เคยเจอเครื่องคำนวณอยู่ที่นี่ (E23, ปรับตาม A3)
+ *
+ * Graphite redesign (Reports pass) — Tailwind only, ไม่ import Reports.module.css อีกต่อไป
+ * (task-size-reports-graphite.md Step 3). CollapsibleSection ท้องถิ่นด้านล่างแทนที่ header ที่มือเขียนเอง
+ * เดิมด้วย CollapsibleHeading.js ตัวเดียวกับ Dashboard pass (ไม่แตะไฟล์นั้น — ใช้ตามที่มีอยู่) แต่
+ * CollapsibleHeading ไม่มี prop สำหรับ aria-controls ผูกกับ body region ของมันเอง (ไม่เคยต้องใช้ตอน
+ * Dashboard pass เพราะ BudgetHealthPanel/DashboardCalendarSection ไม่มี id คู่กัน) จึง patch attribute
+ * aria-controls ลงบน <button> ภายในด้วย DOM query สั้น ๆ ใน useEffect แทน (คง header+chevron+
+ * aria-expanded+aria-controls→div#id relationship ของโค้ดเดิมไว้ครบ โดยไม่แก้ CollapsibleHeading.js เอง)
+ *
+ * AC-20: reportMonthModalOpen เดิม Escape-close อย่างเดียว ไม่มี focus trap — ตอนนี้ Tab วนในโมดัล,
+ * Escape ปิด, focus คืนกลับจุดเปิดโมดัลเมื่อปิด (แพทเทิร์นเดียวกับ UnsavedChangesDialog.js แต่ markup เป็น
+ * Tailwind C9 ล้วน ไม่ใช้ CreditCardForm.module.css เพราะยังไม่ migrate) ใช้ getTabbableElements จาก
+ * focusTrap.js ตรง ๆ (TD-M06) ไม่เขียน selector ใหม่เอง
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Layout from '../src/frontend/components/Layout';
 import SummaryReport from '../src/frontend/components/SummaryReport';
 import MonthComparison from '../src/frontend/components/MonthComparison';
+import CollapsibleHeading from '../src/frontend/components/CollapsibleHeading';
 import { Icons } from '../src/frontend/components/Icons';
 import { useSession } from '../src/frontend/contexts/SessionContext';
 import { showToast } from '../src/shared/utils/frontend/toast';
@@ -29,7 +42,11 @@ import { getChartData } from '../src/shared/utils/frontend/summaryUtils';
 import { round2, getCurrentMonthKey, addMonths } from '../src/shared/utils/creditCardUtils';
 import { formatMonthLabelTH } from '../src/shared/utils/frontend/monthUtils';
 import { downloadSummaryReportPdf } from '../src/shared/utils/frontend/reportPdf';
-import styles from '../src/frontend/styles/Reports.module.css';
+import { getTabbableElements } from '../src/shared/utils/frontend/focusTrap';
+
+const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
+// การ์ด/แผงหลักทุกใบใช้กติกาเดียวกัน (C1 §5 component vocabulary) — ตัวคงที่เดียวกับที่ pages/index.js ใช้
+const CARD = 'rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5';
 
 const SELECTED_MONTH_KEY = 'edit_selected_month'; // คีย์เดียวกับ /workspace และ Dashboard (ADR-012)
 const MONTH_RE = /^\d{4}-\d{2}$/;
@@ -182,24 +199,32 @@ const buildMonthlyReportPayload = async (monthKey, taxByYearCache) => {
   };
 };
 
-/** ส่วนพับเก็บได้ — ใช้ซ้ำ 3 ครั้งในหน้านี้ (สรุปรายเดือน/คำนวณเงินเดือน/เปรียบเทียบรายเดือน — AC-RS-30) */
-function CollapsibleSection({ id, title, defaultExpanded, children }) {
+/**
+ * ส่วนพับเก็บได้ — ใช้ 2 ครั้งในหน้านี้ (สรุปรายเดือน/เปรียบเทียบรายเดือน — AC-RS-30)
+ * ห่อ CollapsibleHeading.js (ของเดิมจาก Dashboard pass, ไม่แตะไฟล์นั้น) แล้ว patch aria-controls ลงบน
+ * <button> ภายในด้วย DOM query — CollapsibleHeading เองไม่มี prop สำหรับ wiring นี้ (ไม่เคยต้องใช้มาก่อน)
+ * เพื่อคง button[aria-controls] → div#id relationship ของ CollapsibleSection มือเขียนเดิมไว้ครบ
+ */
+function CollapsibleSection({ headingId, bodyId, title, defaultExpanded, children }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const headingWrapRef = useRef(null);
+
+  useEffect(() => {
+    const button = headingWrapRef.current?.querySelector('button');
+    if (button) button.setAttribute('aria-controls', bodyId);
+  }, [bodyId]);
+
   return (
-    <section className={styles.panelCard}>
-      <button
-        type="button"
-        className={styles.collapsibleHeader}
-        onClick={() => setExpanded((prev) => !prev)}
-        aria-expanded={expanded}
-        aria-controls={id}
-      >
-        <span className={styles.collapsibleTitle}>{title}</span>
-        <span className={`${styles.collapsibleChevron} ${expanded ? styles.collapsibleChevronOpen : ''}`}>
-          <Icons.ChevronDown size={18} />
-        </span>
-      </button>
-      {expanded && <div id={id} className={styles.panelBody}>{children}</div>}
+    <section className={CARD}>
+      <div ref={headingWrapRef}>
+        <CollapsibleHeading
+          headingId={headingId}
+          expanded={expanded}
+          onToggle={() => setExpanded((prev) => !prev)}
+          title={title}
+        />
+      </div>
+      {expanded && <div id={bodyId} className="pt-space-4">{children}</div>}
     </section>
   );
 }
@@ -326,19 +351,55 @@ export default function ReportsPage() {
     }
   };
 
+  // AC-20: Tab วนในโมดัล, Escape ปิด, focus คืนกลับที่ปุ่มเปิดเมื่อปิดจริง (เดินตามแพทเทิร์นเดียวกับ
+  // UnsavedChangesDialog.js — จับ document.activeElement ตอนเปิด, ตั้ง focus แรกให้ element ที่ tab
+  // ได้ตัวแรกในโมดัล, ใช้ getTabbableElements จาก focusTrap.js แทนการเขียน selector เอง (TD-M06))
+  const modalRef = useRef(null);
+
   useEffect(() => {
     if (!reportMonthModalOpen) return undefined;
-    const handleEsc = (event) => { if (event.key === 'Escape') setReportMonthModalOpen(false); };
-    document.addEventListener('keydown', handleEsc);
-    return () => document.removeEventListener('keydown', handleEsc);
+    const previouslyFocused = typeof document !== 'undefined' ? document.activeElement : null;
+    const focusFirstTimer = setTimeout(() => {
+      const focusable = getTabbableElements(modalRef.current);
+      (focusable[0] || modalRef.current)?.focus();
+    }, 0);
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setReportMonthModalOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab' || !modalRef.current) return;
+      const focusable = getTabbableElements(modalRef.current);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      clearTimeout(focusFirstTimer);
+      document.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus?.();
+    };
   }, [reportMonthModalOpen]);
 
   const monthLabel = selectedMonth ? getMonthLabel(selectedMonth) : '';
 
+  // ปุ่ม Download Report PDF — C7 secondary button, อยู่ใน headerActions ของ Layout เหมือนเดิม
+  // (ไม่ย้ายที่ — Stage 1.5 ยืนยันแล้วว่าตำแหน่งถูกต้องอยู่แล้ว)
   const headerActions = (
     <button
       type="button"
-      className={styles.reportDownloadButton}
+      className={`inline-flex min-h-11 items-center gap-space-2 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary disabled:cursor-not-allowed disabled:opacity-55 ${FOCUS_RING}`}
       onClick={handleOpenReportMonthModal}
       disabled={isDownloadingReport || months.length === 0}
     >
@@ -349,72 +410,125 @@ export default function ReportsPage() {
 
   return (
     <Layout activeNav="reports" title="รายงาน" headerActions={headerActions}>
-      <div className={styles.reportsWrap}>
-        <div className={styles.monthNavGroup}>
-          <button type="button" className={styles.monthNavButton} onClick={() => handleNavigateMonth(-1)} aria-label="เดือนก่อนหน้า">
+      {/* ไม่มี padding/max-width ของตัวเอง — Layout.module.css's .content ให้ทั้งสองอย่างอยู่แล้ว
+          (28px padding + max-width 1280px auto margin) เหมือนที่ pages/index.js (Dashboard pass) ทำ */}
+      <div className="flex w-full flex-col gap-space-5">
+        <div className="flex items-center justify-center gap-space-3">
+          <button
+            type="button"
+            className={`inline-flex h-11 w-11 items-center justify-center rounded-full border border-border-default bg-surface-2 text-primary ${FOCUS_RING}`}
+            onClick={() => handleNavigateMonth(-1)}
+            aria-label="เดือนก่อนหน้า"
+          >
             <Icons.ChevronLeft size={18} />
           </button>
-          <span className={styles.monthNavLabel}>{monthLabel}</span>
-          <button type="button" className={styles.monthNavButton} onClick={() => handleNavigateMonth(1)} aria-label="เดือนถัดไป">
+          <span className="min-w-[120px] text-center text-base font-bold text-primary">{monthLabel}</span>
+          <button
+            type="button"
+            className={`inline-flex h-11 w-11 items-center justify-center rounded-full border border-border-default bg-surface-2 text-primary ${FOCUS_RING}`}
+            onClick={() => handleNavigateMonth(1)}
+            aria-label="เดือนถัดไป"
+          >
             <Icons.ChevronRight size={18} />
           </button>
         </div>
 
-        <CollapsibleSection id="reports-summary" title="สรุปรายเดือน" defaultExpanded>
-          <SummaryReport selectedMonth={selectedMonth} />
-        </CollapsibleSection>
+        {/* lg: สองคอลัมน์ — สรุปซ้าย เปรียบเทียบขวา (UX_SPEC §9) */}
+        <div className="flex flex-col gap-space-5 lg:grid lg:grid-cols-2 lg:items-start">
+          <CollapsibleSection headingId="reports-summary" bodyId="reports-summary-body" title="สรุปรายเดือน" defaultExpanded>
+            <SummaryReport selectedMonth={selectedMonth} />
+          </CollapsibleSection>
 
-        <CollapsibleSection id="reports-comparison" title="เปรียบเทียบรายเดือน (6 เดือนล่าสุด)" defaultExpanded={false}>
-          <MonthComparison />
-        </CollapsibleSection>
+          <CollapsibleSection headingId="reports-comparison" bodyId="reports-comparison-body" title="เปรียบเทียบรายเดือน (6 เดือนล่าสุด)" defaultExpanded={false}>
+            <MonthComparison />
+          </CollapsibleSection>
+        </div>
 
         {/* ทางเข้าเครื่องคำนวณเงินเดือนจุดที่สอง (A1) — low-emphasis text link ไม่ใช่ปุ่ม ไม่แข่งกับ
             Download Report PDF ใน headerActions */}
-        <Link
-          href="/workspace/income?salary=open"
-          className={styles.salaryLinkFooter}
-          aria-describedby="reports-salary-link-hint"
-        >
-          คำนวณเงินเดือน →
-        </Link>
-        <p id="reports-salary-link-hint" className={styles.salaryLinkHint}>ย้ายไปอยู่ในแท็บรายรับแล้ว</p>
+        <div className="text-center">
+          <Link
+            href="/workspace/income?salary=open"
+            className={`inline-flex min-h-11 items-center rounded-xs px-space-2 text-sm font-semibold text-accent no-underline ${FOCUS_RING}`}
+            aria-describedby="reports-salary-link-hint"
+          >
+            คำนวณเงินเดือน →
+          </Link>
+          <p id="reports-salary-link-hint" className="m-0 text-xs text-tertiary">ย้ายไปอยู่ในแท็บรายรับแล้ว</p>
+        </div>
       </div>
 
       {reportMonthModalOpen && (
-        <div className={styles.reportMonthModalBackdrop} role="presentation" onClick={() => setReportMonthModalOpen(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(10,10,11,0.72)] p-space-4 md:items-center"
+          role="presentation"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setReportMonthModalOpen(false); }}
+        >
           <div
-            className={styles.reportMonthModal}
+            ref={modalRef}
+            className="flex max-h-[85vh] w-full max-w-md flex-col gap-space-4 overflow-y-auto rounded-lg bg-surface-3 p-space-5 shadow-elev-3"
             role="dialog"
             aria-modal="true"
             aria-label="เลือกเดือนในรายงาน"
-            onClick={(event) => event.stopPropagation()}
           >
-            <div className={styles.reportMonthModalHeader}>
-              <h3 className={styles.reportMonthModalTitle}>เลือกเดือนในรายงาน</h3>
+            <div className="flex items-center justify-between gap-space-3">
+              <h3 className="m-0 text-lg font-semibold text-primary">เลือกเดือนในรายงาน</h3>
+              <button
+                type="button"
+                className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-secondary hover:bg-surface-2 ${FOCUS_RING}`}
+                onClick={() => setReportMonthModalOpen(false)}
+                aria-label="ปิด"
+              >
+                <Icons.X size={18} />
+              </button>
             </div>
-            <p className={styles.reportMonthModalHint}>เดือนที่เลือก: {reportMonthLabel}</p>
-            <div className={styles.reportMonthActions}>
-              <button type="button" onClick={handleSelectAllReportMonths}>เลือกทั้งหมด</button>
-              <button type="button" onClick={handleClearReportMonths}>ล้างที่เลือก</button>
+            <p className="m-0 text-sm text-secondary">เดือนที่เลือก: {reportMonthLabel}</p>
+            <div className="flex gap-space-3">
+              <button
+                type="button"
+                className={`min-h-11 flex-1 rounded-sm border border-border-interactive bg-surface-2 text-sm font-medium text-primary ${FOCUS_RING}`}
+                onClick={handleSelectAllReportMonths}
+              >
+                เลือกทั้งหมด
+              </button>
+              <button
+                type="button"
+                className={`min-h-11 flex-1 rounded-sm border border-border-interactive bg-surface-2 text-sm font-medium text-primary ${FOCUS_RING}`}
+                onClick={handleClearReportMonths}
+              >
+                ล้างที่เลือก
+              </button>
             </div>
-            <div className={styles.reportMonthList}>
+            <div className="flex flex-col gap-space-1 overflow-y-auto">
               {months.map((month) => {
                 const checked = selectedReportMonths.includes(month);
                 return (
-                  <label key={month} className={styles.reportMonthItem}>
-                    <input type="checkbox" checked={checked} onChange={() => toggleReportMonthSelection(month)} />
+                  <label
+                    key={month}
+                    className={`flex min-h-11 cursor-pointer items-center gap-space-3 rounded-sm px-space-2 text-sm text-primary hover:bg-surface-2 ${checked ? 'bg-accent-muted' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleReportMonthSelection(month)}
+                      className="h-5 w-5 shrink-0 accent-accent"
+                    />
                     <span>{getMonthLabel(month)}</span>
                   </label>
                 );
               })}
             </div>
-            <div className={styles.reportMonthModalFooter}>
-              <button type="button" className={styles.reportMonthModalCancelButton} onClick={() => setReportMonthModalOpen(false)}>
+            <div className="flex justify-end gap-space-3">
+              <button
+                type="button"
+                className={`min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary ${FOCUS_RING}`}
+                onClick={() => setReportMonthModalOpen(false)}
+              >
                 ยกเลิก
               </button>
               <button
                 type="button"
-                className={styles.reportMonthModalConfirmButton}
+                className={`min-h-11 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent disabled:cursor-not-allowed disabled:opacity-55 ${FOCUS_RING}`}
                 onClick={handleDownloadReport}
                 disabled={isDownloadingReport || orderedSelectedReportMonths.length === 0}
               >
