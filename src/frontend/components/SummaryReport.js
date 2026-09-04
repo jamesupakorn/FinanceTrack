@@ -4,6 +4,20 @@
  * ตัวเลขทั้งหมดมาจาก getMonthlySummaryModel() เดียวกับ Dashboard/MonthComparison (BR-DASH-005) —
  * ปิดข้อยกเว้นสุดท้ายของ BR-DASH-005 (Amendment A2) หลังจากที่ก่อนหน้านี้ไฟล์นี้ยังมี pipeline คำนวณยอด
  * แยกเป็นของตัวเอง (ดูรายละเอียดใน spec-reports-settings.md §Amendment A2)
+ *
+ * Graphite redesign (Reports pass) — Tailwind only, ไม่ import SummaryReport.module.css อีกต่อไป
+ * (task-size-reports-graphite.md Step 1). ไม่มี card ของตัวเอง — คอมโพเนนต์นี้ mount อยู่ในตัว body ของ
+ * CollapsibleSection ที่ pages/reports.js เป็นคนให้ C1 card chrome (surface-1/border/elev-1) อยู่แล้ว
+ * ใส่การ์ดซ้ำที่นี่จะผิดกติกา C1 "never nest a card inside a card" — ส่วน "สรุป" ที่ต้องแยกกลุ่มสายตา
+ * จากวงแหวนใช้ --surface-2 + border ตามกติกาการจัดกลุ่มซ้อน (C1) แทน ไม่ใช่การ์ดใบที่สอง
+ *
+ * CashFlowRing.js (ย้ายมาก่อนแล้วตอน Dashboard pass, ไม่แตะที่นี่) มี [container-type:inline-size] อยู่บน
+ * <section> ของตัวเอง ทำให้ container-query legend-wrap fix (@container max-width:330px) ทำงานได้ในตัว
+ * ไม่ว่าจะฝังในคอนเทนเนอร์แคบแค่ไหนก็ตาม — ไม่ต้องเติม container-type เพิ่มที่นี่ (ยืนยันจากซอร์สจริง)
+ *
+ * ค่าทุกตัวในตาราง "สรุป" คงเป็น text-primary เสมอ (C3: "value is always text-primary; the delta
+ * carries pos/neg, not the value" — ของเดิมมี .income/.remaining/.tax ใส่สีลงตัวเลขตรง ๆ ซึ่งขัดกติกานี้)
+ * ตัดสีออกจากค่าทุกตัวในรอบนี้ ไม่ใช่ regression — เป็นการ align กับ token rule ที่ประกาศไว้แล้ว
  * @param {object} props
  * @param {string} props.selectedMonth - เดือนที่เลือก (YYYY-MM)
  */
@@ -16,7 +30,8 @@ import { getMonthlySummaryModel } from '../../shared/utils/frontend/monthlySumma
 import { formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
 import { useSession } from '../contexts/SessionContext';
 import CashFlowRing from './CashFlowRing';
-import styles from '../styles/SummaryReport.module.css';
+
+const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 
 /**
  * รายงานสรุปภาพรวมการเงิน
@@ -139,17 +154,73 @@ const SummaryReport = ({ selectedMonth }) => {
     (model?.totalIncome || 0) - round2((model?.generalExpense || 0) + (model?.creditCard || 0))
   );
 
+  // แถวของตาราง "สรุป" — name ซ้าย + amount ขวา tabular-nums ตามกติกา C4 (§5 component vocabulary)
+  // ค่าทุกแถวเป็น text-primary เสมอ ไม่ใส่สี pos/neg/warn/info ลงตัวค่าตรง ๆ (C3) — ผิดกับของเดิม
+  const summaryRows = [
+    {
+      key: 'income',
+      label: 'ยอดรวมรายรับรายเดือน',
+      value: getDisplay(model?.totalIncome || 0)
+    },
+    {
+      key: 'generalExpense',
+      label: 'รายจ่ายทั่วไป',
+      value: getDisplay(model?.generalExpense || 0)
+    },
+    {
+      key: 'creditCard',
+      label: 'บัตรเครดิต',
+      value: getDisplay(model?.creditCard || 0)
+    },
+    {
+      key: 'unpaid',
+      label: 'ยอดค้างชำระ',
+      value: getDisplay(model?.unpaid?.total || 0)
+    },
+    {
+      key: 'savings',
+      label: 'ยอดรวมเงินเก็บรายเดือน',
+      value: getDisplay(model?.savings || 0)
+    },
+    {
+      key: 'goalTarget',
+      label: 'รวมเป้าหมายเงินออม',
+      value: getDisplay(totalGoalsTarget)
+    },
+    {
+      key: 'remaining',
+      label: 'ยอดเงินคงเหลือ',
+      qualifier: 'ก่อนหักรายจ่ายรายวัน/ออม',
+      value: getDisplay(remainingBalance)
+    },
+    {
+      key: 'tax',
+      label: 'ภาษีสะสมตั้งแต่เดือนแรก',
+      value: getDisplay(model?.taxAccumulated || 0)
+    }
+  ];
+
   return (
-    <div className={styles.summaryReport}>
-      <h2 className={styles.reportTitle}>งบประมาณ</h2>
+    <div className="flex flex-col gap-space-5">
+      <h3 className="m-0 text-lg font-semibold text-primary">งบประมาณ</h3>
+
       {currentUser?.isDemo && effectiveMonth && selectedMonth && effectiveMonth !== selectedMonth && (
-        <p className={styles.reportHint}>
+        <p className="m-0 rounded-sm border border-info/30 bg-info/10 px-space-3 py-space-2 text-sm text-info">
           บัญชีเดโม่ไม่มีข้อมูลเดือนที่เลือก จึงแสดงข้อมูลล่าสุดจาก {formatMonthLabelTH(effectiveMonth)}
         </p>
       )}
-      <div className={styles.summaryContent}>
+
+      {/*
+        ring+table side-by-side ใช้ container query (@container) ไม่ใช่ md: breakpoint ตรง ๆ —
+        pages/reports.js's lg tier วางการ์ดนี้ในผัง 2 คอลัมน์ (UX_SPEC §9) ทำให้ความกว้างจริงของการ์ด
+        แคบกว่า viewport มาก (~350px ที่ 1024px viewport) md:flex-row (ผูกกับ viewport width) จึงยัง
+        สั่ง side-by-side อยู่ทั้งที่พื้นที่จริงไม่พอ ทำให้ label ห่อคำแตกเป็น 3 บรรทัด — เทคนิคเดียวกับที่
+        CashFlowRing.js ใช้แก้ปัญหา legend เดียวกันนี้อยู่แล้ว (BUG-A2-1) เอามาใช้ซ้ำที่นี่ (min-width
+        560px ≈ พอสำหรับวงแหวน ~250px + ตาราง ~280px วางเคียงกันแบบไม่บีบ)
+      */}
+      <div className="flex flex-col gap-space-5 [container-type:inline-size] [@container(min-width:560px)]:flex-row [@container(min-width:560px)]:items-start">
         {/* โครงสร้างกระแสเงินสด — CashFlowRing ตัวเดียวกับ Dashboard ในโหมดแสดงผลอย่างเดียว (Amendment A2) */}
-        <div className={styles.chartsSection}>
+        <div className="min-w-0 [@container(min-width:560px)]:flex-1">
           <CashFlowRing
             model={model}
             interactive={false}
@@ -157,88 +228,32 @@ const SummaryReport = ({ selectedMonth }) => {
           />
         </div>
 
-        {/* Summary Table Section */}
-        <div className={styles.summaryTablesSection}>
-          <h3 className={styles.tableTitle}>สรุป</h3>
-          <div className={styles.tablesGrid}>
-            <div className={`${styles.summaryTable} ${styles.actual}`}>
-              <h4 className={styles.tableSubtitle}>สรุปรายเดือน</h4>
-              <div className={styles.summaryGrid}>
-                <div
-                  className={styles.summaryItem}
-                  tabIndex={0}
-                  aria-label={`ยอดรวมรายรับรายเดือน: ${getDisplay(model?.totalIncome || 0)}`}
-                >
-                  <span className={styles.itemLabel}>ยอดรวมรายรับรายเดือน</span>
-                  <span className={`${styles.itemValue} ${styles.income}`}>{getDisplay(model?.totalIncome || 0)}</span>
-                </div>
-                <div
-                  className={styles.summaryItem}
-                  tabIndex={0}
-                  aria-label={`รายจ่ายทั่วไป: ${getDisplay(model?.generalExpense || 0)}`}
-                >
-                  <span className={styles.itemLabel}>รายจ่ายทั่วไป</span>
-                  <span className={styles.itemValue}>{getDisplay(model?.generalExpense || 0)}</span>
-                </div>
-                <div
-                  className={styles.summaryItem}
-                  tabIndex={0}
-                  aria-label={`บัตรเครดิต: ${getDisplay(model?.creditCard || 0)}`}
-                >
-                  <span className={styles.itemLabel}>บัตรเครดิต</span>
-                  <span className={styles.itemValue}>{getDisplay(model?.creditCard || 0)}</span>
-                </div>
-                <div
-                  className={styles.summaryItem}
-                  tabIndex={0}
-                  aria-label={`ยอดค้างชำระ: ${getDisplay(model?.unpaid?.total || 0)}`}
-                >
-                  <span className={styles.itemLabel}>ยอดค้างชำระ</span>
-                  <span className={styles.itemValue}>{getDisplay(model?.unpaid?.total || 0)}</span>
-                </div>
-                <div
-                  className={styles.summaryItem}
-                  tabIndex={0}
-                  aria-label={`ยอดรวมเงินเก็บรายเดือน: ${getDisplay(model?.savings || 0)}`}
-                >
-                  <span className={styles.itemLabel}>ยอดรวมเงินเก็บรายเดือน</span>
-                  <span className={styles.itemValue}>{getDisplay(model?.savings || 0)}</span>
-                </div>
-                <div
-                  className={styles.summaryItem}
-                  tabIndex={0}
-                  aria-label={`รวมเป้าหมายเงินออม: ${getDisplay(totalGoalsTarget)}`}
-                >
-                  <span className={styles.itemLabel}>รวมเป้าหมายเงินออม</span>
-                  <span className={`${styles.itemValue} ${styles.goalTarget}`}>{getDisplay(totalGoalsTarget)}</span>
-                </div>
-                <div
-                  className={styles.summaryItem}
-                  tabIndex={0}
-                  aria-label={`ยอดเงินคงเหลือก่อนหักรายจ่ายรายวันและเงินออม: ${getDisplay(remainingBalance)}`}
-                >
-                  <span className={styles.itemLabel}>
-                    ยอดเงินคงเหลือ<small className={styles.itemLabelQualifier}>ก่อนหักรายจ่ายรายวัน/ออม</small>
-                  </span>
-                  <span className={`${styles.itemValue} ${styles.remaining}`}>{getDisplay(remainingBalance)}</span>
-                </div>
-                <div
-                  className={`${styles.summaryItem} ${styles.taxSection}`}
-                  tabIndex={0}
-                  aria-label={`ภาษีสะสมตั้งแต่เดือนแรก: ${getDisplay(model?.taxAccumulated || 0)}`}
-                >
-                  <span className={styles.itemLabel}>ภาษีสะสมตั้งแต่เดือนแรก</span>
-                  <span className={`${styles.itemValue} ${styles.tax}`}>{getDisplay(model?.taxAccumulated || 0)}</span>
-                </div>
+        {/* ตาราง "สรุป" — surface-2 + border (C1 nested-grouping rule), ไม่ใช่การ์ดใบที่สอง */}
+        <div className="min-w-0 [@container(min-width:560px)]:flex-1">
+          <h4 className="m-0 mb-space-3 text-sm font-medium text-secondary">สรุป</h4>
+          <div className="flex flex-col divide-y divide-border-subtle rounded-md border border-border-default bg-surface-2">
+            {summaryRows.map((row) => (
+              <div
+                key={row.key}
+                tabIndex={0}
+                aria-label={`${row.label}: ${row.value}`}
+                className={`flex min-h-14 items-center justify-between gap-space-3 px-space-3 py-space-2 ${FOCUS_RING}`}
+              >
+                <span className="text-sm text-secondary">
+                  {row.label}
+                  {row.qualifier && <small className="mt-1 block text-xs text-tertiary">{row.qualifier}</small>}
+                </span>
+                <span className="whitespace-nowrap text-lg font-semibold text-primary tabular-nums">{row.value}</span>
               </div>
-              {/* ป้ายอธิบายศัพท์ (AC-RS-43) — ตรงกลางวงแหวนกับแถวยอดเงินคงเหลือคือคนละยอด เจตนา ไม่ใช่ข้อผิดพลาด */}
-              <p className={styles.summaryHint}>
-                กระแสเงินสดสุทธิ (ตรงกลางวงแหวน) = รายรับ − รายจ่ายทั่วไป − รายจ่ายประจำวัน − เงินออม − บัตรเครดิต
-                {' · '}
-                ยอดเงินคงเหลือ = รายรับ − รายจ่ายทั่วไป − บัตรเครดิต (ยังไม่หักรายจ่ายประจำวันและเงินออม)
-              </p>
-            </div>
+            ))}
           </div>
+
+          {/* ป้ายอธิบายศัพท์ (AC-RS-43) — ตรงกลางวงแหวนกับแถวยอดเงินคงเหลือคือคนละยอด เจตนา ไม่ใช่ข้อผิดพลาด */}
+          <p className="m-0 mt-space-3 text-xs text-tertiary">
+            กระแสเงินสดสุทธิ (ตรงกลางวงแหวน) = รายรับ − รายจ่ายทั่วไป − รายจ่ายประจำวัน − เงินออม − บัตรเครดิต
+            {' · '}
+            ยอดเงินคงเหลือ = รายรับ − รายจ่ายทั่วไป − บัตรเครดิต (ยังไม่หักรายจ่ายประจำวันและเงินออม)
+          </p>
         </div>
       </div>
     </div>

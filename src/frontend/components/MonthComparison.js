@@ -12,6 +12,15 @@
  * getAll() จึงต้องยิง getByMonth ทีละเดือนสูงสุด N ครั้งใน Promise.all เดียว แต่ละคำขอ .catch เป็นของ
  * ตัวเอง ไม่ให้เดือนหนึ่งล้มเหลวแล้วพังทั้งตาราง (AC-RS-20/E12) — ปักธง __failed ไว้ภายใน (ไม่ส่งต่อให้
  * getMonthlySummaryModel เห็น) เพื่อแยก "ยอดจริงเป็น 0" ออกจาก "โหลดไม่สำเร็จ" ตาม UX_SPEC (never silently 0)
+ *
+ * Graphite redesign (Reports pass) — Tailwind only, ไม่ import Reports.module.css อีกต่อไป. โครงสร้าง
+ * ข้อมูล/การดึงข้อมูลไม่เปลี่ยนเลย (คงเดิม 100% — ตัด/แก้เฉพาะ markup+className) ตามมติผู้ใช้ที่ยืนยันแล้ว
+ * ใน Stage 1.5: คงโครงสร้าง "การ์ดต่อเดือนสูงสุด 6 การ์ด" ไว้ที่ base tier — ไม่ยุบเป็นตารางแบบ 2 เดือน/
+ * ต่อแถวเมตริก (ตัวเลือกที่ถูกพิจารณาแล้วปฏิเสธอย่างชัดเจน) เปลี่ยนแค่ "รูปทรงภายในการ์ด" จาก <dl> เดิม
+ * เป็นแถวแบบ C4 (ชื่อซ้าย --text-base, ยอด+เดลต้าขวา, tabular-nums) ตาม UX_SPEC §9 ส่วน md+ ยังเป็น
+ * ตาราง C5 (คอลัมน์ตัวเลขชิดขวา + tabular-nums) เหมือนเดิม — คอมโพเนนต์นี้ไม่รู้จักผัง 2 คอลัมน์ที่ lg
+ * (นั่นเป็นหน้าที่ของ pages/reports.js's grid ตาม UX_SPEC §9's "lg: two columns... this component only
+ * knows about its own section")
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -21,7 +30,6 @@ import { round2 } from '../../shared/utils/creditCardUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
 import { Icons } from './Icons';
-import styles from '../styles/Reports.module.css';
 
 const MAX_MONTHS = 6;
 const MONTH_RE = /^\d{4}-\d{2}$/;
@@ -39,23 +47,45 @@ function computeDelta(currentModel, previousModel) {
   return { amount, percent };
 }
 
+// เดลต้าชิป (C8) — ขึ้น = pos, ลง = neg, เสมอมีไอคอน+ข้อความกำกับ ไม่ใช้สีอย่างเดียว (N2)
 function DeltaBadge({ delta }) {
   if (!delta || delta.percent === null || delta.amount === null) {
-    return <span className={styles.deltaCell}>—</span>;
+    return <span className="text-sm text-tertiary">—</span>;
   }
   const isUp = delta.amount >= 0;
   const Icon = isUp ? Icons.TrendingUp : Icons.TrendingDown;
   const word = isUp ? 'เพิ่มขึ้น' : 'ลดลง';
   const absPercent = Math.abs(delta.percent);
+  const tone = isUp ? 'border-pos/40 bg-pos/10 text-pos' : 'border-neg/40 bg-neg/10 text-neg';
   return (
-    <span className={`${styles.deltaCell} ${isUp ? styles.deltaUp : styles.deltaDown}`}>
+    <span className={`inline-flex w-fit items-center gap-1 whitespace-nowrap rounded-full border px-space-2 py-[2px] text-xs font-medium ${tone}`}>
       {/* ไอคอน+ตัวเลขที่เห็น ซ่อนจาก screen reader — มีเวอร์ชันอ่านง่ายแยกไว้ข้างล่างแทน (UX_SPEC §Accessibility) */}
-      <span aria-hidden="true" className={styles.deltaVisible}>
-        <Icon size={14} />
+      <span aria-hidden="true" className="inline-flex items-center gap-1">
+        <Icon size={12} />
         {`${word} ${absPercent}%`}
       </span>
-      <span className={styles.srOnly}>{`${word} ${absPercent} เปอร์เซ็นต์`}</span>
+      <span className="sr-only">{`${word} ${absPercent} เปอร์เซ็นต์`}</span>
     </span>
+  );
+}
+
+// ชิปข้อมูลบางส่วนไม่ครบ (C8, warn — เสมอมีไอคอน+ข้อความกำกับ)
+function PartialDataChip() {
+  return (
+    <span className="inline-flex w-fit items-center gap-1 whitespace-nowrap rounded-full border border-warn/40 bg-warn/10 px-space-2 py-[2px] text-xs font-medium text-warn">
+      <Icons.AlertTriangle size={12} />
+      ข้อมูลบางส่วนไม่ครบ
+    </span>
+  );
+}
+
+// แถวแบบ C4 ในการ์ด — ชื่อซ้าย (text-base), ยอดขวา tabular-nums
+function ComparisonRow({ label, value, emphasized }) {
+  return (
+    <div className={`flex min-h-11 items-center justify-between gap-space-3 border-b border-border-subtle py-space-2 last:border-b-0 ${emphasized ? 'pt-space-3' : ''}`}>
+      <span className={`text-base ${emphasized ? 'font-semibold text-primary' : 'text-secondary'}`}>{label}</span>
+      <span className={`whitespace-nowrap tabular-nums ${emphasized ? 'text-lg font-bold text-primary' : 'text-base font-medium text-primary'}`}>{value}</span>
+    </div>
   );
 }
 
@@ -121,92 +151,86 @@ export default function MonthComparison() {
   }, [rows]);
 
   if (rows === null) {
-    return <p className={styles.comparisonStatus}>กำลังโหลดข้อมูลเปรียบเทียบ...</p>;
+    return <p className="m-0 text-sm text-secondary">กำลังโหลดข้อมูลเปรียบเทียบ...</p>;
   }
 
   if (loadError) {
-    return <p className={styles.comparisonStatus}>โหลดข้อมูลเปรียบเทียบไม่สำเร็จ</p>;
+    return <p className="m-0 text-sm text-secondary">โหลดข้อมูลเปรียบเทียบไม่สำเร็จ</p>;
   }
 
   if (rows.length < 2) {
-    return <p className={styles.comparisonStatus}>ต้องมีข้อมูลอย่างน้อย 2 เดือนจึงจะเปรียบเทียบได้</p>;
+    return <p className="m-0 text-sm text-secondary">ต้องมีข้อมูลอย่างน้อย 2 เดือนจึงจะเปรียบเทียบได้</p>;
   }
 
   return (
-    <div className={styles.comparisonWrap}>
-      <p className={styles.comparisonHint}>
+    // container query แทน md: breakpoint ตรง ๆ — pages/reports.js's lg tier วางการ์ดนี้ในผัง 2 คอลัมน์
+    // (UX_SPEC §9) ทำให้ความกว้างจริงของการ์ดแคบกว่า viewport มาก (~330px ที่ 1024px viewport) ตาราง 8
+    // คอลัมน์ (C5) ต้องการอย่างน้อย ~640px ถึงจะไม่บีบ (ยืนยันแล้วว่าพอดีที่ md เดี่ยว ~686px จริง) —
+    // md: (ผูกกับ viewport width) จึงยังสั่งโชว์ตารางทั้งที่พื้นที่จริงไม่พอ ตัดคอลัมน์ขวาหายไปเงียบ ๆ
+    // เทคนิคเดียวกับที่ SummaryReport.js/CashFlowRing.js ใช้แก้ปัญหาเดียวกันนี้อยู่แล้ว (BUG-A2-1)
+    <div className="flex flex-col gap-space-4 [container-type:inline-size]">
+      <p className="m-0 text-xs text-tertiary">
         กระแสเงินสดสุทธิ = รายรับ − รายจ่ายทั้งหมดในเดือนนั้น · Δ = เทียบกับเดือนก่อนหน้า
       </p>
 
-      {/* เดสก์ท็อป: ตาราง */}
-      <table className={styles.comparisonTable}>
-        <caption className={styles.srOnly}>{`ตารางเปรียบเทียบยอดรายเดือนย้อนหลัง ${rowsWithDelta.length} เดือน`}</caption>
-        <thead>
-          <tr>
-            <th scope="col">เดือน</th>
-            <th scope="col">รายรับ</th>
-            <th scope="col">รายจ่ายทั่วไป</th>
-            <th scope="col">รายจ่ายประจำวัน</th>
-            <th scope="col">เงินออม</th>
-            <th scope="col">บัตรเครดิต</th>
-            <th scope="col">กระแสเงินสดสุทธิ</th>
-            <th scope="col">เปลี่ยนแปลง</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rowsWithDelta.map((row) => (
-            <tr key={row.month}>
-              <th scope="row">
-                {formatMonthLabelTH(row.month)}
-                {row.dailyFailed && <span className={styles.comparisonPartialChip}>ข้อมูลบางส่วนไม่ครบ</span>}
-              </th>
-              <td>{formatCurrency(row.model.totalIncome)}</td>
-              <td>{formatCurrency(row.model.generalExpense)}</td>
-              <td>{row.dailyFailed ? '—' : formatCurrency(row.model.dailyExpense)}</td>
-              <td>{formatCurrency(row.model.savings)}</td>
-              <td>{formatCurrency(row.model.creditCard)}</td>
-              <td className={styles.comparisonHeadlineCell}>{formatCurrency(row.model.netCashFlow)}</td>
-              <td><DeltaBadge delta={row.delta} /></td>
+      {/* container ≥640px: ตาราง C5 — คอลัมน์ตัวเลขชิดขวา + tabular-nums */}
+      <div className="hidden overflow-x-auto [@container(min-width:640px)]:block">
+        <table className="w-full border-collapse text-sm">
+          <caption className="sr-only">{`ตารางเปรียบเทียบยอดรายเดือนย้อนหลัง ${rowsWithDelta.length} เดือน`}</caption>
+          <thead>
+            <tr className="border-b border-border-subtle">
+              <th scope="col" className="px-space-2 py-space-3 text-left text-xs font-medium text-secondary">เดือน</th>
+              <th scope="col" className="px-space-2 py-space-3 text-right text-xs font-medium text-secondary">รายรับ</th>
+              <th scope="col" className="px-space-2 py-space-3 text-right text-xs font-medium text-secondary">รายจ่ายทั่วไป</th>
+              <th scope="col" className="px-space-2 py-space-3 text-right text-xs font-medium text-secondary">รายจ่ายประจำวัน</th>
+              <th scope="col" className="px-space-2 py-space-3 text-right text-xs font-medium text-secondary">เงินออม</th>
+              <th scope="col" className="px-space-2 py-space-3 text-right text-xs font-medium text-secondary">บัตรเครดิต</th>
+              <th scope="col" className="px-space-2 py-space-3 text-right text-xs font-medium text-secondary">กระแสเงินสดสุทธิ</th>
+              <th scope="col" className="px-space-2 py-space-3 text-right text-xs font-medium text-secondary">เปลี่ยนแปลง</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rowsWithDelta.map((row) => (
+              <tr key={row.month} className="border-b border-border-subtle last:border-b-0">
+                <th scope="row" className="px-space-2 py-space-3 text-left font-medium text-primary">
+                  <span className="flex flex-wrap items-center gap-space-2">
+                    {formatMonthLabelTH(row.month)}
+                    {row.dailyFailed && <PartialDataChip />}
+                  </span>
+                </th>
+                <td className="whitespace-nowrap px-space-2 py-space-3 text-right tabular-nums text-primary">{formatCurrency(row.model.totalIncome)}</td>
+                <td className="whitespace-nowrap px-space-2 py-space-3 text-right tabular-nums text-primary">{formatCurrency(row.model.generalExpense)}</td>
+                <td className="whitespace-nowrap px-space-2 py-space-3 text-right tabular-nums text-primary">{row.dailyFailed ? '—' : formatCurrency(row.model.dailyExpense)}</td>
+                <td className="whitespace-nowrap px-space-2 py-space-3 text-right tabular-nums text-primary">{formatCurrency(row.model.savings)}</td>
+                <td className="whitespace-nowrap px-space-2 py-space-3 text-right tabular-nums text-primary">{formatCurrency(row.model.creditCard)}</td>
+                <td className="whitespace-nowrap px-space-2 py-space-3 text-right font-semibold tabular-nums text-primary">{formatCurrency(row.model.netCashFlow)}</td>
+                <td className="px-space-2 py-space-3 text-right">
+                  <span className="inline-flex justify-end"><DeltaBadge delta={row.delta} /></span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      {/* มือถือ: การ์ดต่อเดือน — ไม่มีการเลื่อนแนวนอนของข้อมูลการเงิน (AC-RS-23) */}
-      <div className={styles.comparisonCards}>
+      {/* container <640px: การ์ดต่อเดือน (คงโครงสร้างเดิม — มติผู้ใช้) แถวภายในเป็น C4 — ไม่มีการเลื่อน
+          แนวนอนของข้อมูลการเงิน (AC-RS-23) รวมถึงตอนคอนเทนเนอร์แคบเพราะ lg 2-คอลัมน์ ไม่ใช่แค่มือถือ */}
+      <div className="flex flex-col gap-space-3 [@container(min-width:640px)]:hidden">
         {rowsWithDelta.map((row) => (
-          <div key={row.month} className={styles.comparisonCard}>
-            <div className={styles.comparisonCardHeader}>
-              <span className={styles.comparisonCardMonth}>{formatMonthLabelTH(row.month)}</span>
+          <div key={row.month} className="rounded-md border border-border-default bg-surface-2 p-space-4">
+            <div className="mb-space-2 flex items-center justify-between gap-space-3">
+              <span className="text-base font-semibold text-primary">{formatMonthLabelTH(row.month)}</span>
               <DeltaBadge delta={row.delta} />
             </div>
-            {row.dailyFailed && <span className={styles.comparisonPartialChip}>ข้อมูลบางส่วนไม่ครบ</span>}
-            <dl className={styles.comparisonCardList}>
-              <div className={styles.comparisonCardRow}>
-                <dt>รายรับ</dt>
-                <dd>{formatCurrency(row.model.totalIncome)}</dd>
-              </div>
-              <div className={styles.comparisonCardRow}>
-                <dt>รายจ่ายทั่วไป</dt>
-                <dd>{formatCurrency(row.model.generalExpense)}</dd>
-              </div>
-              <div className={styles.comparisonCardRow}>
-                <dt>รายจ่ายประจำวัน</dt>
-                <dd>{row.dailyFailed ? '—' : formatCurrency(row.model.dailyExpense)}</dd>
-              </div>
-              <div className={styles.comparisonCardRow}>
-                <dt>เงินออม</dt>
-                <dd>{formatCurrency(row.model.savings)}</dd>
-              </div>
-              <div className={styles.comparisonCardRow}>
-                <dt>บัตรเครดิต</dt>
-                <dd>{formatCurrency(row.model.creditCard)}</dd>
-              </div>
-              <div className={`${styles.comparisonCardRow} ${styles.comparisonCardNet}`}>
-                <dt>สุทธิ</dt>
-                <dd>{formatCurrency(row.model.netCashFlow)}</dd>
-              </div>
-            </dl>
+            {row.dailyFailed && <div className="mb-space-2"><PartialDataChip /></div>}
+            <div className="flex flex-col">
+              <ComparisonRow label="รายรับ" value={formatCurrency(row.model.totalIncome)} />
+              <ComparisonRow label="รายจ่ายทั่วไป" value={formatCurrency(row.model.generalExpense)} />
+              <ComparisonRow label="รายจ่ายประจำวัน" value={row.dailyFailed ? '—' : formatCurrency(row.model.dailyExpense)} />
+              <ComparisonRow label="เงินออม" value={formatCurrency(row.model.savings)} />
+              <ComparisonRow label="บัตรเครดิต" value={formatCurrency(row.model.creditCard)} />
+              <ComparisonRow label="สุทธิ" value={formatCurrency(row.model.netCashFlow)} emphasized />
+            </div>
           </div>
         ))}
       </div>
