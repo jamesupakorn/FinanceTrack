@@ -40,7 +40,12 @@ const DEMO_PROFILE = {
 };
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
-const CARD_BASE = `flex flex-col items-center gap-space-3 rounded-md border border-border-default bg-surface-1 p-space-4 text-center shadow-elev-1 transition-transform duration-fast ease-graphite hover:-translate-y-0.5 hover:border-border-interactive hover:shadow-elev-2 md:p-space-5 ${FOCUS_RING}`;
+// Direction/alignment/text-align are deliberately NOT here — they differ between a demo card
+// (horizontal) and a regular card (vertical), and appending an override on top of a base that
+// already sets the opposite value left both flex-col/flex-row (and items-*/text-*) present in the
+// same class list at once, with Tailwind's generated-CSS source order — not JSX order — silently
+// deciding the winner. Each card site supplies its own complete, mutually-exclusive triplet.
+const CARD_BASE = `flex gap-space-3 rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 transition-transform duration-fast ease-graphite hover:-translate-y-0.5 hover:border-border-interactive hover:shadow-elev-2 md:p-space-5 ${FOCUS_RING}`;
 const PRIMARY_BUTTON = `inline-flex h-11 items-center justify-center rounded-sm bg-accent px-space-5 text-sm font-semibold text-on-accent transition-opacity duration-fast ease-graphite disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`;
 const SECONDARY_BUTTON = `inline-flex h-11 items-center justify-center rounded-sm border border-border-interactive bg-surface-2 px-space-5 text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`;
 const CHIP_BASE = 'inline-flex items-center gap-space-1 rounded-full px-space-3 py-space-1 text-xs font-medium whitespace-nowrap';
@@ -361,7 +366,7 @@ export default function ProfileGalleryPage({ initialProfiles = [] }) {
                   ref={(el) => { cardRefs.current[profile.id] = el; }}
                   type="button"
                   onClick={() => handleProfileClick(profile)}
-                  className={`${CARD_BASE} ${spanClass} ${profile.isDemo ? 'flex-row text-left' : ''}`}
+                  className={`${CARD_BASE} ${spanClass} ${profile.isDemo ? 'flex-row items-center text-left' : 'flex-col items-center text-center'}`}
                 >
                   <Avatar profile={profile} />
                   <div className={`flex flex-col gap-space-2 ${profile.isDemo ? 'items-start' : 'items-center'}`}>
