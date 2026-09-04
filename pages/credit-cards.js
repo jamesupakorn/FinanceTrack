@@ -10,6 +10,14 @@
  *   /credit-cards?card=<cardId>   → รายละเอียดบัตร (ปลายทางของลิงก์จาก ExpenseTable)
  * ปฏิทินย้ายออกจากหน้านี้เป็นโมดัลรวม (ADR-012 · Feature 2) เปิดจากปุ่ม "ปฏิทิน" ในหัวข้อ
  * `/credit-cards?view=calendar` ยังคงรองรับเป็น legacy deep link ที่เปิดโมดัลนี้อัตโนมัติ (AC-69)
+ *
+ * Graphite redesign (credit-cards-graphite pass) — เต็มหน้าเปลี่ยนเป็น Tailwind แล้ว ไม่ import
+ * CreditCard.module.css / CreditCardForm.module.css อีกต่อไป (ทั้งสองไฟล์ยังอยู่บน disk เพราะ
+ * ExpenseCalendarModal.js/ExpenseCalendar.js/SalaryModal.js/UnsavedChangesDialog.js ยัง depend อยู่ —
+ * ดู task-context-credit-cards-graphite.md "CRITICAL FINDING", เป็น named exception ต่อ ADR-019 rule 5)
+ * ConfirmDialog เปลี่ยนมาใช้ getTabbableElements จาก focusTrap.js แทน querySelectorAll ของตัวเอง
+ * (TD-M06 conformance — เดิมมีแค่ Escape listener + inline trap คัดลอกจาก CreditCardForm.js รุ่นก่อน
+ * extraction, ดู architecture-review-credit-cards-graphite.md Finding 2)
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -26,16 +34,25 @@ import { showToast } from '../src/shared/utils/frontend/toast';
 import { formatCurrency } from '../src/shared/utils/frontend/numberUtils';
 import { formatMonthKeyTH } from '../src/shared/utils/dateUtils';
 import { addMonths, PLAN_STATUS } from '../src/shared/utils/creditCardUtils';
-import styles from '../src/frontend/styles/CreditCard.module.css';
-import formStyles from '../src/frontend/styles/CreditCardForm.module.css';
+import { getTabbableElements } from '../src/shared/utils/frontend/focusTrap';
 
-/** กล่องยืนยันสำหรับ action ที่ทำลายข้อมูล — action อื่นทั้งหมดใช้ toast
- *  Tab-trap + focus-restore ตามแพทเทิร์นเดียวกับ InstallmentPlanForm/CreditCardForm (critique
- *  2026-08-29 P2 — เดิมมีแค่ Escape listener คีย์บอร์ด/screen reader tab ออกไปหลังโมดัลได้) */
+const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
+
+/** กล่องยืนยันสำหรับ action ที่ทำลายข้อมูล (ลบบัตร/ยกเลิกแผน/ลบแผน/จ่ายขั้นต่ำ) — action อื่นทั้งหมด
+ *  ใช้ toast แทน เป็น C9 (Sheet/Modal) — role="alertdialog" + aria-modal + focus trap ผ่าน
+ *  getTabbableElements ที่ใช้ร่วมกับ CreditCardForm.js/InstallmentPlanForm.js + Escape + focus restore */
 function ConfirmDialog({ open, title, message, confirmLabel, onCancel, onConfirm, busy }) {
   const dialogRef = useRef(null);
   const confirmButtonRef = useRef(null);
   const triggerRef = useRef(null);
+  // เก็บ onCancel ล่าสุดไว้ใน ref แทนการใส่เป็น dependency ของ effect ด้านล่างตรงๆ — ถ้า parent
+  // re-render ระหว่างเปิด dialog (เช่น RevolvingBalanceSection เรียก onChanged ให้ CreditCardsPage
+  // โหลดข้อมูลใหม่แบบ silent) onCancel prop (arrow function ใหม่ทุก render) จะทำให้ effect cleanup
+  // แล้ว re-run กลางอากาศ ซึ่ง cleanup เดิมมี triggerRef.current?.focus?.() อยู่ด้วย — โฟกัสจะหลุดออก
+  // จาก dialog ไปที่หน้าเบื้องหลังทันทีแม้ dialog ยังเปิดอยู่ (พบจากการ live-verify รอบ Graphite นี้
+  // — ไม่เคยถูกทดสอบในเบราว์เซอร์จริงมาก่อน ดู task-context/architecture-review Finding 3)
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -48,13 +65,11 @@ function ConfirmDialog({ open, title, message, confirmLabel, onCancel, onConfirm
     if (!open) return undefined;
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
-        onCancel?.();
+        onCancelRef.current?.();
         return;
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
-      const focusable = dialogRef.current.querySelectorAll(
-        'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      );
+      const focusable = getTabbableElements(dialogRef.current);
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -71,27 +86,54 @@ function ConfirmDialog({ open, title, message, confirmLabel, onCancel, onConfirm
       document.removeEventListener('keydown', handleKeyDown);
       triggerRef.current?.focus?.();
     };
-  }, [open, onCancel]);
+  }, [open]);
 
   if (!open) return null;
 
   return (
-    <div className={formStyles.backdrop} role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onCancel?.();
-    }}>
-      <div ref={dialogRef} className={`${formStyles.modal} ${formStyles.modalNarrow}`} role="alertdialog" aria-modal="true" aria-label={title}>
-        <div className={formStyles.modalHeader}>
-          <h2 className={formStyles.modalTitle}>{title}</h2>
-          <button type="button" className={formStyles.closeButton} onClick={onCancel} aria-label="ปิด">
+    <div
+      className="fixed inset-0 z-[60] flex items-end justify-center overflow-y-auto bg-[rgba(10,10,11,0.72)] p-0 backdrop-blur-sm md:items-center md:p-space-5"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onCancel?.();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-lg bg-surface-3 shadow-elev-3 md:max-h-[85vh] md:max-w-sm md:rounded-lg"
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <div className="flex items-center justify-between gap-space-3 border-b border-border-subtle px-space-5 py-space-4">
+          <h2 className="m-0 text-lg font-semibold text-primary">{title}</h2>
+          <button
+            type="button"
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-sm text-secondary hover:bg-surface-2 ${FOCUS_RING}`}
+            onClick={onCancel}
+            aria-label="ปิด"
+          >
             <Icons.X size={18} />
           </button>
         </div>
-        <div className={formStyles.modalBody}>
-          <p className={formStyles.confirmText}>{message}</p>
+        <div className="flex flex-col gap-space-4 overflow-y-auto px-space-5 py-space-4">
+          <p className="m-0 text-sm leading-relaxed text-secondary">{message}</p>
         </div>
-        <div className={formStyles.modalFooter}>
-          <button type="button" className={formStyles.secondaryButton} onClick={onCancel}>ยกเลิก</button>
-          <button type="button" ref={confirmButtonRef} className={formStyles.dangerButton} onClick={onConfirm} disabled={busy}>
+        <div className="flex flex-col-reverse items-stretch gap-space-3 border-t border-border-subtle px-space-5 py-space-4 md:flex-row md:items-center md:justify-end">
+          <button
+            type="button"
+            className={`min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary ${FOCUS_RING}`}
+            onClick={onCancel}
+          >
+            ยกเลิก
+          </button>
+          <button
+            type="button"
+            ref={confirmButtonRef}
+            className={`min-h-11 rounded-sm border border-neg bg-neg/10 px-space-4 text-sm font-semibold text-neg disabled:opacity-60 ${FOCUS_RING}`}
+            onClick={onConfirm}
+            disabled={busy}
+          >
             {busy ? 'กำลังดำเนินการ...' : (confirmLabel || 'ยืนยัน')}
           </button>
         </div>
@@ -377,10 +419,18 @@ export default function CreditCardsPage() {
       title="บัตรเครดิต & แผนผ่อนชำระ"
       headerActions={(
         <>
-          <button type="button" className={styles.primaryButton} onClick={handleOpenAddCard}>
+          <button
+            type="button"
+            className={`inline-flex min-h-11 items-center justify-center gap-space-2 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent transition-colors duration-fast ease-graphite hover:opacity-90 ${FOCUS_RING}`}
+            onClick={handleOpenAddCard}
+          >
             <Icons.Plus size={16} /> <span>เพิ่มบัตร</span>
           </button>
-          <button type="button" className={styles.ghostButton} onClick={() => setCalendarTrigger(prev => prev + 1)}>
+          <button
+            type="button"
+            className={`inline-flex min-h-11 items-center justify-center gap-space-2 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING}`}
+            onClick={() => setCalendarTrigger(prev => prev + 1)}
+          >
             <Icons.Calendar size={16} /> <span>ปฏิทิน</span>
           </button>
         </>
@@ -388,50 +438,44 @@ export default function CreditCardsPage() {
       calendarTrigger={calendarTrigger}
       onCalendarClose={({ changed } = {}) => { if (changed) loadData({ silent: true }); }}
     >
-      {/* .page ให้ครอบไว้เหมือนเดิม (ไม่ใช่แค่ .container) เพราะ ":focus-visible" ทั้งหมดของหน้านี้
-          (การ์ด/ปุ่ม/ฟอร์ม) ผูกกับ selector ".page :focus-visible" ใน CreditCard.module.css — ถอด
-          .page ออกจะทำให้ focus ring ของทั้งหน้าหายไป ไม่ใช่แค่ header (ปุ่ม header ย้ายไปอยู่ใน
-          Layout เองแล้ว จึงมี selector แยกที่ Layout.module.css: ".headerActionsRow button") */}
-      <div className={styles.page}>
-        <div className={styles.container}>
-          {selectedCardId ? (
-            <CreditCardDetail
-              card={selectedCard}
-              plans={selectedCardPlans}
-              pendingKeys={pendingKeys}
-              onBack={() => goTo({})}
-              onEditCard={handleOpenEditCard}
-              onDeleteCard={handleDeleteCard}
-              onAddPlanForCard={handleOpenAddPlan}
-              onRenamePlan={handleOpenEditPlan}
-              onEditPlan={handleOpenEditPlan}
-              onCancelPlan={handleCancelPlan}
-              onDeletePlan={handleDeletePlan}
-              onToggleInstallment={handleToggleInstallment}
-              onConfirmMinimum={handleConfirmMinimum}
-              onRevolvingChanged={() => loadData({ silent: true })}
-            />
-          ) : (
-            <CreditCardDashboard
-              cards={cards}
-              totals={totals}
-              plans={plans}
-              loading={loading}
-              error={error}
-              pendingKeys={pendingKeys}
-              planCreatedNote={planCreatedNote}
-              onRetry={() => loadData()}
-              onAddCard={handleOpenAddCard}
-              onEditCard={handleOpenEditCard}
-              onDeleteCard={handleDeleteCard}
-              onAddPlan={() => handleOpenAddPlan(null)}
-              onAddPlanForCard={handleOpenAddPlan}
-              onOpenCard={(cardId) => goTo({ card: cardId })}
-              onOpenCalendar={() => setCalendarTrigger(prev => prev + 1)}
-              onToggleInstallment={handleToggleInstallment}
-            />
-          )}
-        </div>
+      <div className="flex flex-col gap-space-5">
+        {selectedCardId ? (
+          <CreditCardDetail
+            card={selectedCard}
+            plans={selectedCardPlans}
+            pendingKeys={pendingKeys}
+            onBack={() => goTo({})}
+            onEditCard={handleOpenEditCard}
+            onDeleteCard={handleDeleteCard}
+            onAddPlanForCard={handleOpenAddPlan}
+            onRenamePlan={handleOpenEditPlan}
+            onEditPlan={handleOpenEditPlan}
+            onCancelPlan={handleCancelPlan}
+            onDeletePlan={handleDeletePlan}
+            onToggleInstallment={handleToggleInstallment}
+            onConfirmMinimum={handleConfirmMinimum}
+            onRevolvingChanged={() => loadData({ silent: true })}
+          />
+        ) : (
+          <CreditCardDashboard
+            cards={cards}
+            totals={totals}
+            plans={plans}
+            loading={loading}
+            error={error}
+            pendingKeys={pendingKeys}
+            planCreatedNote={planCreatedNote}
+            onRetry={() => loadData()}
+            onAddCard={handleOpenAddCard}
+            onEditCard={handleOpenEditCard}
+            onDeleteCard={handleDeleteCard}
+            onAddPlan={() => handleOpenAddPlan(null)}
+            onAddPlanForCard={handleOpenAddPlan}
+            onOpenCard={(cardId) => goTo({ card: cardId })}
+            onOpenCalendar={() => setCalendarTrigger(prev => prev + 1)}
+            onToggleInstallment={handleToggleInstallment}
+          />
+        )}
 
         <CreditCardForm
           open={cardFormOpen}

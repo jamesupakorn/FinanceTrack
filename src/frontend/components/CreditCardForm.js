@@ -1,6 +1,6 @@
 /**
  * คอมโพเนนต์: CreditCardForm (หน้าจอ 3a)
- * ฟอร์มเพิ่ม/แก้ไขบัตรเครดิต — modal บน desktop, full-screen sheet บนมือถือ
+ * ฟอร์มเพิ่ม/แก้ไขบัตรเครดิต — modal บน desktop, full-screen sheet บนมือถือ (C9)
  *
  * พร็อพ:
  * - open {boolean}
@@ -12,6 +12,11 @@
  *
  * หมายเหตุ: ช่องตัวเลขเป็น type="text" + inputMode เสมอ (ADR-006)
  * และไม่ normalize ค่าระหว่างพิมพ์ — จัดรูปแบบตอน blur เท่านั้น เพื่อไม่ให้ focus หลุดบนมือถือ
+ *
+ * Graphite redesign — Tailwind แทน CreditCardForm.module.css แล้ว (ไฟล์ .module.css เดิมยังอยู่บน
+ * disk เพราะ ExpenseCalendarModal.js/SalaryModal.js/UnsavedChangesDialog.js ยัง depend อยู่)
+ * ไฟล์นี้เป็น reference implementation ของ focus trap (getTabbableElements) ที่
+ * InstallmentPlanForm.js และ ConfirmDialog ใน pages/credit-cards.js เอาไปใช้ตามในรอบนี้ด้วย
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -21,9 +26,15 @@ import { parseAndFormat } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
 import { Icons } from './Icons';
-import styles from '../styles/CreditCardForm.module.css';
 
 const DAY_OPTIONS = Array.from({ length: 31 }, (_, index) => String(index + 1));
+
+const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
+const INPUT = `min-h-11 w-full rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-base text-primary outline-none transition-colors duration-fast ease-graphite focus:border-accent aria-[invalid=true]:border-neg ${FOCUS_RING}`;
+const LABEL = 'text-sm font-medium text-secondary';
+const HELPER = 'text-xs leading-relaxed text-tertiary';
+const ERROR_TEXT = 'text-xs text-neg';
+const GROUP_TITLE = 'text-xs font-semibold uppercase tracking-[0.02em] text-tertiary';
 
 const emptyForm = {
   name: '',
@@ -50,6 +61,13 @@ export default function CreditCardForm({
   const dialogRef = useRef(null);
   const firstFieldRef = useRef(null);
   const triggerRef = useRef(null);
+  // เก็บ onClose ล่าสุดไว้ใน ref แทนการใส่เป็น dependency ของ effect ด้านล่างตรงๆ — ถ้า parent
+  // re-render ระหว่างเปิดโมดัล onClose prop (arrow function ใหม่ทุก render) จะทำให้ effect cleanup
+  // แล้ว re-run กลางอากาศ ซึ่ง cleanup มี triggerRef.current?.focus?.() อยู่ด้วย — โฟกัสจะหลุดออกจาก
+  // โมดัลไปที่หน้าเบื้องหลังทันทีแม้โมดัลยังเปิดอยู่ (พบจากการ live-verify รอบ Graphite นี้ — ไม่เคย
+  // ถูกทดสอบในเบราว์เซอร์จริงมาก่อน ดู task-context/architecture-review Finding 3)
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
@@ -81,7 +99,7 @@ export default function CreditCardForm({
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onClose?.();
+        onCloseRef.current?.();
         return;
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
@@ -102,7 +120,7 @@ export default function CreditCardForm({
       document.removeEventListener('keydown', handleKeyDown);
       triggerRef.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   const usedColors = useMemo(() => new Set(
     existingCards.filter(item => item?.id !== card?.id).map(item => item?.color)
@@ -131,38 +149,47 @@ export default function CreditCardForm({
   const describedBy = (field) => (errors[field] ? `card-${field}-error` : undefined);
 
   return (
-    <div className={styles.backdrop} role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose?.();
-    }}>
+    <div
+      className="fixed inset-0 z-[60] flex items-end justify-center overflow-y-auto bg-[rgba(10,10,11,0.72)] p-0 backdrop-blur-sm md:items-center md:p-space-5"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose?.();
+      }}
+    >
       <form
         ref={dialogRef}
-        className={styles.modal}
+        className="flex max-h-[95vh] w-full flex-col overflow-hidden rounded-t-lg bg-surface-3 shadow-elev-3 md:max-h-[85vh] md:max-w-lg md:rounded-lg"
         role="dialog"
         aria-modal="true"
         aria-label={card ? 'แก้ไขบัตรเครดิต' : 'เพิ่มบัตรเครดิต'}
         onSubmit={handleSubmit}
       >
-        <div className={styles.modalHeader}>
-          <h2 className={styles.modalTitle}>{card ? 'แก้ไขบัตรเครดิต' : 'เพิ่มบัตรเครดิต'}</h2>
-          <button type="button" className={styles.closeButton} onClick={onClose} aria-label="ปิด">
+        <div className="flex items-center justify-between gap-space-3 border-b border-border-subtle px-space-5 py-space-4">
+          <h2 className="m-0 text-lg font-semibold text-primary">{card ? 'แก้ไขบัตรเครดิต' : 'เพิ่มบัตรเครดิต'}</h2>
+          <button
+            type="button"
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-sm text-secondary hover:bg-surface-2 ${FOCUS_RING}`}
+            onClick={onClose}
+            aria-label="ปิด"
+          >
             <Icons.X size={18} />
           </button>
         </div>
 
-        <div className={styles.modalBody}>
-          <fieldset className={styles.group}>
-            <legend className={styles.groupTitle}>ข้อมูลบัตร</legend>
+        <div className="flex flex-col gap-space-4 overflow-y-auto px-space-5 py-space-4">
+          <fieldset className="flex flex-col gap-space-3 border-0 p-0 m-0">
+            <legend className={GROUP_TITLE}>ข้อมูลบัตร</legend>
 
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="cc-name">
-                ชื่อบัตร <span className={styles.required}>*</span>
+            <div className="flex flex-col gap-space-1">
+              <label className={LABEL} htmlFor="cc-name">
+                ชื่อบัตร <span className="text-neg">*</span>
               </label>
               <input
                 id="cc-name"
                 name="name"
                 ref={firstFieldRef}
                 type="text"
-                className={styles.input}
+                className={INPUT}
                 maxLength={40}
                 value={form.name}
                 onChange={(event) => setField('name', event.target.value)}
@@ -170,32 +197,32 @@ export default function CreditCardForm({
                 aria-invalid={errors.name ? 'true' : undefined}
                 aria-describedby={describedBy('name')}
               />
-              {errors.name && <span id="card-name-error" className={styles.error}>{errors.name}</span>}
+              {errors.name && <span id="card-name-error" className={ERROR_TEXT}>{errors.name}</span>}
             </div>
 
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="cc-bank">ธนาคาร</label>
+            <div className="flex flex-col gap-space-1">
+              <label className={LABEL} htmlFor="cc-bank">ธนาคาร</label>
               <input
                 id="cc-bank"
                 name="bankName"
                 type="text"
-                className={styles.input}
+                className={INPUT}
                 maxLength={40}
                 value={form.bankName}
                 onChange={(event) => setField('bankName', event.target.value)}
                 placeholder="KTC"
               />
-              <span className={styles.helper}>ถ้าตรงกับชื่อบัญชีธนาคารที่ใช้อยู่ ระบบจะรวมยอดผ่อนเข้าบัญชีนั้น</span>
+              <span className={HELPER}>ถ้าตรงกับชื่อบัญชีธนาคารที่ใช้อยู่ ระบบจะรวมยอดผ่อนเข้าบัญชีนั้น</span>
             </div>
 
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="cc-last4">เลข 4 ตัวท้าย</label>
+            <div className="flex flex-col gap-space-1">
+              <label className={LABEL} htmlFor="cc-last4">เลข 4 ตัวท้าย</label>
               <input
                 id="cc-last4"
                 name="last4"
                 type="text"
                 inputMode="numeric"
-                className={`${styles.input} ${styles.inputShort}`}
+                className={`${INPUT} max-w-[140px]`}
                 maxLength={4}
                 value={form.last4}
                 onChange={(event) => setField('last4', event.target.value.replace(/\D/g, ''))}
@@ -203,12 +230,12 @@ export default function CreditCardForm({
                 aria-invalid={errors.last4 ? 'true' : undefined}
                 aria-describedby={describedBy('last4')}
               />
-              {errors.last4 && <span id="card-last4-error" className={styles.error}>{errors.last4}</span>}
+              {errors.last4 && <span id="card-last4-error" className={ERROR_TEXT}>{errors.last4}</span>}
             </div>
 
-            <div className={styles.field}>
-              <span className={styles.label} id="cc-color-label">สีประจำบัตร</span>
-              <div className={styles.colorGrid} role="radiogroup" aria-labelledby="cc-color-label">
+            <div className="flex flex-col gap-space-1">
+              <span className={LABEL} id="cc-color-label">สีประจำบัตร</span>
+              <div className="grid grid-cols-8 gap-space-2" role="radiogroup" aria-labelledby="cc-color-label">
                 {CARD_COLORS.map((color, index) => {
                   const selected = form.color === color;
                   return (
@@ -218,7 +245,7 @@ export default function CreditCardForm({
                       role="radio"
                       aria-checked={selected}
                       aria-label={`สีที่ ${index + 1}${usedColors.has(color) ? ' (ใช้กับบัตรอื่นแล้ว)' : ''}`}
-                      className={`${styles.colorSwatch} ${selected ? styles.colorSwatchSelected : ''} ${usedColors.has(color) ? styles.colorSwatchUsed : ''}`}
+                      className={`relative flex h-11 w-11 items-center justify-center rounded-sm border-2 text-white ${selected ? 'border-white shadow-[0_0_0_3px_rgba(212,168,87,0.45)]' : 'border-transparent'} ${FOCUS_RING} ${usedColors.has(color) ? 'after:absolute after:bottom-1 after:h-1 after:w-1 after:rounded-full after:bg-white/85 after:content-[\'\']' : ''}`}
                       style={{ background: color }}
                       onClick={() => setField('color', color)}
                     >
@@ -230,19 +257,19 @@ export default function CreditCardForm({
             </div>
           </fieldset>
 
-          <div className={styles.divider} />
+          <div className="h-px bg-border-subtle" />
 
-          <fieldset className={styles.group}>
-            <legend className={styles.groupTitle}>วงเงินและกำหนดชำระ</legend>
+          <fieldset className="flex flex-col gap-space-3 border-0 p-0 m-0">
+            <legend className={GROUP_TITLE}>วงเงินและกำหนดชำระ</legend>
 
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="cc-limit">วงเงินบัตร (บาท)</label>
+            <div className="flex flex-col gap-space-1">
+              <label className={LABEL} htmlFor="cc-limit">วงเงินบัตร (บาท)</label>
               <input
                 id="cc-limit"
                 name="creditLimit"
                 type="text"
                 inputMode="decimal"
-                className={styles.input}
+                className={INPUT}
                 value={form.creditLimit}
                 onChange={(event) => setField('creditLimit', event.target.value)}
                 onBlur={(event) => setField('creditLimit', event.target.value.trim() ? parseAndFormat(event.target.value) : '')}
@@ -250,37 +277,37 @@ export default function CreditCardForm({
                 aria-invalid={errors.creditLimit ? 'true' : undefined}
                 aria-describedby={describedBy('creditLimit')}
               />
-              <span className={styles.helper}>เว้นว่างหรือใส่ 0 หากไม่ต้องการติดตามวงเงิน</span>
-              {errors.creditLimit && <span id="card-creditLimit-error" className={styles.error}>{errors.creditLimit}</span>}
+              <span className={HELPER}>เว้นว่างหรือใส่ 0 หากไม่ต้องการติดตามวงเงิน</span>
+              {errors.creditLimit && <span id="card-creditLimit-error" className={ERROR_TEXT}>{errors.creditLimit}</span>}
             </div>
 
-            <div className={styles.subGroup}>
-              <span className={styles.subGroupTitle}>ยอดใช้จ่ายหมุนเวียน</span>
-              <div className={styles.fieldRow}>
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor="cc-annual-rate">ดอกเบี้ยต่อปี (%)</label>
+            <div className="flex flex-col gap-space-2 rounded-sm border border-border-subtle bg-surface-2 p-space-3">
+              <span className={GROUP_TITLE}>ยอดใช้จ่ายหมุนเวียน</span>
+              <div className="grid grid-cols-1 gap-space-3 md:grid-cols-2">
+                <div className="flex flex-col gap-space-1">
+                  <label className={LABEL} htmlFor="cc-annual-rate">ดอกเบี้ยต่อปี (%)</label>
                   <input
                     id="cc-annual-rate"
                     name="annualRate"
                     type="text"
                     inputMode="decimal"
-                    className={`${styles.input} ${styles.inputShort}`}
+                    className={`${INPUT} max-w-[140px]`}
                     value={form.annualRate}
                     onChange={(event) => setField('annualRate', event.target.value)}
                     placeholder="18"
                     aria-invalid={errors.annualRate ? 'true' : undefined}
                     aria-describedby={describedBy('annualRate')}
                   />
-                  {errors.annualRate && <span id="card-annualRate-error" className={styles.error}>{errors.annualRate}</span>}
+                  {errors.annualRate && <span id="card-annualRate-error" className={ERROR_TEXT}>{errors.annualRate}</span>}
                 </div>
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor="cc-min-percent">ชำระขั้นต่ำ (%)</label>
+                <div className="flex flex-col gap-space-1">
+                  <label className={LABEL} htmlFor="cc-min-percent">ชำระขั้นต่ำ (%)</label>
                   <input
                     id="cc-min-percent"
                     name="minPaymentPercent"
                     type="text"
                     inputMode="decimal"
-                    className={`${styles.input} ${styles.inputShort}`}
+                    className={`${INPUT} max-w-[140px]`}
                     value={form.minPaymentPercent}
                     onChange={(event) => setField('minPaymentPercent', event.target.value)}
                     placeholder="10"
@@ -288,22 +315,22 @@ export default function CreditCardForm({
                     aria-describedby={describedBy('minPaymentPercent')}
                   />
                   {errors.minPaymentPercent && (
-                    <span id="card-minPaymentPercent-error" className={styles.error}>{errors.minPaymentPercent}</span>
+                    <span id="card-minPaymentPercent-error" className={ERROR_TEXT}>{errors.minPaymentPercent}</span>
                   )}
                 </div>
               </div>
               {/* ประโยคนี้กันความเข้าใจผิดว่าถูกคิดดอกเบี้ยทั้งที่จ่ายเต็มทุกเดือน */}
-              <span className={styles.helper}>ใช้เฉพาะตอนเลือก “จ่ายขั้นต่ำ”</span>
-              <span className={styles.helper}>ปกติบัตรส่วนใหญ่กำหนดขั้นต่ำไว้ที่ 5–10%</span>
+              <span className={HELPER}>ใช้เฉพาะตอนเลือก “จ่ายขั้นต่ำ”</span>
+              <span className={HELPER}>ปกติบัตรส่วนใหญ่กำหนดขั้นต่ำไว้ที่ 5–10%</span>
             </div>
 
-            <div className={styles.fieldRow}>
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="cc-statement">วันสรุปยอด</label>
+            <div className="grid grid-cols-1 gap-space-3 md:grid-cols-2">
+              <div className="flex flex-col gap-space-1">
+                <label className={LABEL} htmlFor="cc-statement">วันสรุปยอด</label>
                 <select
                   id="cc-statement"
                   name="statementDay"
-                  className={styles.select}
+                  className={INPUT}
                   value={String(form.statementDay)}
                   onChange={(event) => setField('statementDay', event.target.value)}
                 >
@@ -311,12 +338,12 @@ export default function CreditCardForm({
                   {DAY_OPTIONS.map(day => <option key={day} value={day}>{day}</option>)}
                 </select>
               </div>
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="cc-due">วันครบกำหนดชำระ</label>
+              <div className="flex flex-col gap-space-1">
+                <label className={LABEL} htmlFor="cc-due">วันครบกำหนดชำระ</label>
                 <select
                   id="cc-due"
                   name="dueDay"
-                  className={styles.select}
+                  className={INPUT}
                   value={String(form.dueDay)}
                   onChange={(event) => setField('dueDay', event.target.value)}
                 >
@@ -328,9 +355,19 @@ export default function CreditCardForm({
           </fieldset>
         </div>
 
-        <div className={styles.modalFooter}>
-          <button type="button" className={styles.secondaryButton} onClick={onClose}>ยกเลิก</button>
-          <button type="submit" className={styles.primaryButton} disabled={submitting}>
+        <div className="flex flex-col-reverse items-stretch gap-space-3 border-t border-border-subtle px-space-5 py-space-4 md:flex-row md:items-center md:justify-end">
+          <button
+            type="button"
+            className={`min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary ${FOCUS_RING}`}
+            onClick={onClose}
+          >
+            ยกเลิก
+          </button>
+          <button
+            type="submit"
+            className={`min-h-11 rounded-sm bg-accent px-space-5 text-sm font-semibold text-on-accent disabled:opacity-60 ${FOCUS_RING}`}
+            disabled={submitting}
+          >
             {submitting ? 'กำลังบันทึก...' : 'บันทึกบัตร'}
           </button>
         </div>
