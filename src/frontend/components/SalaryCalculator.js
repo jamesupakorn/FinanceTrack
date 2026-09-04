@@ -2,13 +2,25 @@
  * คอมโพเนนต์: SalaryCalculator
  * ฟอร์มคำนวณเงินเดือน รายรับ/รายหัก และภาษีรายเดือน
  * ดึงข้อมูลจาก API และสรุปผลให้ผู้ใช้
+ *
+ * Graphite redesign (SalaryModal/SalaryCalculator pass) — Tailwind only, เลิก import
+ * SalaryCalculator.module.css (sole owner ของไฟล์นั้น, ลบไฟล์นี้ไปพร้อมกันในคอมมิตนี้ — ADR-019 rule 5)
+ *
+ * เลย์เอาต์เปลี่ยนจาก 2 คอลัมน์ (รายได้ | รายการหัก เคียงข้างกัน) เป็นคอลัมน์เดียว (C1, max 680px)
+ * ตาม UX_SPEC §9's SalaryModal/SalaryCalculator.js entry: รายการรายได้ → รายการหัก → เงินได้สุทธิ
+ * (ฮีโร่ text-3xl เดียวของโมดัลนี้) เรียงต่อกันทุก breakpoint — นี่คือการเปลี่ยนเลย์เอาต์จริง ไม่ใช่แค่
+ * retint ของกริด 2 คอลัมน์เดิม (อ่านตรงตามตัวสเปก ไม่ใช่การตีความ)
+ *
+ * รายการรายได้/รายการหักทั้งสองชุดเป็น C11 (editable list) — คอมโพเนนต์นี้คือ reference implementation
+ * ของ primitive นี้ (UX_SPEC §5.1): K12 (เพิ่มแถวใหม่ไม่ว่าง), K13 (key คงที่ ไม่ใช่ index), K14
+ * (แยก onChange ดิบ / onBlur ค่อยจัด format) ผ่านอยู่แล้วในโค้ดเดิม — พาสนี้แค่คงพฤติกรรมเดิมไว้ผ่านการ
+ * ปรับ markup/className เท่านั้น ไม่แตะ logic
  */
 
 import React, { useState, useEffect } from 'react';
 import { formatCurrency, parseAndFormat, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { salaryAPI, incomeAPI, taxAPI } from '../../shared/utils/frontend/apiUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
-import styles from '../styles/SalaryCalculator.module.css';
 
 // ฟังก์ชันสำหรับแปลงเดือนเป็นชื่อภาษาไทย
 const getThaiMonthName = (monthStr) => {
@@ -105,7 +117,7 @@ const buildItemsFromSource = (sectionData, presetKeys, type) => {
     const hasValue = Object.prototype.hasOwnProperty.call(sectionData, key);
     const rawValue = sectionData[key];
     const numValue = parseToNumber(rawValue);
-    
+
     // เพิ่มเฉพาะรายการที่มีค่ามากกว่า 0
     if (hasValue && numValue > 0) {
       items.push({
@@ -156,6 +168,65 @@ const serializeItemsForSave = (items) => {
 
 const sumItems = (items) => items.reduce((sum, item) => sum + parseToNumber(item.value), 0);
 const hasInputValue = (value) => String(value ?? '').trim() !== '';
+
+// ── Graphite design tokens (ตัวคงที่เดียวกับ CreditCardForm.js/pages/reports.js) ──────────────────
+const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
+const INPUT = `min-h-11 w-full rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-base text-primary outline-none transition-colors duration-fast ease-graphite focus:border-accent ${FOCUS_RING}`;
+const FIELD_LABEL = 'text-xs font-medium text-tertiary';
+const SECTION_TITLE = 'm-0 text-xl font-semibold text-primary';
+
+/**
+ * แถวหนึ่งของ C11 editable list — ชื่อรายการ + จำนวนเงิน + ปุ่มลบ
+ * เก็บ data-salary-type/data-salary-id ไว้บน container เดิม — pendingScrollItem effect (ด้านล่าง)
+ * ค้นหาแถวใหม่ด้วย selector นี้ ไม่ใช่ของตกแต่ง (ห้ามถอดออกตอนปรับ markup)
+ */
+function SalaryItemRow({
+  type, item, typeLabelHint, onLabelChange, onValueChange, onValueBlur, onAmountFocus, onRemove, removeAriaLabel
+}) {
+  return (
+    <div
+      className="flex flex-col gap-space-2 border-b border-border-subtle py-space-3 last:border-b-0"
+      data-salary-type={type}
+      data-salary-id={item.id}
+    >
+      <div className="flex items-end gap-space-2">
+        <div className="flex flex-1 flex-col gap-space-1">
+          <span className={FIELD_LABEL}>ชื่อรายการ</span>
+          <input
+            type="text"
+            value={item.label}
+            onChange={(e) => onLabelChange(item.id, e.target.value)}
+            placeholder={typeLabelHint}
+            className={INPUT}
+            aria-label={`แก้ไขชื่อ${removeAriaLabel}`}
+          />
+        </div>
+        <button
+          type="button"
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-sm text-secondary hover:bg-surface-2 hover:text-neg ${FOCUS_RING}`}
+          onClick={() => onRemove(item.id)}
+          aria-label={`ลบ${removeAriaLabel}นี้`}
+        >
+          ✕
+        </button>
+      </div>
+      <div className="flex flex-col gap-space-1">
+        <span className={FIELD_LABEL}>จำนวนเงิน</span>
+        <input
+          type="text"
+          value={item.value}
+          onChange={(e) => onValueChange(item.id, e.target.value)}
+          onBlur={(e) => onValueBlur(item.id, e.target.value)}
+          onFocus={onAmountFocus}
+          placeholder="0.00"
+          className={`${INPUT} font-numeric text-lg font-semibold tabular-nums`}
+          aria-label={`จำนวนเงิน${removeAriaLabel}`}
+          inputMode="decimal"
+        />
+      </div>
+    </div>
+  );
+}
 
 const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, inModal = false }) => {
   const [incomeItems, setIncomeItems] = useState(() => buildPresetItems(incomePresetKeys));
@@ -337,167 +408,112 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, inModal = false }) =>
   };
 
   return (
-    <div className={`${styles.salaryCalculator} ${inModal ? styles.inModal : ''}`.trim()}>
+    <div className="mx-auto flex w-full max-w-[680px] flex-col gap-space-5">
       {/* เมื่ออยู่ใน modal ตัว shell (SalaryModal) เป็นคนแสดงหัวข้อ/เดือนแทนแล้ว — ไม่งั้นซ้อนกัน 2 หัวข้อ */}
       {!inModal && (
-        <h2 className={styles.title}>คำนวณเงินเดือน - {selectedMonth ? getThaiMonthName(selectedMonth) : 'กรุณาเลือกเดือน'}</h2>
+        <h2 className={SECTION_TITLE}>
+          คำนวณเงินเดือน - {selectedMonth ? getThaiMonthName(selectedMonth) : 'กรุณาเลือกเดือน'}
+        </h2>
       )}
 
-      <div className={styles.salaryContent}>
-        <div className={styles.incomeSection}>
-          <div className={styles.sectionHeader}>
-            <h3 className={`${styles.sectionTitle} ${styles.incomeTitle}`}>รายได้</h3>
-            <button
-              type="button"
-              className={`${styles.addRowBtn} ${styles.addIncomeBtn}`}
-              onClick={() => handleAddItem('income')}
-            >
-              + เพิ่มรายการ
-            </button>
-          </div>
-          <div className={styles.dynamicList}>
-            {incomeItems.map((item) => (
-              <div
-                key={item.id}
-                className={`${styles.dynamicRow} ${styles.incomeRow}`}
-                data-salary-type="income"
-                data-salary-id={item.id}
-              >
-                <div className={styles.rowField}>
-                  <span className={styles.fieldLabel}>ชื่อรายการ</span>
-                  <input
-                    type="text"
-                    value={item.label}
-                    onChange={(e) => handleLabelChange('income', item.id, e.target.value)}
-                    placeholder="เช่น ค่า OT พิเศษ"
-                    className={styles.labelInput}
-                    aria-label="แก้ไขชื่อรายการรายได้"
-                  />
-                </div>
-                <div className={styles.rowField}>
-                  <span className={styles.fieldLabel}>จำนวนเงิน</span>
-                  <input
-                    type="text"
-                    value={item.value}
-                    onChange={(e) => handleValueChange('income', item.id, e.target.value)}
-                    onBlur={(e) => handleValueBlur('income', item.id, e.target.value)}
-                    onFocus={handleAmountInputFocus}
-                    placeholder="0.00"
-                    className={`${styles.labelInput} ${styles.amountInput}`}
-                    aria-label="จำนวนเงินรายได้"
-                    inputMode="decimal"
-                  />
-                </div>
-                <div className={styles.rowActions}>
-                  <button
-                    type="button"
-                    className={styles.removeRowBtn}
-                    onClick={() => handleRemoveItem('income', item.id)}
-                    aria-label="ลบรายการรายได้นี้"
-                  >
-                    ลบ
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className={`${styles.subtotal} ${styles.incomeSubtotal}`}>
-            <span>รวมรายได้: </span>
-            <span className={styles.amount}>{formatCurrency(calculatedResults.รวมรายได้)}</span>
-          </div>
+      {/* C11 editable list #1 — รายได้ (single column ตาม UX_SPEC §9, ไม่ใช่กริด 2 คอลัมน์เดิม) */}
+      <section className="flex flex-col gap-space-3">
+        <div className="flex items-center justify-between gap-space-3">
+          <h3 className={SECTION_TITLE}>รายได้</h3>
         </div>
-
-        <div className={styles.deductionSection}>
-          <div className={styles.sectionHeader}>
-            <h3 className={`${styles.sectionTitle} ${styles.deductionTitle}`}>
-              ค่าใช้จ่ายหักออก
-            </h3>
-            <button
-              type="button"
-              className={`${styles.addRowBtn} ${styles.addDeductionBtn}`}
-              onClick={() => handleAddItem('deduction')}
-            >
-              + เพิ่มรายการ
-            </button>
-          </div>
-          <div className={styles.dynamicList}>
-            {deductionItems.map((item) => (
-              <div
-                key={item.id}
-                className={`${styles.dynamicRow} ${styles.deductionRow}`}
-                data-salary-type="deduction"
-                data-salary-id={item.id}
-              >
-                <div className={styles.rowField}>
-                  <span className={styles.fieldLabel}>ชื่อรายการ</span>
-                  <input
-                    type="text"
-                    value={item.label}
-                    onChange={(e) => handleLabelChange('deduction', item.id, e.target.value)}
-                    placeholder="เช่น เงินกู้กยศ"
-                    className={styles.labelInput}
-                    aria-label="แก้ไขชื่อรายการค่าใช้จ่ายหักออก"
-                  />
-                </div>
-                <div className={styles.rowField}>
-                  <span className={styles.fieldLabel}>จำนวนเงิน</span>
-                  <input
-                    type="text"
-                    value={item.value}
-                    onChange={(e) => handleValueChange('deduction', item.id, e.target.value)}
-                    onBlur={(e) => handleValueBlur('deduction', item.id, e.target.value)}
-                    onFocus={handleAmountInputFocus}
-                    placeholder="0.00"
-                    className={`${styles.labelInput} ${styles.amountInput}`}
-                    aria-label="จำนวนเงินรายการค่าใช้จ่ายหักออก"
-                    inputMode="decimal"
-                  />
-                </div>
-                <div className={styles.rowActions}>
-                  <button
-                    type="button"
-                    className={styles.removeRowBtn}
-                    onClick={() => handleRemoveItem('deduction', item.id)}
-                    aria-label="ลบรายการค่าใช้จ่ายหักออกนี้"
-                  >
-                    ลบ
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className={`${styles.subtotal} ${styles.deductionSubtotal}`}>
-            <span>รวมหัก: </span>
-            <span className={styles.amount}>{formatCurrency(calculatedResults.รวมหัก)}</span>
-          </div>
+        <div className="rounded-md border border-border-default bg-surface-1 px-space-4">
+          {incomeItems.map((item) => (
+            <SalaryItemRow
+              key={item.id}
+              type="income"
+              item={item}
+              typeLabelHint="เช่น ค่า OT พิเศษ"
+              onLabelChange={(id, value) => handleLabelChange('income', id, value)}
+              onValueChange={(id, value) => handleValueChange('income', id, value)}
+              onValueBlur={(id, value) => handleValueBlur('income', id, value)}
+              onAmountFocus={handleAmountInputFocus}
+              onRemove={(id) => handleRemoveItem('income', id)}
+              removeAriaLabel="รายการรายได้"
+            />
+          ))}
         </div>
-      </div>
+        <button
+          type="button"
+          className={`flex min-h-11 w-full items-center justify-center rounded-sm border border-border-interactive bg-surface-2 text-sm font-medium text-primary ${FOCUS_RING}`}
+          onClick={() => handleAddItem('income')}
+        >
+          + เพิ่มรายการ
+        </button>
+        <div className="flex items-center justify-between rounded-sm bg-surface-2 px-space-3 py-space-2">
+          <span className="text-sm text-secondary">รวมรายได้</span>
+          <span className="font-numeric text-base font-semibold tabular-nums text-primary">
+            {formatCurrency(calculatedResults.รวมรายได้)}
+          </span>
+        </div>
+      </section>
 
-      {/* ผลลัพธ์สุทธิ */}
-      <div className={styles.netResult}>
-        <h3>
-          เงินได้สุทธิ: <span className={styles.netAmount}>{formatCurrency(calculatedResults.เงินได้สุทธิ)}</span>
-        </h3>
+      {/* C11 editable list #2 — รายการหัก */}
+      <section className="flex flex-col gap-space-3">
+        <div className="flex items-center justify-between gap-space-3">
+          <h3 className={SECTION_TITLE}>ค่าใช้จ่ายหักออก</h3>
+        </div>
+        <div className="rounded-md border border-border-default bg-surface-1 px-space-4">
+          {deductionItems.map((item) => (
+            <SalaryItemRow
+              key={item.id}
+              type="deduction"
+              item={item}
+              typeLabelHint="เช่น เงินกู้กยศ"
+              onLabelChange={(id, value) => handleLabelChange('deduction', id, value)}
+              onValueChange={(id, value) => handleValueChange('deduction', id, value)}
+              onValueBlur={(id, value) => handleValueBlur('deduction', id, value)}
+              onAmountFocus={handleAmountInputFocus}
+              onRemove={(id) => handleRemoveItem('deduction', id)}
+              removeAriaLabel="รายการค่าใช้จ่ายหักออก"
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          className={`flex min-h-11 w-full items-center justify-center rounded-sm border border-border-interactive bg-surface-2 text-sm font-medium text-primary ${FOCUS_RING}`}
+          onClick={() => handleAddItem('deduction')}
+        >
+          + เพิ่มรายการ
+        </button>
+        <div className="flex items-center justify-between rounded-sm bg-surface-2 px-space-3 py-space-2">
+          <span className="text-sm text-secondary">รวมหัก</span>
+          <span className="font-numeric text-base font-semibold tabular-nums text-primary">
+            {formatCurrency(calculatedResults.รวมหัก)}
+          </span>
+        </div>
+      </section>
+
+      {/* เงินได้สุทธิ — ฮีโร่ text-3xl เดียวของโมดัลนี้ (K16: อัปเดตทุก render ก่อนบันทึก ไม่ใช่แค่ตอนกดบันทึก) */}
+      <div className="rounded-md border border-border-default bg-surface-2 p-space-5 text-center shadow-elev-1">
+        <p className="m-0 text-sm font-medium text-secondary">เงินได้สุทธิ</p>
+        <p className="font-numeric m-0 text-3xl tabular-nums text-primary">
+          {formatCurrency(calculatedResults.เงินได้สุทธิ)}
+        </p>
       </div>
 
       {/* ปุ่มจัดการ — บันทึกทันทีเมื่อกด ไม่ผูกกับ triggerSave ของ Save All อีกต่อไป (Amendment A3) */}
-      <div className={styles.actionButtons}>
+      <div className="flex flex-col-reverse gap-space-3 sm:flex-row">
+        <button
+          type="button"
+          onClick={clearAll}
+          className={`min-h-11 flex-1 rounded-sm border border-border-interactive bg-surface-2 text-sm font-medium text-primary ${FOCUS_RING}`}
+          aria-label="ล้างข้อมูล"
+        >
+          ล้างข้อมูล
+        </button>
         <button
           type="button"
           onClick={saveSalaryData}
-          className={styles.saveBtn}
+          className={`min-h-11 flex-1 rounded-sm bg-accent text-sm font-semibold text-on-accent disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`}
           aria-label="บันทึกเงินเดือน"
           disabled={isSaving}
         >
           {isSaving ? 'กำลังบันทึก...' : 'บันทึกเงินเดือน'}
-        </button>
-        <button
-          type="button"
-          onClick={clearAll}
-          className={styles.clearBtn}
-          aria-label="ล้างข้อมูล"
-        >
-          ล้างข้อมูล
         </button>
       </div>
     </div>
