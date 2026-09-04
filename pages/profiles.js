@@ -284,7 +284,7 @@ export default function ProfileGalleryPage({ initialProfiles = [] }) {
         )}
 
         {showProfileGrid && (
-          <div className="grid grid-cols-2 gap-space-4">
+          <div className="grid grid-cols-1 gap-space-4 sm:grid-cols-2">
             {profiles.map((profile) => {
               const isRevealed = revealedProfileId === profile.id;
               const isCurrent = currentUserId === profile.id;
