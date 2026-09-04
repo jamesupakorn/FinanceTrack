@@ -294,8 +294,12 @@ export default function ProfileGalleryPage({ initialProfiles = [] }) {
               const isRevealed = revealedProfileId === profile.id;
               const isCurrent = currentUserId === profile.id;
               // Demo/placeholder cards span the full grid width — the existing fix, carried forward
-              // (critique 2026-08-29, UX_SPEC §9 "the existing fix").
-              const spanClass = profile.isDemo ? 'col-span-2' : '';
+              // (critique 2026-08-29, UX_SPEC §9 "the existing fix"). Must stay scoped to `sm:` only:
+              // the grid itself is `grid-cols-1 sm:grid-cols-2`, so an unconditional `col-span-2` below
+              // 640px spans a grid that only has 1 explicit column, forcing CSS Grid to invent a narrow
+              // *implicit* 2nd column sized by content — which the next real card then gets auto-placed
+              // into, rendering squeezed instead of stacked full-width (found live on a real phone).
+              const spanClass = profile.isDemo ? 'sm:col-span-2' : '';
 
               if (isRevealed) {
                 return (
