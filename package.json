@@ -1,6 +1,6 @@
 {
   "name": "financetrack",
-  "version": "2.2.58",
+  "version": "2.2.59",
   "description": "บัญชีรับจ่ายย้อนหลัง 12 เดือน",
   "main": "index.js",
   "engines": {
@@ -10,6 +10,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "jest",
+    "test:watch": "jest --watch",
     "release:patch": "npm version patch -m \"chore(release): v%s\"",
     "release:minor": "npm version minor -m \"chore(release): v%s\"",
     "release:major": "npm version major -m \"chore(release): v%s\""
@@ -28,7 +30,13 @@
     "react-dom": "latest"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "autoprefixer": "^10.5.4",
+    "jest": "^30.5.1",
+    "jest-environment-jsdom": "^30.5.1",
+    "mongodb-memory-server": "^11.2.0",
+    "node-mocks-http": "^1.18.1",
     "postcss": "^8.5.26",
     "tailwindcss": "^3.4.19"
   }
