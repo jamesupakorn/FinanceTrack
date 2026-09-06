@@ -296,4 +296,23 @@ describe('/api/line_monthly_summary (Mongo mode)', () => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
     });
   });
+
+  describe('getRecipients type guard (hardening: .pipeline/spec-line-monthly-summary-hardening.md)', () => {
+    it('treats a non-string userId as matching nobody instead of leaking Mongo-filter behavior', async () => {
+      await db.collection('users').insertMany([
+        { id: TEST_USER_ID, LineId: 'line-a', monthlySummaryEnabled: true },
+        { id: OTHER_USER_ID, LineId: 'line-b', monthlySummaryEnabled: true }
+      ]);
+
+      // A Mongo-operator-shaped object is exactly the crafted-input risk the guard closes:
+      // without it, `filter = { id: { $ne: null } }` would match every user with a LineId.
+      const { req, res } = makeReqRes({ body: { date: '2024-01-31', userId: { $ne: null } } });
+      await handler(req, res);
+
+      expect(res._getStatusCode()).toBe(200);
+      const data = JSON.parse(res._getData());
+      expect(data.results).toEqual([]);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
 });

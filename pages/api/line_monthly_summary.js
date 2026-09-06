@@ -15,6 +15,12 @@ import {
 } from '../../src/shared/utils/backend/monthlyLineSummary';
 
 async function getRecipients(targetUserId) {
+  // Reject non-string userId before it can shape a Mongo filter (crafted objects like
+  // { $ne: null } could otherwise change query semantics). undefined/null/'' still mean
+  // "no filter, all users" — unchanged from today, matches JSON mode's `!targetUserId` branch.
+  if (targetUserId !== undefined && targetUserId !== null && typeof targetUserId !== 'string') {
+    return [];
+  }
   if (isJsonMode()) {
     return loadUsers().filter(user => user.LineId && (!targetUserId || user.id === targetUserId));
   }
