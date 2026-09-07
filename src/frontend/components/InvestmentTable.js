@@ -269,11 +269,12 @@ export default function InvestmentTable({ selectedMonth, onDataChange, onRegiste
           type="button"
           onClick={() => {
             if (investments.length === 0) return;
+            markDirty?.(); // K17 — เดียวกับ addInvestment/removeInvestment ด้านบน
             const avgPercents = averagePercent(investments.length);
-            setInvestments(investments.map((item, idx) => ({
+            setInvestments(prev => recalcAmounts(baseAmount, prev.map((item, idx) => ({
               ...item,
               percent: avgPercents[idx]
-            })));
+            }))));
           }}
           className={BTN_SECONDARY}
           disabled={investments.length === 0}
