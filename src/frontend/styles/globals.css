@@ -163,6 +163,35 @@
   --dur-fast: 120ms;
   --dur-base: 200ms;
   --dur-slow: 280ms;
+
+  /* ── App shell geometry (shell-graphite pass) — relocated verbatim from Layout.module.css's own
+     `:global(:root)` block, per this pass's own "legacy bridge" style requirement: Layout.module.css
+     is deleted in this same commit, but 4 other already-migrated files read these exact property
+     names via inline `var(name, fallback)` Tailwind arbitrary values, not via any CSS Module import
+     (WorkspaceShell.js:524,563, MonthManager.js:421, ExpenseTable.js:851,887, IncomeTable.js:388) —
+     relocating (not deleting) keeps every one of those call sites resolving to the real, intentional
+     value with zero change required on their end. ── */
+  --nav-sidebar-width: 240px;
+  --nav-bottom-height: 56px;
+  --nav-safe-bottom: calc(var(--nav-bottom-height) + env(safe-area-inset-bottom, 0px));
+  /* ความสูงจริงของ top bar บนมือถือตอนมี headerActions (ปุ่มเดือนก่อน/ถัดไป + ตัวเลือกเดือน) —
+     /workspace/* เท่านั้นที่ใช้ (F1 · Amendment A5) ค่านี้เคยเป็น 100px (เก่าจาก Layout.module.css
+     ก่อน Tailwind rewrite ของ pass นี้ ตอนที่ consumer ทุกตัวใช้ fallback 90px อยู่แล้ว — คลาดกัน ~10px
+     มาตั้งแต่ก่อนหน้านี้) วัดจริงด้วย Playwright บน /workspace/income ที่ 375px หลัง Tailwind rewrite
+     ของ top bar ใน pass นี้: header.getBoundingClientRect().height = 125px (ไม่ใช่ค่าคาดคะเนจากการบวก
+     เลข) — ทุก consumer เดิมยังบวก +8px เองอยู่แล้ว (`calc(var(--topbar-safe-top,90px)+8px)`) จึงตั้งค่า
+     ตัวแปรนี้เป็นความสูงจริงเฉยๆ ไม่บวกกันชนซ้ำ */
+  --topbar-safe-top: 125px;
+}
+
+/* ── App shell — bottom sheet "เพิ่มเติม" slide-up (shell-graphite pass). Relocated from
+   Layout.module.css's own `@keyframes sheetSlideUp` (referenced from Layout.js via a Tailwind
+   arbitrary `animate-[...]` value, since this pass creates no new CSS Module). `prefers-reduced-
+   motion` is already handled by this file's own unscoped rule further down (forces all transitions/
+   animations to ~0 with `!important`) — no separate reduced-motion override needed here. ── */
+@keyframes sheetSlideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 /* Global Reset */
