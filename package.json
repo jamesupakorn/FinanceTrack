@@ -1,6 +1,6 @@
 {
   "name": "financetrack",
-  "version": "2.2.63",
+  "version": "2.2.64",
   "description": "บัญชีรับจ่ายย้อนหลัง 12 เดือน",
   "main": "index.js",
   "engines": {
@@ -32,6 +32,7 @@
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "autoprefixer": "^10.5.4",
     "jest": "^30.5.1",
     "jest-environment-jsdom": "^30.5.1",
