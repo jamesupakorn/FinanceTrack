@@ -12,11 +12,14 @@
  */
 
 // ...imports and component definition...
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { formatCurrency, handleNumberInput, handleNumberBlur, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { createDefault12MonthsObject, sumAccumulated, getSortedYears } from '../../shared/utils/taxUtils';
 import { taxAPI, salaryAPI } from '../../shared/utils/frontend/apiUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
+import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { Icons } from './Icons';
+import formStyles from '../styles/CreditCardForm.module.css';
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 const INPUT = `h-11 w-full rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-base text-primary outline-none ${FOCUS_RING}`;
@@ -40,6 +43,16 @@ export default function TaxTable({ selectedMonth, salaryUpdateTrigger, onRegiste
     event.target.select();
   };
 
+  // กล่องยืนยันลบปี (ADR-006 ห้าม window.confirm) — รูปแบบเดียวกับ RevolvingConfirmDialog
+  // (ExpenseCalendarModal.js:44-114) แต่เป็น component เดียวกันเลย (เจ้าของทั้งปุ่มเปิดและกล่อง
+  // เหมือน UnsavedChangesDialog.js) จึงคืน focus ให้ปุ่มที่เปิดแบบ self-contained ผ่าน document.activeElement
+  // แทนที่จะรับ restoreFocusRef จากภายนอก
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const deleteDialogRef = useRef(null);
+  const cancelDeleteButtonRef = useRef(null);
+  const deleteTriggerRef = useRef(null);
+
   // ...existing code...
   // เพิ่มปีใหม่ (เฉพาะโหมด edit)
   const handleAddNewYear = (yearAD) => {
@@ -57,18 +70,20 @@ export default function TaxTable({ selectedMonth, salaryUpdateTrigger, onRegiste
     setMonthlyProvident(emptyYearData.monthly_provident);
     setShowAddForm(false);
   };  // ลบปี (เฉพาะโหมด edit)
+  // คืนค่า true/false บอกผลลัพธ์จริง — confirmDeleteYear ด้านล่างใช้ตัดสินใจว่าจะปิดกล่องยืนยันไหม
+  // (ลบไม่สำเร็จต้องเปิดกล่องค้างไว้ ไม่ใช่ปิดเงียบๆ ทั้งที่ยังไม่ได้ลบจริง)
   const handleDelete = async (yearAD) => {
-    if (!yearAD || !allYearData[yearAD]) return;
+    if (!yearAD || !allYearData[yearAD]) return false;
     // ลบที่ backend ก่อน
     try {
       const result = await taxAPI.deleteYear(yearAD);
       if (!result?.success) {
         showToast(result?.message || 'ลบข้อมูลไม่สำเร็จ', 'error');
-        return;
+        return false;
       }
     } catch (e) {
       showToast('เกิดข้อผิดพลาดในการลบข้อมูล', 'error');
-      return;
+      return false;
     }
     // ลบที่ frontend
     const updated = { ...allYearData };
@@ -86,7 +101,58 @@ export default function TaxTable({ selectedMonth, salaryUpdateTrigger, onRegiste
         setMonthlyProvident({});
       }
     }
+    return true;
   };
+
+  // เรียก handleDelete จริงหลังผู้ใช้กดยืนยันในกล่อง — handleDelete เองจัด toast/error ให้อยู่แล้ว
+  // (ไม่แตะ internals นอกจาก return value) ที่นี่แค่คุม busy state ระหว่างรอ แล้วปิดกล่องเฉพาะตอนลบ
+  // สำเร็จจริงเท่านั้น — ลบไม่สำเร็จต้องเปิดกล่องค้างไว้ให้ผู้ใช้กดลองใหม่ได้ ไม่ใช่ปิดเงียบๆ
+  const confirmDeleteYear = async () => {
+    setDeleteBusy(true);
+    const deleted = await handleDelete(selectedYear);
+    setDeleteBusy(false);
+    if (deleted) setConfirmDeleteOpen(false);
+  };
+
+  // เปิดกล่อง: จำปุ่มที่เปิดไว้ก่อน แล้วหน่วง 40ms ค่อยย้าย focus เข้ากล่อง (ให้ผ่านช่วง mount —
+  // รูปแบบเดียวกับ RevolvingConfirmDialog/UnsavedChangesDialog) ปิดกล่อง (ทุกทาง): คืน focus ให้ปุ่มเดิม
+  useEffect(() => {
+    if (!confirmDeleteOpen) return undefined;
+    deleteTriggerRef.current = typeof document !== 'undefined' ? document.activeElement : null;
+    const timer = setTimeout(() => cancelDeleteButtonRef.current?.focus(), 40);
+    return () => {
+      clearTimeout(timer);
+      deleteTriggerRef.current?.focus?.();
+    };
+  }, [confirmDeleteOpen]);
+
+  // Escape ปิดกล่องเสมอ (ทางเลือกปลอดภัย ไม่เคยตีความเป็นยืนยัน) · Tab วนอยู่ในกล่องผ่าน getTabbableElements
+  // (ไม่ใช่ raw selector — ป้องกัน BUG-4 เช่นเดียวกับที่อื่นในโค้ดฐานนี้)
+  useEffect(() => {
+    if (!confirmDeleteOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setConfirmDeleteOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab' || !deleteDialogRef.current) return;
+      const focusable = getTabbableElements(deleteDialogRef.current);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [confirmDeleteOpen]);
+
   const handleSyncFromSalary = async () => {
     try {
       const { months: allMonths } = await salaryAPI.getAll();
@@ -258,10 +324,71 @@ export default function TaxTable({ selectedMonth, salaryUpdateTrigger, onRegiste
         <button type="button" onClick={handleSyncFromSalary} className={BTN_SECONDARY}>
           ซิงค์จากเงินเดือน
         </button>
-        <button type="button" onClick={() => handleDelete(selectedYear)} className={BTN_DANGER}>
+        <button
+          type="button"
+          onClick={() => {
+            if (!selectedYear || !allYearData[selectedYear]) return;
+            setConfirmDeleteOpen(true);
+          }}
+          className={BTN_DANGER}
+        >
           ลบข้อมูลปี พ.ศ. {parseInt(selectedYear) + 543}
         </button>
       </div>
+
+      {confirmDeleteOpen && (
+        <div
+          className={formStyles.backdrop}
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setConfirmDeleteOpen(false);
+          }}
+        >
+          <div
+            ref={deleteDialogRef}
+            className={`${formStyles.modal} ${formStyles.modalNarrow}`}
+            role="alertdialog"
+            aria-modal="true"
+            aria-label={`ลบข้อมูลปี พ.ศ. ${parseInt(selectedYear) + 543}`}
+          >
+            <div className={formStyles.modalHeader}>
+              <h2 className={formStyles.modalTitle}>{`ลบข้อมูลปี พ.ศ. ${parseInt(selectedYear) + 543}`}</h2>
+              <button
+                type="button"
+                className={formStyles.closeButton}
+                onClick={() => setConfirmDeleteOpen(false)}
+                aria-label="ปิด"
+              >
+                <Icons.X size={18} />
+              </button>
+            </div>
+            <div className={formStyles.modalBody}>
+              <p className={formStyles.confirmText}>
+                {`ข้อมูลภาษี รายรับ และกองทุนสำรองเลี้ยงชีพทั้ง 12 เดือนของปี พ.ศ. ${parseInt(selectedYear) + 543} `
+                  + 'จะถูกลบถาวรและไม่สามารถกู้คืนได้'}
+              </p>
+            </div>
+            <div className={formStyles.modalFooter}>
+              <button
+                ref={cancelDeleteButtonRef}
+                type="button"
+                className={formStyles.secondaryButton}
+                onClick={() => setConfirmDeleteOpen(false)}
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                className={formStyles.dangerButton}
+                onClick={confirmDeleteYear}
+                disabled={deleteBusy}
+              >
+                {deleteBusy ? 'กำลังลบ...' : 'ลบข้อมูล'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAddForm && (
         <div className="mb-space-4 rounded-md border border-border-subtle bg-surface-2 p-space-4">
