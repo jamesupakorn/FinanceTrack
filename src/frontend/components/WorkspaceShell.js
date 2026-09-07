@@ -88,6 +88,17 @@ const SECTION_HEADING_META = {
 // ที่สลับหน้า และกันแถบเดือน sticky วาบหายแล้วโผล่ใหม่ระหว่างรอ fetch (AC-A5-9)
 const monthsCache = new Map();
 
+// hydration-safe flag ระดับ module (เหมือน monthsCache — อยู่รอดข้าม remount ตราบใดที่ยังอยู่ในแท็บ/
+// document เดิม, รีเซ็ตเป็น false ทุกครั้งที่โหลดหน้าใหม่จริงๆ เพราะ module state ทั้งหมดถูกสร้างใหม่)
+// ใช้แยกสองกรณีที่ selectedMonth's lazy initializer (ด้านล่าง) ต้องทำต่างกัน:
+//   - hasHydratedOnce === false → นี่อาจเป็น "true first hydration" ของแท็บนี้จริงๆ (มี SSR HTML จริงที่
+//     client ต้อง match) → ต้อง seed selectedMonth เป็น null ให้ตรงกับ server (window undefined ฝั่ง
+//     server ทำให้ selectedMonth เป็น null เสมอ) แล้วค่อย resolve ค่าจริงใน useEffect หลัง commit แรก
+//     (เห็นผลช้าไปหนึ่ง tick แต่ไม่มี hydration mismatch)
+//   - hasHydratedOnce === true → นี่คือ remount ทีหลังจากสลับ /workspace/* route ย่อย ไม่มี SSR เกี่ยวข้อง
+//     กับ render รอบนี้เลย อ่าน window/localStorage แบบ sync ได้ทันทีเหมือนเดิม (AC-A5-9 ต้องไม่ถอย)
+let hasHydratedOnce = false;
+
 const buildLeaveCopy = (heading, monthLabel) => (
   `ข้อมูลใน "${heading}" ของเดือน ${monthLabel} ยังไม่ได้บันทึก ถ้าออกตอนนี้ข้อมูลที่แก้ไว้จะหายไป`
 );
@@ -116,12 +127,24 @@ export default function WorkspaceShell({ section, overlay, children }) {
   const headingMeta = SECTION_HEADING_META[section] || SECTION_HEADING_META.income;
 
   // ------------------------------------------------------------------ เดือน + รายชื่อเดือน
+  // snapshot ของ hasHydratedOnce ตอน render แรกของ instance นี้เท่านั้น (ref คงค่าไว้ข้าม re-render ของ
+  // instance เดิม ต่างจาก local const ที่จะอ่านค่า module flag ใหม่ทุก render — ถ้าไม่ snapshot ไว้
+  // ตอน effect ด้านล่างพลิก hasHydratedOnce เป็น true แล้ว re-render รอบต่อไปของ "instance เดิม" จะเข้าใจ
+  // ผิดว่าตัวเองไม่ใช่ first hydration ทั้งที่มันเป็นคนพลิก flag เอง)
+  const isFirstHydrationRef = useRef(!hasHydratedOnce);
+
   // seed แบบ sync จาก URL จริง (window.location.search — ไม่ใช้ router.query ที่ยังไม่พร้อมตอน hard
   // load) แล้วค่อย fallback localStorage — WorkspaceShell mount ได้ก็ต่อเมื่อ Layout ปลดล็อกแล้วเท่านั้น
   // (isLocked=false ต้องมี currentUser พร้อมแล้ว) จึงอ่าน localStorage ตาม userId ได้ทันทีตั้งแต่ render
   // แรกโดยไม่ต้องรอ effect — ทำให้แถบเดือน/เนื้อหา section เห็นเดือนถูกต้องตั้งแต่ paint แรก (AC-A5-9)
+  //
+  // ข้อยกเว้น: ถ้านี่คือ true first hydration ของแท็บนี้ (isFirstHydrationRef.current === true) ต้อง seed
+  // เป็น null ให้ตรงกับ server เป๊ะๆ ก่อน (server เห็น window === undefined เสมอ จึงได้ null เสมอ) —
+  // ไม่งั้น React จะเจอ SSR/CSR text mismatch จริงบน headerActions's month pill (Layout.js render
+  // headerActions แบบไม่ gate ด้วย isLocked) แล้วค่อย resolve ค่าจริงใน useEffect ถัดไปหลัง commit แรก
   const [selectedMonth, setSelectedMonth] = useState(() => {
     if (typeof window === 'undefined') return null;
+    if (isFirstHydrationRef.current) return null;
     try {
       const params = new URLSearchParams(window.location.search);
       const fromUrl = params.get('month');
@@ -133,6 +156,27 @@ export default function WorkspaceShell({ section, overlay, children }) {
     }
     return null;
   });
+
+  // resolve เดือนจริงหลัง commit แรก — ทำงานเฉพาะ instance ที่เป็น true first hydration เท่านั้น (ref
+  // guard กัน remount ทีหลังจากสลับ route ย่อยไม่ให้เข้ามาซ้ำ, effect นั้นได้ค่า sync ไปแล้วตั้งแต่ตอน
+  // seed ข้างบน) ใช้ resolution order เดียวกับตอน seed sync ทุกประการ (URL ก่อน แล้วค่อย localStorage)
+  // — ถ้าไม่เจอทั้งคู่ ปล่อยเป็น null ต่อไป แล้วให้ effect resolve เดือนตัวหลัก (:~230 ด้านล่าง, รอ months
+  // โหลดเสร็จ) เป็นคนเลือกเดือนปัจจุบันแทนเหมือนพฤติกรรมเดิมทุกประการ (spec AC-4)
+  useEffect(() => {
+    if (!isFirstHydrationRef.current) return;
+    hasHydratedOnce = true; // พลิกก่อนเสมอ แม้ resolve ด้านล่างจะ throw — remount ถัดไปต้องไม่ถูกนับเป็น first hydration อีก
+    if (typeof window === 'undefined') return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const fromUrl = params.get('month');
+      if (fromUrl && MONTH_RE.test(fromUrl)) { setSelectedMonth(fromUrl); return; }
+      const stored = userId ? localStorage.getItem(`${SELECTED_MONTH_KEY}_${userId}`) : null;
+      if (stored && MONTH_RE.test(stored)) setSelectedMonth(stored);
+    } catch (error) {
+      // localStorage อาจถูกบล็อก (private mode ฯลฯ) — เดือนจะถูก resolve ใหม่จาก effect หลัก (:~230) แทน
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [months, setMonths] = useState(() => (userId && monthsCache.has(userId) ? monthsCache.get(userId) : []));
   const [refreshTrigger, setRefreshTrigger] = useState(0);
