@@ -59,15 +59,15 @@ const getMonthLabel = (monthKey) => {
 
 // แถวนำทางหลัก — เงินออม/เป้าหมาย/ลงทุน สามหน้ารวมกันเป็นก้อนเดียวของแถวนี้ (เงินออม active ให้ทั้งสาม)
 const PRIMARY_NAV = [
-  { id: 'income', label: 'รายได้', Icon: Icons.TrendingUp },
-  { id: 'expense', label: 'บิลและรายจ่าย', Icon: Icons.CreditCard },
-  { id: 'savings', label: 'ออมและเป้าหมาย', Icon: Icons.PiggyBank },
-  { id: 'daily', label: 'ค่าใช้จ่ายรายวัน', Icon: Icons.CreditCard },
+  { id: 'income', label: 'รายรับ', Icon: Icons.TrendingUp },
+  { id: 'expense', label: 'บิล', Icon: Icons.CreditCard },
+  { id: 'savings', label: 'เงินออม', Icon: Icons.PiggyBank },
+  { id: 'daily', label: 'รายวัน', Icon: Icons.CreditCard },
   { id: 'tax', label: 'ภาษี', Icon: Icons.BarChart }
 ];
 const SAVINGS_GROUP = ['savings', 'goals', 'investment'];
 const SUB_NAV = [
-  { id: 'savings', label: 'เงินออม' },
+  { id: 'savings', label: 'ภาพรวม' },
   { id: 'goals', label: 'เป้าหมาย' },
   { id: 'investment', label: 'ลงทุน' }
 ];
@@ -396,7 +396,7 @@ export default function WorkspaceShell({ section, overlay, children }) {
 
   // ------------------------------------------------------------------ เฮดเดอร์: แถบเดือน sticky
   // (Finding 4) + ปุ่มบันทึกถาวรที่ lg เท่านั้น (Finding 5, §6.6) — ทั้งก้อนอยู่ใน Layout's
-  // headerActions ซึ่งเรนเดอร์ใน .topBar ที่ position:sticky อยู่แล้ว (Layout.module.css:151-152)
+  // headerActions ซึ่งเรนเดอร์ใน Layout.js's <header> ที่ position:sticky อยู่แล้ว
   const headerActions = (
     <div className="flex w-full flex-wrap items-center justify-between gap-space-3 lg:w-auto lg:flex-nowrap">
       <div className="flex items-center gap-space-2">
@@ -475,7 +475,7 @@ export default function WorkspaceShell({ section, overlay, children }) {
         </p>
 
         <nav
-          className="mb-space-4 flex gap-space-2 overflow-x-auto pb-space-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="mb-space-4 flex flex-wrap gap-x-space-1 gap-y-space-2 pb-space-1 lg:flex-nowrap lg:gap-x-space-2 lg:gap-y-space-2"
           aria-label="ส่วนของบันทึกรายเดือน"
         >
           {PRIMARY_NAV.map((item) => {
@@ -484,7 +484,7 @@ export default function WorkspaceShell({ section, overlay, children }) {
               <Link
                 key={item.id}
                 href={sectionHref(item.id, selectedMonth)}
-                className={`flex shrink-0 items-center gap-space-2 whitespace-nowrap rounded-sm border-b-2 px-space-4 py-space-3 text-sm font-medium transition-colors duration-fast ease-graphite ${FOCUS_RING} ${
+                className={`flex min-h-11 shrink-0 basis-[calc((100%-1rem)/5)] items-center justify-center gap-space-2 whitespace-nowrap rounded-sm border-b-2 px-space-2 py-space-3 text-xs font-medium transition-colors duration-fast ease-graphite lg:basis-auto lg:justify-start lg:px-space-4 lg:text-sm ${FOCUS_RING} ${
                   active
                     ? 'border-accent text-primary font-semibold'
                     : 'border-transparent text-secondary hover:text-primary'
@@ -492,7 +492,9 @@ export default function WorkspaceShell({ section, overlay, children }) {
                 aria-current={active ? 'page' : undefined}
                 onClick={(event) => handleNavLinkClick(event, item.id, active)}
               >
-                <item.Icon size={20} />
+                <span className="hidden lg:inline-flex" aria-hidden="true">
+                  <item.Icon size={20} />
+                </span>
                 {item.label}
               </Link>
             );
