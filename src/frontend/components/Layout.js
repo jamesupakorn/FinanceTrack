@@ -10,14 +10,17 @@
  * - เมนูผู้ใช้ (เปลี่ยนรหัสผ่าน / สลับผู้ใช้ / ออกจากระบบ) + ChangePasswordModal — ย้ายมาจาก edit.js
  * - ExpenseCalendarModal หนึ่งอินสแตนซ์เดียวในทั้งแอป (AC-SH-13)
  *
- * ปุ่ม "เพิ่มเติม" บนมือถือเปิด bottom sheet ที่มี focus trap ของตัวเอง — คัดลอกรูปแบบ
- * getTabbableElements/FOCUSABLE_SELECTOR ("ตัวจริง" ที่แก้บั๊กแล้ว) มาจาก
- * ExpenseCalendarModal.js:49-74 ตรงตามที่ UX_SPEC กำกับไว้ (ห้ามใช้รูปแบบเก่าที่ CreditCardForm.js:87)
+ * ปุ่ม "เพิ่มเติม" บนมือถือเปิด bottom sheet ที่มี focus trap ของตัวเอง — ใช้
+ * getTabbableElements จาก shared/utils/frontend/focusTrap.js (ของกลางที่สกัดจาก
+ * ExpenseCalendarModal.js หลัง TD-M06 — เดิมไฟล์นี้คัดลอกมาเป็นสำเนาของตัวเอง ตอนนี้เปลี่ยนมาใช้
+ * ของกลางแล้วระหว่าง Graphite pass นี้ ตาม UX_SPEC ที่กำกับไว้ ห้ามใช้รูปแบบเก่าที่ CreditCardForm.js:87)
  *
- * Graphite redesign (income-expense-graphite pass, architecture-review Finding 1) — เฉพาะ 3 บริเวณ
- * ที่เคยพึ่ง Home.module.css เท่านั้นถูก migrate เป็น Tailwind ที่นี่: เมนูผู้ใช้ (บรรทัดนี้ลงไปหา
- * userDropdown), guard overlay ตอน isLocked, และ action toast ท้ายไฟล์ — sidebar/top bar
- * structure/bottom nav/bottom sheet/ทั้งสองโมดัลยังอยู่บน Layout.module.css เดิมทั้งหมด ไม่แตะ
+ * Graphite redesign (shell-graphite pass) — ทั้งไฟล์ migrate เป็น Tailwind ครบแล้ว
+ * (income-expense-graphite pass เคย migrate ไว้ก่อน 3 บริเวณ: เมนูผู้ใช้/guard overlay/action toast —
+ * pass นี้ทำส่วนที่เหลือทั้งหมด: skip link, sidebar, top bar, main wrapper, bottom nav, bottom sheet)
+ * Layout.module.css ถูกลบแล้ว — 4 ตัวแปร geometry (--nav-sidebar-width ฯลฯ) ย้ายไปอยู่ globals.css
+ * แทน (ยังมีไฟล์อื่นนอก Layout.js อ่านผ่าน inline var(name, fallback) อยู่ 4 ไฟล์ — ดูหมายเหตุที่
+ * globals.css เอง)
  *
  * props ที่นอกเหนือจากที่ spec ระบุไว้ (calendarTrigger, onCalendarClose): เพิ่มเพื่อคงพฤติกรรมเดิมที่
  * edit.js/credit-cards.js มีอยู่แล้วก่อนรวมโมดัลเป็นหนึ่งเดียว — ทั้งสองหน้าเคย refresh ข้อมูลของตัวเอง
@@ -43,7 +46,7 @@ import { Icons } from './Icons';
 import ChangePasswordModal from './ChangePasswordModal';
 import ExpenseCalendarModal from './ExpenseCalendarModal';
 import { withApiTokenHeaders } from '../../shared/utils/frontend/apiToken';
-import styles from '../styles/Layout.module.css';
+import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 
@@ -61,24 +64,6 @@ const NAV_ITEMS = [
 ];
 const MOBILE_PRIMARY_IDS = ['dashboard', 'workspace', 'credit-cards', 'calendar'];
 const MOBILE_SHEET_NAV_IDS = ['reports', 'settings'];
-
-// selector กว้างไว้ก่อนแล้วกรองด้วยความจริงของ element ทีหลัง — คัดลอกจาก ExpenseCalendarModal.js:49-74
-const FOCUSABLE_SELECTOR = [
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  'a[href]',
-  '[tabindex]'
-].join(', ');
-
-function getTabbableElements(root) {
-  return Array.from(root.querySelectorAll(FOCUSABLE_SELECTOR)).filter(element => (
-    !element.disabled
-    && element.tabIndex >= 0
-    && (element.offsetParent !== null || element.getClientRects().length > 0)
-  ));
-}
 
 /** ไอคอนจุดสามจุดสำหรับปุ่ม "เพิ่มเติม" — ไม่มีในชุด Icons.js เดิม จึงวาด inline ด้วยสไตล์เดียวกัน (stroke 2, 24x24) */
 function MoreIcon({ size = 20 }) {
@@ -301,8 +286,11 @@ export default function Layout({
     router.push(item.href);
   };
 
+  // ไอคอนใน nav item — currentColor ตาม Icons.js เดิม จึงกำหนดสีผ่าน text-* ของ span ห่อ ไม่ต้องส่ง
+  // prop สีเข้าไปใน Icon เอง; active ต้องเป็น "สี accent + องค์ประกอบ 2px + น้ำหนักตัวอักษร" เสมอ
+  // (WCAG 1.4.1 "ห้ามสื่อความหมายด้วยสีอย่างเดียว" — §6.1/§6.2)
   const renderNavIcon = (Icon, active) => (
-    <span className={`${styles.navIcon} ${active ? styles.navIconActive : ''}`}>
+    <span className={`inline-flex shrink-0 ${active ? 'text-accent' : 'text-secondary'}`}>
       <Icon size={20} />
     </span>
   );
@@ -310,22 +298,34 @@ export default function Layout({
   const sheetNavItems = NAV_ITEMS.filter(item => MOBILE_SHEET_NAV_IDS.includes(item.id));
 
   return (
-    <div className={styles.shell}>
-      <a href="#main" className={styles.skipLink}>ข้ามไปยังเนื้อหา</a>
+    <div className="flex min-h-screen w-full">
+      <a
+        href="#main"
+        className={`fixed left-space-3 top-[-60px] z-[200] rounded-md bg-accent px-space-5 py-space-3 text-sm font-semibold text-on-accent no-underline transition-[top] duration-base ease-graphite focus-visible:top-space-3 focus:top-space-3 ${FOCUS_RING}`}
+      >
+        ข้ามไปยังเนื้อหา
+      </a>
 
-      {/* ------------------------------------------------------------ sidebar (desktop) */}
-      <nav className={styles.sidebar} aria-label="เมนูหลัก">
-        <div className={styles.sidebarBrand}>FinanceTrack</div>
-        <div className={styles.sidebarNavList}>
+      {/* ------------------------------------------------------------ sidebar (desktop, lg+) — §6.2 */}
+      <nav
+        className="sticky top-0 hidden h-screen w-[var(--nav-sidebar-width,240px)] shrink-0 flex-col border-r border-border-default bg-surface-1 px-space-4 py-space-5 lg:flex"
+        aria-label="เมนูหลัก"
+      >
+        <div className="px-space-3 pb-space-5 text-lg font-bold text-primary">FinanceTrack</div>
+        <div className="flex flex-1 flex-col gap-space-1">
           {NAV_ITEMS.map((item) => {
             const active = activeNav === item.id;
             return (
               <button
                 key={item.id}
                 type="button"
-                className={`${styles.sidebarNavItem} ${active ? styles.sidebarNavItemActive : ''}`}
                 onClick={() => handleNavClick(item)}
                 aria-current={active ? 'page' : undefined}
+                className={`flex min-h-11 w-full items-center gap-space-3 rounded-md border-l-2 px-space-3 py-space-2 text-left text-sm font-medium transition-colors duration-fast ease-graphite ${FOCUS_RING} ${
+                  active
+                    ? 'border-accent bg-accent-muted font-semibold text-primary'
+                    : 'border-transparent text-secondary hover:bg-surface-2 hover:text-primary'
+                }`}
               >
                 {renderNavIcon(item.Icon, active)}
                 <span>{item.label}</span>
@@ -333,20 +333,24 @@ export default function Layout({
             );
           })}
         </div>
-        <div className={styles.sidebarFooter}>
-          <button type="button" className={styles.sidebarLogout} onClick={handleLogoutClick}>
+        <div className="mt-space-3 border-t border-border-subtle pt-space-3">
+          <button
+            type="button"
+            onClick={handleLogoutClick}
+            className={`flex min-h-11 w-full items-center gap-space-2 rounded-md px-space-3 py-space-2 text-sm font-semibold text-neg transition-colors duration-fast ease-graphite hover:bg-neg/10 ${FOCUS_RING}`}
+          >
             <Icons.Lock size={18} />
             <span>ออกจากระบบ</span>
           </button>
         </div>
       </nav>
 
-      <div className={styles.main}>
-        {/* ------------------------------------------------------------ top bar */}
-        <header className={styles.topBar}>
-          <div className={styles.topBarTitleRow}>
-            <h1 className={styles.topBarTitle}>{title}</h1>
-            <div className={`${styles.userMenuWrapper} relative`} ref={userMenuRef}>
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* ------------------------------------------------------------ top bar — §6.1/§6.2 */}
+        <header className="sticky top-0 z-30 border-b border-border-subtle bg-surface-1 px-space-4 py-space-3 lg:px-space-6">
+          <div className="flex min-h-9 items-center justify-between gap-space-4">
+            <h1 className="truncate text-2xl font-semibold text-primary">{title}</h1>
+            <div className="relative shrink-0" ref={userMenuRef}>
               <button
                 type="button"
                 className={`flex items-center gap-space-2 rounded-full border border-border-default bg-surface-2 px-space-4 py-space-2 text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING} [&[data-open=true]_svg]:rotate-180 [&_svg]:transition-transform [&_svg]:duration-fast`}
@@ -401,14 +405,19 @@ export default function Layout({
             </div>
           </div>
           {headerActions && (
-            <div className={styles.headerActionsRow}>
+            <div className="mt-space-3 flex items-center gap-space-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
               {headerActions}
             </div>
           )}
         </header>
 
-        {/* ------------------------------------------------------------ เนื้อหาหลัก */}
-        <main id="main" className={`${styles.content} ${contentClassName || ''}`}>
+        {/* ------------------------------------------------------------ เนื้อหาหลัก — content, gutter =
+            clamp(16px…32px) ทั้งสองฝั่ง (§6.1) max-width 1280px คงไว้ (ไม่ใช้ 1200px ตาม §6.2 ตัวหนังสือ —
+            การตัดสินใจนี้ทำไว้แล้วก่อนเริ่ม pass นี้ เพื่อไม่ให้ 4 หน้าที่ปล่อยแล้วขยับความกว้างเนื้อหา) */}
+        <main
+          id="main"
+          className={`mx-auto w-full max-w-[1280px] flex-1 p-[var(--gutter,clamp(1rem,0.5rem+2vw,2rem))] pb-[calc(var(--nav-safe-bottom,56px)+24px)] lg:pb-[var(--gutter,clamp(1rem,0.5rem+2vw,2rem))] ${contentClassName || ''}`}
+        >
           {isLocked ? (
             <div className="flex min-h-screen flex-col items-center justify-center gap-space-4 text-secondary">
               <Icons.Lock size={48} color="var(--accent)" />
@@ -418,73 +427,92 @@ export default function Layout({
         </main>
       </div>
 
-      {/* ------------------------------------------------------------ bottom nav (mobile) */}
-      <nav className={styles.bottomNav} aria-label="เมนูหลัก">
+      {/* ------------------------------------------------------------ bottom nav (mobile, < lg) — §6.1
+          active = สี accent + เส้นขอบบนหนา 2px + น้ำหนัก 600 เสมอ (WCAG 1.4.1 "ห้ามใช้สีสื่อความหมาย
+          อย่างเดียว") — เทคนิคเดียวกับ border-left ของ sidebar ด้านบน เปลี่ยนทิศเป็นแนวนอน */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-[100] flex items-stretch border-t border-border-subtle bg-surface-1 lg:hidden [height:var(--nav-safe-bottom,56px)] [padding-bottom:env(safe-area-inset-bottom,0px)]"
+        aria-label="เมนูหลัก"
+      >
         {NAV_ITEMS.filter(item => MOBILE_PRIMARY_IDS.includes(item.id)).map((item) => {
           const active = activeNav === item.id;
           return (
             <button
               key={item.id}
               type="button"
-              className={`${styles.bottomNavItem} ${active ? styles.bottomNavItemActive : ''}`}
               onClick={() => handleNavClick(item)}
               aria-current={active ? 'page' : undefined}
+              className={`flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-[2px] border-t-2 font-medium ${FOCUS_RING} ${
+                active ? 'border-accent font-semibold text-accent' : 'border-transparent text-tertiary'
+              }`}
             >
               {renderNavIcon(item.Icon, active)}
-              <span className={styles.bottomNavLabel}>{item.mobileLabel}</span>
+              <span className="text-xs">{item.mobileLabel}</span>
             </button>
           );
         })}
         <button
           ref={moreButtonRef}
           type="button"
-          className={styles.bottomNavItem}
           onClick={() => setMoreSheetOpen(true)}
           aria-haspopup="dialog"
           aria-expanded={moreSheetOpen}
+          className={`flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-[2px] border-t-2 border-transparent font-medium text-tertiary ${FOCUS_RING}`}
         >
-          <span className={styles.navIcon}><MoreIcon size={20} /></span>
-          <span className={styles.bottomNavLabel}>เพิ่มเติม</span>
+          <span className="inline-flex shrink-0 text-secondary"><MoreIcon size={20} /></span>
+          <span className="text-xs">เพิ่มเติม</span>
         </button>
       </nav>
 
-      {/* ------------------------------------------------------------ bottom sheet "เพิ่มเติม" */}
+      {/* ------------------------------------------------------------ bottom sheet "เพิ่มเติม" (C9) */}
       {moreSheetOpen && (
         <div
-          className={styles.sheetBackdrop}
+          className="fixed inset-0 z-[150] flex items-end bg-[rgba(2,6,23,0.62)]"
           role="presentation"
           onMouseDown={(event) => { if (event.target === event.currentTarget) setMoreSheetOpen(false); }}
         >
           <div
             ref={sheetRef}
-            className={styles.sheet}
             role="dialog"
             aria-modal="true"
             aria-label="เมนูเพิ่มเติม"
+            className="flex w-full animate-[sheetSlideUp_180ms_cubic-bezier(0.22,1,0.36,1)] flex-col gap-[2px] rounded-t-lg border border-b-0 border-border-default bg-surface-3 p-space-3 pb-[calc(env(safe-area-inset-bottom,0px)+16px)]"
           >
-            <div className={styles.sheetHandle} aria-hidden="true" />
+            <div className="mx-auto mb-space-3 mt-space-1 h-1 w-10 rounded-full bg-border-interactive" aria-hidden="true" />
             {sheetNavItems.map((item, index) => (
               <button
                 key={item.id}
                 ref={index === 0 ? firstSheetRowRef : undefined}
                 type="button"
-                className={styles.sheetRow}
                 onClick={() => handleNavClick(item)}
+                className={`flex min-h-12 w-full items-center gap-space-3 rounded-md px-space-3 py-space-2 text-left text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-2 ${FOCUS_RING}`}
               >
                 <item.Icon size={18} />
                 <span>{item.label}</span>
               </button>
             ))}
-            <div className={styles.sheetDivider} />
-            <button type="button" className={styles.sheetRow} onClick={handleOpenChangePassword}>
+            <div className="mx-space-1 my-space-2 h-px bg-border-subtle" />
+            <button
+              type="button"
+              onClick={handleOpenChangePassword}
+              className={`flex min-h-12 w-full items-center gap-space-3 rounded-md px-space-3 py-space-2 text-left text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-2 ${FOCUS_RING}`}
+            >
               <Icons.Edit size={18} />
               <span>เปลี่ยนรหัสผ่าน</span>
             </button>
-            <button type="button" className={styles.sheetRow} onClick={handleSwitchProfile}>
+            <button
+              type="button"
+              onClick={handleSwitchProfile}
+              className={`flex min-h-12 w-full items-center gap-space-3 rounded-md px-space-3 py-space-2 text-left text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-2 ${FOCUS_RING}`}
+            >
               <Icons.Settings size={18} />
               <span>สลับผู้ใช้</span>
             </button>
-            <button type="button" className={`${styles.sheetRow} ${styles.sheetRowDanger}`} onClick={handleLogoutClick}>
+            <button
+              type="button"
+              onClick={handleLogoutClick}
+              className={`flex min-h-12 w-full items-center gap-space-3 rounded-md px-space-3 py-space-2 text-left text-sm font-medium text-neg transition-colors duration-fast ease-graphite hover:bg-surface-2 ${FOCUS_RING}`}
+            >
               <Icons.Lock size={18} />
               <span>ออกจากระบบ</span>
             </button>

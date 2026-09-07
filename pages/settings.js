@@ -11,7 +11,7 @@
  *
  * Graphite redesign (/settings pass) — Tailwind only, ไม่ import Settings.module.css อีกต่อไป (ลบไฟล์
  * นั้นในพาสนี้ — task-size-settings-graphite.md §Effort Estimate Step 2/3) ไม่มี padding/max-width ของ
- * ตัวเอง — Layout.module.css's .content ให้ทั้งสองอย่างอยู่แล้ว (เหมือนที่ pages/reports.js ทำ) ฟอร์มสั้น
+ * ตัวเอง — Layout.js's <main> ให้ทั้งสองอย่างอยู่แล้ว (เหมือนที่ pages/reports.js ทำ) ฟอร์มสั้น
  * จึงจำกัด max-width ไว้ที่ 2xl เอง (UX_SPEC §9 "อินพุตสั้น จับคู่กับแถบที่อัปเดตสด")
  */
 

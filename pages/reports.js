@@ -410,8 +410,9 @@ export default function ReportsPage() {
 
   return (
     <Layout activeNav="reports" title="รายงาน" headerActions={headerActions}>
-      {/* ไม่มี padding/max-width ของตัวเอง — Layout.module.css's .content ให้ทั้งสองอย่างอยู่แล้ว
-          (28px padding + max-width 1280px auto margin) เหมือนที่ pages/index.js (Dashboard pass) ทำ */}
+      {/* ไม่มี padding/max-width ของตัวเอง — Layout.js's <main> ให้ทั้งสองอย่างอยู่แล้ว (Tailwind
+          gutter clamp(16px…32px) + max-width 1280px auto margin, ย้ายจาก Layout.module.css ตอน
+          shell-graphite pass) เหมือนที่ pages/index.js (Dashboard pass) ทำ */}
       <div className="flex w-full flex-col gap-space-5">
         <div className="flex items-center justify-center gap-space-3">
           <button
