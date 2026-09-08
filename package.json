@@ -1,12 +1,13 @@
 {
   "name": "financetrack",
-  "version": "2.2.68",
+  "version": "2.3.0",
   "description": "บัญชีรับจ่ายย้อนหลัง 12 เดือน",
   "main": "index.js",
   "engines": {
     "node": ">=20.9.0"
   },
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks && chmod +x .githooks/* 2>/dev/null || true",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
