@@ -6,7 +6,7 @@ import { getLineToken, getLineUserId } from './lineConfig';
 
 // pushLineApiCall: primitive ที่รวม logic การส่ง LINE push message ทั้งหมด
 // (token/recipient resolution, guard, fetch, response parsing, error handling)
-// ใช้ร่วมกันโดย sendLineMessage() และ sendLineFlexMessage() (ผ่าน pushLineMessages())
+// ใช้โดย sendLineMessage()
 // หมายเหตุ: log เฉพาะ boolean/count/status เท่านั้น ห้าม log recipient id, เนื้อหาข้อความ, หรือ raw response body
 async function pushLineApiCall(messages, userId = null) {
   const token = getLineToken();
@@ -41,10 +41,6 @@ async function pushLineApiCall(messages, userId = null) {
   return result;
 }
 
-async function pushLineMessages(messages, userId = null) {
-  return pushLineApiCall(messages, userId);
-}
-
 export async function sendLineMessage(message, userId = null) {
   if (!message) {
     console.error('ข้อมูลไม่ครบถ้วน', {
@@ -55,11 +51,4 @@ export async function sendLineMessage(message, userId = null) {
     throw new Error('ข้อมูลไม่ครบถ้วน');
   }
   return pushLineApiCall([{ type: 'text', text: message }], userId);
-}
-
-export async function sendLineFlexMessage(altText, contents, userId = null) {
-  if (!altText || !contents) throw new Error('ข้อมูลไม่ครบถ้วน');
-  return pushLineMessages([
-    { type: 'flex', altText, contents }
-  ], userId);
 }
