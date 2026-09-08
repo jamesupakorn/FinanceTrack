@@ -267,11 +267,6 @@ export const dailyExpenseAPI = {
  */
 export const userSettingsAPI = {
 	get: async () => jsonFetch(buildUrl('/api/user-bank-accounts')),
-	saveMonthlySummaryEnabled: async (enabled) => jsonFetch('/api/user-bank-accounts', {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: withUserPayload({ monthlySummaryEnabled: enabled })
-	}),
 	saveThresholds: async (budgetThresholds) => jsonFetch('/api/user-bank-accounts', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },

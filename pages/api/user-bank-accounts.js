@@ -4,9 +4,7 @@ import {
   getUserBankAccounts,
   updateUserBankAccounts,
   getUserBudgetThresholds,
-  updateUserBudgetThresholds,
-  getUserMonthlySummaryEnabled,
-  updateUserMonthlySummaryEnabled
+  updateUserBudgetThresholds
 } from '../../lib/userStore';
 import {
   BUDGET_THRESHOLD_KEYS,
@@ -62,18 +60,16 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      const [bankAccounts, budgetThresholds, monthlySummaryEnabled] = await Promise.all([
+      const [bankAccounts, budgetThresholds] = await Promise.all([
         getUserBankAccounts(userId),
-        getUserBudgetThresholds(userId),
-        getUserMonthlySummaryEnabled(userId)
+        getUserBudgetThresholds(userId)
       ]);
-      return res.status(200).json({ bankAccounts, budgetThresholds, monthlySummaryEnabled });
+      return res.status(200).json({ bankAccounts, budgetThresholds });
     } catch (error) {
       if (error?.message === 'User not found') {
         return res.status(200).json({
           bankAccounts: [],
-          budgetThresholds: normaliseBudgetThresholds(),
-          monthlySummaryEnabled: true
+          budgetThresholds: normaliseBudgetThresholds()
         });
       }
       console.error('Failed to fetch user bank accounts:', error);
@@ -85,9 +81,9 @@ export default async function handler(req, res) {
     try {
       // req.body อาจเป็น undefined ถ้าไม่มี content-type/body มาเลย (M-5) — กัน TypeError ตอน destructure
       const body = req.body || {};
-      const { bankAccounts, budgetThresholds, monthlySummaryEnabled } = body;
+      const { bankAccounts, budgetThresholds } = body;
 
-      if (bankAccounts === undefined && budgetThresholds === undefined && monthlySummaryEnabled === undefined) {
+      if (bankAccounts === undefined && budgetThresholds === undefined) {
         return res.status(400).json({ error: 'nothing to update' });
       }
 
@@ -103,9 +99,6 @@ export default async function handler(req, res) {
         }
         pickedThresholds = pickBudgetThresholds(budgetThresholds);
       }
-      if (monthlySummaryEnabled !== undefined && typeof monthlySummaryEnabled !== 'boolean') {
-        return res.status(400).json({ error: 'monthlySummaryEnabled must be boolean' });
-      }
 
       // เขียนเฉพาะคีย์ระดับบนที่ส่งมาจริง ๆ เท่านั้น (AC-RS-2/3) — bankAccounts-only body ต้อง
       // byte-identical กับพฤติกรรมเดิมก่อนเฟสนี้ทุกประการ ทั้ง request ที่ยอมรับและ response ที่ตอบกลับ
@@ -119,11 +112,6 @@ export default async function handler(req, res) {
       if (pickedThresholds !== undefined) {
         await updateUserBudgetThresholds(userId, pickedThresholds);
         responsePayload.budgetThresholds = pickedThresholds;
-      }
-
-      if (monthlySummaryEnabled !== undefined) {
-        await updateUserMonthlySummaryEnabled(userId, monthlySummaryEnabled);
-        responsePayload.monthlySummaryEnabled = monthlySummaryEnabled;
       }
 
       return res.status(200).json(responsePayload);

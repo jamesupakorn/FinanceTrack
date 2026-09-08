@@ -1,9 +1,7 @@
 /** @jest-environment node */
 // Focused regression test for the `getUsersForNotify` non-string `userId` type guard added in
-// .pipeline/spec-line-monthly-summary-hardening.md (twin fix to getRecipients() in
-// pages/api/line_monthly_summary.js — see __tests__/api/line_monthly_summary.test.js for the
-// sibling test and rationale). Follows the same real-Mongo-instance pattern as that file rather
-// than mocking the DB.
+// .pipeline/spec-line-monthly-summary-hardening.md. Follows a real-Mongo-instance pattern
+// (mongodb-memory-server) rather than mocking the DB.
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createMocks } from 'node-mocks-http';
 

@@ -198,8 +198,7 @@ function sumItemAmounts(items = []) {
  * @returns {array} รายชื่อผู้ใช้ที่มี LineId
  */
 async function getUsersForNotify(targetUserId) {
-  // Reject non-string userId before it can shape a Mongo filter — see getRecipients() in
-  // pages/api/line_monthly_summary.js for the identical, twinned rationale.
+  // Reject non-string userId before it can shape a Mongo filter.
   if (targetUserId !== undefined && targetUserId !== null && typeof targetUserId !== 'string') {
     return [];
   }
