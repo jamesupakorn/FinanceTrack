@@ -21,7 +21,8 @@ const USERS_SNAPSHOT = [
     displayName: 'JAME',
     avatar: '/avatars/u001.jpg',
     passwordHash: '$2a$10$B5KBN7T4DkYgqmg33beZi.x7b3Gzt8jaEHSOgSvlN8LKnsMv87z3W',
-    LineId: 'U8123a5c8aada628470ca09765d32594d',
+    // Placeholder/synthetic value only — NOT a real LINE user identity. Do not restore the old one.
+    LineId: 'U00000000000000000000000000000001',
     bankAccounts: ['กรุงศรี', 'ttb', 'กสิกร', 'UOB'],
   },
   {
