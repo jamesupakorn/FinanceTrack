@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { setActiveUserId } from '../../shared/utils/frontend/sessionClient';
-import { withApiTokenHeaders } from '../../shared/utils/frontend/apiToken';
+import { userSettingsAPI } from '../../shared/utils/frontend/apiUtils';
 
 const STORAGE_KEY = 'financetrack-current-user';
 const LAST_ACTIVITY_KEY = 'financetrack-last-activity';
@@ -80,11 +80,7 @@ export const SessionProvider = ({ children }) => {
     
     // โหลดบัญชีธนาคารของผู้ใช้
     if (user?.id) {
-      // ต้องแนบ Bearer token เพราะ endpoint นี้ผ่าน assertApiToken (TD-H05)
-      fetch(`/api/user-bank-accounts?userId=${encodeURIComponent(user.id)}`, {
-        headers: withApiTokenHeaders()
-      })
-        .then(res => res.json())
+      userSettingsAPI.get()
         .then(data => {
           if (data.bankAccounts) {
             setCurrentUser(prev => ({

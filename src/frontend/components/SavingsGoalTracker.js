@@ -2,6 +2,13 @@
  * SavingsGoalTracker - แสดงและจัดการเป้าหมายเงินออม
  * - แสดง progress bar แต่ละเป้าหมาย
  * - currentAmount คำนวณจาก savings_type ที่ตรงชื่อ goal เท่านั้น
+ *
+ * Graphite redesign (daily-savings-tax-graphite pass) — Tailwind restyle only, ไม่มี
+ * SavingsGoalTracker.module.css อีกต่อไป. ไม่เพิ่ม markDirty ในไฟล์นี้โดยตั้งใจ (AC-30/E20) —
+ * openCreate เปิดแค่ฟอร์ม ยังไม่เขียนอะไรจนกว่า handleSubmit จะ POST เอง และ
+ * handleDeleteConfirmed ลบผ่าน API ทันทีไม่รอ save ของหน้า ถ้าเพิ่ม markDirty ที่นี่จะทำให้ FAB
+ * ค้างโดยไม่มีอะไรให้บันทึก และเด้ง K11 หลอก — ดู spec.md §Files "Explicitly NOT scoped in"
+ * และ UX_SPEC §5.1 "Dirty-state coupling".
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { savingsGoalsAPI, salaryAPI, incomeAPI, expenseAPI, dailyExpenseAPI } from '../../shared/utils/frontend/apiUtils';
@@ -9,7 +16,6 @@ import { getSummaryData } from '../../shared/utils/frontend/summaryUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
-import styles from '../styles/SavingsGoalTracker.module.css';
 
 const CATEGORY_OPTIONS = [
   { value: 'emergency', label: '🛡️ ฉุกเฉิน' },
@@ -31,13 +37,18 @@ const CATEGORY_LEGACY_MAP = {
   car: 'vehicle',
 };
 
+// tone = Tailwind border/text pair จากโทเค็นความหมาย (K9 — ห้าม hex ตรง ๆ) แทน color hex เดิม
 const PRIORITY_OPTIONS = [
-  { value: 'high', label: 'สูง', color: '#ef4444' },
-  { value: 'medium', label: 'กลาง', color: '#f59e0b' },
-  { value: 'low', label: 'ต่ำ', color: '#22c55e' },
+  { value: 'high', label: 'สูง', tone: 'border-neg/40 text-neg' },
+  { value: 'medium', label: 'กลาง', tone: 'border-warn/40 text-warn' },
+  { value: 'low', label: 'ต่ำ', tone: 'border-pos/40 text-pos' },
 ];
 
 const THAI_SHORT_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+
+const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
+const INPUT = `h-11 w-full rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-base text-primary outline-none ${FOCUS_RING}`;
+const ICON_BTN = `flex h-11 w-11 shrink-0 items-center justify-center rounded-sm text-secondary ${FOCUS_RING}`;
 
 // "ครบใน N เดือน (MMM YYYY)" — Buddhist-era year to match the rest of the UI.
 function formatCompletion(monthsLeft, completionDate) {
@@ -72,23 +83,28 @@ function normalizeAllocationMap(map = {}, goals = []) {
   return normalized;
 }
 
+// K16: ทุก total/hero figure ที่มาจากรายการ C11 ต้องคำนวณสดจากค่าปัจจุบัน — แถบนี้ไม่ใช่ C11 (goal ไม่ใช่
+// name+amount row) แต่ยังต้องสะท้อนเปอร์เซ็นต์ปัจจุบันแบบไม่รอ save เหมือนกัน
 function ProgressBar({ percent, status }) {
   const capped = Math.min(100, Math.max(0, percent || 0));
   const isComplete = capped >= 100 || status === 'completed';
   return (
-    <div className={styles.progressBarTrack}>
-      <div
-        className={`${styles.progressBarFill} ${isComplete ? styles.progressComplete : ''}`}
-        style={{ width: `${capped}%` }}
-      />
-      <span className={styles.progressLabel}>{capped.toFixed(1)}%</span>
+    <div className="my-space-2 flex items-center gap-space-2">
+      <div className="h-3 flex-1 overflow-hidden rounded-full bg-surface-3">
+        <div
+          className={`h-full rounded-full transition-[width] duration-slow ease-graphite ${isComplete ? 'bg-pos' : 'bg-accent'}`}
+          style={{ width: `${capped}%` }}
+        />
+      </div>
+      <span className="w-12 shrink-0 text-right font-[family-name:var(--font-numeric)] text-xs font-semibold tabular-nums text-secondary">
+        {capped.toFixed(1)}%
+      </span>
     </div>
   );
 }
 
-export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAllocatableChange, triggerSave }) {
+export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAllocatableChange, onRegisterSave, onSaved }) {
   const formRef = useRef(null);
-  const lastSaveTriggerRef = useRef(triggerSave);
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -96,6 +112,7 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [plannerOpen, setPlannerOpen] = useState(false);
+  const [completedOpen, setCompletedOpen] = useState(false);
   const [dailyExpenseTotal, setDailyExpenseTotal] = useState(0);
   const [plannerNetIncome, setPlannerNetIncome] = useState(null); // number|null
   const [plannerLoading, setPlannerLoading] = useState(false);
@@ -399,6 +416,7 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
       await savingsGoalsAPI.saveAllocations(allocations);
       setLastSavedAllocationInputs(normalizeAllocationMap(allocationInputs, activeGoals));
       if (!silent) showToast('บันทึกสัดส่วนเงินออมเรียบร้อย');
+      onSaved?.();
     } catch (err) {
       if (!silent) showToast(err?.message || 'บันทึกสัดส่วนไม่สำเร็จ', 'error');
     } finally {
@@ -406,61 +424,71 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
     }
   };
 
+  // ลงทะเบียนฟังก์ชันบันทึกกับ ref ของ WorkspaceShell แทนตัวนับ Save All เดิม (Amendment A5)
+  // silent: false (ต่างจาก Save All เดิมที่ silent: true เสมอ) — ปุ่มนี้ตอนนี้เป็นปุ่มบันทึกของหน้า
+  // /workspace/savings/goals โดยตรงแล้ว ไม่ใช่ผู้เข้าร่วม batch save ที่ toast แทนใครไม่ได้อีกต่อไป
+  // (ADR-018 §2 — "การบันทึกเดียวในแอปที่ไม่มี feedback เลย" ถูกปิดแล้ว, AC-A5-15) ใช้ flag
+  // savingAllocation เดิม (:104, guard ที่ :384) ไม่เพิ่ม isSaving ตัวที่สอง — ซ้อนกับ isSaving ของ
+  // WorkspaceShell ได้อย่างไม่มีปัญหา (double-guard เฉย ๆ)
   useEffect(() => {
-    if (triggerSave === lastSaveTriggerRef.current) return;
-    lastSaveTriggerRef.current = triggerSave;
-    if (!triggerSave || triggerSave <= 0) return;
-    handleSaveAllocation({ silent: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [triggerSave]);
+    if (!onRegisterSave) return undefined;
+    onRegisterSave(() => handleSaveAllocation({ silent: false }));
+    return () => onRegisterSave(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onRegisterSave, handleSaveAllocation]);
 
   return (
-    <div className={styles.container}>
+    <div className="rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5">
       {/* Header */}
-      <div className={styles.header}>
-        <h3 className={styles.title}>
-          <Icons.Target size={20} color="var(--secondary-color)" />
+      <div className="mb-space-2 flex flex-wrap items-center justify-between gap-space-2">
+        <h3 className="flex items-center gap-space-2 text-lg font-medium text-primary">
+          <Icons.Target size={20} />
           เป้าหมายเงินออม
         </h3>
-        <button className={styles.addGoalBtn} onClick={openCreate} type="button">
-          <Icons.Plus size={16} color="white" />
-          เพิ่มเป้าหมาย
+        <button
+          type="button"
+          className={`min-h-11 shrink-0 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent ${FOCUS_RING}`}
+          onClick={openCreate}
+        >
+          + เพิ่มเป้าหมาย
         </button>
       </div>
 
       {/* Hint */}
-      <p className={styles.hint}>
+      <p className="mb-space-4 text-xs italic text-tertiary">
         ตั้งชื่อรายการออมให้ตรงกับชื่อเป้าหมาย ยอดจะถูกนับเข้า progress อัตโนมัติ
       </p>
 
       {activeGoals.length > 0 && (
         <>
-          <div className={styles.plannerSplitSummary}>
-            สัดส่วนรวม: <strong>{manualAllocationTotal.toFixed(1)}%</strong>
+          <div className="text-sm text-secondary">
+            สัดส่วนรวม: <strong className="font-semibold text-primary">{manualAllocationTotal.toFixed(1)}%</strong>
             {manualAllocationTotal > 0 && Math.abs(manualAllocationTotal - 100) > 0.1 && (
-              <span className={styles.plannerSplitHint}> (ระบบจะเฉลี่ยตามสัดส่วนที่ใส่)</span>
+              <span className="text-tertiary"> (ระบบจะเฉลี่ยตามสัดส่วนที่ใส่)</span>
             )}
           </div>
           {hasUnsavedAllocationChanges && (
-            <div className={styles.saveHint}>การเปลี่ยนแปลงสัดส่วนจะถูกบันทึกพร้อมปุ่มบันทึกหลักของหน้าเงินออม</div>
+            <div className="-mt-space-1 mb-space-3 text-xs text-tertiary">การเปลี่ยนแปลงสัดส่วนจะถูกบันทึกพร้อมปุ่มบันทึกหลักของหน้าเงินออม</div>
           )}
         </>
       )}
 
       {/* Allocation Planner */}
       <details
-        className={styles.plannerSection}
+        className="mb-space-5 mt-space-5 overflow-hidden rounded-md border border-border-default bg-surface-2"
         onToggle={(e) => setPlannerOpen(e.target.open)}
       >
-        <summary className={styles.plannerHeader}>แผนการจัดสรรเงินออม</summary>
-        <div className={styles.plannerBody}>
+        <summary className={`flex cursor-pointer select-none items-center justify-between gap-space-2 p-space-3 text-sm font-semibold text-primary marker:content-none [&::-webkit-details-marker]:hidden ${FOCUS_RING}`}>
+          <span>{plannerOpen ? '▼' : '▶'} แผนการจัดสรรเงินออม</span>
+        </summary>
+        <div className="flex flex-col gap-space-3 border-t border-border-subtle p-space-4">
           {activeGoals.length === 0 ? (
-            <div className={styles.plannerAllocRow}>เพิ่มเป้าหมายก่อนเพื่อใช้แผนการจัดสรร</div>
+            <div className="text-sm text-secondary">เพิ่มเป้าหมายก่อนเพื่อใช้แผนการจัดสรร</div>
           ) : (
             <>
-              <div className={styles.plannerInfoRow}>
+              <div className="flex flex-wrap items-center justify-between gap-space-2 text-sm text-secondary">
                 <span>ยอดคงเหลือหลังหักค่าใช้จ่าย:</span>
-                <span className={styles.plannerInfoValue}>
+                <span className="font-semibold text-accent">
                   {plannerLoading
                     ? 'กำลังโหลด...'
                     : (plannerNetIncome == null
@@ -470,55 +498,52 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
               </div>
 
               {!plannerLoading && (plannerNetIncome == null || plannerNetIncome <= 0) ? (
-                <div className={styles.plannerAllocRow}>
+                <div className="text-sm text-secondary">
                   ไม่พบข้อมูลรายรับ — กรอกยอดรายรับในแท็บ รายรับ ก่อน
                 </div>
               ) : (
                 <>
-                  <div className={styles.plannerInfoRow}>
+                  <div className="flex flex-wrap items-center justify-between gap-space-2 text-sm text-secondary">
                     <span>ค่าใช้จ่ายรายวัน/เดือน:</span>
-                    <span className={styles.plannerInfoValue}>
+                    <span className="font-semibold text-accent">
                       {plannerLoading ? 'กำลังโหลด...' : formatCurrency(dailyExpenseTotal)}
                     </span>
                   </div>
 
-                  <div className={styles.plannerAllocRow}>
+                  <div className="text-sm text-secondary">
                     เงินที่จัดสรรได้:{' '}
-                    <span className={styles.plannerAllocValue}>{formatCurrency(allocatable)}</span>
+                    <span className="text-base font-bold text-accent">{formatCurrency(allocatable)}</span>
                   </div>
 
                   {allocatable <= 0 ? (
-                    <div className={styles.plannerWarning}>
+                    <div className="rounded-sm border border-warn/25 bg-warn/10 p-space-3 text-sm text-warn">
                       ⚠ รายรับน้อยกว่าค่าใช้จ่าย ไม่สามารถจัดสรรได้
                     </div>
                   ) : (
                     <>
-                      <div className={styles.plannerDivider} />
+                      <div className="my-space-1 h-px bg-border-subtle" />
                       {allocationResults.map(({ goal, monthlyAlloc, monthsLeft, completionDate }) => {
                         const priorityInfo = PRIORITY_OPTIONS.find(p => p.value === goal.priority) || PRIORITY_OPTIONS[1];
                         const funded = monthsLeft === 0;
                         const noAlloc = !funded && (monthlyAlloc || 0) <= 0;
                         return (
-                          <div key={goal._id} className={styles.plannerGoalRow}>
-                            <div className={styles.plannerGoalName}>
+                          <div key={goal._id} className="flex flex-col gap-space-1 rounded-sm border border-border-subtle bg-surface-1 p-space-3">
+                            <div className="text-sm font-semibold text-primary">
                               {goal.goalName}{' '}
-                              <span
-                                className={styles.priorityBadge}
-                                style={{ borderColor: priorityInfo.color, color: priorityInfo.color }}
-                              >
+                              <span className={`rounded-full border px-space-2 py-[2px] text-xs font-medium ${priorityInfo.tone}`}>
                                 {priorityInfo.label}
                               </span>
                             </div>
                             {funded ? (
-                              <div className={styles.plannerGoalFunded}>ครบแล้ว</div>
+                              <div className="text-sm font-semibold text-pos">ครบแล้ว</div>
                             ) : noAlloc ? (
-                              <div className={styles.plannerNoAlloc}>เดือนนี้ยังไม่ได้รับการจัดสรร</div>
+                              <div className="text-xs text-neg">เดือนนี้ยังไม่ได้รับการจัดสรร</div>
                             ) : (
-                              <div className={styles.plannerGoalAlloc}>
-                                <span className={styles.plannerGoalAllocAmount}>
+                              <div className="flex flex-wrap items-center gap-space-3 text-sm text-secondary">
+                                <span className="font-semibold text-accent">
                                   ออมเดือนนี้: {formatCurrency(monthlyAlloc)}
                                 </span>
-                                <span className={styles.plannerGoalMonths}>
+                                <span className="text-tertiary">
                                   {formatCompletion(monthsLeft, completionDate)}
                                 </span>
                               </div>
@@ -537,12 +562,12 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
 
       {/* Form */}
       {showForm && (
-        <form ref={formRef} className={styles.form} onSubmit={handleSubmit}>
-          <div className={styles.formRow}>
-            <div className={styles.formGroup}>
-              <label className={styles.label}>ชื่อเป้าหมาย *</label>
+        <form ref={formRef} className="mb-space-5 rounded-md border border-border-subtle bg-surface-2 p-space-4" onSubmit={handleSubmit}>
+          <div className="mb-space-3 flex flex-wrap gap-space-3">
+            <div className="flex min-w-[140px] flex-1 flex-col gap-space-1">
+              <label className="text-xs font-medium text-secondary">ชื่อเป้าหมาย *</label>
               <input
-                className={styles.input}
+                className={INPUT}
                 type="text"
                 value={form.goalName}
                 onChange={e => handleFormChange('goalName', e.target.value)}
@@ -550,10 +575,10 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
                 required
               />
             </div>
-            <div className={styles.formGroup}>
-              <label className={styles.label}>เป้าหมาย (บาท) *</label>
+            <div className="flex min-w-[140px] flex-1 flex-col gap-space-1">
+              <label className="text-xs font-medium text-secondary">เป้าหมาย (บาท) *</label>
               <input
-                className={styles.input}
+                className={`${INPUT} text-right font-[family-name:var(--font-numeric)] tabular-nums`}
                 type="text"
                 inputMode="decimal"
                 value={form.targetAmount}
@@ -563,11 +588,11 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
               />
             </div>
           </div>
-          <div className={styles.formRow}>
-            <div className={styles.formGroup}>
-              <label className={styles.label}>หมวดหมู่</label>
+          <div className="mb-space-3 flex flex-wrap gap-space-3">
+            <div className="flex min-w-[140px] flex-1 flex-col gap-space-1">
+              <label className="text-xs font-medium text-secondary">หมวดหมู่</label>
               <select
-                className={styles.select}
+                className={INPUT}
                 value={form.category}
                 onChange={e => handleFormChange('category', e.target.value)}
               >
@@ -576,10 +601,10 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
                 ))}
               </select>
             </div>
-            <div className={styles.formGroup}>
-              <label className={styles.label}>ความสำคัญ</label>
+            <div className="flex min-w-[140px] flex-1 flex-col gap-space-1">
+              <label className="text-xs font-medium text-secondary">ความสำคัญ</label>
               <select
-                className={styles.select}
+                className={INPUT}
                 value={form.priority}
                 onChange={e => handleFormChange('priority', e.target.value)}
               >
@@ -589,21 +614,29 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
               </select>
             </div>
           </div>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>คำอธิบาย</label>
+          <div className="mb-space-3 flex flex-col gap-space-1">
+            <label className="text-xs font-medium text-secondary">คำอธิบาย</label>
             <input
-              className={styles.input}
+              className={INPUT}
               type="text"
               value={form.description}
               onChange={e => handleFormChange('description', e.target.value)}
               placeholder="คำอธิบายเพิ่มเติม (ไม่บังคับ)"
             />
           </div>
-          <div className={styles.formActions}>
-            <button className={styles.submitBtn} type="submit" disabled={submitting}>
+          <div className="flex gap-space-3">
+            <button
+              className={`min-h-11 rounded-sm bg-accent px-space-5 text-sm font-semibold text-on-accent disabled:opacity-50 ${FOCUS_RING}`}
+              type="submit"
+              disabled={submitting}
+            >
               {submitting ? 'กำลังบันทึก...' : (editingId ? 'อัปเดต' : 'สร้างเป้าหมาย')}
             </button>
-            <button className={styles.cancelBtn} type="button" onClick={handleCancel}>
+            <button
+              className={`min-h-11 rounded-sm border border-border-interactive px-space-4 text-sm text-secondary ${FOCUS_RING}`}
+              type="button"
+              onClick={handleCancel}
+            >
               ยกเลิก
             </button>
           </div>
@@ -611,17 +644,17 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
       )}
 
       {/* Loading */}
-      {loading && <div className={styles.loading}>กำลังโหลด...</div>}
+      {loading && <div className="py-space-5 text-center text-sm text-secondary">กำลังโหลด...</div>}
 
       {/* Active Goals */}
       {!loading && activeGoals.length === 0 && !showForm && (
-        <div className={styles.emptyState}>
+        <div className="rounded-md border border-dashed border-border-default bg-sunken py-space-6 text-center text-secondary">
           <p>ยังไม่มีเป้าหมายเงินออม</p>
-          <p className={styles.emptyHint}>กดปุ่ม "เพิ่มเป้าหมาย" เพื่อเริ่มต้น</p>
+          <p className="mt-space-1 text-xs italic text-tertiary">กดปุ่ม &quot;เพิ่มเป้าหมาย&quot; เพื่อเริ่มต้น</p>
         </div>
       )}
 
-      <div className={styles.goalList}>
+      <div className="flex flex-col gap-space-4">
         {activeGoals.map(goal => {
           const pct = goal.metadata?.progressPercentage || 0;
           const current = goal.currentAmount || 0;
@@ -633,75 +666,71 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
             || CATEGORY_OPTIONS.find(c => c.value === 'other');
 
           return (
-            <div key={goal._id} className={styles.goalCard}>
-              <div className={styles.goalCardTop}>
-                <div className={styles.goalMeta}>
-                  <span className={styles.categoryBadge}>{categoryInfo.label}</span>
-                  <span
-                    className={styles.priorityBadge}
-                    style={{ borderColor: priorityInfo.color, color: priorityInfo.color }}
-                  >
+            <div key={goal._id} className="rounded-md border border-border-default bg-surface-2 p-space-4">
+              <div className="mb-space-2 flex flex-wrap items-center justify-between gap-space-2">
+                <div className="flex flex-wrap items-center gap-space-2">
+                  <span className="rounded-full border border-border-subtle bg-surface-3 px-space-2 py-[2px] text-xs text-secondary">{categoryInfo.label}</span>
+                  <span className={`rounded-full border px-space-2 py-[2px] text-xs font-medium ${priorityInfo.tone}`}>
                     {priorityInfo.label}
                   </span>
-                  <div className={styles.goalAllocationControls}>
-                    <label htmlFor={`card-alloc-${goal._id}`}>สัดส่วน</label>
+                  <div className="inline-flex items-center gap-space-2">
+                    <label htmlFor={`card-alloc-${goal._id}`} className="text-xs text-tertiary">สัดส่วน</label>
                     <input
                       id={`card-alloc-${goal._id}`}
                       type="text"
                       inputMode="decimal"
-                      className={styles.goalAllocationInput}
+                      className={`h-11 w-20 rounded-sm border border-border-interactive bg-surface-1 px-space-2 text-base text-primary outline-none ${FOCUS_RING}`}
                       value={allocationInputs[goal._id] ?? ''}
                       onChange={(e) => handleAllocationInputChange(goal._id, e.target.value)}
                       placeholder="0"
                     />
-                    <span className={styles.goalAllocationUnit}>%</span>
+                    <span className="text-xs text-secondary">%</span>
                   </div>
-
                 </div>
-                <div className={styles.goalActions}>
+                <div className="flex items-center gap-space-1">
                   <button
-                    className={styles.editBtn}
+                    className={`${ICON_BTN} hover:bg-surface-3`}
                     onClick={() => openEdit(goal)}
-                    title="แก้ไข"
+                    aria-label={`แก้ไข ${goal.goalName}`}
                     type="button"
                   >
-                    <Icons.Edit size={13} color="currentColor" />
+                    <Icons.Edit size={16} />
                   </button>
                   {pct >= 100 && (
                     <button
-                      className={styles.completeBtn}
+                      className={`${ICON_BTN} bg-pos/15 text-pos hover:bg-pos/25`}
                       onClick={() => handleMarkComplete(goal)}
-                      title="ทำเครื่องหมายว่าสำเร็จ"
+                      aria-label={`ทำเครื่องหมายว่าสำเร็จ ${goal.goalName}`}
                       type="button"
                     >
                       ✓
                     </button>
                   )}
                   <button
-                    className={styles.deleteBtn}
+                    className={`${ICON_BTN} hover:bg-neg/15 hover:text-neg`}
                     onClick={() => handleDelete(goal._id)}
-                    title="ลบ"
+                    aria-label={`ลบ ${goal.goalName}`}
                     type="button"
                   >
-                    <Icons.Trash size={13} color="currentColor" />
+                    <Icons.Trash size={16} />
                   </button>
                 </div>
               </div>
 
               {deleteConfirm === goal._id && (
-                <div className={styles.deleteConfirmRow}>
-                  <span className={styles.deleteConfirmText}>
+                <div className="mb-space-2 flex flex-wrap items-center gap-space-2 rounded-sm border border-neg/25 bg-neg/10 p-space-3">
+                  <span className="min-w-0 flex-1 text-sm text-secondary">
                     ลบ &ldquo;{goal.goalName}&rdquo; ใช่หรือไม่?
                   </span>
                   <button
-                    className={styles.deleteConfirmYes}
+                    className={`min-h-11 shrink-0 rounded-sm border border-neg px-space-4 text-sm font-semibold text-neg ${FOCUS_RING}`}
                     type="button"
                     onClick={() => handleDeleteConfirmed(goal._id)}
                   >
                     ยืนยัน
                   </button>
                   <button
-                    className={styles.deleteConfirmNo}
+                    className={`min-h-11 shrink-0 rounded-sm border border-border-interactive px-space-3 text-sm text-secondary ${FOCUS_RING}`}
                     type="button"
                     onClick={() => setDeleteConfirm(null)}
                   >
@@ -710,26 +739,26 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
                 </div>
               )}
 
-              <div className={styles.goalName}>{goal.goalName}</div>
-              {goal.description && <div className={styles.goalDesc}>{goal.description}</div>}
+              <div className="mb-space-1 text-base font-semibold text-primary">{goal.goalName}</div>
+              {goal.description && <div className="mb-space-2 text-sm text-secondary">{goal.description}</div>}
 
               <ProgressBar percent={pct} status={goal.status} />
 
-              <div className={styles.goalAmounts}>
-                <span className={styles.amountCurrent}>
-                  ออมแล้ว: <strong>{formatCurrency(current)}</strong>
+              <div className="mt-space-1 flex flex-wrap items-center justify-between gap-space-1 text-sm text-secondary">
+                <span>
+                  ออมแล้ว: <strong className="font-semibold text-accent">{formatCurrency(current)}</strong>
                 </span>
-                <span className={styles.amountTarget}>
+                <span className="text-tertiary">
                   เป้า: {formatCurrency(target)}
                 </span>
               </div>
               {remaining > 0 && (
-                <div className={styles.remaining}>
-                  ยังขาดอีก <strong>{formatCurrency(remaining)}</strong>
+                <div className="mt-space-1 text-xs text-tertiary">
+                  ยังขาดอีก <strong className="font-semibold text-warn">{formatCurrency(remaining)}</strong>
                 </div>
               )}
               {pct >= 100 && (
-                <div className={styles.goalAchieved}>🎉 บรรลุเป้าหมายแล้ว!</div>
+                <div className="mt-space-2 text-center text-sm font-semibold text-pos">🎉 บรรลุเป้าหมายแล้ว!</div>
               )}
             </div>
           );
@@ -738,24 +767,24 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
 
       {/* Completed Goals (collapsed) */}
       {completedGoals.length > 0 && (
-        <details className={styles.completedSection}>
-          <summary className={styles.completedSummary}>
-            ✅ เป้าหมายที่สำเร็จแล้ว ({completedGoals.length})
+        <details className="mt-space-5" onToggle={(e) => setCompletedOpen(e.target.open)}>
+          <summary className={`cursor-pointer select-none py-space-2 text-sm font-medium text-secondary marker:content-none [&::-webkit-details-marker]:hidden ${FOCUS_RING}`}>
+            {completedOpen ? '▼' : '▶'} ✅ เป้าหมายที่สำเร็จแล้ว ({completedGoals.length})
           </summary>
-          <div className={styles.goalList}>
+          <div className="flex flex-col gap-space-4">
             {completedGoals.map(goal => (
-              <div key={goal._id} className={`${styles.goalCard} ${styles.goalCardCompleted}`}>
-                <div className={styles.goalName}>{goal.goalName}</div>
+              <div key={goal._id} className="rounded-md border border-border-default bg-surface-2 p-space-4 opacity-60">
+                <div className="mb-space-1 text-base font-semibold text-primary">{goal.goalName}</div>
                 <ProgressBar percent={100} status="completed" />
-                <div className={styles.goalAmounts}>
-                  <span className={styles.amountCurrent}>
-                    ออมแล้ว: <strong>{formatCurrency(goal.currentAmount || 0)}</strong>
+                <div className="mt-space-1 flex flex-wrap items-center justify-between gap-space-1 text-sm text-secondary">
+                  <span>
+                    ออมแล้ว: <strong className="font-semibold text-accent">{formatCurrency(goal.currentAmount || 0)}</strong>
                   </span>
-                  <span className={styles.amountTarget}>
+                  <span className="text-tertiary">
                     เป้า: {formatCurrency(goal.targetAmount || 0)}
                   </span>
                 </div>
-                <div className={styles.goalAchieved}>🎉 สำเร็จ</div>
+                <div className="mt-space-2 text-center text-sm font-semibold text-pos">🎉 สำเร็จ</div>
               </div>
             ))}
           </div>

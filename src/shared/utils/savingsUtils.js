@@ -14,7 +14,3 @@ export function mapSavingsApiToList(data) {
     return [];
   }
 }
-
-export function calculateTotalSavings(list) {
-  return list.reduce((sum, item) => sum + (parseFloat(item.จำนวนเงิน) || 0), 0);
-}

@@ -4,18 +4,37 @@
  * @param {object} props
  * @param {string} props.selectedMonth - เดือนที่เลือก (YYYY-MM)
  * @param {function} props.onDataChange - callback เมื่อบันทึกสำเร็จ
+ * @param {function} props.markDirty - (Graphite, K17) เรียกจาก addInvestment/removeInvestment เป็น
+ *   คำสั่งแรกเสมอ — ปุ่มเหล่านี้เป็น onClick ไม่ใช่ input/change จึงไม่โดน bubbled listener ของ
+ *   WorkspaceShell.js จับ (spec.md §Files "The C11 dirty signal", UX_SPEC §7 K17)
+ *
+ * Graphite redesign (daily-savings-tax-graphite pass) — Tailwind only (UX_SPEC §5.1 C11 / §6.5 base /
+ * §6.6 lg), ไม่มี InvestmentTable.module.css อีกต่อไป. C11 conformance fix สองจุด: (1) แถวใหม่มีชื่อ
+ * default ไม่ว่างแล้ว (K12 — เดิม name: '' ทำให้แถวใหม่ดูเหมือนกดไม่ติด) (2) key เปลี่ยนจาก index
+ * เป็น id คงที่ต่อแถว (K13 — เดิม key={idx} ทำให้แถวสลับ/remount เวลาเพิ่ม-ลบ จนโฟกัสหลุดกลางคัน)
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { investmentAPI } from '../../shared/utils/frontend/apiUtils';
 import { parseToNumber, formatCurrency } from '../../shared/utils/frontend/numberUtils';
+import { averagePercent } from '../../shared/utils/investmentUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
-import styles from '../styles/InvestmentTable.module.css';
-import { averagePercent, calcAmountFromPercent, sumPercent, mapInvestmentData } from '../../shared/utils/investmentUtils';
+import { Icons } from './Icons';
+
+function genId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+const NAME_FALLBACK = 'การลงทุนใหม่';
+
+const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
+const INPUT = `h-11 w-full rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-base text-primary outline-none ${FOCUS_RING}`;
+const REMOVE_BTN = `flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border-interactive bg-surface-2 text-neg ${FOCUS_RING}`;
+const CARD = 'rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1';
+const BTN_SECONDARY = `min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-secondary ${FOCUS_RING} disabled:opacity-50`;
 
 // InvestmentTable: แสดงและแก้ไขรายการลงทุนในแต่ละเดือน
-export default function InvestmentTable({ selectedMonth, onDataChange, triggerSave }) {
-  const lastSaveTriggerRef = useRef(triggerSave);
+export default function InvestmentTable({ selectedMonth, onDataChange, onRegisterSave, onSaved, markDirty }) {
   const [baseAmount, setBaseAmount] = useState('');
   const [investments, setInvestments] = useState([]);
 
@@ -31,12 +50,13 @@ export default function InvestmentTable({ selectedMonth, onDataChange, triggerSa
       amount: base && item.percent ? ((parseFloat(item.percent) / 100) * base).toFixed(2) : ''
     }));
   };
-  const isFirstLoad = useRef(true);
   // เพิ่มฟังก์ชันเพิ่มรายการลงทุนใหม่
   const addInvestment = () => {
+    markDirty?.(); // K17 — คำสั่งแรกเสมอ: ปุ่มนี้เป็น onClick ไม่ใช่ input/change (spec.md §Files
+                    // "The C11 dirty signal")
     setInvestments(prev => recalcAmounts(baseAmount, [
       ...prev,
-      { name: '', percent: '', amount: '' }
+      { id: genId(), name: NAME_FALLBACK, percent: '', amount: '' }
     ]));
   };
 
@@ -48,6 +68,7 @@ export default function InvestmentTable({ selectedMonth, onDataChange, triggerSa
       if (result) {
         if (typeof onDataChange === 'function') onDataChange();
         showToast('บันทึกสำเร็จ');
+        onSaved?.();
         return;
       }
       showToast('บันทึกไม่สำเร็จ', 'error');
@@ -57,18 +78,20 @@ export default function InvestmentTable({ selectedMonth, onDataChange, triggerSa
     }
   };
 
+  // ลงทะเบียนฟังก์ชันบันทึกกับ ref ของ WorkspaceShell แทนตัวนับ Save All เดิม (Amendment A5 —
+  // ดูคำอธิบายเต็มใน IncomeTable.js ที่จุดเดียวกัน)
   useEffect(() => {
-    if (triggerSave === lastSaveTriggerRef.current) return;
-    lastSaveTriggerRef.current = triggerSave;
-    if (triggerSave) handleSave();
-  }, [triggerSave]);
+    if (!onRegisterSave) return undefined;
+    onRegisterSave(handleSave);
+    return () => onRegisterSave(null);
+  }, [onRegisterSave, handleSave]);
 
   // โหลดข้อมูลจาก backend เมื่อ selectedMonth เปลี่ยน
   useEffect(() => {
     if (!selectedMonth) return;
     investmentAPI.getByMonth(selectedMonth).then((data) => {
       if (Array.isArray(data) && data.length > 0) {
-        setInvestments(data);
+        setInvestments(data.map(item => ({ ...item, id: item.id || genId() })));
       } else {
         // ถ้าเดือนนี้ยังไม่มีข้อมูล ให้ดึงชื่อหุ้น/กองทุนจากเดือนก่อนหน้า
         investmentAPI.getAll().then((allData) => {
@@ -85,6 +108,7 @@ export default function InvestmentTable({ selectedMonth, onDataChange, triggerSa
           if (prevMonth && Array.isArray(allData[prevMonth])) {
             // copy เฉพาะ name, percent (amount จะคำนวณใหม่)
             const prevInvestments = allData[prevMonth].map(item => ({
+              id: genId(),
               name: item.name || '',
               percent: item.percent || '',
               amount: ''
@@ -99,10 +123,10 @@ export default function InvestmentTable({ selectedMonth, onDataChange, triggerSa
   }, [selectedMonth]);
 
   // เพิ่มฟังก์ชันแก้ไขฟิลด์ในแต่ละรายการ
-  const updateField = (idx, field, value) => {
+  const updateField = (id, field, value) => {
     setInvestments(prev => {
-      const updated = prev.map((item, i) =>
-        i === idx ? { ...item, [field]: value } : item
+      const updated = prev.map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
       );
       // ถ้าแก้ percent ให้คำนวณ amount ใหม่
       if (field === 'percent') {
@@ -112,19 +136,24 @@ export default function InvestmentTable({ selectedMonth, onDataChange, triggerSa
     });
   };
   // เพิ่มฟังก์ชันลบรายการลงทุน
-  const removeInvestment = (idx) => {
-    setInvestments(prev => prev.filter((_, i) => i !== idx));
+  const removeInvestment = (id) => {
+    markDirty?.(); // K17 — เดียวกับข้างบน
+    setInvestments(prev => prev.filter((item) => item.id !== id));
   };
 
   // คำนวณเปอร์เซ็นรวมของรายการลงทุน
   const totalPercent = investments.reduce((sum, item) => sum + (parseFloat(item.percent) || 0), 0);
+  const hasRows = investments.length > 0;
 
   return (
-    <div className={styles.investmentContainer}>
-      <h3 className={styles.investmentTitle}>การลงทุนประจำเดือน {selectedMonth || ''}</h3>
-      <div className={styles.baseAmountRow}>
-        <label>
-          จำนวนเงินลงทุนรวม (บาท):
+    <div>
+      <div className="mb-space-4">
+        <h3 className="text-lg font-medium text-primary">การลงทุนประจำเดือน {selectedMonth || ''}</h3>
+      </div>
+
+      <div className="mb-space-4">
+        <label className="block text-sm text-secondary">
+          จำนวนเงินลงทุนรวม (บาท)
           <input
             type="text"
             inputMode="decimal"
@@ -134,114 +163,136 @@ export default function InvestmentTable({ selectedMonth, onDataChange, triggerSa
               setInvestments(prev => recalcAmounts(e.target.value, prev));
             }}
             onFocus={handleAmountInputFocus}
-            className={styles.baseAmountInput}
+            className={`${INPUT} mt-space-2 max-w-xs text-right font-[family-name:var(--font-numeric)] tabular-nums`}
           />
         </label>
       </div>
-      {/* Desktop Table */}
-      <div className={styles.investmentTableWrapper + ' ' + styles.hideOnMobile}>
-        <table className={styles.investmentTable}>
-          <thead>
-            <tr className={styles.tableHeaderRow}>
-              <th className={styles.tableHeaderCell}>ชื่อหุ้น/กองทุน</th>
-              <th className={styles.tableHeaderCell}>เปอร์เซ็นการลงทุน (%)</th>
-              <th className={styles.tableHeaderCell}>จำนวนเงิน (บาท)</th>
-              <th className={styles.tableHeaderCell}>ลบ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {investments.map((item, idx) => (
-              <tr key={idx}>
-                <td className={styles.tableCell}>
+
+      {hasRows ? (
+        <>
+          {/* md+: C5 table */}
+          <div className="hidden overflow-x-auto rounded-md border border-border-default md:block">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-border-subtle bg-surface-2">
+                  <th className="p-space-3 text-left text-xs font-medium text-secondary">ชื่อหุ้น/กองทุน</th>
+                  <th className="p-space-3 text-right text-xs font-medium text-secondary">เปอร์เซ็นการลงทุน (%)</th>
+                  <th className="p-space-3 text-right text-xs font-medium text-secondary">จำนวนเงิน (บาท)</th>
+                  <th className="p-space-3 text-center text-xs font-medium text-secondary">ลบ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {investments.map((item) => (
+                  <tr key={item.id} className="border-b border-border-subtle last:border-b-0">
+                    <td className="p-space-3 align-middle">
+                      <input
+                        type="text"
+                        value={item.name}
+                        onChange={e => updateField(item.id, 'name', e.target.value)}
+                        className={INPUT}
+                      />
+                    </td>
+                    <td className="p-space-3 align-middle">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={item.percent}
+                        onChange={e => updateField(item.id, 'percent', e.target.value)}
+                        onFocus={handleAmountInputFocus}
+                        className={`${INPUT} text-right font-[family-name:var(--font-numeric)] tabular-nums`}
+                      />
+                    </td>
+                    <td className="p-space-3 text-right align-middle font-[family-name:var(--font-numeric)] tabular-nums text-primary">
+                      {formatCurrency(item.amount)}
+                    </td>
+                    <td className="p-space-3 text-center align-middle">
+                      <button
+                        type="button"
+                        onClick={() => removeInvestment(item.id)}
+                        className={`mx-auto ${REMOVE_BTN}`}
+                        aria-label={`ลบ ${item.name || NAME_FALLBACK}`}
+                      >
+                        <Icons.X size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* base tier: C4/C11 cards */}
+          <div className="flex flex-col gap-space-3 md:hidden">
+            {investments.map((item) => (
+              <div className="min-h-14 rounded-md border border-border-default bg-surface-2 p-space-4" key={item.id}>
+                <div className="flex items-center gap-space-2">
                   <input
                     type="text"
                     value={item.name}
-                    onChange={e => updateField(idx, 'name', e.target.value)}
-                    className={styles.inputText}
+                    onChange={e => updateField(item.id, 'name', e.target.value)}
+                    className={`${INPUT} flex-1 font-medium`}
+                    placeholder="ชื่อหุ้น/กองทุน"
                   />
-                </td>
-                <td className={styles.tableCell}>
+                  <button
+                    type="button"
+                    onClick={() => removeInvestment(item.id)}
+                    className={REMOVE_BTN}
+                    aria-label={`ลบ ${item.name || NAME_FALLBACK}`}
+                  >
+                    <Icons.X size={16} />
+                  </button>
+                </div>
+                <div className="mt-space-3 flex items-center gap-space-3">
                   <input
                     type="text"
                     inputMode="decimal"
                     value={item.percent}
-                    onChange={e => updateField(idx, 'percent', e.target.value)}
+                    onChange={e => updateField(item.id, 'percent', e.target.value)}
                     onFocus={handleAmountInputFocus}
-                    className={styles.inputPercent}
+                    className={`${INPUT} flex-1 text-right font-[family-name:var(--font-numeric)] tabular-nums`}
+                    placeholder="0%"
                   />
-                </td>
-                <td className={`${styles.tableCell} ${styles.amountCell}`}>
-                  {formatCurrency(item.amount)}
-                </td>
-                <td className={`${styles.tableCell} ${styles.deleteCell}`}>
-                  <button type="button" onClick={() => removeInvestment(idx)} className={styles.deleteButton}>ลบ</button>
-                </td>
-              </tr>
+                  <span className="shrink-0 whitespace-nowrap font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums text-primary">
+                    {formatCurrency(item.amount)}
+                  </span>
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Mobile Card List */}
-      <div className={styles.mobileCardList + ' ' + styles.hideOnDesktop}>
-        {investments.length === 0 && (
-          <div className={styles.emptyCard}>ไม่มีรายการลงทุน</div>
-        )}
-        {investments.map((item, idx) => (
-          <div className={styles.investmentCard} key={idx}>
-            <div className={styles.cardRow}>
-              <label className={styles.cardLabel}>ชื่อหุ้น/กองทุน</label>
-              <input
-                type="text"
-                value={item.name}
-                onChange={e => updateField(idx, 'name', e.target.value)}
-                className={styles.inputText}
-              />
-            </div>
-            <div className={styles.cardRow}>
-              <label className={styles.cardLabel}>เปอร์เซ็น (%)</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={item.percent}
-                onChange={e => updateField(idx, 'percent', e.target.value)}
-                onFocus={handleAmountInputFocus}
-                className={styles.inputPercent}
-              />
-            </div>
-            <div className={styles.cardRow}>
-              <label className={styles.cardLabel}>จำนวนเงิน (บาท)</label>
-              <span className={styles.cardAmount}>
-                {formatCurrency(item.amount)}
-              </span>
-            </div>
-            <div className={styles.cardRow}>
-              <button type="button" onClick={() => removeInvestment(idx)} className={styles.deleteButton}>ลบ</button>
-            </div>
           </div>
-        ))}
-      </div>
-      <div className={styles.actionBar}>
-        <button type="button" onClick={addInvestment} className={styles.addButton}>+ เพิ่มรายการลงทุน</button>
+        </>
+      ) : (
+        <div className="rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">
+          ไม่มีรายการลงทุน
+        </div>
+      )}
+
+      <div className="mt-space-4 flex flex-wrap items-center gap-space-3">
+        <button type="button" onClick={addInvestment} className="min-h-11 shrink-0 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2">
+          + เพิ่มรายการลงทุน
+        </button>
         <button
           type="button"
           onClick={() => {
             if (investments.length === 0) return;
+            markDirty?.(); // K17 — เดียวกับ addInvestment/removeInvestment ด้านบน
             const avgPercents = averagePercent(investments.length);
-            setInvestments(investments.map((item, idx) => ({
+            setInvestments(prev => recalcAmounts(baseAmount, prev.map((item, idx) => ({
               ...item,
               percent: avgPercents[idx]
-            })));
+            }))));
           }}
-          className={styles.averageButton}
+          className={BTN_SECONDARY}
           disabled={investments.length === 0}
         >
           เฉลี่ยเปอร์เซ็น
         </button>
-
       </div>
-      <div className={`${styles.percentSummary} ${totalPercent !== 100 ? styles.percentSummaryError : styles.percentSummaryNormal}`}>
-        รวมเปอร์เซ็น: {totalPercent}% {totalPercent > 100 && '(เกิน 100%)'}{totalPercent < 100 && '(ต้องครบ 100%)'}
+
+      <div className={`${CARD} mt-space-4 flex items-center justify-between ${totalPercent !== 100 ? 'border-warn/40' : 'border-pos/40'}`}>
+        <span className="text-sm text-secondary">รวมเปอร์เซ็น</span>
+        <span className={`font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums ${totalPercent !== 100 ? 'text-warn' : 'text-pos'}`}>
+          {totalPercent}% {totalPercent > 100 && '(เกิน 100%)'}{totalPercent < 100 && '(ต้องครบ 100%)'}
+        </span>
       </div>
     </div>
   );

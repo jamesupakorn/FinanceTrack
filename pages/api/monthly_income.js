@@ -8,7 +8,7 @@
  * - จำกัดข้อมูลย้อนหลังสูงสุด 15 เดือน
  */
 
-import { sumValues, removeSummaryFields, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils';
+import { sumValues, removeSummaryFields } from '../../src/shared/utils/backend/apiUtils';
 import { assertUserId } from '../../src/shared/utils/backend/userRequest';
 import { extractRemovalKeys } from '../../src/shared/utils/commonUtils.js';
 import {
@@ -16,14 +16,15 @@ import {
   withGeneratedId,
   getMongoCollection
 } from '../../lib/dataSource';
-
-const {
+import {
+  enforceSharedMonthWindowJson,
+  enforceSharedMonthWindowMongo
+} from '../../src/shared/utils/backend/sharedMonthWindow.js';
+import {
   getUserData,
   updateUserData,
-  limitUserEntries,
-} = require('../../src/backend/data/userUtils');
+} from '../../src/backend/data/userUtils.js';
 
-const MONTH_LIMIT = 15; // จำกัดข้อมูลย้อนหลังสูงสุด 15 เดือนต่อผู้ใช้
 const JSON_FILENAME = 'monthly_income.json'; // ไฟล์ JSON สำหรับโหมด file-based
 
 /**
@@ -91,18 +92,6 @@ function buildJsonAllMonthsResponse(bucket = {}) {
 }
 
 /**
- * จำกัดจำนวนเดือนข้อมูลรายรับต่อผู้ใช้ไว้ที่ 15 เดือน
- * @param {object} bucket - ข้อมูลรายเดือนของผู้ใช้
- * @returns {object} bucket ที่ถูกจำกัดจำนวนเดือนแล้ว
- */
-function enforceUserMonthLimit(bucket = {}) {
-  return limitUserEntries(bucket, {
-    limit: MONTH_LIMIT,
-    keySelector: (_, value) => value?.month || ''
-  });
-}
-
-/**
  * อ่านข้อมูลรายรับในโหมด JSON
  * - ถ้ามีเดือน: คืนข้อมูลเดือนนั้นพร้อมยอดรวม
  * - ถ้าไม่มีเดือน: คืนข้อมูลทุกเดือนพร้อมยอดรวม
@@ -162,8 +151,10 @@ function handleJsonPost(req, res, userId) {
       delete merged.__labels;
     }
     nextBucket[month] = withGeneratedId(merged);
-    return enforceUserMonthLimit(nextBucket);
+    return nextBucket;
   });
+  // จำกัดหน้าต่าง 15 เดือนแบบรวมทุก collection (expense/income/salary/investment) หลังเขียนไฟล์นี้แล้ว
+  enforceSharedMonthWindowJson(userId, { extraMonth: month });
   return res.status(201).json({ success: true });
 }
 
@@ -198,6 +189,18 @@ export default async function handler(req, res) {
         const monthsDoc = await collection.findOne({ obj: 'months', ...userFilter });
         if (monthsDoc && monthsDoc.months && monthsDoc.months[month]) {
           doc = { month, ...monthsDoc.months[month] };
+          // เอกสาร monthsDoc (ของผู้ใช้คนนี้เอง) เก็บหลายเดือนรวมกัน — ทำสำเนาเฉพาะเดือนนี้ออกมาเป็น doc เดี่ยว
+          // ไม่แก้เอกสารเดิม เพราะเดือนอื่นในเอกสารเดียวกันยังต้องอ่านได้ตามปกติ
+          try {
+            const { _id, userId: _legacyUserId, ...rest } = doc;
+            await collection.updateOne(
+              { month, ...userFilter },
+              { $set: { ...rest, month, ...userFilter } },
+              { upsert: true }
+            );
+          } catch (err) {
+            console.error('Failed to materialize legacy monthsDoc entry for user', userId, month, err);
+          }
         }
       }
       const monthData = doc ? { ...doc } : {};
@@ -219,7 +222,7 @@ export default async function handler(req, res) {
       };
       return res.status(200).json(response);
     } else {
-      let allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
+      const allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
       const data = {};
       allDocs.forEach(doc => {
         const monthData = { ...doc };
@@ -244,6 +247,16 @@ export default async function handler(req, res) {
           if (!data[m]) {
             data[m] = { month: m, ...values };
             data[m].รวม = sumValues(values, ['รวม']);
+            // ทำสำเนาเฉพาะเดือนนี้ออกมาเป็น doc เดี่ยว ไม่แก้เอกสาร monthsDoc เดิมของผู้ใช้คนนี้
+            try {
+              await collection.updateOne(
+                { month: m, ...userFilter },
+                { $set: { ...values, month: m, ...userFilter } },
+                { upsert: true }
+              );
+            } catch (err) {
+              console.error('Failed to materialize legacy monthsDoc entry for user', userId, m, err);
+            }
           }
         }
       }
@@ -257,14 +270,21 @@ export default async function handler(req, res) {
     const removalList = extractRemovalKeys(values);
     const labelUpdates = extractLabelUpdates(values);
     const cleanValues = sanitizeIncomePayload(values);
+    const removalSet = new Set(removalList);
+    const setValues = Object.fromEntries(
+      Object.entries(cleanValues).filter(([key]) => !removalSet.has(key))
+    );
+    const filteredLabelUpdates = Object.fromEntries(
+      Object.entries(labelUpdates).filter(([key]) => !removalSet.has(key))
+    );
     await collection.updateOne(
       { month, ...userFilter },
       (() => {
         const updateOps = {
-          $set: { ...cleanValues, month, ...userFilter }
+          $set: { ...setValues, month, ...userFilter }
         };
-        if (Object.keys(labelUpdates).length) {
-          Object.entries(labelUpdates).forEach(([key, value]) => {
+        if (Object.keys(filteredLabelUpdates).length) {
+          Object.entries(filteredLabelUpdates).forEach(([key, value]) => {
             updateOps.$set[`__labels.${key}`] = value;
           });
         }
@@ -280,14 +300,11 @@ export default async function handler(req, res) {
       { upsert: true }
     );
     const monthsDoc = await collection.findOne({ obj: 'months', ...userFilter });
-    const additionalMonths = monthsDoc && monthsDoc.months ? Object.keys(monthsDoc.months) : [];
-    const { retainedMonths } = await enforceMonthLimit(collection, 15, {
-      filter: userFilter,
-      additionalMonths,
-    });
+    // จำกัดหน้าต่าง 15 เดือนแบบรวมทุก collection (expense/income/salary/investment)
+    const { allowedMonths } = await enforceSharedMonthWindowMongo(userId, { extraMonth: month });
     if (monthsDoc && monthsDoc.months) {
       const prunedMonths = {};
-      retainedMonths.forEach(m => {
+      allowedMonths.forEach(m => {
         if (monthsDoc.months[m]) {
           prunedMonths[m] = monthsDoc.months[m];
         }

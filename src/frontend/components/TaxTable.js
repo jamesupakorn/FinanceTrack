@@ -4,24 +4,54 @@
  * รองรับการเพิ่ม/ลบปีและบันทึกข้อมูลภาษี
  * @param {object} props
  * @param {string} props.selectedMonth - เดือนที่เลือก (YYYY-MM)
+ *
+ * Graphite redesign (daily-savings-tax-graphite pass) — Tailwind restyle only, ไม่มี
+ * TaxTable.module.css อีกต่อไป. ไม่ใช่ C11 (§8 แถว 8) — ตัวเดียวที่เพิ่ม/ลบได้คือ "ปี" ผ่าน
+ * handleAddNewYear/handleDelete ไม่ใช่แถวชื่อ+จำนวนเงิน ตาราง 12 เดือนเป็น grid คงที่ ไม่มีแถวให้
+ * เพิ่ม/ลบ ไม่ต้อง wire markDirty ที่นี่
  */
 
 // ...imports and component definition...
 import { useState, useEffect, useRef } from 'react';
 import { formatCurrency, handleNumberInput, handleNumberBlur, parseToNumber } from '../../shared/utils/frontend/numberUtils';
-import { createDefault12MonthsObject, sumAccumulated, sumYearly, getSortedYears } from '../../shared/utils/taxUtils';
+import { createDefault12MonthsObject, sumAccumulated, getSortedYears } from '../../shared/utils/taxUtils';
 import { taxAPI, salaryAPI } from '../../shared/utils/frontend/apiUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
-import styles from '../styles/TaxTable.module.css';
+import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { Icons } from './Icons';
+import formStyles from '../styles/CreditCardForm.module.css';
+
+const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
+const INPUT = `h-11 w-full rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-base text-primary outline-none ${FOCUS_RING}`;
+const SELECT = `h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-sm text-primary outline-none ${FOCUS_RING}`;
+const BTN_SECONDARY = `min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-secondary ${FOCUS_RING}`;
+const BTN_DANGER = `min-h-11 rounded-sm border border-neg px-space-4 text-sm font-medium text-neg ${FOCUS_RING}`;
+const BTN_PRIMARY = `min-h-11 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent ${FOCUS_RING}`;
+
+const MONTHS = [
+  { month: '01', name: 'มกราคม' }, { month: '02', name: 'กุมภาพันธ์' }, { month: '03', name: 'มีนาคม' },
+  { month: '04', name: 'เมษายน' }, { month: '05', name: 'พฤษภาคม' }, { month: '06', name: 'มิถุนายน' },
+  { month: '07', name: 'กรกฎาคม' }, { month: '08', name: 'สิงหาคม' }, { month: '09', name: 'กันยายน' },
+  { month: '10', name: 'ตุลาคม' }, { month: '11', name: 'พฤศจิกายน' }, { month: '12', name: 'ธันวาคม' }
+];
 
 /**
  * ตารางภาษีรายปี
  */
-export default function TaxTable({ selectedMonth, triggerSave, salaryUpdateTrigger }) {
-  const lastSaveTriggerRef = useRef(triggerSave);
+export default function TaxTable({ selectedMonth, salaryUpdateTrigger, onRegisterSave, onSaved }) {
   const handleAmountInputFocus = (event) => {
     event.target.select();
   };
+
+  // กล่องยืนยันลบปี (ADR-006 ห้าม window.confirm) — รูปแบบเดียวกับ RevolvingConfirmDialog
+  // (ExpenseCalendarModal.js:44-114) แต่เป็น component เดียวกันเลย (เจ้าของทั้งปุ่มเปิดและกล่อง
+  // เหมือน UnsavedChangesDialog.js) จึงคืน focus ให้ปุ่มที่เปิดแบบ self-contained ผ่าน document.activeElement
+  // แทนที่จะรับ restoreFocusRef จากภายนอก
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const deleteDialogRef = useRef(null);
+  const cancelDeleteButtonRef = useRef(null);
+  const deleteTriggerRef = useRef(null);
 
   // ...existing code...
   // เพิ่มปีใหม่ (เฉพาะโหมด edit)
@@ -40,18 +70,20 @@ export default function TaxTable({ selectedMonth, triggerSave, salaryUpdateTrigg
     setMonthlyProvident(emptyYearData.monthly_provident);
     setShowAddForm(false);
   };  // ลบปี (เฉพาะโหมด edit)
+  // คืนค่า true/false บอกผลลัพธ์จริง — confirmDeleteYear ด้านล่างใช้ตัดสินใจว่าจะปิดกล่องยืนยันไหม
+  // (ลบไม่สำเร็จต้องเปิดกล่องค้างไว้ ไม่ใช่ปิดเงียบๆ ทั้งที่ยังไม่ได้ลบจริง)
   const handleDelete = async (yearAD) => {
-    if (!yearAD || !allYearData[yearAD]) return;
+    if (!yearAD || !allYearData[yearAD]) return false;
     // ลบที่ backend ก่อน
     try {
       const result = await taxAPI.deleteYear(yearAD);
       if (!result?.success) {
         showToast(result?.message || 'ลบข้อมูลไม่สำเร็จ', 'error');
-        return;
+        return false;
       }
     } catch (e) {
       showToast('เกิดข้อผิดพลาดในการลบข้อมูล', 'error');
-      return;
+      return false;
     }
     // ลบที่ frontend
     const updated = { ...allYearData };
@@ -69,7 +101,58 @@ export default function TaxTable({ selectedMonth, triggerSave, salaryUpdateTrigg
         setMonthlyProvident({});
       }
     }
+    return true;
   };
+
+  // เรียก handleDelete จริงหลังผู้ใช้กดยืนยันในกล่อง — handleDelete เองจัด toast/error ให้อยู่แล้ว
+  // (ไม่แตะ internals นอกจาก return value) ที่นี่แค่คุม busy state ระหว่างรอ แล้วปิดกล่องเฉพาะตอนลบ
+  // สำเร็จจริงเท่านั้น — ลบไม่สำเร็จต้องเปิดกล่องค้างไว้ให้ผู้ใช้กดลองใหม่ได้ ไม่ใช่ปิดเงียบๆ
+  const confirmDeleteYear = async () => {
+    setDeleteBusy(true);
+    const deleted = await handleDelete(selectedYear);
+    setDeleteBusy(false);
+    if (deleted) setConfirmDeleteOpen(false);
+  };
+
+  // เปิดกล่อง: จำปุ่มที่เปิดไว้ก่อน แล้วหน่วง 40ms ค่อยย้าย focus เข้ากล่อง (ให้ผ่านช่วง mount —
+  // รูปแบบเดียวกับ RevolvingConfirmDialog/UnsavedChangesDialog) ปิดกล่อง (ทุกทาง): คืน focus ให้ปุ่มเดิม
+  useEffect(() => {
+    if (!confirmDeleteOpen) return undefined;
+    deleteTriggerRef.current = typeof document !== 'undefined' ? document.activeElement : null;
+    const timer = setTimeout(() => cancelDeleteButtonRef.current?.focus(), 40);
+    return () => {
+      clearTimeout(timer);
+      deleteTriggerRef.current?.focus?.();
+    };
+  }, [confirmDeleteOpen]);
+
+  // Escape ปิดกล่องเสมอ (ทางเลือกปลอดภัย ไม่เคยตีความเป็นยืนยัน) · Tab วนอยู่ในกล่องผ่าน getTabbableElements
+  // (ไม่ใช่ raw selector — ป้องกัน BUG-4 เช่นเดียวกับที่อื่นในโค้ดฐานนี้)
+  useEffect(() => {
+    if (!confirmDeleteOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setConfirmDeleteOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab' || !deleteDialogRef.current) return;
+      const focusable = getTabbableElements(deleteDialogRef.current);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [confirmDeleteOpen]);
+
   const handleSyncFromSalary = async () => {
     try {
       const { months: allMonths } = await salaryAPI.getAll();
@@ -127,23 +210,24 @@ export default function TaxTable({ selectedMonth, triggerSave, salaryUpdateTrigg
         monthly_provident: monthlyProvident
       });
       showToast('บันทึกข้อมูลภาษีสำเร็จ');
+      onSaved?.();
     } catch (e) {
       showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูลภาษี', 'error');
     }
   };
 
+  // ลงทะเบียนฟังก์ชันบันทึกกับ ref ของ WorkspaceShell แทนตัวนับ Save All เดิม (Amendment A5 —
+  // ดูคำอธิบายเต็มใน IncomeTable.js ที่จุดเดียวกัน) salaryUpdateTrigger ยังอยู่ในพารามิเตอร์เหมือนเดิม
+  // แต่ไม่มีใครส่งค่าให้จาก /workspace/tax อีกแล้ว (ผู้ผลิตตัวเดียวคือ modal เงินเดือนอยู่คนละ route แล้ว
+  // — /workspace/income) undefined ที่เสถียรทำให้ effect ด้านล่าง (dep [selectedYear, salaryUpdateTrigger])
+  // ยังรันตอน mount เหมือนเดิม ซึ่งเป็นการรีเฟรชที่มันต้องการอยู่แล้วพอดี ไม่ต้องแก้ effect นั้นเพิ่ม
   useEffect(() => {
-    if (triggerSave === lastSaveTriggerRef.current) return;
-    lastSaveTriggerRef.current = triggerSave;
-    if (triggerSave) handleSave();
-  }, [triggerSave]);
+    if (!onRegisterSave) return undefined;
+    onRegisterSave(handleSave);
+    return () => onRegisterSave(null);
+  }, [onRegisterSave, handleSave]);
   // State for provident fund and its tax
   const [monthlyProvident, setMonthlyProvident] = useState({
-    '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
-    '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
-    '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
-  });
-  const [monthlyProvidentTax, setMonthlyProvidentTax] = useState({
     '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
     '05': '0.00', '06': '0.00', '07': '0.00', '08': '0.00',
     '09': '0.00', '10': '0.00', '11': '0.00', '12': '0.00'
@@ -155,9 +239,6 @@ export default function TaxTable({ selectedMonth, triggerSave, salaryUpdateTrigg
   };
   // default ปีที่เลือกเป็น AD (คศ)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
-  // รวมเงินได้ทั้งปี
-  const [totalYearlyIncome, setTotalYearlyIncome] = useState('0.00');
-  const [accumulatedTax, setAccumulatedTax] = useState('0.00');
   // รายรับแต่ละเดือนของปีที่เลือก
   const [monthlyIncome, setMonthlyIncome] = useState({
     '01': '0.00', '02': '0.00', '03': '0.00', '04': '0.00',
@@ -194,20 +275,7 @@ export default function TaxTable({ selectedMonth, triggerSave, salaryUpdateTrigg
     fetchTaxData();
   }, [selectedYear, salaryUpdateTrigger]);
 
-
-  const handleMonthlyTaxChange = (month, value) => {
-    // format เป็นทศนิยม 2 ตำแหน่งทุกครั้งที่ onChange
-    handleNumberInput(value, setMonthlyTax, month);
-  };
-
-  const handleMonthlyTaxBlur = async (month, value) => {
-    handleNumberInput(value, setMonthlyTax, month);
-    // ส่วน save backend คงเดิม
-  };
-
   const calculateAccumulatedTax = (upToMonth) => sumAccumulated(monthlyTax, upToMonth, parseToNumber);
-
-  const getTotalYearlyTax = () => sumYearly(monthlyTax, parseToNumber);
 
   // ฟังก์ชันคำนวณรายได้สะสมถึงเดือนที่กำหนด
   const calculateAccumulatedIncome = (upToMonth) => sumAccumulated(monthlyIncome, upToMonth, parseToNumber);
@@ -218,222 +286,291 @@ export default function TaxTable({ selectedMonth, triggerSave, salaryUpdateTrigg
   };
 
   return (
-    <div className={styles.taxTable}>
-      <h2 className={styles.headerTitle}>ภาษีสะสม</h2>
-      <div className={styles.yearSelector}>
-        <label className={styles.yearLabel}>เลือกปี:</label>
-        <select 
+    <div>
+      <h2 className="mb-space-4 text-xl font-semibold text-primary">ภาษีสะสม</h2>
+
+      <div className="mb-space-4 flex flex-wrap items-center gap-space-2">
+        <label className="text-sm text-secondary">เลือกปี:</label>
+        <select
           value={selectedYear}
           onChange={(e) => setSelectedYear(e.target.value)}
-          className={styles.yearSelect}
+          className={SELECT}
         >
           {getSortedYears(allYearData).map(yearAD => {
             const yearBE = (parseInt(yearAD) + 543).toString();
             return <option key={yearAD} value={yearAD}>พ.ศ. {yearBE}</option>;
           })}
         </select>
-        <>
-          <button 
-            onClick={() => {
-              setShowAddForm(!showAddForm);
-              if (!showAddForm) {
-                // หา BE ล่าสุดจาก allYearData แล้ว +1
-                const currentBE = new Date().getFullYear() + 543;
-                const years = Object.keys(allYearData).map(y => parseInt(y) + 543);
-                if (years.length > 0) {
-                  const maxBE = Math.max(...years);
-                  setNewYear((maxBE + 1).toString());
-                } else {
-                  setNewYear(currentBE.toString());
-                }
+        <button
+          type="button"
+          onClick={() => {
+            setShowAddForm(!showAddForm);
+            if (!showAddForm) {
+              // หา BE ล่าสุดจาก allYearData แล้ว +1
+              const currentBE = new Date().getFullYear() + 543;
+              const years = Object.keys(allYearData).map(y => parseInt(y) + 543);
+              if (years.length > 0) {
+                const maxBE = Math.max(...years);
+                setNewYear((maxBE + 1).toString());
+              } else {
+                setNewYear(currentBE.toString());
               }
-            }}
-            className={styles.addYearBtn}
-          >
-            + เพิ่มปีใหม่
-          </button>
-          <button
-            onClick={handleSyncFromSalary}
-            className={styles.syncBtn}
-          >
-            ซิงค์จากเงินเดือน
-          </button>
-          <button
-            onClick={() => handleDelete(selectedYear)}
-            className={styles.deleteBtn}
-          >
-            ลบข้อมูลปี พ.ศ. {parseInt(selectedYear) + 543}
-          </button>
-        </>
+            }
+          }}
+          className={BTN_PRIMARY}
+        >
+          + เพิ่มปีใหม่
+        </button>
+        <button type="button" onClick={handleSyncFromSalary} className={BTN_SECONDARY}>
+          ซิงค์จากเงินเดือน
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (!selectedYear || !allYearData[selectedYear]) return;
+            setConfirmDeleteOpen(true);
+          }}
+          className={BTN_DANGER}
+        >
+          ลบข้อมูลปี พ.ศ. {parseInt(selectedYear) + 543}
+        </button>
       </div>
 
+      {confirmDeleteOpen && (
+        <div
+          className={formStyles.backdrop}
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setConfirmDeleteOpen(false);
+          }}
+        >
+          <div
+            ref={deleteDialogRef}
+            className={`${formStyles.modal} ${formStyles.modalNarrow}`}
+            role="alertdialog"
+            aria-modal="true"
+            aria-label={`ลบข้อมูลปี พ.ศ. ${parseInt(selectedYear) + 543}`}
+          >
+            <div className={formStyles.modalHeader}>
+              <h2 className={formStyles.modalTitle}>{`ลบข้อมูลปี พ.ศ. ${parseInt(selectedYear) + 543}`}</h2>
+              <button
+                type="button"
+                className={formStyles.closeButton}
+                onClick={() => setConfirmDeleteOpen(false)}
+                aria-label="ปิด"
+              >
+                <Icons.X size={18} />
+              </button>
+            </div>
+            <div className={formStyles.modalBody}>
+              <p className={formStyles.confirmText}>
+                {`ข้อมูลภาษี รายรับ และกองทุนสำรองเลี้ยงชีพทั้ง 12 เดือนของปี พ.ศ. ${parseInt(selectedYear) + 543} `
+                  + 'จะถูกลบถาวรและไม่สามารถกู้คืนได้'}
+              </p>
+            </div>
+            <div className={formStyles.modalFooter}>
+              <button
+                ref={cancelDeleteButtonRef}
+                type="button"
+                className={formStyles.secondaryButton}
+                onClick={() => setConfirmDeleteOpen(false)}
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                className={formStyles.dangerButton}
+                onClick={confirmDeleteYear}
+                disabled={deleteBusy}
+              >
+                {deleteBusy ? 'กำลังลบ...' : 'ลบข้อมูล'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showAddForm && (
-        <div className={styles.addForm}>
-          <h4 className={styles.addFormTitle}>เพิ่มปีใหม่</h4>
-          <div className={styles.addFormControls}>
-            <label className={styles.addFormLabel}>ปี พ.ศ.:</label>
+        <div className="mb-space-4 rounded-md border border-border-subtle bg-surface-2 p-space-4">
+          <h4 className="mb-space-3 text-sm font-semibold text-primary">เพิ่มปีใหม่</h4>
+          <div className="flex flex-wrap items-center gap-space-2">
+            <label className="text-sm text-secondary">ปี พ.ศ.:</label>
             <input
               type="text"
               inputMode="numeric"
               value={newYear}
               onChange={(e) => setNewYear(e.target.value)}
               placeholder="เช่น 2568"
-              className={styles.yearInput}
+              className={`${INPUT} max-w-[140px]`}
             />
-            <button onClick={() => {
-              const yearAD = (parseInt(newYear) - 543).toString();
-              setNewYear('');
-              handleAddNewYear(yearAD);
-            }} className={styles.submitBtn}>เพิ่ม</button>
-            <button onClick={() => {
-              setShowAddForm(false);
-              setNewYear('');
-            }} className={styles.cancelBtn}>ยกเลิก</button>
+            <button
+              type="button"
+              onClick={() => {
+                const yearAD = (parseInt(newYear) - 543).toString();
+                setNewYear('');
+                handleAddNewYear(yearAD);
+              }}
+              className={BTN_PRIMARY}
+            >
+              เพิ่ม
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddForm(false);
+                setNewYear('');
+              }}
+              className={BTN_SECONDARY}
+            >
+              ยกเลิก
+            </button>
           </div>
         </div>
       )}
 
-      {/* Desktop Table */}
-      <div className={styles.tableSection + ' ' + styles.hideOnMobile}>
-        <h3 className={styles.tableTitle}>ภาษีสะสมรายเดือน พ.ศ. {parseInt(selectedYear) + 543}</h3>
-        <table className={styles.monthlyTable}>
-          <thead className={styles.tableHeader}>
-            <tr>
-              <th className={`${styles.tableHeaderCell} ${styles.left}`}>เดือน</th>
-              <th className={`${styles.tableHeaderCell} ${styles.right}`}>รายรับ (บาท)</th>
-              <th className={`${styles.tableHeaderCell} ${styles.right}`}>รายได้สะสม (บาท)</th>
-              <th className={`${styles.tableHeaderCell} ${styles.right}`}>กองทุนสำรองเลี้ยงชีพ (บาท)</th>
-              <th className={`${styles.tableHeaderCell} ${styles.right}`}>{taxKeyThaiMapping['monthly_tax']} (บาท)</th>
-              <th className={`${styles.tableHeaderCell} ${styles.right}`}>{taxKeyThaiMapping['accumulated_tax']} (บาท)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[{ month: '01', name: 'มกราคม' }, { month: '02', name: 'กุมภาพันธ์' }, { month: '03', name: 'มีนาคม' },
-              { month: '04', name: 'เมษายน' }, { month: '05', name: 'พฤษภาคม' }, { month: '06', name: 'มิถุนายน' },
-              { month: '07', name: 'กรกฎาคม' }, { month: '08', name: 'สิงหาคม' }, { month: '09', name: 'กันยายน' },
-              { month: '10', name: 'ตุลาคม' }, { month: '11', name: 'พฤศจิกายน' }, { month: '12', name: 'ธันวาคม' }
-            ].map(({ month, name }) => {
-              const accumulatedTaxVal = calculateAccumulatedTax(month);
-              const accumulatedIncomeVal = calculateAccumulatedIncome(month);
-              const income = monthlyIncome[month] || '0.00';
-              const provident = monthlyProvident?.[month] || '0.00';
-              const monthlyTaxVal = monthlyTax[month] || '0.00';
-              return (
-                <tr key={month} className={styles.tableRow}>
-                  <td className={`${styles.tableCell} ${styles.left}`}>{name}</td>
-                  <td className={`${styles.tableCell} ${styles.right}`}>
-                    <input
-                      type="text"
-                      value={income}
-                      onChange={e => handleNumberInput(e.target.value, setMonthlyIncome, month)}
-                      onBlur={e => handleNumberBlur(e.target.value, setMonthlyIncome, month)}
-                      onFocus={handleAmountInputFocus}
-                      placeholder="รายรับ"
-                      className={styles.monthInput}
-                    />
-                  </td>
-                  <td className={`${styles.tableCell} ${styles.right}`}>
-                    <span>{formatCurrency(accumulatedIncomeVal)}</span>
-                  </td>
-                  <td className={`${styles.tableCell} ${styles.right}`}>
-                    <input
-                      type="text"
-                      value={provident}
-                      onChange={e => handleNumberInput(e.target.value, setMonthlyProvident, month)}
-                      onBlur={e => handleNumberBlur(e.target.value, setMonthlyProvident, month)}
-                      onFocus={handleAmountInputFocus}
-                      placeholder="กองทุนสำรองเลี้ยงชีพ"
-                      className={styles.monthInput}
-                    />
-                  </td>
-                  <td className={`${styles.tableCell} ${styles.right}`}>
-                    <input
-                      type="text"
-                      value={monthlyTaxVal}
-                      onChange={e => handleNumberInput(e.target.value, setMonthlyTax, month)}
-                      onBlur={e => handleNumberBlur(e.target.value, setMonthlyTax, month)}
-                      onFocus={handleAmountInputFocus}
-                      placeholder={taxKeyThaiMapping['monthly_tax']}
-                      className={styles.monthInput}
-                    />
-                  </td>
-                  <td className={`${styles.tableCell} ${styles.right} ${styles.accumulatedCell}`}>{formatCurrency(accumulatedTaxVal)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr className={styles.totalRow}>
-              <td className={styles.totalCell}>รวมทั้งปี</td>
-              <td className={`${styles.totalCell} ${styles.right}`}>{getSumDisplay(monthlyIncome)}</td>
-              <td className={`${styles.totalCell} ${styles.right}`}>{getSumDisplay(monthlyIncome)}</td>
-              <td className={`${styles.totalCell} ${styles.right}`}>{getSumDisplay(monthlyProvident)}</td>
-              <td className={`${styles.totalCell} ${styles.right}`}>{getSumDisplay(monthlyTax)}</td>
-              <td className={`${styles.totalCell} ${styles.right}`}>{getSumDisplay(monthlyTax)}</td>
-            </tr>
-          </tfoot>
-        </table>
+      {/* md+: C5 table */}
+      <div className="hidden md:block">
+        <h3 className="mb-space-3 text-sm font-medium text-secondary">ภาษีสะสมรายเดือน พ.ศ. {parseInt(selectedYear) + 543}</h3>
+        <div className="overflow-x-auto rounded-md border border-border-default">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-border-subtle bg-surface-2">
+                <th className="p-space-3 text-left text-xs font-medium text-secondary">เดือน</th>
+                <th className="p-space-3 text-right text-xs font-medium text-secondary">รายรับ (บาท)</th>
+                <th className="p-space-3 text-right text-xs font-medium text-secondary">รายได้สะสม (บาท)</th>
+                <th className="p-space-3 text-right text-xs font-medium text-secondary">กองทุนสำรองเลี้ยงชีพ (บาท)</th>
+                <th className="p-space-3 text-right text-xs font-medium text-secondary">{taxKeyThaiMapping['monthly_tax']} (บาท)</th>
+                <th className="p-space-3 text-right text-xs font-medium text-secondary">{taxKeyThaiMapping['accumulated_tax']} (บาท)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {MONTHS.map(({ month, name }) => {
+                const accumulatedTaxVal = calculateAccumulatedTax(month);
+                const accumulatedIncomeVal = calculateAccumulatedIncome(month);
+                const income = monthlyIncome[month] || '0.00';
+                const provident = monthlyProvident?.[month] || '0.00';
+                const monthlyTaxVal = monthlyTax[month] || '0.00';
+                return (
+                  <tr key={month} className="border-b border-border-subtle last:border-b-0">
+                    <td className="p-space-3 align-middle text-secondary">{name}</td>
+                    <td className="p-space-3 align-middle">
+                      <input
+                        type="text"
+                        value={income}
+                        onChange={e => handleNumberInput(e.target.value, setMonthlyIncome, month)}
+                        onBlur={e => handleNumberBlur(e.target.value, setMonthlyIncome, month)}
+                        onFocus={handleAmountInputFocus}
+                        placeholder="รายรับ"
+                        className={`${INPUT} text-right font-[family-name:var(--font-numeric)] tabular-nums`}
+                      />
+                    </td>
+                    <td className="p-space-3 text-right align-middle font-[family-name:var(--font-numeric)] tabular-nums text-secondary">
+                      {formatCurrency(accumulatedIncomeVal)}
+                    </td>
+                    <td className="p-space-3 align-middle">
+                      <input
+                        type="text"
+                        value={provident}
+                        onChange={e => handleNumberInput(e.target.value, setMonthlyProvident, month)}
+                        onBlur={e => handleNumberBlur(e.target.value, setMonthlyProvident, month)}
+                        onFocus={handleAmountInputFocus}
+                        placeholder="กองทุนสำรองเลี้ยงชีพ"
+                        className={`${INPUT} text-right font-[family-name:var(--font-numeric)] tabular-nums`}
+                      />
+                    </td>
+                    <td className="p-space-3 align-middle">
+                      <input
+                        type="text"
+                        value={monthlyTaxVal}
+                        onChange={e => handleNumberInput(e.target.value, setMonthlyTax, month)}
+                        onBlur={e => handleNumberBlur(e.target.value, setMonthlyTax, month)}
+                        onFocus={handleAmountInputFocus}
+                        placeholder={taxKeyThaiMapping['monthly_tax']}
+                        className={`${INPUT} text-right font-[family-name:var(--font-numeric)] tabular-nums`}
+                      />
+                    </td>
+                    <td className="p-space-3 text-right align-middle font-[family-name:var(--font-numeric)] font-semibold tabular-nums text-primary">
+                      {formatCurrency(accumulatedTaxVal)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="bg-surface-2">
+                <td className="p-space-3 text-sm font-semibold text-primary">รวมทั้งปี</td>
+                <td className="p-space-3 text-right font-[family-name:var(--font-numeric)] text-sm font-semibold tabular-nums text-primary">{getSumDisplay(monthlyIncome)}</td>
+                <td className="p-space-3 text-right font-[family-name:var(--font-numeric)] text-sm font-semibold tabular-nums text-primary">{getSumDisplay(monthlyIncome)}</td>
+                <td className="p-space-3 text-right font-[family-name:var(--font-numeric)] text-sm font-semibold tabular-nums text-primary">{getSumDisplay(monthlyProvident)}</td>
+                <td className="p-space-3 text-right font-[family-name:var(--font-numeric)] text-sm font-semibold tabular-nums text-primary">{getSumDisplay(monthlyTax)}</td>
+                <td className="p-space-3 text-right font-[family-name:var(--font-numeric)] text-sm font-semibold tabular-nums text-primary">{getSumDisplay(monthlyTax)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </div>
 
-      {/* Mobile Card List */}
-      <div className={styles.mobileCardList + ' ' + styles.hideOnDesktop}>
-        {[{ month: '01', name: 'มกราคม' }, { month: '02', name: 'กุมภาพันธ์' }, { month: '03', name: 'มีนาคม' },
-          { month: '04', name: 'เมษายน' }, { month: '05', name: 'พฤษภาคม' }, { month: '06', name: 'มิถุนายน' },
-          { month: '07', name: 'กรกฎาคม' }, { month: '08', name: 'สิงหาคม' }, { month: '09', name: 'กันยายน' },
-          { month: '10', name: 'ตุลาคม' }, { month: '11', name: 'พฤศจิกายน' }, { month: '12', name: 'ธันวาคม' }
-        ].map(({ month, name }) => {
+      {/* base tier: C4 cards */}
+      <div className="flex flex-col gap-space-3 md:hidden">
+        {MONTHS.map(({ month, name }) => {
           const accumulatedTaxVal = calculateAccumulatedTax(month);
           const accumulatedIncomeVal = calculateAccumulatedIncome(month);
           const income = monthlyIncome[month] || '0.00';
           const provident = monthlyProvident?.[month] || '0.00';
           const monthlyTaxVal = monthlyTax[month] || '0.00';
           return (
-            <div className={styles.taxCard} key={month}>
-              <div className={styles.cardRow}><span className={styles.cardLabel}>เดือน</span><span>{name}</span></div>
-              <div className={styles.cardRow}>
-                <span className={styles.cardLabel}>รายรับ</span>
-                <input
-                  type="text"
-                  value={income}
-                  onChange={e => handleNumberInput(e.target.value, setMonthlyIncome, month)}
-                  onBlur={e => handleNumberBlur(e.target.value, setMonthlyIncome, month)}
-                  onFocus={handleAmountInputFocus}
-                  placeholder="รายรับ"
-                  className={styles.monthInput}
-                />
+            <div className="rounded-md border border-border-default bg-surface-2 p-space-4" key={month}>
+              <div className="mb-space-2 text-sm font-semibold text-primary">{name}</div>
+              <div className="flex flex-col gap-space-2">
+                <label className="flex flex-col gap-space-1">
+                  <span className="text-xs text-secondary">รายรับ</span>
+                  <input
+                    type="text"
+                    value={income}
+                    onChange={e => handleNumberInput(e.target.value, setMonthlyIncome, month)}
+                    onBlur={e => handleNumberBlur(e.target.value, setMonthlyIncome, month)}
+                    onFocus={handleAmountInputFocus}
+                    placeholder="รายรับ"
+                    className={`${INPUT} text-right font-[family-name:var(--font-numeric)] tabular-nums`}
+                  />
+                </label>
+                <div className="flex items-center justify-between text-xs text-tertiary">
+                  <span>รายได้สะสม</span>
+                  <span className="font-[family-name:var(--font-numeric)] tabular-nums">{formatCurrency(accumulatedIncomeVal)}</span>
+                </div>
+                <label className="flex flex-col gap-space-1">
+                  <span className="text-xs text-secondary">กองทุนสำรองเลี้ยงชีพ</span>
+                  <input
+                    type="text"
+                    value={provident}
+                    onChange={e => handleNumberInput(e.target.value, setMonthlyProvident, month)}
+                    onBlur={e => handleNumberBlur(e.target.value, setMonthlyProvident, month)}
+                    onFocus={handleAmountInputFocus}
+                    placeholder="กองทุนสำรองเลี้ยงชีพ"
+                    className={`${INPUT} text-right font-[family-name:var(--font-numeric)] tabular-nums`}
+                  />
+                </label>
+                <label className="flex flex-col gap-space-1">
+                  <span className="text-xs text-secondary">{taxKeyThaiMapping['monthly_tax']}</span>
+                  <input
+                    type="text"
+                    value={monthlyTaxVal}
+                    onChange={e => handleNumberInput(e.target.value, setMonthlyTax, month)}
+                    onBlur={e => handleNumberBlur(e.target.value, setMonthlyTax, month)}
+                    onFocus={handleAmountInputFocus}
+                    placeholder={taxKeyThaiMapping['monthly_tax']}
+                    className={`${INPUT} text-right font-[family-name:var(--font-numeric)] tabular-nums`}
+                  />
+                </label>
+                <div className="flex items-center justify-between text-xs text-tertiary">
+                  <span>{taxKeyThaiMapping['accumulated_tax']}</span>
+                  <span className="font-[family-name:var(--font-numeric)] font-semibold tabular-nums text-primary">{formatCurrency(accumulatedTaxVal)}</span>
+                </div>
               </div>
-              <div className={styles.cardRow}><span className={styles.cardLabel}>รายได้สะสม</span><span>{formatCurrency(accumulatedIncomeVal)}</span></div>
-              <div className={styles.cardRow}>
-                <span className={styles.cardLabel}>กองทุนสำรองเลี้ยงชีพ</span>
-                <input
-                  type="text"
-                  value={provident}
-                  onChange={e => handleNumberInput(e.target.value, setMonthlyProvident, month)}
-                  onBlur={e => handleNumberBlur(e.target.value, setMonthlyProvident, month)}
-                  onFocus={handleAmountInputFocus}
-                  placeholder="กองทุนสำรองเลี้ยงชีพ"
-                  className={styles.monthInput}
-                />
-              </div>
-              <div className={styles.cardRow}>
-                <span className={styles.cardLabel}>{taxKeyThaiMapping['monthly_tax']}</span>
-                <input
-                  type="text"
-                  value={monthlyTaxVal}
-                  onChange={e => handleNumberInput(e.target.value, setMonthlyTax, month)}
-                  onBlur={e => handleNumberBlur(e.target.value, setMonthlyTax, month)}
-                  onFocus={handleAmountInputFocus}
-                  placeholder={taxKeyThaiMapping['monthly_tax']}
-                  className={styles.monthInput}
-                />
-              </div>
-              <div className={styles.cardRow}><span className={styles.cardLabel}>{taxKeyThaiMapping['accumulated_tax']}</span><span>{formatCurrency(accumulatedTaxVal)}</span></div>
             </div>
           );
         })}
       </div>
-
-
     </div>
   );
 }
