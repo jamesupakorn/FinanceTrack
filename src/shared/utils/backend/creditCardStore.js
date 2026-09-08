@@ -21,6 +21,7 @@
 
 import { isJsonMode, getMongoCollection } from '../../../../lib/dataSource';
 import { getUserData, updateUserData } from '../../../backend/data/userUtils.js';
+import { assertScopedUserId } from './userRequest';
 
 const COLLECTION_NAME = 'credit_cards';
 const JSON_FILENAME = 'credit_cards.json';
@@ -40,12 +41,10 @@ function normaliseCreditData(raw) {
   };
 }
 
+// F-08: implementation moved to shared src/shared/utils/backend/userRequest.js#assertScopedUserId
+// — this file only supplies its own error-message label so its distinct message stays byte-identical.
 function assertUserScope(userId) {
-  const normalised = typeof userId === 'string' ? userId.trim() : '';
-  if (!normalised) {
-    throw new Error('creditCardStore: userId is required');
-  }
-  return normalised;
+  return assertScopedUserId(userId, 'creditCardStore');
 }
 
 /**
