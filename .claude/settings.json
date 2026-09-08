@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Skill(impeccable)",
-      "Skill(impeccable:*)"
+      "Skill(impeccable:*)",
+      "Bash(perl -0pi -e 's{'\\\\''\\\\.\\\\./\\\\.\\\\./\\\\.\\\\./\\\\.\\\\./\\\\.\\\\./Users/supakornraengkasiwit/Git/Personal Project/FinanceTrack/}{'\\\\''file:///Users/supakornraengkasiwit/Git/Personal%20Project/FinanceTrack/}g' /private/tmp/claude-501/-Users-supakornraengkasiwit-Git-Personal-Project-FinanceTrack/8ada3265-eef1-41be-99f6-a17e12a50178/scratchpad/e2e.mjs)"
     ]
   }
 }

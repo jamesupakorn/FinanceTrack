@@ -4,8 +4,6 @@
 export const THAI_MONTH_LABELS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 export const END_OF_MONTH_DUE_DAY = 'EOM';
 
-const DAY_IN_MS = 24 * 60 * 60 * 1000;
-
 /**
  * แปลงตัวเลข/สตริงให้เป็นสตริง 2 หลัก (เติม 0 ด้านหน้า)
  */
@@ -207,16 +205,4 @@ export function formatDueDateLabel(date, options = { day: 'numeric', month: 'sho
   // จัดรูปแบบวันเป็นสตริง ไทย เช่น '19', '19 ก.พ. 568'
   if (!date) return '';
   return date.toLocaleDateString('th-TH', options);
-}
-
-/**
- * คำนวณจำนวนวันจากวันนี้ถึงวันครบกำหนด
- */
-export function calculateDaysDifference(dueDateFromDay) {
-  // คำนวณจำนวนระหว่างจากวันปัจจุบันไปยังวันครบกำหนด
-  const parsedDate = getDueDateFromDay(dueDateFromDay);
-  if (!parsedDate) return null;
-  const today = getStartOfToday();
-  // จำนวนระหว่าง โดยหากหน่วยขึ้นเพึ่อส่วนต่าง
-  return Math.ceil((parsedDate - today) / DAY_IN_MS);
 }

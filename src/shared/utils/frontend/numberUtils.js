@@ -3,12 +3,13 @@
  * ฟังก์ชันช่วยจัดการตัวเลขและการเงินฝั่ง frontend
  * - จัดรูปแบบตัวเลข/สกุลเงิน
  * - แปลงข้อมูลรายรับ/รายจ่ายจาก API
- * - คำนวณสรุปเงินเดือน/ภาษี/เงินออม
+ * - จัดรูปแบบข้อมูลภาษี/เงินออม
  * - จัดการ input/blur ของช่องตัวเลข
- * - จัดการเดือน/ปี และทำความสะอาดข้อมูลเก่า
+ * - จัดการตัวเลือกเดือนสำหรับ dropdown
  */
 
 import { END_OF_MONTH_DUE_DAY, isEndOfMonthDueDay } from '../dateUtils';
+import { isCreditCardRowKey } from '../creditCardUtils';
 
 const DEFAULT_BANK_ACCOUNTS = ['กรุงศรี', 'ttb', 'กสิกร', 'UOB'];
 const LEGACY_ITEM_ACCOUNT_MAP = {
@@ -183,30 +184,6 @@ export const calculateSum = (values) => {
 };
 
 /**
- * คำนวณสรุปเงินเดือน (รายรับ/รายหัก/สุทธิ)
- * @param {object} salaryData - ข้อมูลเงินเดือนจากฟอร์ม
- * @returns {object} {รวมรายได้, รวมหัก, เงินได้สุทธิ}
- */
-export const calculateSalaryTotals = (salaryData) => {
-  const totalIncome = [
-    'salary', 'overtime_1x', 'overtime_1_5x',
-    'overtime_2x', 'overtime_3x', 'overtime_other',
-    'bonus', 'other_income'
-  ].reduce((sum, key) => sum + parseToNumber(salaryData[key]), 0);
-
-  const totalDeduction = [
-    'provident_fund', 'social_security', 'tax'
-  ].reduce((sum, key) => sum + parseToNumber(salaryData[key]), 0);
-
-  const netIncome = totalIncome - totalDeduction;
-  return {
-    รวมรายได้: totalIncome,
-    รวมหัก: totalDeduction,
-    เงินได้สุทธิ: netIncome
-  };
-};
-
-/**
  * จัดการการพิมพ์ตัวเลขแบบเรียลไทม์ (ยังไม่ format)
  * @param {string} value - ค่าที่ผู้ใช้พิมพ์
  * @param {function} setState - ฟังก์ชันอัปเดต state
@@ -348,10 +325,20 @@ export const formatExpenseData = (data, month) => {
 
   // ถ้าเดือนนี้ยังไม่มีข้อมูลจริงเลย ให้แสดงรายการมาตรฐานเป็นค่าเริ่มต้น
   // แต่ถ้ามีข้อมูลที่บันทึกแล้ว ให้แสดงเฉพาะ key ที่มีอยู่จริง (เพื่อให้การลบรายการคงอยู่)
-  const hasPersistedRows = dynamicKeys.length > 0;
-  const allKeys = hasPersistedRows
-    ? Array.from(new Set(dynamicKeys))
-    : Array.from(new Set(DEFAULT_EXPENSE_KEYS));
+  //
+  // ⚠ แถวบัตรเครดิต (cci_ งวดผ่อน · ccr_ ยอดหมุนเวียน) เป็นแถวที่ derive มาตอน GET
+  //   ไม่ใช่ข้อมูลที่ผู้ใช้บันทึกไว้ ถ้านับรวมในการเช็คนี้ เดือนที่ยังไม่เคยแก้ไข
+  //   แต่บังเอิญมีแถวบัตรเครดิต 1 แถว จะแสดงเฉพาะแถวนั้นแถวเดียว รายการมาตรฐานทั้งชุดหายไป
+  //   และ Save All จะบันทึกการหายนั้นทับลงไป
+  //   ต้องครอบทั้งสอง prefix — บั๊กนี้เคยหลุดขึ้น production มาแล้วครั้งหนึ่งกับ cci_
+  //   (Stage 4 MAJOR-2 / AC-32 / AC-53)
+  const creditCardKeys = dynamicKeys.filter(isCreditCardRowKey);
+  const persistedKeys = dynamicKeys.filter(key => !isCreditCardRowKey(key));
+  const hasPersistedRows = persistedKeys.length > 0;
+  const allKeys = Array.from(new Set([
+    ...(hasPersistedRows ? persistedKeys : DEFAULT_EXPENSE_KEYS),
+    ...creditCardKeys
+  ]));
 
   allKeys.forEach(item => {
     const source = (monthData && monthData[item]) ? monthData[item] : {};
@@ -463,77 +450,4 @@ export const getNextMonth = (currentMonth) => {
   const [year, month] = currentMonth.split('-').map(Number);
   const nextDate = new Date(year, month, 1); // month+1 เนื่องจาก Date constructor month เริ่มจาก 0
   return `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
-};
-
-/**
- * ลบข้อมูลเดือนเก่า เก็บไว้เฉพาะ 15 เดือนล่าสุด
- * @param {object} data - ข้อมูลที่มี months
- * @param {string} newMonth - เดือนใหม่ (YYYY-MM)
- * @returns {object} ข้อมูลที่ถูกตัดเหลือ 15 เดือน
- */
-export const cleanOldMonthData = (data, newMonth) => {
-  const months = Object.keys(data.months || {});
-  
-  // เพิ่มเดือนใหม่
-  months.push(newMonth);
-  
-  // เรียงลำดับเดือน (ใหม่ไปเก่า)
-  months.sort((a, b) => b.localeCompare(a));
-  
-  // เก็บแค่ 15 เดือน ลบเดือนเก่าสุดออก
-  const recentMonths = months.slice(0, 15);
-  
-  // สร้าง data ใหม่เก็บแค่เดือนที่ต้องการ
-  const cleanedData = { ...data };
-  cleanedData.months = {};
-  
-  recentMonths.forEach(month => {
-    if (data.months && data.months[month]) {
-      cleanedData.months[month] = data.months[month];
-    }
-  });
-  
-  return cleanedData;
-};
-
-/**
- * สร้างตัวเลือกปีสำหรับ dropdown (ปีนี้และปีก่อนหน้า)
- * @returns {array} [{value, label}, ...]
- */
-export const generateYearOptions = () => {
-  const years = [];
-  const currentYear = new Date().getFullYear();
-  
-  for (let i = 0; i < 2; i++) {
-    const year = currentYear - i;
-    years.push({
-      value: year.toString(),
-      label: `พ.ศ. ${year + 543}`
-    });
-  }
-  
-  return years;
-};
-
-/**
- * ลบข้อมูลปีเก่า เก็บไว้เฉพาะปีปัจจุบันและปีก่อนหน้า
- * @param {object} data - ข้อมูลที่มี ภาษีรายปี
- * @returns {object} ข้อมูลที่ถูกตัดเหลือ 2 ปี
- */
-export const cleanOldYearData = (data) => {
-  const currentYear = new Date().getFullYear();
-  const years = Object.keys(data.ภาษีรายปี || {}).map(Number);
-  
-  // เก็บเฉพาะปีปัจจุบันและปีก่อนหน้า
-  const validYears = years.filter(year => year >= currentYear - 1);
-  
-  // สร้างข้อมูลใหม่เก็บเฉพาะปีที่ต้องการ
-  const newYearData = {};
-  validYears.forEach(year => {
-    if (data.ภาษีรายปี && data.ภาษีรายปี[year]) {
-      newYearData[year] = data.ภาษีรายปี[year];
-    }
-  });
-  
-  return { ...data, ภาษีรายปี: newYearData };
 };

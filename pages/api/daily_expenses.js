@@ -2,7 +2,7 @@ import { assertUserId } from '../../src/shared/utils/backend/userRequest.js';
 import { enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils.js';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource.js';
 
-const { getUserData, updateUserData, limitUserEntries } = require('../../src/backend/data/userUtils');
+import { getUserData, updateUserData, limitUserEntries } from '../../src/backend/data/userUtils.js';
 
 const COLLECTION_NAME = 'daily_expenses';
 const JSON_FILENAME = 'daily_expenses.json';
@@ -65,13 +65,16 @@ function validateItems(items) {
 }
 
 function handleJsonGet(req, res, userId) {
-  const { month } = req.query;
+  const { month, raw } = req.query;
   if (!month) return res.status(400).json({ error: 'month is required' });
 
   const bucket = getUserData(JSON_FILENAME, userId);
   let doc = bucket[month];
 
-  if (!doc) {
+  // raw=1 skips the fixed-only carry-forward below — used by "copy from previous month"
+  // (MonthManager.js), which wants the previous month's actually-saved items (or none),
+  // not a synthesized, never-persisted preview meant for the normal editing view.
+  if (!doc && raw !== '1') {
     const prevMonth = getPreviousMonth(month);
     const prevDoc = bucket[prevMonth];
     const fixedItems = (prevDoc?.items || [])
@@ -80,7 +83,7 @@ function handleJsonGet(req, res, userId) {
     doc = { month, items: fixedItems };
   }
 
-  const items = doc.items || [];
+  const items = doc?.items || [];
   return res.status(200).json({ month, items, ...calculateTotals(items) });
 }
 
@@ -121,12 +124,13 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      const { month } = req.query;
+      const { month, raw } = req.query;
       if (!month) return res.status(400).json({ error: 'month is required' });
 
       let doc = await collection.findOne({ month, ...userFilter });
 
-      if (!doc) {
+      // raw=1 skips the fixed-only carry-forward below — see handleJsonGet's comment.
+      if (!doc && raw !== '1') {
         const prevMonth = getPreviousMonth(month);
         const prevDoc = await collection.findOne({ month: prevMonth, ...userFilter });
         const fixedItems = (prevDoc?.items || [])
@@ -135,7 +139,7 @@ export default async function handler(req, res) {
         doc = { month, items: fixedItems };
       }
 
-      const items = doc.items || [];
+      const items = doc?.items || [];
       return res.status(200).json({ month, items, ...calculateTotals(items) });
     } catch {
       return res.status(500).json({ error: 'Failed to read daily expenses' });

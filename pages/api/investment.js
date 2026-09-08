@@ -1,27 +1,21 @@
-import { mapInvestmentDoc, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils';
+import { mapInvestmentDoc } from '../../src/shared/utils/backend/apiUtils';
 import { assertUserId } from '../../src/shared/utils/backend/userRequest';
 import {
   isJsonMode,
   withGeneratedId,
   getMongoCollection
 } from '../../lib/dataSource';
-
-const {
+import {
+  enforceSharedMonthWindowJson,
+  enforceSharedMonthWindowMongo
+} from '../../src/shared/utils/backend/sharedMonthWindow.js';
+import {
   getUserData,
   updateUserData,
-  limitUserEntries,
-} = require('../../src/backend/data/userUtils');
+} from '../../src/backend/data/userUtils.js';
 
 const COLLECTION_NAME = 'investment';
 const JSON_FILENAME = 'investment.json';
-const MONTH_LIMIT = 15;
-
-function enforceUserMonthLimit(bucket = {}) {
-  return limitUserEntries(bucket, {
-    limit: MONTH_LIMIT,
-    keySelector: (_, value) => value?.month || ''
-  });
-}
 
 function handleJsonInvestmentGet(req, res, userId) {
   const bucket = getUserData(JSON_FILENAME, userId);
@@ -48,8 +42,10 @@ function handleJsonInvestmentPost(req, res, userId) {
     const existing = nextBucket[month] || {};
     const payload = withGeneratedId({ ...existing, month, investments });
     nextBucket[month] = payload;
-    return enforceUserMonthLimit(nextBucket);
+    return nextBucket;
   });
+  // จำกัดหน้าต่าง 15 เดือนแบบรวมทุก collection (expense/income/salary/investment) หลังเขียนไฟล์นี้แล้ว
+  enforceSharedMonthWindowJson(userId, { extraMonth: month });
   return res.status(200).json({ success: true });
 }
 
@@ -95,7 +91,8 @@ export default async function handler(req, res) {
       { $set: { month, investments, ...userFilter } },
       { upsert: true }
     );
-    await enforceMonthLimit(collection, 15, { filter: userFilter });
+    // จำกัดหน้าต่าง 15 เดือนแบบรวมทุก collection (expense/income/salary/investment)
+    await enforceSharedMonthWindowMongo(userId, { extraMonth: month });
     return res.status(200).json({ success: true });
   }
   res.status(405).json({ error: 'Method not allowed' });

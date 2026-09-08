@@ -1,7 +1,6 @@
 import crypto from 'crypto';
 import { getMongoCollection, isJsonMode } from '../../lib/dataSource';
-
-const { updateUserLineId } = require('../../src/backend/data/userUtils');
+import { updateUserLineId } from '../../src/backend/data/userUtils.js';
 
 export const config = {
   api: {
@@ -59,11 +58,13 @@ export default async function handler(req, res) {
 
   const signature = req.headers['x-line-signature'];
   const channelSecret = process.env.LINE_CHANNEL_SECRET;
-  if (channelSecret) {
-    const isValid = verifySignature(rawBody, signature, channelSecret);
-    if (!isValid) {
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
+  if (!channelSecret) {
+    console.error('LINE webhook: LINE_CHANNEL_SECRET is not configured — rejecting request');
+    return res.status(500).json({ error: 'LINE_CHANNEL_SECRET is not configured' });
+  }
+  const isValid = verifySignature(rawBody, signature, channelSecret);
+  if (!isValid) {
+    return res.status(401).json({ error: 'Invalid signature' });
   }
 
   let payload = {};

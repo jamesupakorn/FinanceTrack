@@ -137,7 +137,7 @@
 
 ไฟล์เพิ่ม:
 - `pages/api/user-bank-accounts.js`
-- `scripts/migrateBankAccounts.js`
+- `scripts/migrateBankAccounts.mjs` (renamed from `.js` 2026-08-29, TD-H01 ESM conversion)
 - `src/shared/utils/frontend/toast.js`
 - `src/frontend/components/Toast.js`
 - `src/frontend/styles/Toast.module.css`

@@ -1,6 +1,6 @@
-const fs = require('fs');
-const path = require('path');
-const bcrypt = require('bcryptjs');
+import fs from 'fs';
+import path from 'path';
+import bcrypt from 'bcryptjs';
 
 const DATA_DIR = path.join(process.cwd(), 'src', 'backend', 'data');
 const USERS_PATH = path.join(DATA_DIR, 'users.json');
@@ -8,7 +8,7 @@ const USER_ID_PREFIX = 'u';
 const USER_ID_PADDING = 3;
 const USER_ID_PATTERN = /^u(\d+)$/i;
 
-function loadUsers() {
+export function loadUsers() {
   try {
     const raw = fs.readFileSync(USERS_PATH, 'utf8');
     const parsed = JSON.parse(raw);
@@ -21,11 +21,11 @@ function loadUsers() {
   }
 }
 
-function saveUsers(users = []) {
+export function saveUsers(users = []) {
   fs.writeFileSync(USERS_PATH, JSON.stringify(users, null, 2));
 }
 
-function getUserById(userId) {
+export function getUserById(userId) {
   const users = loadUsers();
   return users.find(u => u.id === userId) || null;
 }
@@ -43,7 +43,7 @@ function formatUserId(counter) {
   return `${USER_ID_PREFIX}${String(safeCounter).padStart(USER_ID_PADDING, '0')}`;
 }
 
-function generateUserId() {
+export function generateUserId() {
   const users = loadUsers();
   const nextCounter = users.reduce((max, user) => {
     const counter = parseUserCounter(user.id);
@@ -52,13 +52,13 @@ function generateUserId() {
   return formatUserId(nextCounter);
 }
 
-async function checkUserPassword(userId, password) {
+export async function checkUserPassword(userId, password) {
   const user = getUserById(userId);
   if (!user) return false;
   return await bcrypt.compare(password, user.passwordHash);
 }
 
-async function updateUserPassword(userId, nextPassword) {
+export async function updateUserPassword(userId, nextPassword) {
   if (!userId || typeof nextPassword !== 'string') {
     throw new Error('Invalid payload');
   }
@@ -80,7 +80,7 @@ async function updateUserPassword(userId, nextPassword) {
   };
 }
 
-function updateUserLineId(userId, lineUserId) {
+export function updateUserLineId(userId, lineUserId) {
   if (!userId || !lineUserId) {
     throw new Error('Invalid payload');
   }
@@ -102,7 +102,7 @@ function updateUserLineId(userId, lineUserId) {
   };
 }
 
-function getUserBankAccounts(userId) {
+export function getUserBankAccounts(userId) {
   const user = getUserById(userId);
   if (!user) {
     throw new Error('User not found');
@@ -110,7 +110,7 @@ function getUserBankAccounts(userId) {
   return user.bankAccounts || [];
 }
 
-function updateUserBankAccounts(userId, bankAccounts) {
+export function updateUserBankAccounts(userId, bankAccounts) {
   if (!userId) {
     throw new Error('Invalid userId');
   }
@@ -135,11 +135,11 @@ function updateUserBankAccounts(userId, bankAccounts) {
   };
 }
 
-function resolveDataPath(filename) {
+export function resolveDataPath(filename) {
   return path.join(DATA_DIR, filename);
 }
 
-function readDataFile(filename) {
+export function readDataFile(filename) {
   const filePath = resolveDataPath(filename);
   try {
     const raw = fs.readFileSync(filePath, 'utf8');
@@ -155,7 +155,7 @@ function readDataFile(filename) {
   return {};
 }
 
-function writeDataFile(filename, payload) {
+export function writeDataFile(filename, payload) {
   const filePath = resolveDataPath(filename);
   fs.writeFileSync(filePath, JSON.stringify(payload || {}, null, 2));
 }
@@ -167,19 +167,19 @@ function ensureUserBucket(data, userId) {
   return data[userId];
 }
 
-function getUserData(filename, userId) {
+export function getUserData(filename, userId) {
   const data = readDataFile(filename);
   return data[userId] || {};
 }
 
-function setUserData(filename, userId, userPayload) {
+export function setUserData(filename, userId, userPayload) {
   const data = readDataFile(filename);
   data[userId] = userPayload;
   writeDataFile(filename, data);
   return data[userId];
 }
 
-function updateUserData(filename, userId, updater) {
+export function updateUserData(filename, userId, updater) {
   const data = readDataFile(filename);
   const bucket = ensureUserBucket(data, userId);
   const nextBucket = typeof updater === 'function' ? updater({ ...bucket }) : updater;
@@ -188,7 +188,7 @@ function updateUserData(filename, userId, updater) {
   return data[userId];
 }
 
-function limitUserEntries(bucket = {}, { limit = 15, keySelector } = {}) {
+export function limitUserEntries(bucket = {}, { limit = 15, keySelector } = {}) {
   if (!bucket || typeof bucket !== 'object') {
     return {};
   }
@@ -210,21 +210,3 @@ function limitUserEntries(bucket = {}, { limit = 15, keySelector } = {}) {
   });
   return limited;
 }
-
-module.exports = {
-  loadUsers,
-  getUserById,
-  checkUserPassword,
-  updateUserPassword,
-  updateUserLineId,
-  getUserBankAccounts,
-  updateUserBankAccounts,
-  generateUserId,
-  resolveDataPath,
-  readDataFile,
-  writeDataFile,
-  getUserData,
-  setUserData,
-  updateUserData,
-  limitUserEntries,
-};
