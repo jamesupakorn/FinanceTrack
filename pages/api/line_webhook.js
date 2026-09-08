@@ -93,13 +93,12 @@ export default async function handler(req, res) {
     }
   }
 
-  console.log('LINE webhook events:', events.map(event => ({
-    type: event.type,
-    source: event.source,
-    message: event.message
-  })));
+  console.log('LINE webhook events:', {
+    count: events.length,
+    types: events.map(event => event.type)
+  });
   if (linked.length > 0) {
-    console.log('LINE linked users:', linked);
+    console.log('LINE linked users:', linked.length);
   }
 
   return res.status(200).json({ ok: true });
