@@ -18,26 +18,11 @@ import {
 import {
   getUserData,
   updateUserData,
-  limitUserEntries,
+  enforceUserMonthLimit,
 } from '../../src/backend/data/userUtils.js';
 
 const COLLECTION_NAME = 'savings';
 const JSON_FILENAME = 'savings.json';
-const MONTH_LIMIT = 15;
-
-/**
- * Enforce the 15-month data limit per user
- * Removes oldest month entries when user exceeds MONTH_LIMIT threshold
- * Uses the month field from each entry to determine age and retention priority
- * @param {object} bucket - Object containing all months of user savings data
- * @returns {object} Limited bucket with maximum MONTH_LIMIT entries per user
- */
-function enforceUserMonthLimit(bucket = {}) {
-  return limitUserEntries(bucket, {
-    limit: MONTH_LIMIT,
-    keySelector: (_, value) => value?.month || ''
-  });
-}
 
 /**
  * อ่านข้อมูลเงินออมในโหมด JSON

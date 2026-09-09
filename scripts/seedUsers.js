@@ -5,14 +5,14 @@
  * ใช้ครั้งเดียวหลังจาก users.json ถูกลบในการ migrate ไป MongoDB
  *
  * Usage:
- *   node scripts/seedUsers.js
- *   node scripts/seedUsers.js --dry-run
+ *   node scripts/seedUsers.js            (dry-run — prints what would be inserted)
+ *   node scripts/seedUsers.js --apply    (writes to MongoDB)
  */
 
 const { MongoClient } = require('mongodb');
 
 const DATABASE_NAME = process.env.MONGODB_DB || 'financetrack';
-const isDryRun = process.argv.includes('--dry-run');
+const apply = process.argv.includes('--apply');
 
 // Snapshot ของ users จาก git history (ก่อน users.json ถูกลบใน commit 3d6f236)
 const USERS_SNAPSHOT = [
@@ -46,7 +46,10 @@ async function run() {
     const db = client.db(DATABASE_NAME);
     const col = db.collection('users');
 
-    console.log(`\nSeed users → MongoDB [db: ${DATABASE_NAME}]${isDryRun ? '  (dry-run)' : ''}`);
+    console.log(`\nSeed users → MongoDB [db: ${DATABASE_NAME}]${!apply ? '  (dry-run)' : ''}`);
+    if (!apply) {
+      console.log('Dry run only — no write performed. Re-run with --apply to persist these changes.');
+    }
 
     for (const user of USERS_SNAPSHOT) {
       const existing = await col.findOne({ id: user.id });
@@ -54,13 +57,13 @@ async function run() {
         console.log(` - ${user.id} (${user.displayName}) → already exists, skipping`);
         continue;
       }
-      if (!isDryRun) {
+      if (apply) {
         await col.insertOne(user);
       }
-      console.log(` - ${user.id} (${user.displayName}) → ${isDryRun ? '[dry-run] would insert' : 'inserted'}`);
+      console.log(` - ${user.id} (${user.displayName}) → ${apply ? 'inserted' : '[dry-run] would insert'}`);
     }
 
-    console.log(isDryRun ? '\nDry-run complete.' : '\nSeed complete.');
+    console.log(apply ? '\nSeed complete.' : '\nDry-run complete.');
   } catch (err) {
     console.error('Seed failed:', err);
     process.exitCode = 1;
