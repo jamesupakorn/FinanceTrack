@@ -17,6 +17,7 @@ const COLLECTION_CONFIGS = [
 ];
 
 const shouldDrop = process.argv.includes('--drop');
+const apply = process.argv.includes('--apply');
 
 if (!process.env.MONGODB_URI) {
   console.error('Missing MONGODB_URI. Please set it via environment variable or .env.local');
@@ -93,7 +94,11 @@ async function importCollection(db, config) {
 
   const collection = db.collection(config.name);
   if (shouldDrop) {
-    await collection.deleteMany({});
+    if (apply) {
+      await collection.deleteMany({});
+    } else {
+      console.warn(`   (dry run — would drop collection ${config.name} before insert)`);
+    }
   }
 
   const operations = docs.map((doc) => ({
@@ -107,6 +112,10 @@ async function importCollection(db, config) {
     }
   }));
 
+  if (!apply) {
+    return { inserted: docs.length, updated: 0, dryRun: true };
+  }
+
   const result = await collection.bulkWrite(operations, { ordered: false });
   const upserts = result.upsertedCount || 0;
   const modifications = result.modifiedCount || 0;
@@ -119,10 +128,17 @@ async function run() {
     await client.connect();
     const db = client.db(DATABASE_NAME);
     console.log(`\nImporting JSON data into MongoDB database "${DATABASE_NAME}"${shouldDrop ? ' (collections cleared before insert)' : ''}`);
+    if (!apply) {
+      console.log('Dry run only — no write performed. Re-run with --apply to persist these changes.');
+    }
 
     for (const config of COLLECTION_CONFIGS) {
       process.stdout.write(` - ${config.name} (${config.file}) ... `);
       const result = await importCollection(db, config);
+      if (result.dryRun) {
+        console.log(`${result.inserted} would insert/update`);
+        continue;
+      }
       const parts = [`${result.inserted} insert`];
       if (result.updated) {
         parts.push(`${result.updated} update`);
@@ -130,7 +146,7 @@ async function run() {
       console.log(parts.join(', '));
     }
 
-    console.log('\nImport complete.');
+    console.log(apply ? '\nImport complete.' : '\nDry run complete. Re-run with --apply to persist these changes.');
   } catch (error) {
     console.error('Import failed:', error);
     process.exitCode = 1;

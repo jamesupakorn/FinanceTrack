@@ -1,8 +1,13 @@
+// One-off: convert per-file flat-array JSON data stores into per-user keyed objects.
+// Usage: node scripts/migrateToMultiUser.js            (dry-run — prints what would be rewritten)
+//        node scripts/migrateToMultiUser.js --apply    (writes the migrated files to disk)
 const fs = require('fs');
 const path = require('path');
 
 const DEFAULT_USER_ID = 'u001';
 const DATA_DIR = path.join(__dirname, '..', 'src', 'backend', 'data');
+
+const apply = process.argv.includes('--apply');
 
 const CONFIG = [
   { file: 'monthly_income.json', key: 'month' },
@@ -42,8 +47,20 @@ function migrateFile({ file, key }) {
   }
 
   const migrated = toMultiUserPayload(parsed, key);
+
+  if (!apply) {
+    console.log(`Would migrate: ${file} (dry run only — no write performed)`);
+    return;
+  }
+
   fs.writeFileSync(targetPath, JSON.stringify(migrated, null, 2));
   console.log(`Migrated ${file}`);
+}
+
+console.log(`Target data directory: ${DATA_DIR}`);
+console.log(`Files to process: ${CONFIG.map(c => c.file).join(', ')}`);
+if (!apply) {
+  console.log('Dry run only — no write performed. Re-run with --apply to persist these changes.');
 }
 
 CONFIG.forEach(migrateFile);
