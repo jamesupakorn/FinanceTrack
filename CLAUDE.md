@@ -165,9 +165,9 @@
 ## 5) สถานะ release ล่าสุด
 
 - branch ที่ใช้ปล่อยล่าสุด: `production`
-- commit สุดท้ายที่จัดเวอร์ชันให้ตรง: `a464442`
-- `package.json` และ `package-lock.json` เป็น `2.2.0` (release tag)
-- version ล่าสุดบน branch `develop` คือ `2.2.3` (mobile UX overhaul)
+- commit สุดท้ายที่จัดเวอร์ชันให้ตรง: `a464442` (verified: "chore: set version to 2.2.0 exactly")
+- `package.json` และ `package-lock.json` เป็น `2.2.0` ตอนที่ commit `a464442` ถูกสร้าง (release tag บน production)
+- version ล่าสุดบน branch `develop` คือ `2.3.5` (auto-bumped ผ่าน version-bump git hook, ยืนยันจาก package.json:3)
 
 ## 6) สิ่งที่ควรรู้ก่อนพัฒนาต่อ
 
