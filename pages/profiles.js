@@ -26,7 +26,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useSession } from '../src/frontend/contexts/SessionContext';
-import { withApiTokenHeaders } from '../src/shared/utils/frontend/apiToken';
 import { loadUsers } from '../lib/userStore';
 
 const DEFAULT_DESCRIPTION = 'เลือกรูปโปรไฟล์ที่ต้องการใช้งาน แล้วกรอกรหัส PIN ของแต่ละผู้ใช้';
@@ -107,10 +106,7 @@ export default function ProfileGalleryPage({ initialProfiles = [] }) {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/users?ts=${Date.now()}`, {
-        cache: 'no-store',
-        headers: withApiTokenHeaders()
-      });
+      const res = await fetch(`/api/users?ts=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data?.error || 'ไม่สามารถโหลดรายชื่อผู้ใช้');
@@ -240,7 +236,7 @@ export default function ProfileGalleryPage({ initialProfiles = [] }) {
     try {
       const res = await fetch('/api/auth/profile-login', {
         method: 'POST',
-        headers: withApiTokenHeaders({ 'Content-Type': 'application/json' }),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: profile.id, password })
       });
       const data = await res.json();

@@ -1,5 +1,4 @@
 import { requireActiveUserId } from './sessionClient';
-import { withApiTokenHeaders } from './apiToken';
 
 const API_URLS = {
 	INCOME: '/api/monthly_income',
@@ -58,10 +57,59 @@ const deleteTaxYearPayload = async (year) => jsonFetch(API_URLS.TAX, {
 	body: withUserPayload({ year: normalizeYearInput(year) })
 });
 
+const CSRF_COOKIE_NAME = 'ft_csrf';
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+// TD-C02 B3 — handler กลางสำหรับ "session ใช้ไม่ได้แล้ว" (401/403)
+// ลงทะเบียนครั้งเดียวจาก SessionContext ตอน mount (รูปแบบตัวแปรระดับโมดูล เหมือน sessionClient.js)
+let sessionInvalidHandler = null;
+
+/**
+ * ลงทะเบียน callback ที่จะถูกเรียกเมื่อ API ตอบ 401/403 (session หมดอายุ / CSRF ไม่ตรง)
+ * @param {Function|null} handler
+ */
+export function setSessionInvalidHandler(handler) {
+	sessionInvalidHandler = typeof handler === 'function' ? handler : null;
+}
+
+/** อ่าน CSRF token จาก cookie (ft_csrf ตั้งใจไม่เป็น HttpOnly เพื่อให้ JS อ่านได้) */
+function readCsrfToken() {
+	if (typeof document === 'undefined') return '';
+	const match = document.cookie
+		.split('; ')
+		.find(entry => entry.startsWith(`${CSRF_COOKIE_NAME}=`));
+	return match ? decodeURIComponent(match.slice(CSRF_COOKIE_NAME.length + 1)) : '';
+}
+
+/**
+ * เติม X-CSRF-Token ให้ headers ของ request ที่เปลี่ยนข้อมูล
+ * export ไว้สำหรับ call site ที่ยังยิง fetch() ตรง ไม่ผ่าน jsonFetch
+ * (Layout.js#change_password, ExpenseTable.js#user-bank-accounts) — ไม่งั้นจะโดน 403 หลัง B2
+ * @param {object} [headers]
+ * @returns {object} headers ชุดใหม่ (ไม่แก้ของเดิม)
+ */
+export function withCsrfHeaders(headers = {}) {
+	const csrfToken = readCsrfToken();
+	return csrfToken ? { ...headers, 'X-CSRF-Token': csrfToken } : { ...headers };
+}
+
+function notifySessionInvalid() {
+	if (!sessionInvalidHandler) return;
+	try {
+		sessionInvalidHandler();
+	} catch (err) {
+		console.error('session invalid handler ทำงานไม่สำเร็จ', err);
+	}
+}
+
 async function jsonFetch(url, options = {}) {
+	// แนบ CSRF token เฉพาะ method ที่เปลี่ยนข้อมูล — GET ฝั่ง server ยกเว้นไว้ (spec §Decision B)
+	const headers = MUTATING_METHODS.has(String(options.method || 'GET').toUpperCase())
+		? withCsrfHeaders(options.headers || {})
+		: { ...(options.headers || {}) };
 	const mergedOptions = {
 		...options,
-		headers: withApiTokenHeaders(options.headers || {})
+		headers
 	};
 	const response = await fetch(url, mergedOptions);
 	let data;
@@ -71,6 +119,11 @@ async function jsonFetch(url, options = {}) {
 		data = null;
 	}
 	if (!response.ok) {
+		// 401 = ไม่มี/หมดอายุ session, 403 = CSRF ไม่ตรง — ทั้งคู่แปลว่า request นี้เชื่อถือไม่ได้
+		// ในฐานะผู้ใช้คนปัจจุบัน จึงพากลับไปล็อกอินใหม่ แล้วค่อย throw ให้ .catch() เดิมทำงานตามปกติ
+		if (response.status === 401 || response.status === 403) {
+			notifySessionInvalid();
+		}
 		const message = data?.error || 'ไม่สามารถเชื่อมต่อ API ได้';
 		throw new Error(message);
 	}

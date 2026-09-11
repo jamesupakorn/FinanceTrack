@@ -7,14 +7,13 @@
  * - PATCH  : ติ๊กสถานะชำระของงวด
  * - DELETE : ยกเลิกแผน (cancel) หรือลบถาวร (delete)
  *
- * ทุก handler: assertApiToken → assertUserId → store (BR-CC-001)
+ * ทุก handler: assertUserId → store (BR-CC-001)
  * cardId ของแผนต้องเป็นบัตรในเอกสารของผู้ใช้คนเดียวกัน มิฉะนั้น 404 — ห้าม fallback ไป lookup แบบ global
  * ห้ามเชื่อการคำนวณเงินจาก client: schedule / monthlyPayment / totalInterest / totalPayable
  * ที่ client ส่งมาถูกทิ้งทั้งหมด แล้วคำนวณใหม่ด้วย buildSchedule() เสมอ
  */
 
 import crypto from 'crypto';
-import { assertApiToken } from '../../../src/shared/utils/backend/apiTokenAuth';
 import { assertUserId } from '../../../src/shared/utils/backend/userRequest';
 import { getUserCreditData, updateUserCreditData } from '../../../src/shared/utils/backend/creditCardStore';
 import {
@@ -333,8 +332,6 @@ async function handleDelete(req, res, userId) {
 }
 
 export default async function handler(req, res) {
-  if (!assertApiToken(req, res)) return;
-
   const userId = assertUserId(req, res);
   if (!userId) return;
 
