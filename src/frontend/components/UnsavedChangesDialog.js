@@ -6,8 +6,8 @@
  * chrome (backdrop/modal/modalNarrow/modalHeader/modalTitle/closeButton/modalBody/confirmText/
  * modalFooter/secondaryButton/primaryButton) ใช้คลาสร่วมจาก CreditCardForm.module.css เหมือนที่
  * RevolvingConfirmDialog (ExpenseCalendarModal.js:70-140) ทำอยู่แล้ว — ไม่สร้าง stylesheet โมดัลใหม่
- * focus trap (FOCUSABLE_SELECTOR + getTabbableElements) คัดลอกจาก ExpenseCalendarModal.js:37-63
- * คำต่อคำ — ห้ามใช้ raw selector ของ CreditCardForm.js:87-89 (ต้นตอ BUG-4)
+ * focus trap ใช้ getTabbableElements จาก src/shared/utils/frontend/focusTrap.js (shared helper)
+ * เหมือนที่ CreditCardForm.js/ExpenseCalendarModal.js ใช้ — ไม่มี local copy ของ selector/ฟังก์ชันแล้ว
  *
  * ปุ่มที่ปลอดภัย ("กลับไปบันทึก") เป็นปุ่มเด่น (.primaryButton) ได้ focus แรกและอยู่ท้ายสุด — สลับกับ
  * RevolvingConfirmDialog ที่ปุ่มยืนยัน (ทำลาย/สร้างหนี้) เป็นปุ่มเด่น เพราะที่นี่ปุ่มทำลาย
@@ -17,24 +17,8 @@
 
 import { useEffect, useRef } from 'react';
 import { Icons } from './Icons';
+import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
 import formStyles from '../styles/CreditCardForm.module.css';
-
-const FOCUSABLE_SELECTOR = [
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  'a[href]',
-  '[tabindex]'
-].join(', ');
-
-function getTabbableElements(root) {
-  return Array.from(root.querySelectorAll(FOCUSABLE_SELECTOR)).filter(element => (
-    !element.disabled
-    && element.tabIndex >= 0
-    && (element.offsetParent !== null || element.getClientRects().length > 0)
-  ));
-}
 
 export default function UnsavedChangesDialog({ open, message, onStay, onLeave }) {
   const dialogRef = useRef(null);
