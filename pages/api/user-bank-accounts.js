@@ -1,4 +1,3 @@
-import { assertApiToken } from '../../src/shared/utils/backend/apiTokenAuth';
 import { assertUserId } from '../../src/shared/utils/backend/userRequest';
 import {
   getUserBankAccounts,
@@ -51,10 +50,6 @@ function pickBudgetThresholds(payload) {
 }
 
 export default async function handler(req, res) {
-  if (!assertApiToken(req, res)) {
-    return;
-  }
-
   const userId = assertUserId(req, res);
   if (!userId) return;
 

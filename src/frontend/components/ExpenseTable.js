@@ -46,8 +46,7 @@ import {
 } from '../../shared/utils/dateUtils';
 import { isCreditCardRowKey, isRevolvingRowKey } from '../../shared/utils/creditCardUtils';
 import BankAccountTable from './BankAccountTable';
-import { expenseAPI, creditCardAPI } from '../../shared/utils/frontend/apiUtils';
-import { withApiTokenHeaders } from '../../shared/utils/frontend/apiToken';
+import { expenseAPI, creditCardAPI, withCsrfHeaders } from '../../shared/utils/frontend/apiUtils';
 import { useSession } from '../contexts/SessionContext';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
@@ -423,10 +422,10 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
       // อัปเดตบัญชีในโปรไฟล์ user (เพื่อให้เดือนหน้าใช้เป็นค่าเริ่มต้น)
       if (currentUser?.id) {
         try {
-          // ต้องแนบ Bearer token เพราะ endpoint นี้ผ่าน assertApiToken (เดียวกับ TD-H05)
+          // ต้องแนบ X-CSRF-Token เพราะ POST ผ่าน assertUserId (TD-C02 B3) — call site นี้ไม่ผ่าน jsonFetch
           await fetch('/api/user-bank-accounts', {
             method: 'POST',
-            headers: withApiTokenHeaders({ 'Content-Type': 'application/json' }),
+            headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ bankAccounts: normalizedAccounts, userId: currentUser.id })
           });
         } catch (error) {

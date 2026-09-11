@@ -1,80 +1,69 @@
-import { assertApiToken } from './apiTokenAuth';
+import {
+  verifySession,
+  verifyCsrfToken,
+  buildSessionCookie,
+  buildCsrfCookie,
+  SESSION_COOKIE_NAME,
+  SESSION_TIMEOUT_MS
+} from './sessionCookie';
+
+// TD-C02 Increment B2 — trust-model cutover
+// userId มาจาก session cookie ที่เซิร์ฟเวอร์เซ็นเองเท่านั้น ไม่มี fallback ไป query/body/x-user-id
+// อีกต่อไป (fallback ใด ๆ = เปิดช่องเดิมที่งานนี้มีไว้ปิด: client ประกาศตัวเป็นใครก็ได้)
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /**
- * แปลงค่า userId แบบ scalar (string/number) เท่านั้นให้เป็น string มาตรฐาน
- * ค่าอื่น ๆ (object, boolean, null, undefined ฯลฯ) ถูกปฏิเสธ → null
- * ใช้ร่วมกันทั้ง scalar branch และ array branch ของ normalizeUserId() ด้านล่าง
- * เพื่อไม่ให้ array branch มี logic แยกชุดที่หลุด type-check (F-01/F-08)
- * @param {*} value - ค่าที่อาจเป็น userId
- * @returns {string|null} userId แบบ string ที่ trim แล้ว หรือ null ถ้าไม่ใช่ scalar ที่ถูกต้อง
- */
-function normalizeScalarUserId(value) {
-  if (typeof value === 'string') {
-    return value.trim() || null;
-  }
-  if (typeof value === 'number') {
-    return value.toString();
-  }
-  return null;
-}
-
-/**
- * แปลงค่า userId ให้อยู่ในรูปแบบ string มาตรฐาน
- * รองรับค่าแบบ array, string และ number
- * array branch ใช้ scalar เฉพาะตัวแรกเท่านั้น (`?userId=a&userId=b` → 'a', พฤติกรรมเดิม)
- * แต่ต้องผ่านกฎ scalar เดียวกับ non-array branch — object/nested-array ที่ปนมาใน value[0]
- * (เช่น `{ "userId": [{ "$ne": null }] }` ที่ NoSQL injection craft มา) ต้องถูกปฏิเสธเป็น null
- * ไม่ใช่หลุดผ่านไปเป็น Mongo query operator ใน userFilter = { userId } (F-01, Critical)
- * @param {string|number|array|null} value - ค่า userId ที่รับเข้ามา
- * @returns {string|null} userId แบบ string หรือ null
- */
-function normalizeUserId(value) {
-  if (Array.isArray(value)) {
-    return normalizeScalarUserId(value[0]);
-  }
-  return normalizeScalarUserId(value);
-}
-
-/**
- * ดึง userId จาก request ตามลำดับความสำคัญ
- * 1) query.userId
- * 2) body.userId
- * 3) header x-user-id
- * @param {object} req - Express request
- * @returns {string|null} userId ที่พบ หรือ null
+ * ดึง userId จาก session cookie ที่ผ่านการตรวจลายเซ็นแล้ว
+ * @param {object} req - Next.js API request (ต้องมี req.cookies)
+ * @returns {string|null} userId หรือ null เมื่อไม่มี/ไม่ถูกต้อง/หมดอายุ
  */
 export function getUserIdFromRequest(req) {
   if (!req) return null;
-  const queryUser = normalizeUserId(req.query?.userId);
-  if (queryUser) return queryUser;
-  const bodyUser = normalizeUserId(req.body?.userId);
-  if (bodyUser) return bodyUser;
-  const headerUser = normalizeUserId(req.headers?.['x-user-id']);
-  return headerUser;
+  const session = verifySession(req.cookies?.[SESSION_COOKIE_NAME]);
+  return session ? session.userId : null;
 }
 
 /**
- * ตรวจสอบว่ามี userId ใน request หรือไม่
- * ถ้าไม่มีจะตอบกลับ 400 ทันที
- * @param {object} req - Express request
- * @param {object} res - Express response
- * @returns {string|null} userId หรือ null
+ * ตรวจสิทธิ์ระดับ request: session cookie → CSRF (เฉพาะ method ที่เปลี่ยนข้อมูล)
+ * static Bearer "API token" ถูกถอดออกแล้ว (TD-C02 follow-up) — มันถูก bake ลง client bundle ผ่าน
+ * NEXT_PUBLIC_* ตั้งแต่ build time จึงไม่เคยเป็นความลับจริง เป็นแค่ speed bump กัน bot
+ * session cookie ที่เซิร์ฟเวอร์เซ็นเองคือด่านเดียวและเพียงพอ
+ * และต่ออายุ session แบบ sliding เมื่อเวลาที่เหลือน้อยกว่าครึ่งหนึ่งของ window
+ * - ไม่มี/ไม่ถูกต้อง/หมดอายุ → 401 (เดิมเป็น 400 'userId required')
+ * - CSRF ไม่ตรง → 403
+ * @param {object} req - Next.js API request
+ * @param {object} res - Next.js API response
+ * @returns {string|null} userId หรือ null (เมื่อคืน null แปลว่าตอบ response ไปแล้ว)
  */
 export function assertUserId(req, res) {
-  if (!assertApiToken(req, res)) {
+  const session = verifySession(req?.cookies?.[SESSION_COOKIE_NAME]);
+  if (!session) {
+    res.status(401).json({ error: 'session expired or invalid — please log in again' });
     return null;
   }
-  const userId = getUserIdFromRequest(req);
-  if (!userId) {
-    res.status(400).json({ error: 'userId required' });
+
+  if (MUTATING_METHODS.has(req.method) && !verifyCsrfToken(session.sid, req.headers?.['x-csrf-token'])) {
+    res.status(403).json({ error: 'invalid csrf token' });
     return null;
   }
-  return userId;
+
+  // Sliding expiry แบบมี threshold (spec Decision A): ต่ออายุเมื่อเหลือ < 50% ของ window เท่านั้น
+  // ไม่ใช่ทุก request — Save All ยิงหลาย request ติดกัน การ re-issue ทุกครั้งคือ churn เปล่า ๆ
+  // sid เดิมถูกใช้ต่อ เพื่อให้ CSRF token ที่ frontend ถืออยู่ยังใช้ได้
+  if (session.exp - Date.now() < SESSION_TIMEOUT_MS / 2) {
+    res.setHeader('Set-Cookie', [
+      buildSessionCookie(session.userId, { sid: session.sid }),
+      buildCsrfCookie(session.sid)
+    ]);
+  }
+
+  return session.userId;
 }
 
 /**
  * ปฏิเสธ userId ที่ไม่ใช่ string/ว่างเปล่า ก่อนถูกนำไปสร้าง Mongo filter หรือใช้ค้นหาใน JSON
- * แก้ช่องโหว่ cross-user write: normalizeUserId() (ด้านบน) เดิมมี branch array ที่คืนค่าดิบโดยไม่เช็ค
+ * แก้ช่องโหว่ cross-user write: เดิม normalizeUserId() (ถูกลบไปแล้วใน B2 พร้อม client-supplied userId)
+ * มี branch array ที่คืนค่าดิบโดยไม่เช็ค
  * type — { "userId": [{"$ne": null}] } จะหลุดมาถึง findOne({ id: userId })/updateOne({ id: userId }, ...)
  * แบบไม่มีการ์ด ทำให้อ่าน/เขียนทับเอกสารผู้ใช้คนอื่นได้ใน Mongo mode (production)
  * throw แทนการคืน null เพื่อให้ทุก caller (store-layer function) fail ดังชัดเจน แทนที่จะ match ศูนย์

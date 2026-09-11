@@ -6,7 +6,7 @@
  * - PATCH  : บันทึกการตัดสินใจชำระ ('full' | 'minimum' | null)
  * - DELETE : ลบ cycle ที่เก็บไว้ของเดือนนั้น (เดือนถัด ๆ ไป derive ใหม่เอง)
  *
- * ทุก handler: assertApiToken → assertUserId → store เท่านั้น ไม่มีข้อยกเว้น (BR-CC-001)
+ * ทุก handler: assertUserId → store เท่านั้น ไม่มีข้อยกเว้น (BR-CC-001)
  * การค้นหา cardId ทำภายในเอกสารของผู้ใช้คนนั้นเสมอ บัตรของผู้ใช้อื่นจึงได้ 404
  * ห้ามลอกแบบ fallback { userId: { $exists: false } } จาก monthly_expense.js มาใช้ที่นี่
  *
@@ -17,7 +17,6 @@
  */
 
 import crypto from 'crypto';
-import { assertApiToken } from '../../../src/shared/utils/backend/apiTokenAuth';
 import { assertUserId } from '../../../src/shared/utils/backend/userRequest';
 import { getUserCreditData, updateUserCreditData } from '../../../src/shared/utils/backend/creditCardStore';
 import {
@@ -321,8 +320,6 @@ async function handleDelete(req, res, userId) {
 }
 
 export default async function handler(req, res) {
-  if (!assertApiToken(req, res)) return;
-
   const userId = assertUserId(req, res);
   if (!userId) return;
 
