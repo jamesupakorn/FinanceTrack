@@ -109,14 +109,17 @@ describe('POST /api/auth/profile-login — session cookie issuance', () => {
     expect(sidOf(first.res)).not.toBe(sidOf(second.res));
   });
 
-  it('response body ไม่เปลี่ยน — { success, user:{id,displayName,avatar} } เท่านั้น', async () => {
+  // TD-H09: `isDemo` was added to `safeUser` so SummaryReport.js's existing `currentUser?.isDemo`
+  // read keeps working once the demo profile goes through this same response path. For a
+  // non-demo user it's always `false` — the rest of the body shape is unchanged.
+  it('response body ไม่เปลี่ยน — { success, user:{id,displayName,avatar,isDemo} } เท่านั้น', async () => {
     const { req, res } = loginMocks();
     await loginHandler(req, res);
 
     const body = res._getJSONData();
     expect(body).toEqual({
       success: true,
-      user: { id: 'u001', displayName: 'Supakorn', avatar: '/a.png' }
+      user: { id: 'u001', displayName: 'Supakorn', avatar: '/a.png', isDemo: false }
     });
     // ไม่มี token/session รั่วออกทาง body (cookie เป็น HttpOnly เท่านั้น)
     expect(Object.keys(body).sort()).toEqual(['success', 'user']);
@@ -201,6 +204,75 @@ describe('POST /api/auth/profile-login — session cookie issuance', () => {
     expect(res._getStatusCode()).toBe(500);
     expect(res.getHeader('Set-Cookie')).toBeUndefined();
     expect(res._getJSONData().success).toBeUndefined();
+  });
+
+  // TD-H09: demo account passwordless branch — gated strictly on the server-read `user.isDemo`
+  // flag, never on anything the client sends.
+  describe('demo account (isDemo: true) — passwordless branch', () => {
+    it('ล็อกอินสำเร็จโดยไม่ต้องรหัสผ่านถูก — checkUserPassword ไม่ถูกเรียกเลย', async () => {
+      mockGetUserById.mockResolvedValue({
+        id: 'demo',
+        displayName: 'บัญชีสาธิต (Demo)',
+        avatar: '',
+        isDemo: true,
+        passwordHash: null
+      });
+      mockCheckUserPassword.mockResolvedValue(false); // ต้องไม่ถูกเรียก/ไม่ถูกอ้างอิงเลย
+
+      const { req, res } = createMocks({
+        method: 'POST',
+        headers: baseHeaders,
+        body: { userId: 'demo', password: 'anything-non-empty' }
+      });
+      await loginHandler(req, res);
+
+      expect(res._getStatusCode()).toBe(200);
+      expect(mockCheckUserPassword).not.toHaveBeenCalled();
+      expect(res._getJSONData()).toEqual({
+        success: true,
+        user: { id: 'demo', displayName: 'บัญชีสาธิต (Demo)', avatar: '', isDemo: true }
+      });
+      expect(readCookie(res, 'ft_session')).toBeDefined();
+      expect(readCookie(res, 'ft_csrf')).toBeDefined();
+    });
+
+    it('ยังต้องส่ง password (non-empty) ตาม guard เดิม — ค่าจริงไม่ถูกตรวจสอบ', async () => {
+      mockGetUserById.mockResolvedValue({ id: 'demo', displayName: 'Demo', avatar: '', isDemo: true });
+      const { req, res } = createMocks({
+        method: 'POST',
+        headers: baseHeaders,
+        body: { userId: 'demo', password: '' }
+      });
+      await loginHandler(req, res);
+
+      expect(res._getStatusCode()).toBe(400);
+      expect(mockCheckUserPassword).not.toHaveBeenCalled();
+    });
+
+    // Core security regression: a non-demo user cannot bypass the password gate by any means —
+    // the branch is keyed off the server-read `user.isDemo` value, not a client-supplied field.
+    it('user ธรรมดา (isDemo falsy) ต้องยังผ่าน checkUserPassword เสมอ แม้ client จะพยายามส่ง isDemo/role มาด้วย', async () => {
+      mockGetUserById.mockResolvedValue({
+        id: 'u001',
+        displayName: 'Supakorn',
+        avatar: '/a.png',
+        isDemo: undefined
+      });
+      mockCheckUserPassword.mockResolvedValue(false);
+
+      const { req, res } = createMocks({
+        method: 'POST',
+        headers: baseHeaders,
+        // ผู้ใช้ (หรือ client ที่ถูกดัดแปลง) ลองอ้าง isDemo/role ผ่าน request body — ต้องไม่มีผลใด ๆ
+        // เพราะ handler อ่านค่า isDemo จาก user record ฝั่งเซิร์ฟเวอร์เท่านั้น ไม่เคยอ่านจาก req.body
+        body: { userId: 'u001', password: 'wrong-password', isDemo: true, role: 'demo' }
+      });
+      await loginHandler(req, res);
+
+      expect(mockCheckUserPassword).toHaveBeenCalledWith('u001', 'wrong-password');
+      expect(res._getStatusCode()).toBe(401);
+      expect(res.getHeader('Set-Cookie')).toBeUndefined();
+    });
   });
 
   it('login ซ้ำ → cookie ใหม่ทุกครั้ง และยัง verify ผ่าน', async () => {

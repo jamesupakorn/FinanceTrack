@@ -111,14 +111,16 @@ export default function ProfileGalleryPage({ initialProfiles = [] }) {
       if (!res.ok) {
         throw new Error(data?.error || 'ไม่สามารถโหลดรายชื่อผู้ใช้');
       }
-      const nextProfiles = Array.isArray(data.users) ? [...data.users] : [];
+      let nextProfiles = Array.isArray(data.users) ? [...data.users] : [];
       if (!nextProfiles.length) {
         throw new Error('ไม่พบรายชื่อผู้ใช้');
       }
-      const hasDemo = nextProfiles.some(user => user.id === DEMO_PROFILE.id);
-      if (!hasDemo) {
-        nextProfiles.unshift(DEMO_PROFILE);
-      }
+      // /api/users strips isDemo (public projection, TD-H09 M-1) ทำให้แถว 'demo' จาก server เป็นแค่
+      // profile ธรรมดาไม่มี isDemo/tagline/description — ถ้าปล่อยผ่านจะไปเข้า handleProfileClick ปกติ
+      // (เปิด PIN reveal) แทนที่จะเป็น handleDemoLogin() การ์ดพิเศษ ตัดแถวดิบทิ้งแล้ว unshift
+      // DEMO_PROFILE เดียวกับ initial state เสมอ เพื่อให้การ์ด demo คงพฤติกรรม/ตำแหน่งเดิมทุกครั้ง
+      nextProfiles = nextProfiles.filter(user => user.id !== DEMO_PROFILE.id);
+      nextProfiles.unshift(DEMO_PROFILE);
       setProfiles(nextProfiles);
       setError('');
     } catch (err) {
@@ -214,15 +216,32 @@ export default function ProfileGalleryPage({ initialProfiles = [] }) {
     setShowPassword(false);
   };
 
-  const handleDemoLogin = () => {
-    selectUser({
-      id: DEMO_PROFILE.id,
-      displayName: DEMO_PROFILE.displayName,
-      avatar: DEMO_PROFILE.avatar,
-      role: 'demo',
-      isDemo: true
-    });
-    router.replace('/');
+  // TD-H09: routes the demo login through the same session-cookie-issuing path as every other
+  // profile (previously called `selectUser()` directly — no ft_session/ft_csrf cookie was ever
+  // issued, so the demo account's first API call 401'd). Password is a fixed, never-checked
+  // placeholder — see spec-demo-profile-login-fix.md §2/§4; the passwordless bypass is gated
+  // server-side on `user.isDemo`, not on anything sent from here.
+  const handleDemoLogin = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/auth/profile-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: DEMO_PROFILE.id, password: 'demo' })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data?.error || 'ไม่สามารถเข้าสู่ระบบสาธิตได้');
+        return;
+      }
+      selectUser(data.user);
+      router.replace('/');
+    } catch (err) {
+      console.error('เข้าสู่ระบบสาธิตไม่สำเร็จ', err);
+      setError('ไม่สามารถเข้าสู่ระบบสาธิตได้ กรุณาลองใหม่');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleLogin = async (event, profile) => {
