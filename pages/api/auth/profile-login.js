@@ -23,15 +23,21 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'ไม่พบผู้ใช้' });
     }
 
-    const isValid = await checkUserPassword(userId, password);
-    if (!isValid) {
-      return res.status(401).json({ error: 'รหัสผ่านไม่ถูกต้อง' });
+    // TD-H09: demo account, no password gate. Gated strictly on the server-read `user.isDemo`
+    // flag (never a client-supplied value) — this branch never runs for u001/u002/any future
+    // real user, so every other account's login behavior is byte-for-byte unchanged.
+    if (user.isDemo !== true) {
+      const isValid = await checkUserPassword(userId, password);
+      if (!isValid) {
+        return res.status(401).json({ error: 'รหัสผ่านไม่ถูกต้อง' });
+      }
     }
 
     const safeUser = {
       id: user.id,
       displayName: user.displayName,
-      avatar: user.avatar
+      avatar: user.avatar,
+      isDemo: user.isDemo === true
     };
 
     // ออก session cookie + CSRF cookie คู่กัน (TD-C02 B2/B3)

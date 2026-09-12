@@ -32,6 +32,18 @@ const USERS_SNAPSHOT = [
     passwordHash: '$2a$10$LOXxLTyAOtrmYwAdDVA3BulvGrqpBKPtYXgpIN4FT942G0ajKYrOq',
     bankAccounts: [],
   },
+  {
+    // TD-H09: real server-side demo user — restores "ทดลองใช้" login through the normal
+    // /api/auth/profile-login path (see .pipeline/spec-demo-profile-login-fix.md §1).
+    // `isDemo: true` is the only new field this task adds; passwordHash is never read for
+    // this user (profile-login.js gates the passwordless branch strictly on `user.isDemo`).
+    id: 'demo',
+    displayName: 'บัญชีสาธิต (Demo)',
+    avatar: '',
+    isDemo: true,
+    passwordHash: null,
+    bankAccounts: [],
+  },
 ];
 
 if (!process.env.MONGODB_URI) {
