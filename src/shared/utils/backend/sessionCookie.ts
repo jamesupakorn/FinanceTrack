@@ -14,16 +14,16 @@ import crypto from 'crypto';
 
 export const SESSION_COOKIE_NAME = 'ft_session';
 export const CSRF_COOKIE_NAME = 'ft_csrf';
-export const SESSION_TIMEOUT_MS = 60 * 60 * 1000; // 60 นาที ให้ตรงกับ SessionContext ฝั่ง client
+export const SESSION_TIMEOUT_MS: number = 60 * 60 * 1000; // 60 นาที ให้ตรงกับ SessionContext ฝั่ง client
 
 const SIGNATURE_SEPARATOR = '.';
 const DEFAULT_SAME_SITE = 'Lax'; // Lax + CSRF token (defense-in-depth) ตามที่ผู้ใช้เลือกไว้
 // Node's base64url decoder ยอมรับอักขระนอกชุดแล้วข้ามทิ้งเงียบ ๆ ทำให้ token หลายหน้าตาถูก decode
 // เป็นค่าเดียวกัน (malleability) — gate ด้วย charset ก่อน decode ทุกครั้ง
-const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
+const BASE64URL_PATTERN: RegExp = /^[A-Za-z0-9_-]+$/;
 const CSRF_DOMAIN_PREFIX = 'csrf:'; // domain separation: secret เดียวกันแต่คนละวัตถุประสงค์
 
-function isBase64Url(value) {
+function isBase64Url(value: unknown): value is string {
   return typeof value === 'string' && BASE64URL_PATTERN.test(value);
 }
 
@@ -31,7 +31,7 @@ function isBase64Url(value) {
  * อ่าน SESSION_SECRET แบบ fail-closed
  * ถ้าไม่ตั้งค่าไว้ จะ throw เพื่อให้ handler ตอบ 500 แทนการ fallback ไปใช้ค่า default ที่ไม่ปลอดภัย
  */
-function getSessionSecret() {
+function getSessionSecret(): string {
   const secret = typeof process.env.SESSION_SECRET === 'string'
     ? process.env.SESSION_SECRET.trim()
     : '';
@@ -41,11 +41,11 @@ function getSessionSecret() {
   return secret;
 }
 
-function signPayload(encodedPayload, secret) {
+function signPayload(encodedPayload: string, secret: string): Buffer {
   return crypto.createHmac('sha256', secret).update(encodedPayload).digest();
 }
 
-function safeEqual(a, b) {
+function safeEqual(a: unknown, b: unknown): boolean {
   if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b) || a.length !== b.length) {
     return false;
   }
@@ -57,7 +57,7 @@ function safeEqual(a, b) {
  * ใช้เป็นตัวผูก CSRF token เข้ากับ session หนึ่ง ๆ
  * @returns {string} random id แบบ base64url (16 ไบต์)
  */
-export function createSessionId() {
+export function createSessionId(): string {
   return crypto.randomBytes(16).toString('base64url');
 }
 
@@ -68,7 +68,7 @@ export function createSessionId() {
  * @returns {string} ค่าที่จะใส่ใน cookie
  * @throws {Error} เมื่อ userId/sid ไม่ถูกต้อง หรือไม่ได้ตั้ง SESSION_SECRET
  */
-export function signSession(userId, sid) {
+export function signSession(userId: string, sid: unknown): string {
   if (typeof userId !== 'string' || !userId.trim()) {
     throw new Error('signSession requires a non-empty userId');
   }
@@ -97,7 +97,7 @@ export function signSession(userId, sid) {
  * @param {string} cookieValue
  * @returns {{ userId: string, sid: string, exp: number }|null} null เมื่อ token ไม่ถูกต้อง/หมดอายุ
  */
-export function verifySession(cookieValue) {
+export function verifySession(cookieValue: unknown): { userId: string; sid: string; exp: number } | null {
   if (typeof cookieValue !== 'string' || !cookieValue) return null;
 
   const secret = getSessionSecret();
@@ -115,7 +115,7 @@ export function verifySession(cookieValue) {
   let payload;
   try {
     payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf-8'));
-  } catch (error) {
+  } catch (err: any) {
     return null;
   }
 
@@ -137,7 +137,7 @@ export function verifySession(cookieValue) {
  * @returns {string} token แบบ base64url
  * @throws {Error} เมื่อ sid ไม่ถูกต้อง หรือไม่ได้ตั้ง SESSION_SECRET
  */
-export function signCsrfToken(sid) {
+export function signCsrfToken(sid: string): string {
   if (!isBase64Url(sid)) {
     throw new Error('signCsrfToken requires a valid sid');
   }
@@ -155,14 +155,18 @@ export function signCsrfToken(sid) {
  * @param {*} providedToken - ค่าที่ผู้เรียกส่งมา (ไม่เชื่อถือ)
  * @returns {boolean}
  */
-export function verifyCsrfToken(sid, providedToken) {
+export function verifyCsrfToken(sid: unknown, providedToken: unknown): boolean {
   if (!isBase64Url(sid) || !isBase64Url(providedToken)) return false;
   const expected = Buffer.from(signCsrfToken(sid), 'base64url');
   const provided = Buffer.from(providedToken, 'base64url');
   return safeEqual(expected, provided);
 }
 
-function serializeCookie(name, value, { maxAgeSeconds, sameSite = DEFAULT_SAME_SITE, httpOnly = true }) {
+function serializeCookie(
+  name: string,
+  value: string,
+  { maxAgeSeconds, sameSite = DEFAULT_SAME_SITE, httpOnly = true }: { maxAgeSeconds: number; sameSite?: string; httpOnly?: boolean }
+): string {
   const attributes = [
     `${name}=${value}`,
     'Path=/',
@@ -183,7 +187,7 @@ function serializeCookie(name, value, { maxAgeSeconds, sameSite = DEFAULT_SAME_S
  * @param {{ sid: string, sameSite?: string }} options - sid จำเป็นเสมอ
  * @returns {string}
  */
-export function buildSessionCookie(userId, options = {}) {
+export function buildSessionCookie(userId: string, options: { sid?: string; sameSite?: string } = {}): string {
   const token = signSession(userId, options.sid);
   return serializeCookie(SESSION_COOKIE_NAME, token, {
     maxAgeSeconds: Math.floor(SESSION_TIMEOUT_MS / 1000),
@@ -198,7 +202,7 @@ export function buildSessionCookie(userId, options = {}) {
  * @param {{ sameSite?: string }} [options]
  * @returns {string}
  */
-export function buildCsrfCookie(sid, options = {}) {
+export function buildCsrfCookie(sid: string, options: { sameSite?: string } = {}): string {
   return serializeCookie(CSRF_COOKIE_NAME, signCsrfToken(sid), {
     maxAgeSeconds: Math.floor(SESSION_TIMEOUT_MS / 1000),
     sameSite: options.sameSite,
@@ -211,7 +215,7 @@ export function buildCsrfCookie(sid, options = {}) {
  * @param {{ sameSite?: string }} [options]
  * @returns {string}
  */
-export function buildClearedCsrfCookie(options = {}) {
+export function buildClearedCsrfCookie(options: { sameSite?: string } = {}): string {
   return serializeCookie(CSRF_COOKIE_NAME, '', {
     maxAgeSeconds: 0,
     sameSite: options.sameSite,
@@ -224,7 +228,7 @@ export function buildClearedCsrfCookie(options = {}) {
  * @param {{ sameSite?: string }} [options]
  * @returns {string}
  */
-export function buildClearedSessionCookie(options = {}) {
+export function buildClearedSessionCookie(options: { sameSite?: string } = {}): string {
   return serializeCookie(SESSION_COOKIE_NAME, '', {
     maxAgeSeconds: 0,
     sameSite: options.sameSite
