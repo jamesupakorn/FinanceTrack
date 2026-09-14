@@ -426,7 +426,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
           await fetch('/api/user-bank-accounts', {
             method: 'POST',
             headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ bankAccounts: normalizedAccounts, userId: currentUser.id })
+            body: JSON.stringify({ bankAccounts: normalizedAccounts })
           });
         } catch (error) {
           console.warn('Warning: Could not update user bank accounts:', error);

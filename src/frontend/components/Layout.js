@@ -196,7 +196,7 @@ export default function Layout({
         method: 'POST',
         // POST ผ่าน assertUserId → ต้องมี X-CSRF-Token ด้วย (TD-C02 B3) เพราะ call site นี้ไม่ผ่าน jsonFetch
         headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ currentPassword, newPassword, userId: currentUser?.id })
+        body: JSON.stringify({ currentPassword, newPassword })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
