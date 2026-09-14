@@ -1,4 +1,4 @@
-// authUtils.js
+// authUtils.ts
 // ฟังก์ชันเกี่ยวกับการจัดการรหัสผ่านและการเข้ารหัส
 
 /**
@@ -6,7 +6,7 @@
  * @param {string} encoded
  * @returns {string}
  */
-export function decodePassword(encoded) {
+export function decodePassword(encoded: string): string {
   if (typeof window !== 'undefined' && window.atob) {
     return window.atob(encoded);
   }
