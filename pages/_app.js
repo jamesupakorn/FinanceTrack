@@ -3,6 +3,7 @@ import { Anuphan, IBM_Plex_Mono } from 'next/font/google';
 import { ThemeProvider } from '../src/frontend/contexts/ThemeContext';
 import { SessionProvider } from '../src/frontend/contexts/SessionContext';
 import Toast from '../src/frontend/components/Toast';
+import ErrorBoundary from '../src/frontend/components/ErrorBoundary';
 import '../src/frontend/styles/globals.css';
 
 // Graphite redesign fonts (UX_SPEC §3.2), self-hosted at build time via next/font — no runtime
@@ -41,7 +42,9 @@ function MyApp({ Component, pageProps }) {
               ทันทีตอน mount (เช่น EditRedirect) อาจ dispatch เหตุการณ์ app:toast ก่อนที่ Toast จะ
               ผูก window.addEventListener ทัน (mount-order race, พบจาก Stage 4 bug log) */}
           <Toast />
-          <Component {...pageProps} />
+          <ErrorBoundary>
+            <Component {...pageProps} />
+          </ErrorBoundary>
         </div>
       </SessionProvider>
     </ThemeProvider>
