@@ -1,9 +1,9 @@
 /**
  * Toast utility — triggers a non-blocking notification via custom DOM event.
- * @param {string} message - Text to display
- * @param {'success'|'error'|'info'} [type='success'] - Visual style
+ * @param message - Text to display
+ * @param type - Visual style (default 'success')
  */
-export function showToast(message, type = 'success') {
+export function showToast(message: string, type: 'success' | 'error' | 'info' = 'success'): void {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(
     new CustomEvent('app:toast', {

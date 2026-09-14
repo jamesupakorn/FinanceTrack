@@ -9,7 +9,7 @@
  *   - CreditCardDetail.js:297 `matchMedia('(max-width: 767px)')` → ควรใช้ `BP.md - 1`
  */
 
-export const BP = {
+export const BP: Readonly<{ sm: number; md: number; lg: number }> = {
   sm: 640,
   md: 768,
   lg: 1024

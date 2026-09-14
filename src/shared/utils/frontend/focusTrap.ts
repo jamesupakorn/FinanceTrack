@@ -23,10 +23,13 @@ export const FOCUSABLE_SELECTOR = [
  * ผิดตัว เงื่อนไขวนกลับไม่มีวันเป็นจริง แล้ว Tab เดินหลุดออกไปโดนปุ่มของหน้าเบื้องหลัง (BUG-4)
  * เกณฑ์จึงเป็น "tabIndex >= 0 และมองเห็นอยู่" ซึ่งครอบคลุม element ที่ตั้งใจข้ามจาก trap ทุกแบบ
  */
-export function getTabbableElements(root) {
+export function getTabbableElements(root: Element | Document | null | undefined): HTMLElement[] {
   if (!root) return [];
-  return Array.from(root.querySelectorAll(FOCUSABLE_SELECTOR)).filter(element => (
-    !element.disabled
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(element => (
+    // 'disabled' มีเฉพาะ form-control elements (button/input/select/textarea) ไม่ใช่ HTMLElement ทั่วไป
+    // แต่ FOCUSABLE_SELECTOR ครอบคลุมเฉพาะ tag เหล่านั้นบวก a[href]/[tabindex] ซึ่งไม่มี .disabled จริง
+    // (ค่าจะเป็น undefined ที่ falsy) จึง cast ผ่าน union ของ form-control types เพื่อผ่าน strict mode
+    !(element as HTMLButtonElement | HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).disabled
     && element.tabIndex >= 0
     // display:none → ไม่มีทั้ง offsetParent และกล่องเรขาคณิต; position:fixed → ไม่มี offsetParent แต่ยังมีกล่อง
     && (element.offsetParent !== null || element.getClientRects().length > 0)
