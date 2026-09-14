@@ -13,17 +13,6 @@ import {
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /**
- * ดึง userId จาก session cookie ที่ผ่านการตรวจลายเซ็นแล้ว
- * @param {object} req - Next.js API request (ต้องมี req.cookies)
- * @returns {string|null} userId หรือ null เมื่อไม่มี/ไม่ถูกต้อง/หมดอายุ
- */
-export function getUserIdFromRequest(req) {
-  if (!req) return null;
-  const session = verifySession(req.cookies?.[SESSION_COOKIE_NAME]);
-  return session ? session.userId : null;
-}
-
-/**
  * ตรวจสิทธิ์ระดับ request: session cookie → CSRF (เฉพาะ method ที่เปลี่ยนข้อมูล)
  * static Bearer "API token" ถูกถอดออกแล้ว (TD-C02 follow-up) — มันถูก bake ลง client bundle ผ่าน
  * NEXT_PUBLIC_* ตั้งแต่ build time จึงไม่เคยเป็นความลับจริง เป็นแค่ speed bump กัน bot

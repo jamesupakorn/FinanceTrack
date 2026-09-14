@@ -6,7 +6,6 @@
 // Pure-function tests — ไม่มี DB, ไม่มี mongodb-memory-server; ใช้ signSession/createSessionId/
 // signCsrfToken ตัวจริงจาก sessionCookie.js (ไม่ประกอบ token ด้วยมือ) ตาม spec §7
 import {
-  getUserIdFromRequest,
   assertUserId,
   assertScopedUserId
 } from '../../../../src/shared/utils/backend/userRequest';
@@ -75,52 +74,6 @@ beforeEach(() => {
 afterEach(() => {
   process.env = { ...originalEnv };
   jest.restoreAllMocks();
-});
-
-describe('getUserIdFromRequest() — session cookie เป็นแหล่งเดียว', () => {
-  it('session cookie ที่ถูกต้อง → คืน userId ใน payload', () => {
-    const { req } = makeSessionReq();
-    expect(getUserIdFromRequest(req)).toBe(USER_ID);
-  });
-
-  it('ไม่มี cookie → null', () => {
-    expect(getUserIdFromRequest(makeReq())).toBeNull();
-  });
-
-  it('cookie ปลอม/ผิดรูป → null', () => {
-    ['garbage', 'a.b', 'a.b.c', ''].forEach(value => {
-      const req = makeReq({ cookies: { [SESSION_COOKIE_NAME]: value } });
-      expect(getUserIdFromRequest(req)).toBeNull();
-    });
-  });
-
-  it('cookie หมดอายุ → null', () => {
-    const { req } = makeSessionReq({ issuedOffsetMs: -(SESSION_TIMEOUT_MS + 1000) });
-    expect(getUserIdFromRequest(req)).toBeNull();
-  });
-
-  it('query.userId / body.userId / x-user-id ล้วน ๆ (ไม่มี cookie) → null (fallback ถูกถอดออกแล้ว)', () => {
-    const req = makeReq({
-      query: { userId: 'from-query' },
-      body: { userId: 'from-body' },
-      headers: { 'x-user-id': 'from-header' }
-    });
-    expect(getUserIdFromRequest(req)).toBeNull();
-  });
-
-  it('มี cookie และมี userId ปลอมจาก client ด้วย → ยึด cookie เสมอ', () => {
-    const { req } = makeSessionReq({
-      query: { userId: 'u999' },
-      body: { userId: 'u999' },
-      headers: { 'x-user-id': 'u999' }
-    });
-    expect(getUserIdFromRequest(req)).toBe(USER_ID);
-  });
-
-  it('req เป็น null/undefined → null ไม่ throw', () => {
-    expect(getUserIdFromRequest(null)).toBeNull();
-    expect(getUserIdFromRequest(undefined)).toBeNull();
-  });
 });
 
 describe('assertUserId() — session ที่ถูกต้อง', () => {

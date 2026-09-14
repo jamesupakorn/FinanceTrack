@@ -36,13 +36,14 @@ function buildUrl(path: string, params: Record<string, string | number | undefin
 			searchParams.set(key, String(value));
 		}
 	});
-	searchParams.set('userId', requireActiveUserId());
+	requireActiveUserId(); // pre-flight guard only — server derives userId from the session cookie, not this
 	const serialized = searchParams.toString();
 	return serialized ? `${base}?${serialized}` : base;
 }
 
 function withUserPayload(payload: Record<string, unknown> = {}): string {
-	return JSON.stringify({ ...payload, userId: requireActiveUserId() });
+	requireActiveUserId(); // pre-flight guard only — server derives userId from the session cookie, not this
+	return JSON.stringify(payload);
 }
 
 const getTaxYearPayload = async (year: unknown): Promise<any> => jsonFetch(buildUrl(API_URLS.TAX, { year: normalizeYearInput(year) as string | number | undefined | null }));
