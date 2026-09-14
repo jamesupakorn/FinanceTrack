@@ -1,5 +1,5 @@
 /**
- * numberUtils.js
+ * numberUtils.ts
  * ฟังก์ชันช่วยจัดการตัวเลขและการเงินฝั่ง frontend
  * - จัดรูปแบบตัวเลข/สกุลเงิน
  * - แปลงข้อมูลรายรับ/รายจ่ายจาก API
@@ -8,11 +8,14 @@
  * - จัดการตัวเลือกเดือนสำหรับ dropdown
  */
 
+import type { MonthKey, ExpenseItem } from '../../types/domain';
 import { END_OF_MONTH_DUE_DAY, isEndOfMonthDueDay } from '../dateUtils';
+// isCreditCardRowKey ยังเป็น .js (นอก scope ของ slice นี้) — TS จะอนุมาน type แบบหลวมให้ตามที่
+// task-context บันทึกไว้ (ดู spec §Scope A.1)
 import { isCreditCardRowKey } from '../creditCardUtils';
 
 const DEFAULT_BANK_ACCOUNTS = ['กรุงศรี', 'ttb', 'กสิกร', 'UOB'];
-const LEGACY_ITEM_ACCOUNT_MAP = {
+const LEGACY_ITEM_ACCOUNT_MAP: Record<string, string> = {
   credit_kungsri: 'กรุงศรี',
   house: 'ttb',
   credit_ttb: 'ttb',
@@ -27,11 +30,16 @@ const LEGACY_ITEM_ACCOUNT_MAP = {
 /**
  * คำนวณสรุปยอดตามบัญชีจากข้อมูลค่าใช้จ่าย
  * รวมเฉพาะรายการที่ยังไม่ได้ชำระ
- * @param {object} editExpense - ข้อมูลค่าใช้จ่าย
- * @returns {object} สรุปยอด {ชื่อบัญชี: ยอดรวม}
+ *
+ * หมายเหตุ: เป็น implementation แยกจาก `getAccountSummary` ใน commonUtils.ts (signature/logic ต่างกัน
+ * — ตัวนี้รับ bankAccounts เป็นพารามิเตอร์ที่ 2 และเทียบ paid แบบตรงตัว ไม่ผ่าน isPaidFlag) จงใจไม่รวมกัน
+ * ในรอบนี้ (ดู spec §Out of scope)
  */
-export const getAccountSummary = (editExpense, bankAccounts = []) => {
-  const summary = {};
+export const getAccountSummary = (
+  editExpense: Record<string, unknown> | undefined,
+  bankAccounts: string[] = []
+): Record<string, number> => {
+  const summary: Record<string, number> = {};
   const normalizedAccounts = Array.isArray(bankAccounts)
     ? Array.from(new Set(bankAccounts.map((item) => String(item || '').trim()).filter(Boolean)))
     : [];
@@ -42,24 +50,25 @@ export const getAccountSummary = (editExpense, bankAccounts = []) => {
 
   Object.entries(editExpense || {}).forEach(([itemKey, item]) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return;
-    const paid = item?.paid;
+    const expenseItem = item as Partial<ExpenseItem>;
+    const paid = expenseItem?.paid;
     if (paid === true || paid === 'true') return;
 
-    const accountName = (typeof item.account === 'string' && item.account.trim().length > 0)
-      ? item.account.trim()
+    const accountName = (typeof expenseItem.account === 'string' && expenseItem.account.trim().length > 0)
+      ? expenseItem.account.trim()
       : (LEGACY_ITEM_ACCOUNT_MAP[itemKey] || 'ไม่ระบุบัญชี');
 
     if (!(accountName in summary)) {
       summary[accountName] = 0;
     }
 
-    summary[accountName] += parseToNumber(item?.actual || 0);
+    summary[accountName] += parseToNumber(expenseItem?.actual || 0);
   });
 
   return summary;
 };
 // รายการค่าใช้จ่ายมาตรฐานที่ใช้สำหรับสร้างฟอร์ม (15 รายการ)
-export const DEFAULT_EXPENSE_ITEMS = [
+export const DEFAULT_EXPENSE_ITEMS: { key: string; label: string }[] = [
   { key: 'house', label: 'ค่าบ้าน' },
   { key: 'water', label: 'ค่าน้ำ' },
   { key: 'internet', label: 'ค่าเน็ต' },
@@ -84,10 +93,8 @@ const EXPENSE_IGNORED_FIELDS = new Set([
  * Parse string or number to numeric format for expense amounts
  * Removes comma currency formatting and converts to float
  * Returns 0 for invalid/empty values
- * @param {number|string} value - value to parse (can be formatted with commas)
- * @returns {number} parsed numeric value or 0 if invalid
  */
-function parseExpenseNumeric(value) {
+function parseExpenseNumeric(value: unknown): number {
   // หากเป็นตัวเลขให้คืนค่าเดิม ถ้าไม่ใช่ให้คืน 0
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   if (typeof value === 'string') {
@@ -105,11 +112,8 @@ function parseExpenseNumeric(value) {
  * - No actual amount
  * - No due day set
  * - Not marked as paid
- * @param {string} key - expense item key
- * @param {object} source - expense item object from API/state
- * @returns {boolean} true if row is empty/placeholder
  */
-function isEffectivelyEmptyCustomExpenseRow(key, source) {
+function isEffectivelyEmptyCustomExpenseRow(key: unknown, source?: Record<string, unknown>): boolean {
   // ตรวจสอบว่า key เริ่มด้วย 'custom_'
   if (!String(key || '').startsWith(CUSTOM_EXPENSE_KEY_PREFIX)) return false;
   // ถ้าไม่มีข้อมูลหรือไม่ใช่ object ให้ถือว่าเป็นแถวว่าง
@@ -126,73 +130,61 @@ function isEffectivelyEmptyCustomExpenseRow(key, source) {
 
 /**
  * จัดรูปแบบตัวเลขเป็นทศนิยม 2 ตำแหน่ง พร้อมคั่นหลักพัน
- * @param {number|string} value - ค่าที่ต้องการจัดรูปแบบ
- * @returns {string} สตริงตัวเลขที่จัดรูปแบบแล้ว
  */
-export const formatNumber = (value) => {
+export const formatNumber = (value: number | string): string => {
   // รองรับ input ที่มี comma เช่น 40,560.00
-  let cleaned = typeof value === 'string' ? value.replace(/,/g, '') : value;
-  const numValue = parseFloat(cleaned) || 0;
+  const cleaned = typeof value === 'string' ? value.replace(/,/g, '') : value;
+  const numValue = parseFloat(String(cleaned)) || 0;
   // จัดรูปแบบเพิ่ม comma และทศนิยม 2 ตำแหน่ง
   return numValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 /**
  * แปลงและจัดรูปแบบตัวเลขในขั้นตอนเดียว
- * @param {number|string} value - ค่าที่ต้องการแปลง
- * @returns {string} ผลลัพธ์ที่จัดรูปแบบแล้ว
  */
-export const parseAndFormat = (value) => {
+export const parseAndFormat = (value: number | string): string => {
   // แปลงและจัดรูปแบบ เช่น 40560.00 → 40,560.00
   return formatNumber(value);
 };
 
 /**
  * แปลงตัวเลขสำหรับบันทึกลงฐานข้อมูล (ตัด comma ออก)
- * @param {number|string} value - ค่าที่ต้องการแปลง
- * @returns {number} ตัวเลขแบบ raw
  */
-export const parseToNumber = (value) => {
+export const parseToNumber = (value: number | string): number => {
   // ลบ comma และแปลงเป็นตัวเลข
   if (typeof value === 'string') {
     // หากเป็น string ให้ลบ comma ก่อน
     return parseFloat(value.replace(/,/g, '')) || 0;
   }
-  return parseFloat(value) || 0; // คืน 0 หากไม่สามารถแปลงได้
+  return parseFloat(String(value)) || 0; // คืน 0 หากไม่สามารถแปลงได้
 };
 
 /**
  * จัดรูปแบบตัวเลขเป็นสกุลเงิน (ทศนิยม 2 ตำแหน่ง)
- * @param {number|string} value - ค่าที่ต้องการจัดรูปแบบ
- * @returns {string} สตริงตัวเลขแบบสกุลเงิน
  */
-export const formatCurrency = (value) => {
+export const formatCurrency = (value: number | string): string => {
   // แปลงค่าเป็นเงิน (40560 → 40,560.00)
-  const numValue = parseFloat(value) || 0;
+  const num = parseFloat(typeof value === 'string' ? value.replace(/,/g, '') : String(value)) || 0;
   // จัดรูปแบบเป็นสตริงตัวเลขพร้อมทศนิยม 2 ตำแหน่ง
-  const num = parseFloat(typeof value === 'string' ? value.replace(/,/g, '') : value) || 0;
   return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 /**
  * รวมค่าตัวเลขใน array
- * @param {array} values - รายการตัวเลข/สตริง
- * @returns {number} ผลรวม
  */
-export const calculateSum = (values) => {
-  return values.reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
+export const calculateSum = (values: (number | string)[]): number => {
+  return values.reduce((sum: number, value) => sum + (parseFloat(String(value)) || 0), 0);
 };
 
 /**
  * จัดการการพิมพ์ตัวเลขแบบเรียลไทม์ (ยังไม่ format)
- * @param {string} value - ค่าที่ผู้ใช้พิมพ์
- * @param {function} setState - ฟังก์ชันอัปเดต state
- * @param {string} key - key ของ field (ถ้ามี)
+ * setState เป็น `unknown` แบบตั้งใจ — ไฟล์นี้ไม่มี React import และรูปแบบการเรียกทั้งสอง
+ * (setState(prev => ...) และ setState(value)) รองรับได้ด้วยฟังก์ชันรับพารามิเตอร์เดียวใดๆ
  */
-export const handleNumberInput = (value, setState, key = null) => {
+export const handleNumberInput = (value: string, setState: (arg: unknown) => void, key: string | null = null): void => {
   // ไม่ format ทันที ให้เก็บ raw value เพื่อให้พิมพ์ได้หลายหลัก
   if (key) {
-    setState(prev => ({ ...prev, [key]: value }));
+    setState((prev: unknown) => ({ ...(prev as Record<string, unknown>), [key]: value }));
   } else {
     setState(value);
   }
@@ -200,21 +192,18 @@ export const handleNumberInput = (value, setState, key = null) => {
 
 /**
  * จัดรูปแบบตัวเลขเมื่อออกจากช่อง (blur)
- * @param {string} value - ค่าที่ต้องการจัดรูปแบบ
- * @param {function} setState - ฟังก์ชันอัปเดต state
- * @param {string} key - key ของ field (ถ้ามี)
  */
-export const handleNumberBlur = (value, setState, key = null) => {
+export const handleNumberBlur = (value: string, setState: (arg: unknown) => void, key: string | null = null): void => {
   const formattedValue = parseAndFormat(value);
   if (key) {
-    setState(prev => ({ ...prev, [key]: formattedValue }));
+    setState((prev: unknown) => ({ ...(prev as Record<string, unknown>), [key]: formattedValue }));
   } else {
     setState(formattedValue);
   }
 };
 
 // Default preset income categories (3 basic items, expandable with custom rows)
-export const DEFAULT_INCOME_ITEMS = [
+export const DEFAULT_INCOME_ITEMS: { key: string; label: string }[] = [
   { key: 'salary', label: 'เงินเดือน' },
   { key: 'income2', label: 'แหล่งรายรับ 2' },
   { key: 'other', label: 'อื่นๆ' }
@@ -233,23 +222,25 @@ const INCOME_IGNORED_FIELDS = new Set([
 /**
  * จัดรูปแบบข้อมูลรายรับจาก API ให้พร้อมใช้งานในฟอร์ม
  * รองรับแถว custom และ label แบบกำหนดเอง
- * @param {object} data - ข้อมูลดิบจาก API
- * @param {string} month - เดือนที่เลือก (YYYY-MM)
- * @returns {object} {values, labels, persistedKeys}
  */
-export const formatIncomeData = (data, month) => {
-  const formattedData = {};
-  let monthData = {};
+export const formatIncomeData = (
+  data: Record<string, unknown> | undefined,
+  month: MonthKey
+): { values: Record<string, string>; labels: Record<string, unknown>; persistedKeys: string[] } => {
+  const formattedData: Record<string, string> = {};
+  let monthData: Record<string, unknown> = {};
   if (data && typeof data === 'object') {
-    if (data.months && typeof data.months === 'object' && data.months[month]) {
-      monthData = data.months[month];
+    const months = data.months as Record<string, unknown> | undefined;
+    if (months && typeof months === 'object' && months[month]) {
+      monthData = months[month] as Record<string, unknown>;
     } else {
       monthData = data;
     }
   }
 
-  const storedLabels = (monthData && typeof monthData[INCOME_LABELS_FIELD] === 'object' && !Array.isArray(monthData[INCOME_LABELS_FIELD]))
-    ? { ...monthData[INCOME_LABELS_FIELD] }
+  const labelsField = monthData[INCOME_LABELS_FIELD];
+  const storedLabels: Record<string, unknown> = (labelsField && typeof labelsField === 'object' && !Array.isArray(labelsField))
+    ? { ...(labelsField as Record<string, unknown>) }
     : {};
 
   const persistedValueKeys = Object.keys(monthData || {}).filter(key => {
@@ -273,7 +264,7 @@ export const formatIncomeData = (data, month) => {
   }
 
   keysToFormat.forEach(key => {
-    formattedData[key] = parseAndFormat(monthData[key] ?? 0);
+    formattedData[key] = parseAndFormat((monthData[key] as number | string) ?? 0);
   });
 
   const persistedKeys = Array.from(new Set(persistedValueKeys));
@@ -287,16 +278,19 @@ export const formatIncomeData = (data, month) => {
 /**
  * จัดรูปแบบข้อมูลค่าใช้จ่ายจาก API ให้พร้อมใช้งานในฟอร์ม
  * รองรับรายการ custom และกรองแถวว่าง
- * @param {object} data - ข้อมูลดิบจาก API
- * @param {string} month - เดือนที่เลือก (YYYY-MM)
- * @returns {object} {values, persistedKeys, emptyKeysToDelete}
  */
-export const formatExpenseData = (data, month) => {
-  const formattedData = {};
-  let monthData = {};
+export const formatExpenseData = (
+  data: Record<string, unknown> | undefined,
+  month: MonthKey
+): { values: Record<string, ExpenseItem>; persistedKeys: string[]; emptyKeysToDelete: string[]; bankAccounts: string[] } => {
+  // สร้างแบบหลวมก่อน (ค่า dueDay ที่แท้จริงเป็น string เสมอในไฟล์นี้ สำหรับแสดงผลในฟอร์ม
+  // ไม่ตรงกับ DueDay type ของ ExpenseItem เป๊ะๆ) แล้วค่อย cast เป็น ExpenseItem ครั้งเดียวตอน return
+  const formattedData: Record<string, { name: string; actual: string; account: string; paid: boolean; dueDay: string }> = {};
+  let monthData: Record<string, unknown> = {};
   if (data && typeof data === 'object') {
-    if (data.months && typeof data.months === 'object' && data.months[month]) {
-      monthData = data.months[month];
+    const months = data.months as Record<string, unknown> | undefined;
+    if (months && typeof months === 'object' && months[month]) {
+      monthData = months[month] as Record<string, unknown>;
     } else {
       monthData = data;
     }
@@ -309,18 +303,19 @@ export const formatExpenseData = (data, month) => {
     return true; // เก็บทั้งหมด ก่อนกรอง
   });
 
-  const storedBankAccounts = Array.isArray(monthData?.bankAccounts)
-    ? Array.from(new Set(monthData.bankAccounts.map((item) => String(item || '').trim()).filter(Boolean)))
+  const rawBankAccounts = monthData?.bankAccounts;
+  const storedBankAccounts = Array.isArray(rawBankAccounts)
+    ? Array.from(new Set(rawBankAccounts.map((item) => String(item || '').trim()).filter(Boolean)))
     : [];
 
   // ระบุรายการว่างเปล่าที่ต้องลบออกจากการแสดงผล
   const emptyCustomKeys = allDynamicKeys.filter(key =>
-    isEffectivelyEmptyCustomExpenseRow(key, monthData[key])
+    isEffectivelyEmptyCustomExpenseRow(key, monthData[key] as Record<string, unknown>)
   );
 
   // ระบุรายการที่ใช้งาน (ไม่ใช่ว่าง)
   const dynamicKeys = allDynamicKeys.filter(key =>
-    !isEffectivelyEmptyCustomExpenseRow(key, monthData[key])
+    !isEffectivelyEmptyCustomExpenseRow(key, monthData[key] as Record<string, unknown>)
   );
 
   // ถ้าเดือนนี้ยังไม่มีข้อมูลจริงเลย ให้แสดงรายการมาตรฐานเป็นค่าเริ่มต้น
@@ -341,13 +336,13 @@ export const formatExpenseData = (data, month) => {
   ]));
 
   allKeys.forEach(item => {
-    const source = (monthData && monthData[item]) ? monthData[item] : {};
+    const source = (monthData && monthData[item]) ? (monthData[item] as Record<string, unknown>) : {};
     const defaultLabel = DEFAULT_EXPENSE_ITEMS.find(expense => expense.key === item)?.label;
     formattedData[item] = {
       name: (typeof source.name === 'string' && source.name.trim().length > 0)
         ? source.name
         : (defaultLabel || 'รายการใหม่'),
-      actual: parseAndFormat(source?.actual ?? 0),
+      actual: parseAndFormat((source?.actual as number | string) ?? 0),
       account: (typeof source?.account === 'string' && source.account.trim().length > 0)
         ? source.account.trim()
         : (LEGACY_ITEM_ACCOUNT_MAP[item] || storedBankAccounts[0] || 'ไม่ระบุบัญชี'),
@@ -372,13 +367,15 @@ export const formatExpenseData = (data, month) => {
   });
 
   return {
-    values: formattedData,
+    // ทุก field ของ ExpenseItem ถูกกำหนดค่าเสมอในลูปด้านบน (ไม่มี field ใดถูกข้ามแบบมีเงื่อนไข)
+    // จึงใช้ cast เดียวที่นี่แทนการประกาศ type ซ้ำ
+    values: formattedData as Record<string, ExpenseItem>,
     persistedKeys: allDynamicKeys, // ← ส่งทั้งหมด รวมรายการว่างด้วย เพื่อให้ระบบรู้ว่าอะไรมาจาก API
     emptyKeysToDelete: emptyCustomKeys, // ← ส่งรายการว่างเพื่อลบ
     bankAccounts: Array.from(new Set([
       ...storedBankAccounts,
       ...Object.values(monthData || {})
-        .map((row) => (typeof row?.account === 'string' ? row.account.trim() : ''))
+        .map((row) => (typeof (row as Record<string, unknown>)?.account === 'string' ? ((row as Record<string, unknown>).account as string).trim() : ''))
         .filter(Boolean)
     ]))
   };
@@ -386,30 +383,31 @@ export const formatExpenseData = (data, month) => {
 
 /**
  * จัดรูปแบบข้อมูลเงินออมให้พร้อมใช้งานในฟอร์ม
- * @param {object} data - ข้อมูลเงินออมดิบ
- * @returns {object} ข้อมูลเงินออมที่จัดรูปแบบแล้ว
+ * (รูปแบบข้อมูลนี้เป็น Thai-keyed shape เฉพาะไฟล์นี้ ไม่ได้ promote ไปที่ domain.ts — นอก scope ของ slice นี้)
  */
-export const formatSavingsData = (data) => {
+export const formatSavingsData = (
+  data: { ยอดออมสะสม?: number | string; รายการเงินออม?: Array<Record<string, unknown>> }
+): { ยอดออมสะสม: string; รายการเงินออม: Array<Record<string, unknown>> } => {
   return {
     ยอดออมสะสม: parseAndFormat(data.ยอดออมสะสม || 0),
     รายการเงินออม: (data.รายการเงินออม || []).map(item => ({
       ...item,
-      จำนวนเงิน: parseAndFormat(item.จำนวนเงิน || 0)
+      จำนวนเงิน: parseAndFormat((item.จำนวนเงิน as number | string) || 0)
     }))
   };
 };
 
 /**
  * จัดรูปแบบข้อมูลภาษีให้พร้อมใช้งานในฟอร์ม
- * @param {object} data - ข้อมูลภาษีดิบ
- * @returns {object} ข้อมูลภาษีที่จัดรูปแบบแล้ว
  */
-export const formatTaxData = (data) => {
-  const formattedภาษีรายเดือน = {};
+export const formatTaxData = (
+  data: { ภาษีสะสมตั้งแต่เดือนแรก?: number | string; ภาษีรายเดือน?: Record<string, number | string> }
+): { ภาษีสะสม: string; ภาษีรายเดือน: Record<string, string> } => {
+  const formattedภาษีรายเดือน: Record<string, string> = {};
   Object.keys(data.ภาษีรายเดือน || {}).forEach(month => {
-    formattedภาษีรายเดือน[month] = parseAndFormat(data.ภาษีรายเดือน[month]);
+    formattedภาษีรายเดือน[month] = parseAndFormat((data.ภาษีรายเดือน as Record<string, number | string>)[month]);
   });
-  
+
   return {
     ภาษีสะสม: parseAndFormat(data.ภาษีสะสมตั้งแต่เดือนแรก || 0),
     ภาษีรายเดือน: formattedภาษีรายเดือน
@@ -418,35 +416,32 @@ export const formatTaxData = (data) => {
 
 /**
  * สร้างตัวเลือกเดือนย้อนหลัง 15 เดือนสำหรับ dropdown
- * @returns {array} [{value, label}, ...]
  */
-export const generateMonthOptions = () => {
-  const months = [];
+export const generateMonthOptions = (): { value: MonthKey; label: string }[] => {
+  const months: { value: MonthKey; label: string }[] = [];
   const currentDate = new Date();
-  
+
   for (let i = 0; i < 15; i++) {
     const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
     const monthValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    const monthLabel = date.toLocaleDateString('th-TH', { 
-      year: 'numeric', 
-      month: 'long' 
+    const monthLabel = date.toLocaleDateString('th-TH', {
+      year: 'numeric',
+      month: 'long'
     });
-    
+
     months.push({
       value: monthValue,
       label: monthLabel
     });
   }
-  
+
   return months;
 };
 
 /**
  * คำนวณเดือนถัดไปจากเดือนปัจจุบัน
- * @param {string} currentMonth - เดือนรูปแบบ YYYY-MM
- * @returns {string} เดือนถัดไป (YYYY-MM)
  */
-export const getNextMonth = (currentMonth) => {
+export const getNextMonth = (currentMonth: MonthKey): MonthKey => {
   const [year, month] = currentMonth.split('-').map(Number);
   const nextDate = new Date(year, month, 1); // month+1 เนื่องจาก Date constructor month เริ่มจาก 0
   return `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
