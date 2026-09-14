@@ -16,7 +16,7 @@
 
 import { sendLineMessage } from '../../src/shared/utils/sendLineMessage';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
-import { isPaidFlag } from '../../src/shared/utils/commonUtils.js';
+import { isPaidFlag } from '../../src/shared/utils/commonUtils';
 import crypto from 'crypto';
 import { getUserCreditData } from '../../src/shared/utils/backend/creditCardStore';
 import {
@@ -35,7 +35,7 @@ import {
   formatMonthKeyTH,
   formatThaiDate,
   buildDueDateString
-} from '../../src/shared/utils/dateUtils.js';
+} from '../../src/shared/utils/dateUtils';
 import { loadUsers, getUserData } from '../../src/backend/data/userUtils.js';
 
 const JSON_EXPENSE_FILE = 'monthly_expense.json';
