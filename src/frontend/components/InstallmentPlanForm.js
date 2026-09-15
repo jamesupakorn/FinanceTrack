@@ -229,7 +229,7 @@ export default function InstallmentPlanForm({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center overflow-y-auto bg-[rgba(10,10,11,0.72)] p-0 backdrop-blur-sm md:items-center md:p-space-5"
+      className="fixed inset-0 z-[110] flex items-end justify-center overflow-y-auto bg-[rgba(10,10,11,0.72)] p-0 backdrop-blur-sm md:items-center md:p-space-5"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose?.();
@@ -243,7 +243,7 @@ export default function InstallmentPlanForm({
         aria-label={plan ? 'แก้ไขแผนผ่อนชำระ' : 'เพิ่มแผนผ่อนชำระ'}
         onSubmit={handleSubmit}
       >
-        <div className="flex items-center justify-between gap-space-3 border-b border-border-subtle px-space-5 py-space-4">
+        <div className="flex shrink-0 items-center justify-between gap-space-3 border-b border-border-subtle px-space-5 py-space-4">
           <h2 className="m-0 text-lg font-semibold text-primary">{plan ? 'แก้ไขแผนผ่อนชำระ' : 'เพิ่มแผนผ่อนชำระ'}</h2>
           <button
             type="button"
@@ -255,7 +255,12 @@ export default function InstallmentPlanForm({
           </button>
         </div>
 
-        <div className="flex flex-col gap-space-4 overflow-y-auto px-space-5 py-space-4">
+        {/* flex-1 ทำให้ div นี้เป็น flex child ที่ยืด/หดได้, min-h-0 อนุญาตให้หดต่ำกว่าความสูงเนื้อหา —
+            รูปแบบเดียวกับ CreditCardForm.js (fix เดียวกันทุกประการ) ป้องกัน panel ทั้งก้อนถูกดันสูงเกิน
+            max-h จน backdrop กลายเป็นตัวเลื่อนแทน body เอง ดันปุ่ม footer หลุดจอ (R-5) — ตาราง
+            schedule-preview ที่ซ้อนอยู่ข้างใน (มี max-h-[260px] overflow-auto ของตัวเอง ด้านล่าง)
+            เลื่อนอิสระจาก body นี้อยู่แล้ว ไม่ขึ้นกับ min-h-0 ตัวนี้ (R-6/E-11) */}
+        <div className="flex flex-1 min-h-0 flex-col gap-space-4 overflow-y-auto px-space-5 py-space-4">
           {financialsLocked && (
             <div className="flex items-start gap-space-2 rounded-sm border border-warn/35 bg-warn/10 px-space-3 py-space-3 text-sm leading-relaxed text-warn">
               <Icons.AlertTriangle size={18} />
@@ -585,7 +590,7 @@ export default function InstallmentPlanForm({
           )}
         </div>
 
-        <div className="flex flex-col-reverse items-stretch gap-space-3 border-t border-border-subtle px-space-5 py-space-4 md:flex-row md:items-center md:justify-end">
+        <div className="flex shrink-0 flex-col-reverse items-stretch gap-space-3 border-t border-border-subtle px-space-5 py-space-4 md:flex-row md:items-center md:justify-end">
           <button
             type="button"
             className={`min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary ${FOCUS_RING}`}

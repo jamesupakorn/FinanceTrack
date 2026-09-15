@@ -19,7 +19,7 @@
  * ต่อเป็น onSaved ให้ parent (pages/workspace/income.js) ปิด modal + รีเฟรช salaryUpdateTrigger
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import SalaryCalculator from './SalaryCalculator';
 import { Icons } from './Icons';
 import { formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
@@ -30,6 +30,11 @@ const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:
 export default function SalaryModal({ open, selectedMonth, onClose, onSaved }) {
   const dialogRef = useRef(null);
   const triggerRef = useRef(null);
+  // เก็บ footer <div> ของโมดัลนี้เป็น state (ไม่ใช่ ref เฉยๆ) เพราะ SalaryCalculator ต้อง re-render
+  // เมื่อ node นี้ mount เสร็จแล้วถึงจะ portal ปุ่มเข้าไปได้ — callback ref ทำให้รู้ทันทีที่ node
+  // ปรากฏใน DOM จริง (R-2: อาจมีเฟรมแรกที่ node ยังไม่มี ซึ่ง benign ตามที่ architecture review ยืนยัน
+  // ว่า getTabbableElements อ่าน DOM สดทุกครั้งที่กด Tab ไม่ cache)
+  const [footerNode, setFooterNode] = useState(null);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -83,7 +88,7 @@ export default function SalaryModal({ open, selectedMonth, onClose, onSaved }) {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center overflow-y-auto bg-[rgba(10,10,11,0.72)] p-0 backdrop-blur-sm md:items-center md:p-space-5"
+      className="fixed inset-0 z-[110] flex items-end justify-center overflow-y-auto bg-[rgba(10,10,11,0.72)] p-0 backdrop-blur-sm md:items-center md:p-space-5"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose?.();
@@ -96,7 +101,7 @@ export default function SalaryModal({ open, selectedMonth, onClose, onSaved }) {
         aria-modal="true"
         aria-labelledby="salary-modal-title"
       >
-        <div className="flex items-center justify-between gap-space-3 border-b border-border-subtle px-space-5 py-space-4">
+        <div className="flex shrink-0 items-center justify-between gap-space-3 border-b border-border-subtle px-space-5 py-space-4">
           <h2 id="salary-modal-title" className="m-0 text-lg font-semibold text-primary">
             {`คำนวณเงินเดือน${monthLabel ? ` - ${monthLabel}` : ''}`}
           </h2>
@@ -110,9 +115,27 @@ export default function SalaryModal({ open, selectedMonth, onClose, onSaved }) {
           </button>
         </div>
 
-        <div className="flex flex-col gap-space-4 overflow-y-auto px-space-5 py-space-4">
-          <SalaryCalculator selectedMonth={selectedMonth} onSalaryUpdate={onSaved} inModal />
+        {/* flex-1 ทำให้ body เป็นตัวที่ยืด/หด, min-h-0 อนุญาตให้หดต่ำกว่าความสูงเนื้อหา —
+            ถ้าไม่มี min-h-0 flex item จะใช้ min-height: auto เป็นค่าเริ่มต้น ทำให้ panel ทั้งก้อน
+            ถูกดันสูงเกิน max-h แล้ว backdrop (overflow-y-auto) กลายเป็นตัวเลื่อนแทน body เอง
+            (R-5 — ห้าม "ปรับให้เรียบง่าย" ด้วยการเอา min-h-0 ออกโดยไม่เข้าใจผลกระทบนี้) */}
+        <div className="flex flex-1 min-h-0 flex-col gap-space-4 overflow-y-auto px-space-5 py-space-4">
+          <SalaryCalculator
+            selectedMonth={selectedMonth}
+            onSalaryUpdate={onSaved}
+            inModal
+            footerTarget={footerNode}
+          />
         </div>
+
+        {/* footer ใหม่ของ SalaryModal — เดิมไม่มี footer เลย ปุ่มบันทึก/ล้างข้อมูลอยู่ท้ายสุดของ body
+            ที่เลื่อนได้ ทำให้ต้อง scroll ไปสุดถึงจะกดได้ ตอนนี้ปุ่มถูก portal เข้ามาที่นี่จาก
+            SalaryCalculator (ดู footerTarget ด้านบน + SalaryCalculator.js's footerTarget prop) —
+            state/handler (isSaving/clearAll/saveSalaryData) ยังเป็นของ SalaryCalculator ทั้งหมด (M-3) */}
+        <div
+          ref={setFooterNode}
+          className="shrink-0 border-t border-border-subtle px-space-5 py-space-4"
+        />
       </div>
     </div>
   );
