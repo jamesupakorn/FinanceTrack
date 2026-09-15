@@ -17,7 +17,9 @@
  *    on Escape/outside-close. No full modal focus-trap — this is not a modal (AC-20 does not apply,
  *    same reasoning as the /settings pass's own "no modal on this page" finding).
  * 4. `<label htmlFor>` associates with the password input (unique per profile id).
- * 5. `inputMode="numeric"` on the password field (matches the original modal's PIN-entry hint).
+ * 5. Full alphanumeric keyboard on the password field (no numeric-only keyboard hint) plus
+ *    `autoComplete="current-password"`, matching the actual letters-allowed password policy
+ *    (spec-login-numeric-keyboard-fix.md AC-7).
  *
  * Three `critique 2026-08-29` fixes carried forward as behaviour, not just comments — see inline notes
  * at the demo-unshift, SSR-refetch-error-suppression and conditional-refetch sites below.
@@ -28,7 +30,7 @@ import { useRouter } from 'next/router';
 import { useSession } from '../src/frontend/contexts/SessionContext';
 import { loadUsers } from '../lib/userStore';
 
-const DEFAULT_DESCRIPTION = 'เลือกรูปโปรไฟล์ที่ต้องการใช้งาน แล้วกรอกรหัส PIN ของแต่ละผู้ใช้';
+const DEFAULT_DESCRIPTION = 'เลือกรูปโปรไฟล์ที่ต้องการใช้งาน แล้วกรอกรหัสผ่านของแต่ละผู้ใช้';
 const DEMO_PROFILE = {
   id: 'demo',
   displayName: 'บัญชีสาธิต (Demo)',
@@ -331,14 +333,14 @@ export default function ProfileGalleryPage({ initialProfiles = [] }) {
                     <form onSubmit={(event) => handleLogin(event, profile)} className="flex flex-col gap-space-3">
                       <div className="flex flex-col gap-space-1">
                         <label htmlFor={`profile-password-${profile.id}`} className="text-sm text-secondary">
-                          รหัส PIN
+                          รหัสผ่าน
                         </label>
                         <div className="relative">
                           <input
                             id={`profile-password-${profile.id}`}
                             ref={inputRef}
                             type={showPassword ? 'text' : 'password'}
-                            inputMode="numeric"
+                            autoComplete="current-password"
                             value={password}
                             onChange={(event) => setPassword(event.target.value)}
                             placeholder="รหัสผ่าน"
