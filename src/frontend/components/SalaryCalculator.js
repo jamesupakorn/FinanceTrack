@@ -18,6 +18,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { formatCurrency, parseAndFormat, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { salaryAPI, incomeAPI, taxAPI } from '../../shared/utils/frontend/apiUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
@@ -228,7 +229,7 @@ function SalaryItemRow({
   );
 }
 
-const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, inModal = false }) => {
+const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, inModal = false, footerTarget = null }) => {
   const [incomeItems, setIncomeItems] = useState(() => buildPresetItems(incomePresetKeys));
   const [deductionItems, setDeductionItems] = useState(() => buildPresetItems(deductionPresetKeys));
   const [pendingScrollItem, setPendingScrollItem] = useState(null);
@@ -496,28 +497,47 @@ const SalaryCalculator = ({ selectedMonth, onSalaryUpdate, inModal = false }) =>
         </p>
       </div>
 
-      {/* ปุ่มจัดการ — บันทึกทันทีเมื่อกด ไม่ผูกกับ triggerSave ของ Save All อีกต่อไป (Amendment A3) */}
-      <div className="flex flex-col-reverse gap-space-3 sm:flex-row">
-        <button
-          type="button"
-          onClick={clearAll}
-          className={`min-h-11 flex-1 rounded-sm border border-border-interactive bg-surface-2 text-sm font-medium text-primary ${FOCUS_RING}`}
-          aria-label="ล้างข้อมูล"
-        >
-          ล้างข้อมูล
-        </button>
-        <button
-          type="button"
-          onClick={saveSalaryData}
-          className={`min-h-11 flex-1 rounded-sm bg-accent text-sm font-semibold text-on-accent disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`}
-          aria-label="บันทึกเงินเดือน"
-          disabled={isSaving}
-        >
-          {isSaving ? 'กำลังบันทึก...' : 'บันทึกเงินเดือน'}
-        </button>
-      </div>
+      {/* ปุ่มจัดการ — บันทึกทันทีเมื่อกด ไม่ผูกกับ triggerSave ของ Save All อีกต่อไป (Amendment A3)
+          state/handler (isSaving, clearAll, saveSalaryData) เป็นของ component นี้เสมอ ไม่ว่าปุ่มจะ
+          render อยู่ตรงนี้ (inline) หรือถูก portal ไปที่ footer ของ SalaryModal ก็ตาม (M-3) —
+          footerTarget มีค่าเฉพาะตอนถูกเรียกจาก SalaryModal ที่ footer <div> ของมัน mount เสร็จแล้ว
+          เท่านั้น (ดู SalaryModal.js's setFooterNode) ไม่ใช่ path ที่ Jest ของไฟล์นี้ใช้เลย —
+          render(<SalaryCalculator />) แบบไม่มี footerTarget (รวมถึง inModal เฉยๆ ไม่มี footerTarget)
+          จะ render ปุ่มชุดนี้ inline เหมือนเดิมทุกประการ (M-4) */}
+      {footerTarget
+        ? createPortal(<SalaryActionButtons clearAll={clearAll} saveSalaryData={saveSalaryData} isSaving={isSaving} />, footerTarget)
+        : <SalaryActionButtons clearAll={clearAll} saveSalaryData={saveSalaryData} isSaving={isSaving} />}
     </div>
   );
 };
+
+/**
+ * ปุ่ม ล้างข้อมูล / บันทึกเงินเดือน — แยกออกมาเป็นคอมโพเนนต์ย่อยเพื่อใช้ซ้ำได้ทั้ง path inline
+ * และ path portal (footerTarget) โดยไม่มี markup สองชุด (M-1: ต้องมีปุ่มแต่ละอันแค่ชุดเดียวในเอกสาร
+ * เสมอ ไม่ว่าจะ render ทางไหน) — ไม่ถือ state เอง รับมาจาก SalaryCalculator ทั้งหมด (M-3)
+ */
+function SalaryActionButtons({ clearAll, saveSalaryData, isSaving }) {
+  return (
+    <div className="flex flex-col-reverse gap-space-3 sm:flex-row">
+      <button
+        type="button"
+        onClick={clearAll}
+        className={`min-h-11 flex-1 rounded-sm border border-border-interactive bg-surface-2 text-sm font-medium text-primary ${FOCUS_RING}`}
+        aria-label="ล้างข้อมูล"
+      >
+        ล้างข้อมูล
+      </button>
+      <button
+        type="button"
+        onClick={saveSalaryData}
+        className={`min-h-11 flex-1 rounded-sm bg-accent text-sm font-semibold text-on-accent disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`}
+        aria-label="บันทึกเงินเดือน"
+        disabled={isSaving}
+      >
+        {isSaving ? 'กำลังบันทึก...' : 'บันทึกเงินเดือน'}
+      </button>
+    </div>
+  );
+}
 
 export default SalaryCalculator;
