@@ -166,8 +166,11 @@
 
 - branch ที่ใช้ปล่อยล่าสุด: `production`
 - commit สุดท้ายที่จัดเวอร์ชันให้ตรง: `a464442` (verified: "chore: set version to 2.2.0 exactly")
-- `package.json` และ `package-lock.json` เป็น `2.2.0` ตอนที่ commit `a464442` ถูกสร้าง (release tag บน production)
-- version ล่าสุดบน branch `develop` คือ `2.3.5` (auto-bumped ผ่าน version-bump git hook, ยืนยันจาก package.json:3)
+- `package.json` และ `package-lock.json` บน `production` ปัจจุบันเป็น `2.2.68` (auto-bumped ผ่าน
+  version-bump git hook หลังจาก `a464442`; ไม่ใช่ `2.2.0` อีกต่อไป — ยืนยันสด 2026-09-16)
+- version ล่าสุดบน branch `develop` คือ `2.7.12` (commit `9f590cb`, ยืนยันสด 2026-09-16) — ตัวเลขนี้จะ
+  ขยับต่อไปเรื่อย ๆ ทุกครั้งที่มี commit บน `develop` (auto-bump hook เดียวกัน); ให้เช็คสดด้วย
+  `git show origin/develop:package.json` แทนการเชื่อค่าที่บันทึกไว้ตรงนี้ถ้าต้องการความแม่นยำ
 
 ## 6) สิ่งที่ควรรู้ก่อนพัฒนาต่อ
 
