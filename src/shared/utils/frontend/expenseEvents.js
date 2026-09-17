@@ -163,6 +163,7 @@ export function collectUpcomingPayments({
     eventsByDay.forEach((events, day) => {
       events.forEach(event => {
         if (event.type !== 'expense' || event.paid) return; // ชำระแล้ว → ไม่ต้องนับ (AC-DB-15)
+        if (!(event.amount > 0)) return; // ยอด 0/ว่าง → ยังไม่นับเกินกำหนด เหมือน line_due_notify.js:462-463
         const isoDate = `${monthKey}-${String(day).padStart(2, '0')}`;
         const daysDiff = diffDaysFromBase(isoDate, baseDate);
         const enriched = { ...event, isoDate, daysDiff };

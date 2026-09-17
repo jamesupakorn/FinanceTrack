@@ -97,13 +97,23 @@ const formatDueDayText = (dueDayValue) => {
 };
 
 
-const describeDueTiming = (dueDayValue, paid, monthKey) => {
+const describeDueTiming = (dueDayValue, paid, monthKey, amount) => {
   const parsedDate = getDueDateFromDay(dueDayValue, monthKey);
   const dueDayText = formatDueDayText(dueDayValue);
   if (paid) {
     return {
       status: 'done',
       badge: 'ชำระแล้ว',
+      helper: dueDayText ? `ครบกำหนดทุก${dueDayText}` : '',
+      date: parsedDate,
+      diffDays: null
+    };
+  }
+  // ยอด 0/ว่าง → ยังไม่นับเกินกำหนด เหมือน line_due_notify.js:462-463 และ expenseEvents.js
+  if (!(amount > 0)) {
+    return {
+      status: 'none',
+      badge: 'ยังไม่กรอกยอด',
       helper: dueDayText ? `ครบกำหนดทุก${dueDayText}` : '',
       date: parsedDate,
       diffDays: null
@@ -424,7 +434,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
       if (currentUser?.id) {
         try {
           // ต้องแนบ X-CSRF-Token เพราะ POST ผ่าน assertUserId (TD-C02 B3) — call site นี้ไม่ผ่าน jsonFetch
-          await fetch('/api/user-profile-settings', {
+          await fetch('/api/user-bank-accounts', {
             method: 'POST',
             headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ bankAccounts: normalizedAccounts })
@@ -508,6 +518,8 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
       const paid = row.paid === true || row.paid === 'true';
       if (paid) return;
       const amount = parseToNumber(row.actual);
+      // ยอด 0/ว่าง → ยังไม่นับเกินกำหนด เหมือน line_due_notify.js:462-463 และ expenseEvents.js
+      if (!(amount > 0)) return;
       const parsedDate = getDueDateFromDay(row.dueDay, selectedMonth);
       if (!parsedDate) {
         pendingTotal += amount;
@@ -691,7 +703,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
                   const selectedAccount = (typeof row.account === 'string' && row.account.trim().length > 0)
                     ? row.account
                     : (bankAccounts[0] || 'ไม่ระบุบัญชี');
-                  const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth);
+                  const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth, parseToNumber(row.actual));
                   const isCreditCardRow = isCreditCardRowKey(item);
                   const meta = installmentMeta[item];
 
@@ -838,7 +850,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
               const selectedAccount = (typeof row.account === 'string' && row.account.trim().length > 0)
                 ? row.account
                 : (bankAccounts[0] || 'ไม่ระบุบัญชี');
-              const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth);
+              const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth, parseToNumber(row.actual));
               const isCreditCardRow = isCreditCardRowKey(item);
               const meta = installmentMeta[item];
 
