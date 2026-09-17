@@ -123,8 +123,9 @@ export function mapDocToFlatItemObjectWithTotals(doc) {
   return out;
 }
 
-// Utility: ลบ field summary ออกจาก object
-export function removeSummaryFields(obj, fields = ['รวม', 'totalActualPaid']) {
+// Utility: ลบ field รวมยอดที่รู้จัก (เดิมชื่อ removeSummaryFields — เปลี่ยนชื่อกัน collision กับ
+// commonUtils.ts's removeSummaryFields ซึ่งมี behavior ต่างกัน, TD-M15)
+export function stripKnownTotalFields(obj, fields = ['รวม', 'totalActualPaid']) {
   const out = { ...obj };
   fields.forEach(f => { if (f in out) delete out[f]; });
   return out;

@@ -6,8 +6,8 @@
  * @param {string} defaultValue - ค่า default เช่น '0.00'
  * @returns {object}
  */
-export function createDefault12MonthsObject(defaultValue = '0.00') {
-  const obj = {};
+export function createDefault12MonthsObject(defaultValue: string = '0.00'): Record<string, string> {
+  const obj: Record<string, string> = {};
   for (let i = 1; i <= 12; i++) {
     obj[String(i).padStart(2, '0')] = defaultValue;
   }
@@ -21,7 +21,11 @@ export function createDefault12MonthsObject(defaultValue = '0.00') {
  * @param {function} parseFn - ฟังก์ชันแปลงค่า (เช่น parseFloat)
  * @returns {number}
  */
-export function sumAccumulated(monthlyObj, upToMonth, parseFn = parseFloat) {
+export function sumAccumulated(
+  monthlyObj: Record<string, string>,
+  upToMonth: string,
+  parseFn: (value: number | string) => number = parseFloat as (value: number | string) => number
+): number {
   const months = Object.keys(monthlyObj).sort();
   const idx = months.indexOf(upToMonth);
   let sum = 0;
@@ -37,7 +41,10 @@ export function sumAccumulated(monthlyObj, upToMonth, parseFn = parseFloat) {
  * @param {function} parseFn - ฟังก์ชันแปลงค่า (เช่น parseFloat)
  * @returns {number}
  */
-export function sumYearly(monthlyObj, parseFn = parseFloat) {
+export function sumYearly(
+  monthlyObj: Record<string, string>,
+  parseFn: (value: number | string) => number = parseFloat as (value: number | string) => number
+): number {
   return Object.values(monthlyObj).reduce((sum, v) => sum + parseFn(v), 0);
 }
 
@@ -46,7 +53,7 @@ export function sumYearly(monthlyObj, parseFn = parseFloat) {
  * @param {object} yearObj - object ที่ key เป็นปี
  * @returns {string[]} - array ปีเรียงจากมากไปน้อย
  */
-export function getSortedYears(yearObj) {
+export function getSortedYears(yearObj: Record<string, unknown> | null | undefined): string[] {
   if (!yearObj) return [];
   return Object.keys(yearObj).sort((a, b) => parseInt(b) - parseInt(a));
 }

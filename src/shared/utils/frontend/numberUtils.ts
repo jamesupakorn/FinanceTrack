@@ -361,7 +361,10 @@ export const formatExpenseData = (
         if (typeof source?.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(source.dueDate)) {
           return String(parseInt(source.dueDate.slice(-2), 10));
         }
-        return '';
+        // รายการมาตรฐาน (house/water/internet/electricity/mobile) ที่ยังไม่เคยบันทึก dueDay
+        // ต้อง default เป็น 'EOM' ให้ตรงกับที่ <select> แสดงผลอยู่แล้ว (value={row.dueDay || END_OF_MONTH_DUE_DAY})
+        // ไม่งั้น dueInsights จะไม่นับแถวนี้เป็น overdue เลย แม้ผู้ใช้เห็นว่า "สิ้นเดือน" ถูกเลือกอยู่
+        return defaultLabel ? END_OF_MONTH_DUE_DAY : '';
       })()
     };
   });

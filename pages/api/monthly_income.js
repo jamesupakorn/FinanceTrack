@@ -8,7 +8,7 @@
  * - จำกัดข้อมูลย้อนหลังสูงสุด 15 เดือน
  */
 
-import { sumValues, removeSummaryFields } from '../../src/shared/utils/backend/apiUtils';
+import { sumValues, stripKnownTotalFields } from '../../src/shared/utils/backend/apiUtils';
 import { assertUserId } from '../../src/shared/utils/backend/userRequest';
 import { extractRemovalKeys } from '../../src/shared/utils/commonUtils';
 import {
@@ -52,7 +52,7 @@ function extractLabelUpdates(payload = {}) {
  * @returns {object} ข้อมูลที่พร้อมบันทึก
  */
 function sanitizeIncomePayload(values = {}) {
-  const cleaned = removeSummaryFields(values, ['รวม']);
+  const cleaned = stripKnownTotalFields(values, ['รวม']);
   delete cleaned.__removeKeys;
   delete cleaned.__labels;
   delete cleaned.month;

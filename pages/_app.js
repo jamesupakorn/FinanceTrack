@@ -32,6 +32,16 @@ function MyApp({ Component, pageProps }) {
       <SessionProvider>
         <Head>
           <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
+          {/* SEO/OG meta tags (TD-L02) — copy reused verbatim from package.json/manifest.json,
+              not re-authored. Sitewide default here since no page currently overrides <Head>. */}
+          <title>FinanceTrack — บัญชีรับจ่ายย้อนหลัง 12 เดือน</title>
+          <meta name="description" content="บัญชีรับจ่ายย้อนหลัง 12 เดือน" />
+          <meta property="og:title" content="FinanceTrack" />
+          <meta property="og:description" content="บัญชีรับจ่ายย้อนหลัง 12 เดือน" />
+          <meta property="og:type" content="website" />
+          <meta property="og:site_name" content="FinanceTrack" />
+          <meta property="og:image" content="/icons/icon-512.png" />
+          <meta name="twitter:card" content="summary" />
         </Head>
         {/* No pages/_document.js exists in this Pages Router project, and Foundation deliberately
             doesn't add one (architecture-review-foundation.md) — so the font-variable classes are

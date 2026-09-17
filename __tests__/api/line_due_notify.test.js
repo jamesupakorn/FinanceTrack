@@ -8,8 +8,6 @@ import { createMocks } from 'node-mocks-http';
 const TEST_CRON_SECRET = 'test-cron-secret';
 const TEST_USER_ID = 'user-a';
 
-jest.mock('node-fetch', () => jest.fn());
-
 let mongod;
 let handler;
 let getDbPromise;
@@ -28,13 +26,14 @@ beforeAll(async () => {
 
   jest.resetModules();
 
-  fetchMock = require('node-fetch');
+  fetchMock = jest.spyOn(global, 'fetch').mockImplementation(() => Promise.resolve({ ok: true, status: 200, json: async () => ({}) }));
   handler = require('../../pages/api/line_due_notify').default;
   ({ getDbPromise } = require('../../lib/mongodb'));
   db = await getDbPromise();
 }, 60000);
 
 afterAll(async () => {
+  fetchMock.mockRestore();
   if (db?.client) {
     await db.client.close();
   }

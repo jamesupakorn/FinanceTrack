@@ -21,6 +21,7 @@ import { dailyExpenseAPI } from '../../shared/utils/frontend/apiUtils';
 import { formatCurrency, parseToNumber } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
+import LoadingNotice from './LoadingNotice';
 
 function genId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -242,11 +243,7 @@ export default function DailyExpenseTable({ selectedMonth, onRegisterSave, onSav
   const { fixedMonthly, miscMonthly, totalMonthly } = calcTotals(items);
 
   if (loading) {
-    return (
-      <div role="status" aria-live="polite" className="rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">
-        กำลังโหลด...
-      </div>
-    );
+    return <LoadingNotice />;
   }
 
   return (

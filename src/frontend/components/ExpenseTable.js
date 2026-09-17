@@ -46,6 +46,7 @@ import {
 } from '../../shared/utils/dateUtils';
 import { isCreditCardRowKey, isRevolvingRowKey } from '../../shared/utils/creditCardUtils';
 import BankAccountTable from './BankAccountTable';
+import LoadingNotice from './LoadingNotice';
 import { expenseAPI, creditCardAPI, withCsrfHeaders } from '../../shared/utils/frontend/apiUtils';
 import { useSession } from '../contexts/SessionContext';
 import { showToast } from '../../shared/utils/frontend/toast';
@@ -665,7 +666,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
       )}
 
       {isLoading && !hasExpenseRows && (
-        <div role="status" aria-live="polite" className="rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">กำลังโหลดข้อมูล...</div>
+        <LoadingNotice />
       )}
 
       {hasExpenseRows && (

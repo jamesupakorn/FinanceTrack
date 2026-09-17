@@ -5,11 +5,11 @@
  * `LINE_CHANNEL_SECRET` pattern already used by `pages/api/line_webhook.js`. Server-only —
  * consumed only by `sendLineMessage.js`, which is only ever called from `pages/api/*`.
  */
-export function getLineToken() {
+export function getLineToken(): string {
   return process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
 }
 
-export function getLineUserId() {
+export function getLineUserId(): string {
   return process.env.LINE_CHANNEL_USER_ID || '';
 }
 

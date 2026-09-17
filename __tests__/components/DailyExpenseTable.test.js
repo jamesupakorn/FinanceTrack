@@ -45,7 +45,7 @@ describe('DailyExpenseTable', () => {
     renderTable();
 
     const status = screen.getByRole('status');
-    expect(status).toHaveTextContent('กำลังโหลด...');
+    expect(status).toHaveTextContent('กำลังโหลดข้อมูล...');
     expect(screen.queryByText('รายจ่ายประจำ')).not.toBeInTheDocument();
   });
 

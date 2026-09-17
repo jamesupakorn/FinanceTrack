@@ -27,6 +27,7 @@ import { formatIncomeForSave } from '../../shared/utils/incomeUtils';
 import { incomeAPI, salaryAPI } from '../../shared/utils/frontend/apiUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
+import LoadingNotice from './LoadingNotice';
 
 const CUSTOM_LABEL_FALLBACK = 'รายรับใหม่';
 
@@ -457,7 +458,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, onOpen
           </div>
         </>
       ) : isLoading ? (
-        <div className="rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">กำลังโหลดข้อมูล...</div>
+        <LoadingNotice />
       ) : (
         <div className="rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">ยังไม่มีข้อมูลรายรับสำหรับเดือนนี้</div>
       )}

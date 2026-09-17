@@ -1,4 +1,4 @@
-// investmentUtils.js
+// investmentUtils.ts
 // ฟังก์ชันช่วยจัดการข้อมูลการลงทุน
 
 /**
@@ -6,7 +6,7 @@
  * @param {number} count - จำนวนรายการ
  * @returns {string[]} - array ของเปอร์เซ็นต์แต่ละรายการ (string)
  */
-export function averagePercent(count) {
+export function averagePercent(count: number): string[] {
   if (count <= 0) return [];
   const avg = Math.floor((100 * 100) / count) / 100;
   let remain = 100 - avg * (count - 1);
@@ -19,9 +19,9 @@ export function averagePercent(count) {
  * @param {number|string} baseAmount
  * @returns {string}
  */
-export function calcAmountFromPercent(percent, baseAmount) {
-  const p = parseFloat(percent) || 0;
-  const b = parseFloat(baseAmount) || 0;
+export function calcAmountFromPercent(percent: number | string, baseAmount: number | string): string {
+  const p = parseFloat(percent as string) || 0;
+  const b = parseFloat(baseAmount as string) || 0;
   return ((p / 100) * b).toFixed(2);
 }
 
@@ -30,8 +30,8 @@ export function calcAmountFromPercent(percent, baseAmount) {
  * @param {Array} investments - array ของ object ที่มี percent
  * @returns {number}
  */
-export function sumPercent(investments) {
-  return investments.reduce((sum, item) => sum + (parseFloat(item.percent) || 0), 0);
+export function sumPercent(investments: Array<{ percent?: number | string }>): number {
+  return investments.reduce((sum, item) => sum + (parseFloat(item.percent as string) || 0), 0);
 }
 
 /**
@@ -39,9 +39,9 @@ export function sumPercent(investments) {
  * @param {Array} data
  * @returns {Array}
  */
-export function mapInvestmentData(data) {
+export function mapInvestmentData(data: unknown): Array<{ percent: string; amount: string; name: string }> {
   return Array.isArray(data)
-    ? data.map(item => ({
+    ? (data as Array<{ percent?: number | string; amount?: number | string; name?: string }>).map(item => ({
         ...item,
         percent: item.percent?.toString() ?? '',
         amount: item.amount?.toString() ?? '',

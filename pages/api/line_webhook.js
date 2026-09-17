@@ -19,8 +19,16 @@ function getRawBody(req) {
 
 function verifySignature(rawBody, signature, secret) {
   if (!signature || !secret) return false;
-  const hash = crypto.createHmac('sha256', secret).update(rawBody).digest('base64');
-  return hash === signature;
+  const expectedSignature = crypto.createHmac('sha256', secret).update(rawBody).digest();
+  const providedSignature = Buffer.from(String(signature), 'base64');
+  return safeEqual(expectedSignature, providedSignature);
+}
+
+function safeEqual(a, b) {
+  if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b) || a.length !== b.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(a, b);
 }
 
 function parseLinkCommand(text = '') {

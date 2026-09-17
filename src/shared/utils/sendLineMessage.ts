@@ -1,14 +1,16 @@
 // sendLineMessage.js
 // Utility สำหรับส่งข้อความผ่าน LINE Messaging API
 
-import fetch from 'node-fetch';
 import { getLineToken, getLineUserId } from './lineConfig';
 
 // pushLineApiCall: primitive ที่รวม logic การส่ง LINE push message ทั้งหมด
 // (token/recipient resolution, guard, fetch, response parsing, error handling)
 // ใช้โดย sendLineMessage()
 // หมายเหตุ: log เฉพาะ boolean/count/status เท่านั้น ห้าม log recipient id, เนื้อหาข้อความ, หรือ raw response body
-async function pushLineApiCall(messages, userId = null) {
+async function pushLineApiCall(
+  messages: Array<{ type: string; text: string }>,
+  userId: string | null = null
+): Promise<Record<string, unknown>> {
   const token = getLineToken();
   const to = userId || getLineUserId();
   if (!token || !to || !Array.isArray(messages) || !messages.length) {
@@ -41,7 +43,10 @@ async function pushLineApiCall(messages, userId = null) {
   return result;
 }
 
-export async function sendLineMessage(message, userId = null) {
+export async function sendLineMessage(
+  message: string,
+  userId: string | null = null
+): Promise<Record<string, unknown>> {
   if (!message) {
     console.error('ข้อมูลไม่ครบถ้วน', {
       hasToken: Boolean(getLineToken()),

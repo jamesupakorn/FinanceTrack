@@ -1,7 +1,10 @@
-// savingsUtils.js
+// savingsUtils.ts
 // ฟังก์ชันสำหรับ SavingsTable
 
-export function mapSavingsApiToList(data) {
+export function mapSavingsApiToList(data: {
+  savings_list?: Array<Record<string, unknown>>;
+  รายการเงินออม?: Array<Record<string, unknown>>;
+}): Array<Record<string, unknown>> {
   if (Array.isArray(data.savings_list)) {
     return data.savings_list.map(item => ({
       ...item,

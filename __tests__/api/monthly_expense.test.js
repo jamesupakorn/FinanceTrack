@@ -710,14 +710,14 @@ describe('/api/monthly_expense (Mongo mode)', () => {
   });
 
   // ---------------------------------------------------------------------
-  // removeSummaryFields divergence (1 case)
+  // stripKnownTotalFields divergence (1 case)
   // ---------------------------------------------------------------------
 
-  it("27. apiUtils.removeSummaryFields (used here) does not strip a leaked accountSummary key — it persists verbatim in the stored doc, but a follow-up GET's own accountSummary is freshly recomputed, and totalActualPaid is unaffected (AC-6)", async () => {
-    // Real source facts confirmed this pass: monthly_expense.js imports removeSummaryFields from
+  it("27. apiUtils.stripKnownTotalFields (used here) does not strip a leaked accountSummary key — it persists verbatim in the stored doc, but a follow-up GET's own accountSummary is freshly recomputed, and totalActualPaid is unaffected (AC-6)", async () => {
+    // Real source facts confirmed this pass: monthly_expense.js imports stripKnownTotalFields from
     // apiUtils.js (default fields=['รวม','totalActualPaid']) — NOT the differently-behaved
     // same-named function in commonUtils.ts (fixed list including accountSummary/month/_id/
-    // __removeKeys). The apiUtils.js version called here with no second argument therefore does
+    // __removeKeys). The apiUtils.js version (now stripKnownTotalFields) called here with no second argument therefore does
     // NOT strip an `accountSummary` key from the POST payload.
     const { req: postReq, res: postRes } = makeReqRes({
       method: 'POST',

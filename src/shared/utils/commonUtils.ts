@@ -83,15 +83,28 @@ export function getAccountSummary(expenseData: Record<string, unknown> | undefin
 }
 
 /**
+ * คีย์ metadata ที่ไม่ใช่แถวรายจ่ายจริง — ต้องข้ามตอนรวมยอด totalActualPaid (TD-L04)
+ * รายการเดียวกับที่ getAccountSummary ใช้ (บรรทัด 65 ไฟล์นี้) บวก 'id'/'accountSummary' เพื่อให้
+ * ครอบคลุมเท่ากับ monthlySummary.js's SUMMARY_IGNORED_KEYS (ไม่ import ข้ามมาโดยตรง เพราะไฟล์นั้นอยู่
+ * ใต้ frontend/ และ commonUtils.ts ถูก import โดย API route handler — ดู task-context "Why not
+ * import" สำหรับเหตุผลเต็ม)
+ */
+const EXPENSE_TOTALS_IGNORED_KEYS = new Set([
+  'totalActualPaid', 'accountSummary', 'bankAccounts',
+  'month', '_id', 'id', 'userId', 'periodKey', '__removeKeys'
+]);
+
+/**
  * คำนวณยอดรวมค่าใช้จ่ายจากข้อมูล
  * @param {object} expenseData - ข้อมูลค่าใช้จ่ายแบบ flat
  * @returns {object} {totalActualPaid}
  */
 export function getExpenseTotals(expenseData: Record<string, unknown> | undefined): { totalActualPaid: number } {
   let totalActualPaid = 0; // รวมยอดจ่ายจริง
-  // วนลูปแต่ละรายการค่าใช้จ่าย
-  Object.values(expenseData || {}).forEach(itemValue => {
-    if (itemValue && typeof itemValue === 'object') {
+  // วนลูปแต่ละรายการค่าใช้จ่าย — ข้าม metadata key ที่รู้จักและค่าที่เป็น array เสมอ (TD-L04)
+  Object.entries(expenseData || {}).forEach(([key, itemValue]) => {
+    if (EXPENSE_TOTALS_IGNORED_KEYS.has(key)) return;
+    if (itemValue && typeof itemValue === 'object' && !Array.isArray(itemValue)) {
       const item = itemValue as Partial<{ actual: number | string }>;
       totalActualPaid += parseFloat(String(item.actual || 0));
     }
