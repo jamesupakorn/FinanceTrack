@@ -1,10 +1,14 @@
 #!/bin/sh
 
-# Auto-bump package version according to the conventional-commit type of the
-# commit that was just made, then fold the bump into that same commit:
-#   feat:                                -> minor
-#   <type>!: ...  or a "BREAKING CHANGE:" footer -> major
-#   anything else (fix/chore/test/docs/refactor/merge/...) -> patch
+# Auto-bump package version on every commit — always PATCH, regardless of
+# conventional-commit type — then fold the bump into that same commit.
+# Minor/major bumps are deliberately NOT inferred from commit type (a "feat:"
+# commit landing on develop used to jump the minor version and reset patch to
+# 0, which made develop's version number meaningless as a build counter —
+# every day had a mix of feat/fix commits, so the version jumped around
+# instead of just counting up). Minor/major bumps now happen ONLY through
+# `npm run release:*`, which sets the target version explicitly before this
+# hook ever runs (see the "chore(release):" skip below).
 # Skipped entirely for "chore(release): vX.Y.Z" commits, since those are
 # produced by `npm run release:*` after it already set the target version.
 #
@@ -57,19 +61,7 @@ case "$old_version" in
     ;;
 esac
 
-# Pull "<type>" and a trailing "!" (if any) out of "type(scope)!: subject"
-type_and_bang=$(printf '%s\n' "$first_line" | sed -nE 's/^([A-Za-z]+)(\([^)]*\))?(!)?:.*/\1|\3/p')
-type_name=${type_and_bang%%|*}
-bang=${type_and_bang##*|}
-
-bump=patch
-if [ "$bang" = "!" ] || printf '%s\n' "$msg" | grep -qiE '^BREAKING CHANGE:'; then
-  bump=major
-elif [ "$type_name" = "feat" ]; then
-  bump=minor
-fi
-
-npm version "$bump" --no-git-tag-version >/dev/null
+npm version patch --no-git-tag-version >/dev/null
 new_version=$(node -p "require('./package.json').version")
 
 if [ "$old_version" != "$new_version" ]; then
@@ -79,7 +71,7 @@ if [ "$old_version" != "$new_version" ]; then
     git add package.json
   fi
   git commit --amend --no-edit >/dev/null
-  echo "✅ Version bumped ($bump, from '${type_name:-none}'): $old_version -> $new_version"
+  echo "✅ Version bumped (patch): $old_version -> $new_version"
 fi
 
 exit 0
