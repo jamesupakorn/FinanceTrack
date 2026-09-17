@@ -8,7 +8,7 @@
  * - คำนวณสรุปยอดตามบัญชีและยอดรวมค่าใช้จ่าย
  */
 
-import { mapDocToFlatItemObjectWithTotals, stripKnownTotalFields } from '../../src/shared/utils/backend/apiUtils.js';
+import { mapDocToFlatItemObjectWithTotals, stripKnownTotalFields } from '../../src/shared/utils/backend/apiUtils';
 import { assertUserId } from '../../src/shared/utils/backend/userRequest';
 import { getAccountSummary, getExpenseTotals, extractRemovalKeys } from '../../src/shared/utils/commonUtils';
 import {
@@ -27,7 +27,7 @@ import {
 import {
   enforceSharedMonthWindowJson,
   enforceSharedMonthWindowMongo
-} from '../../src/shared/utils/backend/sharedMonthWindow.js';
+} from '../../src/shared/utils/backend/sharedMonthWindow';
 import {
   getUserData,
   updateUserData,

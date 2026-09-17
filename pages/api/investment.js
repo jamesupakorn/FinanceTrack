@@ -8,7 +8,7 @@ import {
 import {
   enforceSharedMonthWindowJson,
   enforceSharedMonthWindowMongo
-} from '../../src/shared/utils/backend/sharedMonthWindow.js';
+} from '../../src/shared/utils/backend/sharedMonthWindow';
 import {
   getUserData,
   updateUserData,
