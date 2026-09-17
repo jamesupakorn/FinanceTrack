@@ -326,8 +326,8 @@ export const dailyExpenseAPI = {
  * เป็น bare fetch() ไม่แนบ token (F-1) จึงไม่ได้รับผลจากบั๊กนั้น
  */
 export const userSettingsAPI = {
-	get: async (): Promise<any> => jsonFetch(buildUrl('/api/user-bank-accounts')),
-	saveThresholds: async (budgetThresholds: unknown): Promise<any> => jsonFetch('/api/user-bank-accounts', {
+	get: async (): Promise<any> => jsonFetch(buildUrl('/api/user-profile-settings')),
+	saveThresholds: async (budgetThresholds: unknown): Promise<any> => jsonFetch('/api/user-profile-settings', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: withUserPayload({ budgetThresholds })

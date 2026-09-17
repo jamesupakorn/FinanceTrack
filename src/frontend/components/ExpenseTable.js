@@ -424,7 +424,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
       if (currentUser?.id) {
         try {
           // ต้องแนบ X-CSRF-Token เพราะ POST ผ่าน assertUserId (TD-C02 B3) — call site นี้ไม่ผ่าน jsonFetch
-          await fetch('/api/user-bank-accounts', {
+          await fetch('/api/user-profile-settings', {
             method: 'POST',
             headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ bankAccounts: normalizedAccounts })
