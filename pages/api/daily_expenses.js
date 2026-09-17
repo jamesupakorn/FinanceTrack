@@ -1,5 +1,5 @@
 import { assertUserId } from '../../src/shared/utils/backend/userRequest';
-import { enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils.js';
+import { enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource.js';
 
 import { getUserData, updateUserData, enforceUserMonthLimit } from '../../src/backend/data/userUtils.js';
