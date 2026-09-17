@@ -1,13 +1,25 @@
 /**
- * workspaceRoutes.js
+ * workspaceRoutes.ts
  * ตารางแมป "section ↔ path" เดียวของทั้งฟีเจอร์ /workspace (Amendment A5 · monthly-workspace)
  * ผู้ใช้: pages/workspace/index.js, pages/edit.js และ WorkspaceShell.js — ห้ามมีสำเนาที่สอง
  * (spec-monthly-workspace.md §Amendment A5 §Files: "หนึ่งตาราง สามจุดเรียกใช้ — สำเนาที่สองที่ไหน
  * ก็ตามถือว่า review ไม่ผ่าน")
  */
 
+interface WorkspaceSectionDef {
+  path: string;
+  heading: string;
+  saveLabel: string;
+}
+
+interface WorkspaceLegacyQuery {
+  tab?: string | string[];
+  salary?: string | string[];
+  month?: string | string[];
+}
+
 // เจ็ด section ที่มีจริง — path/หัวข้อ/ป้ายปุ่มบันทึกของแต่ละหน้า
-export const WORKSPACE_SECTIONS = {
+export const WORKSPACE_SECTIONS: Record<string, WorkspaceSectionDef> = {
   income: { path: '/workspace/income', heading: 'รายได้ของเดือน', saveLabel: 'บันทึกรายรับ' },
   expense: { path: '/workspace/expense', heading: 'บิลและรายจ่ายของเดือน', saveLabel: 'บันทึกรายจ่าย' },
   savings: { path: '/workspace/savings', heading: 'เงินออมของเดือน', saveLabel: 'บันทึกเงินออม' },
@@ -19,7 +31,7 @@ export const WORKSPACE_SECTIONS = {
 
 // เดิม TAB_IDS ของ P3 มีแค่ 5 ค่า ไม่มี 'investment'/'goals' เลย (verified: workspace.js:30 ก่อนแก้)
 // ตารางแมป ?tab= (เก่า) → section (ใหม่) จึงมีแค่ 5 แถว ไม่มี orphan case
-const LEGACY_TAB_TO_SECTION = {
+const LEGACY_TAB_TO_SECTION: Record<string, string> = {
   income: 'income',
   expense: 'expense',
   savings: 'savings',
@@ -33,7 +45,7 @@ const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
  * สร้าง href ของ section หนึ่ง พร้อม ?month= (ถ้ามี) — ทุกลิงก์นำทางในฟีเจอร์นี้พก ?month= ติดไปด้วยเสมอ
  * เพื่อให้เปลี่ยน section ไม่เปลี่ยนเดือน (spec §Interaction notes — A5)
  */
-export function sectionHref(section, month) {
+export function sectionHref(section: string, month?: string): string {
   const entry = WORKSPACE_SECTIONS[section] || WORKSPACE_SECTIONS.income;
   if (month && MONTH_RE.test(month)) {
     return `${entry.path}?month=${encodeURIComponent(month)}`;
@@ -49,7 +61,7 @@ export function sectionHref(section, month) {
  * - tab ที่รู้จัก → section ที่ตรงกัน, ไม่รู้จัก/ไม่มี → 'income' (fallback เดิมของ E3)
  * - month=YYYY-MM (ถ้ามี) ติดไปกับ path ที่ resolve ได้เสมอ
  */
-export function resolveLegacyWorkspaceHref(query = {}) {
+export function resolveLegacyWorkspaceHref(query: WorkspaceLegacyQuery = {}): string {
   const { tab, salary, month } = query || {};
   const params = new URLSearchParams();
   if (typeof month === 'string' && MONTH_RE.test(month)) {
@@ -62,7 +74,10 @@ export function resolveLegacyWorkspaceHref(query = {}) {
     return `${WORKSPACE_SECTIONS.income.path}${qs ? `?${qs}` : ''}`;
   }
 
-  const section = LEGACY_TAB_TO_SECTION[tab] || 'income';
+  // tab มาจาก router.query จึงอาจเป็น string[]/undefined — แปลงเป็น '' (คีย์ที่ไม่มีในตาราง)
+  // เพื่อให้ fallback ไป 'income' เหมือนเดิมทุกประการ ไม่ใช่การเปลี่ยนพฤติกรรม
+  const tabKey = typeof tab === 'string' ? tab : '';
+  const section = LEGACY_TAB_TO_SECTION[tabKey] || 'income';
   const qs = params.toString();
   return `${WORKSPACE_SECTIONS[section].path}${qs ? `?${qs}` : ''}`;
 }
