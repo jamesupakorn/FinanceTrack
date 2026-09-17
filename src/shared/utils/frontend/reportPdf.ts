@@ -1,6 +1,6 @@
 import type { jsPDF } from 'jspdf';
 import type { UserOptions, Styles, Color } from 'jspdf-autotable';
-import type { SummaryData, ChartData } from './summaryUtils';
+import type { ChartData } from './summaryUtils';
 
 // jspdf-autotable ships types (`node_modules/jspdf-autotable/dist/index.d.ts`) but does not
 // module-augment `jsPDF` with `.autoTable()`/`.lastAutoTable` (its own `autoTable()` function types
@@ -290,12 +290,20 @@ interface ReportItemDetails {
   savingsRows?: ReportDetailRow[];
 }
 
-// `summaryData`'s real producer (`pages/reports.js`'s `buildMonthlyReportPayload`) builds an object
-// with a superset of `SummaryData`'s keys (`ยอดรวมค่าใช้จ่ายรายเดือน_ทั่วไป`/`_บัตรเครดิต`/`_รายวัน`,
-// none of which exist on `summaryUtils.ts`'s `SummaryData` interface — verified by reading both live
-// sources side by side, not assumed field-identical). Intersecting with an index signature lets this
-// file keep reading those extra fields without widening/editing `SummaryData` itself.
-type ReportSummaryData = SummaryData & Record<string, unknown>;
+// `summaryData`'s real producer (`pages/reports.js`'s `buildMonthlyReportPayload`) always constructs
+// and sends exactly these 8 fields as plain `number` literals (verified live). This interface is
+// exhaustive and matches the producer contract exactly — no index signature, no optional markers, so
+// a typo'd or missing field is a real compile error instead of silently type-checking.
+interface ReportSummaryData {
+  ยอดรวมรายรับรายเดือน: number;
+  ยอดรวมค่าใช้จ่ายรายเดือน_ทั่วไป: number;
+  ยอดรวมค่าใช้จ่ายรายเดือน_บัตรเครดิต: number;
+  ยอดรวมค่าใช้จ่ายรายเดือน_รายวัน: number;
+  ยอดรวมค่าใช้จ่ายรายเดือน_ยังไม่ชำระ: number;
+  ยอดรวมเงินเก็บรายเดือน: number;
+  ภาษีสะสมตั้งแต่เดือนแรก: number;
+  ยอดเงินคงเหลือ: number;
+}
 
 interface ReportItem {
   reportMonth?: string;
