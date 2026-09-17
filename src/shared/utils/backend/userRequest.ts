@@ -1,3 +1,4 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
 import {
   verifySession,
   verifyCsrfToken,
@@ -24,14 +25,14 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * @param {object} res - Next.js API response
  * @returns {string|null} userId หรือ null (เมื่อคืน null แปลว่าตอบ response ไปแล้ว)
  */
-export function assertUserId(req, res) {
+export function assertUserId(req: NextApiRequest, res: NextApiResponse): string | null {
   const session = verifySession(req?.cookies?.[SESSION_COOKIE_NAME]);
   if (!session) {
     res.status(401).json({ error: 'session expired or invalid — please log in again' });
     return null;
   }
 
-  if (MUTATING_METHODS.has(req.method) && !verifyCsrfToken(session.sid, req.headers?.['x-csrf-token'])) {
+  if (MUTATING_METHODS.has(req.method as string) && !verifyCsrfToken(session.sid, req.headers?.['x-csrf-token'])) {
     res.status(403).json({ error: 'invalid csrf token' });
     return null;
   }
@@ -65,7 +66,7 @@ export function assertUserId(req, res) {
  * @returns {string} userId แบบ trim แล้ว
  * @throws {Error} `${label}: userId is required` ถ้า userId ไม่ใช่ string ที่ไม่ว่าง
  */
-export function assertScopedUserId(userId, label) {
+export function assertScopedUserId(userId: unknown, label: string): string {
   const normalised = typeof userId === 'string' ? userId.trim() : '';
   if (!normalised) {
     throw new Error(`${label}: userId is required`);

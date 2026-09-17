@@ -26,24 +26,36 @@ import { assertScopedUserId } from './userRequest';
 const COLLECTION_NAME = 'credit_cards';
 const JSON_FILENAME = 'credit_cards.json';
 
+/** Module-private shape for this file's own return/parameter needs (no second real .ts consumer yet). */
+interface CreditData {
+  cards: unknown[];
+  plans: unknown[];
+  cycles: unknown[];
+  updatedAt: string | null;
+}
+
 /** โครงสร้างว่างมาตรฐาน — ผู้ใช้ใหม่เริ่มจากค่าว่างจริง ไม่มี default injection (BR-CC-012 / AC-04) */
-function emptyCreditData() {
+function emptyCreditData(): CreditData {
   return { cards: [], plans: [], cycles: [], updatedAt: null };
 }
 
-function normaliseCreditData(raw) {
+function normaliseCreditData(raw: unknown): CreditData {
   if (!raw || typeof raw !== 'object') return emptyCreditData();
+  const cards = (raw as { cards?: unknown }).cards;
+  const plans = (raw as { plans?: unknown }).plans;
+  const cycles = (raw as { cycles?: unknown }).cycles;
+  const updatedAt = (raw as { updatedAt?: unknown }).updatedAt;
   return {
-    cards: Array.isArray(raw.cards) ? raw.cards : [],
-    plans: Array.isArray(raw.plans) ? raw.plans : [],
-    cycles: Array.isArray(raw.cycles) ? raw.cycles : [],
-    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null
+    cards: Array.isArray(cards) ? cards : [],
+    plans: Array.isArray(plans) ? plans : [],
+    cycles: Array.isArray(cycles) ? cycles : [],
+    updatedAt: typeof updatedAt === 'string' ? updatedAt : null
   };
 }
 
 // F-08: implementation moved to shared src/shared/utils/backend/userRequest.js#assertScopedUserId
 // — this file only supplies its own error-message label so its distinct message stays byte-identical.
-function assertUserScope(userId) {
+function assertUserScope(userId: unknown): string {
   return assertScopedUserId(userId, 'creditCardStore');
 }
 
@@ -52,7 +64,7 @@ function assertUserScope(userId) {
  * @param {string} userId - บังคับ
  * @returns {Promise<{cards: array, plans: array, cycles: array, updatedAt: string|null}>}
  */
-export async function getUserCreditData(userId) {
+export async function getUserCreditData(userId: unknown): Promise<CreditData> {
   const scopedUserId = assertUserScope(userId);
 
   if (isJsonMode()) {
@@ -71,14 +83,17 @@ export async function getUserCreditData(userId) {
  * @param {(data: object) => object} updater - รับ snapshot คืนโครงสร้างใหม่
  * @returns {Promise<object>} ข้อมูลหลังบันทึก
  */
-export async function updateUserCreditData(userId, updater) {
+export async function updateUserCreditData(
+  userId: unknown,
+  updater: (data: CreditData) => CreditData
+): Promise<CreditData> {
   const scopedUserId = assertUserScope(userId);
   if (typeof updater !== 'function') {
     throw new Error('creditCardStore: updater must be a function');
   }
 
   if (isJsonMode()) {
-    const next = updateUserData(JSON_FILENAME, scopedUserId, (bucket) => {
+    const next = updateUserData(JSON_FILENAME, scopedUserId, (bucket: unknown) => {
       const current = normaliseCreditData(bucket);
       const updated = normaliseCreditData(updater(current));
       return { ...updated, updatedAt: new Date().toISOString() };

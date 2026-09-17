@@ -9,7 +9,7 @@
  */
 
 import { mapDocToFlatItemObjectWithTotals, removeSummaryFields } from '../../src/shared/utils/backend/apiUtils.js';
-import { assertUserId } from '../../src/shared/utils/backend/userRequest.js';
+import { assertUserId } from '../../src/shared/utils/backend/userRequest';
 import { getAccountSummary, getExpenseTotals, extractRemovalKeys } from '../../src/shared/utils/commonUtils';
 import {
   loadCreditCardContext,
