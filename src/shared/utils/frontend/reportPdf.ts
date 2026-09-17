@@ -1,4 +1,18 @@
-const toNumericValue = (value) => {
+import type { jsPDF } from 'jspdf';
+import type { UserOptions, Styles, Color } from 'jspdf-autotable';
+import type { SummaryData, ChartData } from './summaryUtils';
+
+// jspdf-autotable ships types (`node_modules/jspdf-autotable/dist/index.d.ts`) but does not
+// module-augment `jsPDF` with `.autoTable()`/`.lastAutoTable` (its own `autoTable()` function types
+// its first parameter as a bare `any`). This local interface fills that gap; both added members are
+// optional, so a plain `jsPDF` instance is structurally assignable to it with zero cast needed at the
+// construction site.
+interface JsPdfWithAutoTable extends jsPDF {
+  autoTable?: (options: UserOptions) => void;
+  lastAutoTable?: { finalY: number };
+}
+
+const toNumericValue = (value: unknown): number => {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : 0;
   }
@@ -9,7 +23,7 @@ const toNumericValue = (value) => {
   return 0;
 };
 
-const formatAmountForPdf = (value) => {
+const formatAmountForPdf = (value: unknown): string => {
   const numericValue = toNumericValue(value);
   return `${numericValue.toLocaleString('en-US', {
     minimumFractionDigits: 2,
@@ -17,10 +31,15 @@ const formatAmountForPdf = (value) => {
   })} บาท`;
 };
 
-const formatPercentForPdf = (value) => `${toNumericValue(value).toFixed(2)}%`;
-const toPercentInRange = (value) => Math.max(0, Math.min(100, toNumericValue(value)));
+const formatPercentForPdf = (value: unknown): string => `${toNumericValue(value).toFixed(2)}%`;
+const toPercentInRange = (value: unknown): number => Math.max(0, Math.min(100, toNumericValue(value)));
 
-const createExpenseRatioChartImage = ({ title, expensePercent }) => {
+interface ExpenseRatioChartOptions {
+  title: string;
+  expensePercent: number;
+}
+
+const createExpenseRatioChartImage = ({ title, expensePercent }: ExpenseRatioChartOptions): string | null => {
   if (typeof document === 'undefined') {
     return null;
   }
@@ -101,13 +120,27 @@ const createExpenseRatioChartImage = ({ title, expensePercent }) => {
   return canvas.toDataURL('image/png');
 };
 
+interface ThaiTextImageOptions {
+  text: string;
+  fontSizePt?: number;
+  fontWeight?: string;
+  color?: string;
+  fontFamily?: string;
+}
+
+interface ThaiTextImageResult {
+  dataUrl: string;
+  widthPt: number;
+  heightPt: number;
+}
+
 const createThaiTextImage = ({
   text,
   fontSizePt = 16,
   fontWeight = '700',
   color = '#111827',
   fontFamily = 'Sarabun'
-}) => {
+}: ThaiTextImageOptions): ThaiTextImageResult | null => {
   if (typeof document === 'undefined' || !text) {
     return null;
   }
@@ -151,8 +184,14 @@ const createThaiTextImage = ({
   };
 };
 
+interface ThaiHeadingOptions extends ThaiTextImageOptions {
+  x: number;
+  topY: number;
+  fallbackFontFamily?: string;
+}
+
 const drawThaiHeadingWithCanvas = (
-  doc,
+  doc: JsPdfWithAutoTable,
   {
     text,
     x,
@@ -162,8 +201,8 @@ const drawThaiHeadingWithCanvas = (
     color = '#111827',
     fontFamily = 'Sarabun',
     fallbackFontFamily = 'helvetica'
-  }
-) => {
+  }: ThaiHeadingOptions
+): number => {
   const textImage = createThaiTextImage({ text, fontSizePt, fontWeight, color, fontFamily });
   if (textImage?.dataUrl) {
     doc.addImage(textImage.dataUrl, 'PNG', x, topY, textImage.widthPt, textImage.heightPt, undefined, 'FAST');
@@ -178,9 +217,14 @@ const drawThaiHeadingWithCanvas = (
 
 const THAI_FONT_FAMILY = 'Sarabun';
 const THAI_FONT_REGULAR_FILE = 'Sarabun-Regular.ttf';
-let cachedThaiFontPayload = null;
 
-const arrayBufferToBase64 = (arrayBuffer) => {
+interface ThaiFontPayload {
+  regularBase64: string;
+}
+
+let cachedThaiFontPayload: ThaiFontPayload | null = null;
+
+const arrayBufferToBase64 = (arrayBuffer: ArrayBuffer): string => {
   const bytes = new Uint8Array(arrayBuffer);
   const chunkSize = 0x8000;
   let binary = '';
@@ -191,7 +235,7 @@ const arrayBufferToBase64 = (arrayBuffer) => {
   return btoa(binary);
 };
 
-const loadThaiFontPayload = async () => {
+const loadThaiFontPayload = async (): Promise<ThaiFontPayload> => {
   if (cachedThaiFontPayload) {
     return cachedThaiFontPayload;
   }
@@ -210,7 +254,7 @@ const loadThaiFontPayload = async () => {
   return cachedThaiFontPayload;
 };
 
-const registerThaiFont = async (doc) => {
+const registerThaiFont = async (doc: JsPdfWithAutoTable): Promise<string> => {
   try {
     const { regularBase64 } = await loadThaiFontPayload();
     doc.addFileToVFS(THAI_FONT_REGULAR_FILE, regularBase64);
@@ -224,27 +268,75 @@ const registerThaiFont = async (doc) => {
   }
 };
 
-const getFallbackRows = (columnCount, message = 'ไม่มีข้อมูล') => {
+const getFallbackRows = (columnCount: number, message = 'ไม่มีข้อมูล'): string[][] => {
   if (columnCount <= 1) return [[message]];
   return [[message, ...Array.from({ length: columnCount - 1 }, () => '-')]];
 };
 
-const getMonthText = (item) => item?.monthLabel || item?.reportMonth || '-';
+interface ReportDetailRow {
+  item?: string;
+  amount?: number | string;
+}
 
-const normalizeReportItems = ({ reportItems, summaryData, chartData, reportMonth, details }) => {
+interface ReportExpenseDetailRow {
+  item?: string;
+  actual?: number | string;
+  paid?: string;
+}
+
+interface ReportItemDetails {
+  incomeRows?: ReportDetailRow[];
+  expenseRows?: ReportExpenseDetailRow[];
+  savingsRows?: ReportDetailRow[];
+}
+
+// `summaryData`'s real producer (`pages/reports.js`'s `buildMonthlyReportPayload`) builds an object
+// with a superset of `SummaryData`'s keys (`ยอดรวมค่าใช้จ่ายรายเดือน_ทั่วไป`/`_บัตรเครดิต`/`_รายวัน`,
+// none of which exist on `summaryUtils.ts`'s `SummaryData` interface — verified by reading both live
+// sources side by side, not assumed field-identical). Intersecting with an index signature lets this
+// file keep reading those extra fields without widening/editing `SummaryData` itself.
+type ReportSummaryData = SummaryData & Record<string, unknown>;
+
+interface ReportItem {
+  reportMonth?: string;
+  monthLabel?: string;
+  summaryData?: ReportSummaryData;
+  chartData?: ChartData;
+  details?: ReportItemDetails;
+}
+
+const getMonthText = (item?: ReportItem): string => item?.monthLabel || item?.reportMonth || '-';
+
+interface DownloadSummaryReportPdfInput {
+  reportItems?: ReportItem[];
+  // Flat single-item fallback shape — zero real callers today, kept per the "don't delete
+  // pre-existing tolerance" rule (same discipline as slice 9's unused `currentMonth` field).
+  summaryData?: ReportSummaryData;
+  chartData?: ChartData;
+  reportMonth?: string;
+  details?: ReportItemDetails;
+}
+
+const normalizeReportItems = ({
+  reportItems,
+  summaryData,
+  chartData,
+  reportMonth,
+  details
+}: DownloadSummaryReportPdfInput): ReportItem[] => {
   if (Array.isArray(reportItems) && reportItems.length > 0) {
     return reportItems;
   }
-  const fallbackItem = {
+  const fallbackItem: ReportItem = {
     reportMonth: reportMonth || new Date().toISOString().slice(0, 7),
-    summaryData: summaryData || {},
-    chartData: chartData || {},
+    summaryData: summaryData || ({} as ReportSummaryData),
+    chartData: chartData || ({} as ChartData),
     details: details || {}
   };
   return [fallbackItem];
 };
 
-const getTableStyles = (fontFamily) => ({
+const getTableStyles = (fontFamily: string): Partial<Styles> => ({
   font: fontFamily,
   fontSize: 10,
   fontStyle: 'normal',
@@ -252,7 +344,7 @@ const getTableStyles = (fontFamily) => ({
   cellPadding: { top: 5, right: 4, bottom: 5, left: 4 }
 });
 
-const getHeadStyles = (fontFamily, fillColor) => ({
+const getHeadStyles = (fontFamily: string, fillColor: Color): Partial<Styles> => ({
   fillColor,
   textColor: [255, 255, 255],
   font: fontFamily,
@@ -261,7 +353,10 @@ const getHeadStyles = (fontFamily, fillColor) => ({
   minCellHeight: 24
 });
 
-export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chartData, reportMonth, details } = {}) => {
+export const downloadSummaryReportPdf = async (
+  input: DownloadSummaryReportPdfInput = {}
+): Promise<void> => {
+  const { reportItems, summaryData, chartData, reportMonth, details } = input;
   const normalizedItems = normalizeReportItems({ reportItems, summaryData, chartData, reportMonth, details });
   const generatedAt = new Date().toLocaleString('th-TH', { hour12: false });
 
@@ -271,13 +366,13 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
   ]);
 
   const autoTable = autoTableModule.default || autoTableModule;
-  const doc = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
+  const doc: JsPdfWithAutoTable = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
   doc.setLineHeightFactor(1.35);
   const pdfFontFamily = await registerThaiFont(doc);
   const marginLeft = 40;
   let contentBottomY = 86;
 
-  const runAutoTable = (options) => {
+  const runAutoTable = (options: UserOptions): void => {
     if (typeof autoTable === 'function') {
       autoTable(doc, options);
       return;
@@ -289,7 +384,14 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
     throw new Error('PDF table plugin unavailable');
   };
 
-  const renderSectionTable = ({ title, head, body, headColor = [93, 91, 255] }) => {
+  interface RenderSectionTableOptions {
+    title: string;
+    head: string[];
+    body: (string | number)[][];
+    headColor?: Color;
+  }
+
+  const renderSectionTable = ({ title, head, body, headColor = [93, 91, 255] }: RenderSectionTableOptions): void => {
     const pageHeight = doc.internal.pageSize.getHeight();
     let titleY = contentBottomY + 20;
     if (titleY + 120 > pageHeight - 40) {
@@ -322,9 +424,9 @@ export const downloadSummaryReportPdf = async ({ reportItems, summaryData, chart
 
     contentBottomY = 86;
 
-    const normalizedSummary = item?.summaryData || {};
-    const normalizedChart = item?.chartData || {};
-    const normalizedDetails = item?.details || {};
+    const normalizedSummary: ReportSummaryData = item?.summaryData || ({} as ReportSummaryData);
+    const normalizedChart: ChartData | Record<string, never> = item?.chartData || {};
+    const normalizedDetails: ReportItemDetails = item?.details || {};
 
     const incomeRows = Array.isArray(normalizedDetails.incomeRows) ? normalizedDetails.incomeRows : [];
     const expenseRows = Array.isArray(normalizedDetails.expenseRows) ? normalizedDetails.expenseRows : [];

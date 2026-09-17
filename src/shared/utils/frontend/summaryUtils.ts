@@ -19,7 +19,7 @@ interface SummaryDataInput {
   currentYear: string;
 }
 
-interface SummaryData {
+export interface SummaryData {
   ยอดรวมรายรับรายเดือน: number;
   ยอดรวมค่าใช้จ่ายรายเดือน_ทั้งหมด: number;
   ยอดรวมค่าใช้จ่ายรายเดือน_จ่ายจริง: number;
@@ -34,7 +34,7 @@ interface ChartDataInput {
   totalExpenseActual: number;
 }
 
-interface ChartData {
+export interface ChartData {
   จ่ายจริง: {
     รับ: number;
     จ่าย: number;
