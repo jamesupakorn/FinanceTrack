@@ -29,6 +29,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useSession } from '../src/frontend/contexts/SessionContext';
 import { loadUsers } from '../lib/userStore';
+import LoadingSkeleton, { SkeletonBlock } from '../src/frontend/components/LoadingSkeleton';
 
 const DEFAULT_DESCRIPTION = 'เลือกรูปโปรไฟล์ที่ต้องการใช้งาน แล้วกรอกรหัสผ่านของแต่ละผู้ใช้';
 const DEMO_PROFILE = {
@@ -47,6 +48,9 @@ const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:
 // same class list at once, with Tailwind's generated-CSS source order — not JSX order — silently
 // deciding the winner. Each card site supplies its own complete, mutually-exclusive triplet.
 const CARD_BASE = `flex gap-space-3 rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 transition-transform duration-fast ease-graphite hover:-translate-y-0.5 hover:border-border-interactive hover:shadow-elev-2 md:p-space-5 ${FOCUS_RING}`;
+// CARD_BASE minus every interactive affordance (transition/hover/focus-ring) — a skeleton is not a
+// button. Direction/alignment are supplied per call site, same discipline as CARD_BASE itself.
+const CARD_SKELETON = 'flex gap-space-3 rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5';
 const PRIMARY_BUTTON = `inline-flex h-11 items-center justify-center rounded-sm bg-accent px-space-5 text-sm font-semibold text-on-accent transition-opacity duration-fast ease-graphite disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`;
 const SECONDARY_BUTTON = `inline-flex h-11 items-center justify-center rounded-sm border border-border-interactive bg-surface-2 px-space-5 text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`;
 const CHIP_BASE = 'inline-flex items-center gap-space-1 rounded-full px-space-3 py-space-1 text-xs font-medium whitespace-nowrap';
@@ -288,9 +292,24 @@ export default function ProfileGalleryPage({ initialProfiles = [] }) {
         </div>
 
         {loading && (
-          <div className="rounded-md border border-border-default bg-surface-1 py-space-6 text-center text-sm text-secondary shadow-elev-1">
-            กำลังโหลดรายชื่อผู้ใช้...
-          </div>
+          <LoadingSkeleton label="กำลังโหลดรายชื่อผู้ใช้..." className="grid grid-cols-1 gap-space-4 sm:grid-cols-2">
+            {/* การ์ด demo — เต็มความกว้าง แนวนอน (เทียบ profiles.js:384-406 การ์ดจริง) */}
+            <div className={`${CARD_SKELETON} flex-row items-center sm:col-span-2`}>
+              <SkeletonBlock className="h-16 w-16 shrink-0 rounded-md" />
+              <div className="flex min-w-0 flex-1 flex-col gap-space-2">
+                <SkeletonBlock className="h-[26px] w-[180px]" />
+                <SkeletonBlock className="h-[26px] w-[120px] rounded-full" />
+                <SkeletonBlock className="h-[22px] w-full max-w-[280px]" />
+              </div>
+            </div>
+            {/* การ์ดผู้ใช้จริง — แนวตั้ง จำนวนจริงยังไม่รู้ตอนนี้ ใช้ 2 ใบตามแบบ CreditCardDashboard.js:176-177 */}
+            {[0, 1].map((index) => (
+              <div key={index} className={`${CARD_SKELETON} flex-col items-center`}>
+                <SkeletonBlock className="h-16 w-16 rounded-md" />
+                <SkeletonBlock className="h-[26px] w-[120px]" />
+              </div>
+            ))}
+          </LoadingSkeleton>
         )}
 
         {!loading && error && (

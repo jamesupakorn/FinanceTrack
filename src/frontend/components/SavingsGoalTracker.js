@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { savingsGoalsAPI, salaryAPI, incomeAPI, expenseAPI, dailyExpenseAPI } from '../../shared/utils/frontend/apiUtils';
 import { getSummaryData } from '../../shared/utils/frontend/summaryUtils';
+import LoadingSkeleton, { SkeletonBlock } from './LoadingSkeleton';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
@@ -643,8 +644,39 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
         </form>
       )}
 
-      {/* Loading */}
-      {loading && <div className="py-space-5 text-center text-sm text-secondary">กำลังโหลด...</div>}
+      {/* Loading — โครงร่างขึ้นเฉพาะตอนยังไม่มีอะไรให้ดูเลย ถ้ามีเป้าหมายบนจอแล้วการรีเฟรชจะไม่เอาแถบเทา
+          ไปทับของจริง (เงื่อนไขเดียวกับที่ ExpenseTable.js ใช้กับ LoadingNotice: isLoading && !hasExpenseRows)
+          กรณีมีเป้าหมายอยู่แล้ว ประกาศผ่าน aria-busy ที่ลิสต์ด้านล่างแทน */}
+      {loading && activeGoals.length === 0 && (
+        <LoadingSkeleton label="กำลังโหลด..." className="flex flex-col gap-space-4">
+          {[0, 1].map((index) => (
+            <div key={index} className="rounded-md border border-border-default bg-surface-2 p-space-4">
+              <div className="mb-space-2 flex flex-wrap items-center justify-between gap-space-2">
+                <div className="flex flex-wrap items-center gap-space-2">
+                  <SkeletonBlock on="surface-2" className="h-6 w-[88px] rounded-full" />
+                  <SkeletonBlock on="surface-2" className="h-6 w-[56px] rounded-full" />
+                  <SkeletonBlock on="surface-2" className="h-11 w-[104px]" />
+                </div>
+                <div className="flex items-center gap-space-1">
+                  <SkeletonBlock on="surface-2" className="h-11 w-11" />
+                  <SkeletonBlock on="surface-2" className="h-11 w-11" />
+                </div>
+              </div>
+              <SkeletonBlock on="surface-2" className="mb-space-1 h-[26px] w-[160px]" />
+              {/* ProgressBar (:88-104): my-space-2, ราง h-3 rounded-full, ตัวเลข w-12 text-xs */}
+              <div className="my-space-2 flex items-center gap-space-2">
+                <SkeletonBlock on="surface-2" className="h-3 flex-1 rounded-full" />
+                <SkeletonBlock on="surface-2" className="h-[18px] w-12" />
+              </div>
+              <div className="mt-space-1 flex items-center justify-between gap-space-1">
+                <SkeletonBlock on="surface-2" className="h-[22px] w-[140px]" />
+                <SkeletonBlock on="surface-2" className="h-[22px] w-[110px]" />
+              </div>
+              <SkeletonBlock on="surface-2" className="mt-space-1 h-[18px] w-[120px]" />
+            </div>
+          ))}
+        </LoadingSkeleton>
+      )}
 
       {/* Active Goals */}
       {!loading && activeGoals.length === 0 && !showForm && (
@@ -654,7 +686,8 @@ export default function SavingsGoalTracker({ refreshTrigger, selectedMonth, onAl
         </div>
       )}
 
-      <div className="flex flex-col gap-space-4">
+      {/* aria-busy ตอนรีเฟรชทั้งที่มีเป้าหมายอยู่แล้ว — ไม่มีโครงร่างให้เห็น แต่ AT ต้องรู้ว่ากำลังอัปเดต */}
+      <div className="flex flex-col gap-space-4" aria-busy={loading && activeGoals.length > 0 ? 'true' : undefined}>
         {activeGoals.map(goal => {
           const pct = goal.metadata?.progressPercentage || 0;
           const current = goal.currentAmount || 0;
