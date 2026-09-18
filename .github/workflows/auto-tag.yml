@@ -7,7 +7,11 @@ on:
       - develop
 
 jobs:
-  tag:
+  # develop: tag the current package.json version as-is, skip if that tag already exists
+  # (patch bumps happen per-commit via .githooks/post-commit; this just mirrors whatever
+  # version number is already on the commit).
+  tag-develop:
+    if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -41,3 +45,56 @@ jobs:
       - name: Skip (tag already exists)
         if: steps.check.outputs.exists == 'true'
         run: echo "Tag ${{ steps.version.outputs.version }} already exists, skipping."
+
+  # production: every push always bumps MINOR (X.Y.0, patch reset), commits that bump back
+  # to production, and tags it — regardless of whether the merge commit itself changed the
+  # version (it usually doesn't, since GitHub's merge button doesn't run .githooks/post-commit).
+  # Guarded against re-triggering itself in a loop by skipping when the triggering commit's
+  # own message already starts with "chore(release):".
+  tag-production:
+    if: github.ref == 'refs/heads/production'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Skip if this push IS a release commit (avoid self-trigger loop)
+        id: guard
+        run: |
+          first_line=$(git log -1 --pretty=%B | head -n1)
+          case "$first_line" in
+            chore\(release\):*)
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Bump minor version and commit
+        if: steps.guard.outputs.skip == 'false'
+        id: bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          npm version minor --no-git-tag-version >/dev/null
+          new_version=$(jq -r .version package.json)
+          echo "version=$new_version" >> "$GITHUB_OUTPUT"
+          git add package.json package-lock.json
+          git commit -m "chore(release): v${new_version}"
+          git push origin HEAD:production
+
+      - name: Tag the release commit
+        if: steps.guard.outputs.skip == 'false'
+        run: |
+          version="${{ steps.bump.outputs.version }}"
+          if git rev-parse "refs/tags/${version}" >/dev/null 2>&1; then
+            echo "Tag ${version} already exists unexpectedly, skipping tag creation."
+          else
+            git tag -a "${version}" -m "chore(release): v${version}"
+            git push origin "${version}"
+          fi
