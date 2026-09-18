@@ -19,8 +19,49 @@ import {
 } from '../creditCardUtils';
 import { parseToNumber } from './numberUtils';
 
+/** ค่าที่ diffDaysFromBase/buildMonthEvents ต้องการจาก card เท่านั้น (id, name, statementDay, dueDay) */
+interface ExpenseEventCard {
+  id: string;
+  name?: string;
+  statementDay?: unknown;
+  [key: string]: unknown;
+}
+
+/** ค่าที่ buildMonthEvents ต้องการจาก plan เท่านั้น (id, cardId) */
+interface ExpenseEventPlan {
+  id: string;
+  cardId: string;
+  [key: string]: unknown;
+}
+
+/** แถวดิบหนึ่งแถวใน monthsMap[monthKey] — รูปร่างเดียวกับแถวใน monthly_expense */
+interface ExpenseEventRow {
+  name?: string;
+  actual?: number | string;
+  account?: string;
+  paid?: boolean | string;
+  dueDay?: unknown;
+  [key: string]: unknown;
+}
+
+/** เหตุการณ์ที่ derive แล้วหนึ่งรายการ (ทั้ง type: 'expense' และ type: 'statement') */
+interface ExpenseEvent {
+  id: string;
+  type: 'expense' | 'statement';
+  source: 'revolving' | 'installment' | 'plain' | 'statement';
+  key: string;
+  name?: string;
+  amount?: number;
+  account?: string;
+  paid?: boolean;
+  dueDay?: unknown;
+  card: ExpenseEventCard | null;
+  plan?: ExpenseEventPlan | null;
+  installmentNo?: number | null;
+}
+
 // ฟิลด์ระบบที่ไม่ใช่แถวค่าใช้จ่าย — ชุดเดียวกับ EXPENSE_IGNORED_FIELDS ของ line_due_notify.js:51-58
-export const IGNORED_ROW_KEYS = new Set([
+export const IGNORED_ROW_KEYS: Set<string> = new Set([
   '_id', 'month', 'userId', 'periodKey', 'accountSummary', 'totalActualPaid', 'bankAccounts'
 ]);
 
@@ -30,21 +71,36 @@ export const IGNORED_ROW_KEYS = new Set([
  * เป็นพารามิเตอร์ เพราะที่นี่รับ cards/plans ดิบตาม §Interfaces ของ spec-dashboard.md
  * @returns {{eventsByDay: Map<number, object[]>, unscheduledEvents: object[], windowState: string, monthTotals: {total:number, paid:number, remaining:number}}}
  */
-export function buildMonthEvents({ monthKey, monthsMap = {}, cards = [], plans = [] } = {}) {
+export function buildMonthEvents({
+  monthKey,
+  monthsMap = {},
+  cards = [],
+  plans = []
+}: {
+  monthKey: string;
+  monthsMap?: Record<string, Record<string, ExpenseEventRow> | unknown>;
+  cards?: ExpenseEventCard[];
+  plans?: ExpenseEventPlan[];
+}): {
+  eventsByDay: Map<number, ExpenseEvent[]>;
+  unscheduledEvents: ExpenseEvent[];
+  windowState: 'in-window' | 'pruned' | 'future';
+  monthTotals: { total: number; paid: number; remaining: number };
+} {
   const cardById = new Map(cards.map(card => [card.id, card]));
   const planById = new Map(plans.map(plan => [plan.id, plan]));
 
   const daysInMonth = getDaysInMonthKey(monthKey);
-  const eventsByDay = new Map();
-  const unscheduledEvents = [];
-  const pushDay = (day, event) => {
+  const eventsByDay = new Map<number, ExpenseEvent[]>();
+  const unscheduledEvents: ExpenseEvent[] = [];
+  const pushDay = (day: number, event: ExpenseEvent) => {
     if (!eventsByDay.has(day)) eventsByDay.set(day, []);
-    eventsByDay.get(day).push(event);
+    eventsByDay.get(day)!.push(event);
   };
 
   // สถานะเทียบกับหน้าต่างข้อมูล 15 เดือน (KL-1 / BR-CC-019) — ดูตาราง 3 สถานะใน spec §Feature 2
   const monthKeys = Object.keys(monthsMap).sort();
-  let windowState = 'in-window';
+  let windowState: 'in-window' | 'pruned' | 'future' = 'in-window';
   if (!Object.prototype.hasOwnProperty.call(monthsMap, monthKey) && monthKeys.length > 0) {
     windowState = monthKey < monthKeys[0] ? 'pruned' : 'future';
   }
@@ -55,9 +111,9 @@ export function buildMonthEvents({ monthKey, monthsMap = {}, cards = [], plans =
     if (!row || typeof row !== 'object') return;
 
     const source = isRevolvingRowKey(key) ? 'revolving' : (isInstallmentRowKey(key) ? 'installment' : 'plain');
-    let card = null;
-    let plan = null;
-    let installmentNo = null;
+    let card: ExpenseEventCard | null = null;
+    let plan: ExpenseEventPlan | null = null;
+    let installmentNo: number | null = null;
 
     if (source === 'revolving') {
       const parsed = parseRevolvingRowKey(key);
@@ -71,13 +127,13 @@ export function buildMonthEvents({ monthKey, monthsMap = {}, cards = [], plans =
       }
     }
 
-    const event = {
+    const event: ExpenseEvent = {
       id: `${monthKey}_${key}`,
       type: 'expense',
       source,
       key,
       name: row.name || 'รายการ',
-      amount: parseToNumber(row.actual),
+      amount: parseToNumber(row.actual ?? 0),
       account: row.account || '',
       paid: row.paid === true || row.paid === 'true',
       dueDay: row.dueDay,
@@ -114,8 +170,8 @@ export function buildMonthEvents({ monthKey, monthsMap = {}, cards = [], plans =
   eventsByDay.forEach(events => {
     events.forEach(event => {
       if (event.type !== 'expense') return;
-      total += event.amount;
-      if (event.paid) paidTotal += event.amount;
+      total += event.amount ?? 0;
+      if (event.paid) paidTotal += event.amount ?? 0;
     });
   });
 
@@ -129,13 +185,13 @@ export function buildMonthEvents({ monthKey, monthsMap = {}, cards = [], plans =
 
 /** จำนวนวันจากวันฐาน (today) ถึง isoDate — คำนวณเทียบกับ today ที่รับเข้ามา ไม่ใช่ Date.now() ตรง ๆ
  * เพื่อให้ collectUpcomingPayments เป็น pure function ทดสอบได้โดยไม่ต้อง mock นาฬิกาเครื่อง */
-function diffDaysFromBase(isoDate, today) {
+function diffDaysFromBase(isoDate: string, today: Date): number {
   const [yearStr, monthStr, dayStr] = isoDate.split('-');
   const target = new Date(Number(yearStr), Number(monthStr) - 1, Number(dayStr));
   target.setHours(0, 0, 0, 0);
   const base = new Date(today);
   base.setHours(0, 0, 0, 0);
-  return Math.round((target - base) / 86400000);
+  return Math.round((target.getTime() - base.getTime()) / 86400000);
 }
 
 /**
@@ -146,7 +202,18 @@ function diffDaysFromBase(isoDate, today) {
  */
 export function collectUpcomingPayments({
   monthsMap = {}, cards = [], plans = [], today = new Date(), horizonDays = 7
-} = {}) {
+}: {
+  monthsMap?: Record<string, unknown>;
+  cards?: ExpenseEventCard[];
+  plans?: ExpenseEventPlan[];
+  today?: Date;
+  horizonDays?: number;
+} = {}): {
+  overdue: (ExpenseEvent & { isoDate: string; daysDiff: number })[];
+  dueToday: (ExpenseEvent & { isoDate: string; daysDiff: number })[];
+  dueSoon: (ExpenseEvent & { isoDate: string; daysDiff: number })[];
+  total: number;
+} {
   const baseDate = (today instanceof Date && !Number.isNaN(today.getTime())) ? today : new Date();
   const [yearStr, monthStr] = [baseDate.getFullYear(), String(baseDate.getMonth() + 1).padStart(2, '0')];
   const currentMonthKey = `${yearStr}-${monthStr}`;
@@ -154,16 +221,16 @@ export function collectUpcomingPayments({
   const nextTotal = ny * 12 + (nm - 1) + 1;
   const nextMonthKey = `${Math.floor(nextTotal / 12)}-${String((nextTotal % 12) + 1).padStart(2, '0')}`;
 
-  const overdue = [];
-  const dueToday = [];
-  const dueSoon = [];
+  const overdue: (ExpenseEvent & { isoDate: string; daysDiff: number })[] = [];
+  const dueToday: (ExpenseEvent & { isoDate: string; daysDiff: number })[] = [];
+  const dueSoon: (ExpenseEvent & { isoDate: string; daysDiff: number })[] = [];
 
   [currentMonthKey, nextMonthKey].forEach(monthKey => {
     const { eventsByDay } = buildMonthEvents({ monthKey, monthsMap, cards, plans });
     eventsByDay.forEach((events, day) => {
       events.forEach(event => {
         if (event.type !== 'expense' || event.paid) return; // ชำระแล้ว → ไม่ต้องนับ (AC-DB-15)
-        if (!(event.amount > 0)) return; // ยอด 0/ว่าง → ยังไม่นับเกินกำหนด เหมือน line_due_notify.js:462-463
+        if (!(event.amount != null && event.amount > 0)) return; // ยอด 0/ว่าง → ยังไม่นับเกินกำหนด เหมือน line_due_notify.js:462-463
         const isoDate = `${monthKey}-${String(day).padStart(2, '0')}`;
         const daysDiff = diffDaysFromBase(isoDate, baseDate);
         const enriched = { ...event, isoDate, daysDiff };
