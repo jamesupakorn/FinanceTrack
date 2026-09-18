@@ -5,14 +5,14 @@
  * ใช้ครั้งเดียวหลังจาก users.json ถูกลบในการ migrate ไป MongoDB
  *
  * Usage:
- *   node scripts/seedUsers.js
- *   node scripts/seedUsers.js --dry-run
+ *   node scripts/seedUsers.js            (dry-run — prints what would be inserted)
+ *   node scripts/seedUsers.js --apply    (writes to MongoDB)
  */
 
 const { MongoClient } = require('mongodb');
 
 const DATABASE_NAME = process.env.MONGODB_DB || 'financetrack';
-const isDryRun = process.argv.includes('--dry-run');
+const apply = process.argv.includes('--apply');
 
 // Snapshot ของ users จาก git history (ก่อน users.json ถูกลบใน commit 3d6f236)
 const USERS_SNAPSHOT = [
@@ -21,7 +21,8 @@ const USERS_SNAPSHOT = [
     displayName: 'JAME',
     avatar: '/avatars/u001.jpg',
     passwordHash: '$2a$10$B5KBN7T4DkYgqmg33beZi.x7b3Gzt8jaEHSOgSvlN8LKnsMv87z3W',
-    LineId: 'U8123a5c8aada628470ca09765d32594d',
+    // Placeholder/synthetic value only — NOT a real LINE user identity. Do not restore the old one.
+    LineId: 'U00000000000000000000000000000001',
     bankAccounts: ['กรุงศรี', 'ttb', 'กสิกร', 'UOB'],
   },
   {
@@ -29,6 +30,18 @@ const USERS_SNAPSHOT = [
     displayName: 'MUHAM',
     avatar: '/avatars/u002.jpeg',
     passwordHash: '$2a$10$LOXxLTyAOtrmYwAdDVA3BulvGrqpBKPtYXgpIN4FT942G0ajKYrOq',
+    bankAccounts: [],
+  },
+  {
+    // TD-H09: real server-side demo user — restores "ทดลองใช้" login through the normal
+    // /api/auth/profile-login path (see .pipeline/spec-demo-profile-login-fix.md §1).
+    // `isDemo: true` is the only new field this task adds; passwordHash is never read for
+    // this user (profile-login.js gates the passwordless branch strictly on `user.isDemo`).
+    id: 'demo',
+    displayName: 'บัญชีสาธิต (Demo)',
+    avatar: '',
+    isDemo: true,
+    passwordHash: null,
     bankAccounts: [],
   },
 ];
@@ -45,7 +58,10 @@ async function run() {
     const db = client.db(DATABASE_NAME);
     const col = db.collection('users');
 
-    console.log(`\nSeed users → MongoDB [db: ${DATABASE_NAME}]${isDryRun ? '  (dry-run)' : ''}`);
+    console.log(`\nSeed users → MongoDB [db: ${DATABASE_NAME}]${!apply ? '  (dry-run)' : ''}`);
+    if (!apply) {
+      console.log('Dry run only — no write performed. Re-run with --apply to persist these changes.');
+    }
 
     for (const user of USERS_SNAPSHOT) {
       const existing = await col.findOne({ id: user.id });
@@ -53,13 +69,13 @@ async function run() {
         console.log(` - ${user.id} (${user.displayName}) → already exists, skipping`);
         continue;
       }
-      if (!isDryRun) {
+      if (apply) {
         await col.insertOne(user);
       }
-      console.log(` - ${user.id} (${user.displayName}) → ${isDryRun ? '[dry-run] would insert' : 'inserted'}`);
+      console.log(` - ${user.id} (${user.displayName}) → ${apply ? 'inserted' : '[dry-run] would insert'}`);
     }
 
-    console.log(isDryRun ? '\nDry-run complete.' : '\nSeed complete.');
+    console.log(apply ? '\nSeed complete.' : '\nDry-run complete.');
   } catch (err) {
     console.error('Seed failed:', err);
     process.exitCode = 1;

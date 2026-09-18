@@ -1,19 +1,12 @@
-import { assertUserId } from '../../src/shared/utils/backend/userRequest.js';
-import { enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils.js';
+import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource.js';
 
-import { getUserData, updateUserData, limitUserEntries } from '../../src/backend/data/userUtils.js';
+import { getUserData, updateUserData, enforceUserMonthLimit } from '../../src/backend/data/userUtils.js';
 
 const COLLECTION_NAME = 'daily_expenses';
 const JSON_FILENAME = 'daily_expenses.json';
 const MONTH_LIMIT = 15;
-
-function enforceUserMonthLimit(bucket = {}) {
-  return limitUserEntries(bucket, {
-    limit: MONTH_LIMIT,
-    keySelector: (_, value) => value?.month || ''
-  });
-}
 
 function getPreviousMonth(monthKey) {
   const [year, month] = monthKey.split('-').map(Number);

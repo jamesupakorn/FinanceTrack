@@ -92,7 +92,7 @@ function ConfirmDialog({ open, title, message, confirmLabel, onCancel, onConfirm
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center overflow-y-auto bg-[rgba(10,10,11,0.72)] p-0 backdrop-blur-sm md:items-center md:p-space-5"
+      className="fixed inset-0 z-[110] flex items-end justify-center overflow-y-auto bg-[rgba(10,10,11,0.72)] p-0 backdrop-blur-sm md:items-center md:p-space-5"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onCancel?.();

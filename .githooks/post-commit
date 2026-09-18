@@ -1,0 +1,77 @@
+#!/bin/sh
+
+# Auto-bump package version on every commit — always PATCH, regardless of
+# conventional-commit type — then fold the bump into that same commit.
+# Minor/major bumps are deliberately NOT inferred from commit type (a "feat:"
+# commit landing on develop used to jump the minor version and reset patch to
+# 0, which made develop's version number meaningless as a build counter —
+# every day had a mix of feat/fix commits, so the version jumped around
+# instead of just counting up). Minor/major bumps now happen ONLY through
+# `npm run release:*`, which sets the target version explicitly before this
+# hook ever runs (see the "chore(release):" skip below).
+# Skipped entirely for "chore(release): vX.Y.Z" commits, since those are
+# produced by `npm run release:*` after it already set the target version.
+#
+# Why post-commit + amend, not commit-msg: commit-msg is the only hook with
+# access to the final message, but by the time it runs the commit's tree has
+# already been written — anything it `git add`s only ends up staged on top
+# of the commit, not inside it. post-commit runs after the commit exists, so
+# `git commit --amend --no-edit` here folds the bump into it as one commit.
+# --no-verify is NOT enough to stop the amend from re-triggering this same
+# post-commit hook (it only suppresses pre-commit/commit-msg), so the
+# FT_SKIP_VERSION_HOOK guard below is what actually prevents infinite
+# self-recursion.
+#
+# Tracked in the repo under .githooks/ and wired up via `npm run prepare`
+# (core.hooksPath) so every clone gets the same behavior — see package.json.
+
+set -e
+
+if [ -n "$FT_SKIP_VERSION_HOOK" ]; then
+  exit 0
+fi
+export FT_SKIP_VERSION_HOOK=1
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+if [ ! -f package.json ]; then
+  exit 0
+fi
+
+msg=$(git log -1 --pretty=%B)
+first_line=$(printf '%s\n' "$msg" | head -n1)
+
+case "$first_line" in
+  chore\(release\):*)
+    exit 0
+    ;;
+esac
+
+old_version=$(node -p "require('./package.json').version")
+
+# Normalize prerelease/dev to stable base first (e.g. 2.0.3-dev -> 2.0.3)
+case "$old_version" in
+  *-*)
+    stable_base_version=${old_version%%-*}
+    if [ -n "$stable_base_version" ]; then
+      npm version "$stable_base_version" --no-git-tag-version >/dev/null
+      old_version=$(node -p "require('./package.json').version")
+    fi
+    ;;
+esac
+
+npm version patch --no-git-tag-version >/dev/null
+new_version=$(node -p "require('./package.json').version")
+
+if [ "$old_version" != "$new_version" ]; then
+  if [ -f package-lock.json ]; then
+    git add package.json package-lock.json
+  else
+    git add package.json
+  fi
+  git commit --amend --no-edit >/dev/null
+  echo "✅ Version bumped (patch): $old_version -> $new_version"
+fi
+
+exit 0

@@ -7,7 +7,6 @@ export default function Document() {
         <meta charSet="UTF-8" />
         
         {/* Mobile optimization */}
-        <meta name="description" content="FinanceTrack - Money Management Application" />
         <meta name="theme-color" content="#03081a" />
         <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
         <link rel="shortcut icon" href="/icons/favicon-32.png" />

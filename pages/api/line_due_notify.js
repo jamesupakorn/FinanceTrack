@@ -5,7 +5,7 @@
  * - แจ้งเตือนรายการครบกำหนด/ค้างชำระตามวันที่ที่ระบุ
  * - รองรับการกำหนดวันครบกำหนดแบบรายเดือน
  * - รวมผลตามสถานะ (ครบกำหนด/ค้างชำระ/ยังไม่ถึงกำหนด)
- * - ใช้ Bearer token (CRON_SECRET) สำหรับการยืนยัน
+ * - ใช้ CRON_SECRET เป็นด่านเดียวและบังคับเสมอ (static Bearer "API token" ถูกถอดออกใน TD-C02 follow-up)
  * - เลือกส่งเฉพาะผู้ใช้หรือส่งให้ทุกคนที่มี LINE ID
  *
  * พารามิเตอร์:
@@ -16,8 +16,8 @@
 
 import { sendLineMessage } from '../../src/shared/utils/sendLineMessage';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
-import { isPaidFlag } from '../../src/shared/utils/commonUtils.js';
-import { assertApiToken } from '../../src/shared/utils/backend/apiTokenAuth';
+import { isPaidFlag } from '../../src/shared/utils/commonUtils';
+import crypto from 'crypto';
 import { getUserCreditData } from '../../src/shared/utils/backend/creditCardStore';
 import {
   PLAN_STATUS,
@@ -35,7 +35,7 @@ import {
   formatMonthKeyTH,
   formatThaiDate,
   buildDueDateString
-} from '../../src/shared/utils/dateUtils.js';
+} from '../../src/shared/utils/dateUtils';
 import { loadUsers, getUserData } from '../../src/backend/data/userUtils.js';
 
 const JSON_EXPENSE_FILE = 'monthly_expense.json';
@@ -198,8 +198,7 @@ function sumItemAmounts(items = []) {
  * @returns {array} รายชื่อผู้ใช้ที่มี LineId
  */
 async function getUsersForNotify(targetUserId) {
-  // Reject non-string userId before it can shape a Mongo filter — see getRecipients() in
-  // pages/api/line_monthly_summary.js for the identical, twinned rationale.
+  // Reject non-string userId before it can shape a Mongo filter.
   if (targetUserId !== undefined && targetUserId !== null && typeof targetUserId !== 'string') {
     return [];
   }
@@ -375,15 +374,56 @@ function buildCreditCardMessage(target, cardEvents) {
   return [header, ...sections, footer].join('\n\n');
 }
 
+/** เทียบสตริงแบบ constant-time เพื่อไม่ให้เวลาตอบกลับบอกใบ้ว่าตรงกันกี่ตัวอักษร */
+function secretsMatch(provided, expected) {
+  if (typeof provided !== 'string' || typeof expected !== 'string') return false;
+  const providedBuf = Buffer.from(provided, 'utf-8');
+  const expectedBuf = Buffer.from(expected, 'utf-8');
+  // timingSafeEqual โยน error ถ้าความยาวไม่เท่ากัน — เทียบความยาวก่อนไม่ทำให้ปลอดภัยน้อยลง
+  // เพราะความยาวของ secret ไม่ใช่ความลับ
+  if (providedBuf.length !== expectedBuf.length) return false;
+  return crypto.timingSafeEqual(providedBuf, expectedBuf);
+}
+
+/**
+ * ดึงค่า secret ที่ผู้เรียกส่งมา รองรับ 3 ทาง:
+ * - Authorization: Bearer <secret> (Vercel Cron ส่งมาทางนี้อัตโนมัติเมื่อตั้ง CRON_SECRET ไว้)
+ * - header x-cron-secret
+ * - query.cronSecret (GET) / body.cronSecret (POST) สำหรับเรียกเองด้วย curl
+ */
+function extractCronSecret(req) {
+  const authHeader = req?.headers?.authorization;
+  if (typeof authHeader === 'string') {
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+    if (match) return match[1].trim();
+  }
+  const headerSecret = req?.headers?.['x-cron-secret'];
+  if (typeof headerSecret === 'string' && headerSecret.trim()) return headerSecret.trim();
+
+  const fromQuery = req?.query?.cronSecret;
+  if (typeof fromQuery === 'string' && fromQuery.trim()) return fromQuery.trim();
+
+  const fromBody = req?.body?.cronSecret;
+  if (typeof fromBody === 'string' && fromBody.trim()) return fromBody.trim();
+
+  return '';
+}
+
 /**
  * ตัวจัดการหลักของ API แจ้งเตือนค่าใช้จ่ายผ่าน LINE
- * ตรวจสอบสิทธิ์ด้วย CRON_SECRET และส่งข้อความตามเงื่อนไข
+ * ตรวจสอบสิทธิ์ด้วย CRON_SECRET (บังคับเสมอ ไม่มีทางลัดอื่น) และส่งข้อความตามเงื่อนไข
  * @param {object} req - Express request (GET/POST)
  * @param {object} res - Express response
  */
 export default async function handler(req, res) {
-  if (!assertApiToken(req, res, { allowCronSecret: true })) {
-    return;
+  // TD-C02 follow-up: CRON_SECRET เป็นด่านเดียวและบังคับ — เดิมมันเป็นแค่ "ทางเลือก" คู่กับ
+  // static Bearer token ถ้าไม่ได้ตั้ง env นี้ไว้ endpoint ต้องปิดตาย ไม่ใช่เปิดให้ทุกคน
+  const expectedSecret = typeof process.env.CRON_SECRET === 'string' ? process.env.CRON_SECRET.trim() : '';
+  if (!expectedSecret) {
+    return res.status(500).json({ error: 'CRON_SECRET is not configured' });
+  }
+  if (!secretsMatch(extractCronSecret(req), expectedSecret)) {
+    return res.status(401).json({ error: 'unauthorized' });
   }
 
   if (req.method !== 'POST' && req.method !== 'GET') {

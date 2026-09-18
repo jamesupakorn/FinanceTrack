@@ -210,3 +210,18 @@ export function limitUserEntries(bucket = {}, { limit = 15, keySelector } = {}) 
   });
   return limited;
 }
+
+/**
+ * Enforce the 15-month data limit per user
+ * Removes oldest month entries when user exceeds MONTH_LIMIT threshold
+ * Uses the month field from each entry to determine age and retention priority
+ * @param {object} bucket - Object containing all months of user data
+ * @param {number} [limit=15] - Maximum number of months to retain
+ * @returns {object} Limited bucket with maximum `limit` entries per user
+ */
+export function enforceUserMonthLimit(bucket = {}, limit = 15) {
+  return limitUserEntries(bucket, {
+    limit,
+    keySelector: (_, value) => value?.month || ''
+  });
+}

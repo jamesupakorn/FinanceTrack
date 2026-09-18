@@ -28,8 +28,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useSession } from '../src/frontend/contexts/SessionContext';
-import { withApiTokenHeaders } from '../src/shared/utils/frontend/apiToken';
 import { loadUsers } from '../lib/userStore';
+import LoadingSkeleton, { SkeletonBlock } from '../src/frontend/components/LoadingSkeleton';
 
 const DEFAULT_DESCRIPTION = 'เลือกรูปโปรไฟล์ที่ต้องการใช้งาน แล้วกรอกรหัสผ่านของแต่ละผู้ใช้';
 const DEMO_PROFILE = {
@@ -48,6 +48,9 @@ const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:
 // same class list at once, with Tailwind's generated-CSS source order — not JSX order — silently
 // deciding the winner. Each card site supplies its own complete, mutually-exclusive triplet.
 const CARD_BASE = `flex gap-space-3 rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 transition-transform duration-fast ease-graphite hover:-translate-y-0.5 hover:border-border-interactive hover:shadow-elev-2 md:p-space-5 ${FOCUS_RING}`;
+// CARD_BASE minus every interactive affordance (transition/hover/focus-ring) — a skeleton is not a
+// button. Direction/alignment are supplied per call site, same discipline as CARD_BASE itself.
+const CARD_SKELETON = 'flex gap-space-3 rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5';
 const PRIMARY_BUTTON = `inline-flex h-11 items-center justify-center rounded-sm bg-accent px-space-5 text-sm font-semibold text-on-accent transition-opacity duration-fast ease-graphite disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`;
 const SECONDARY_BUTTON = `inline-flex h-11 items-center justify-center rounded-sm border border-border-interactive bg-surface-2 px-space-5 text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`;
 const CHIP_BASE = 'inline-flex items-center gap-space-1 rounded-full px-space-3 py-space-1 text-xs font-medium whitespace-nowrap';
@@ -109,22 +112,21 @@ export default function ProfileGalleryPage({ initialProfiles = [] }) {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/users?ts=${Date.now()}`, {
-        cache: 'no-store',
-        headers: withApiTokenHeaders()
-      });
+      const res = await fetch(`/api/users?ts=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data?.error || 'ไม่สามารถโหลดรายชื่อผู้ใช้');
       }
-      const nextProfiles = Array.isArray(data.users) ? [...data.users] : [];
+      let nextProfiles = Array.isArray(data.users) ? [...data.users] : [];
       if (!nextProfiles.length) {
         throw new Error('ไม่พบรายชื่อผู้ใช้');
       }
-      const hasDemo = nextProfiles.some(user => user.id === DEMO_PROFILE.id);
-      if (!hasDemo) {
-        nextProfiles.unshift(DEMO_PROFILE);
-      }
+      // /api/users strips isDemo (public projection, TD-H09 M-1) ทำให้แถว 'demo' จาก server เป็นแค่
+      // profile ธรรมดาไม่มี isDemo/tagline/description — ถ้าปล่อยผ่านจะไปเข้า handleProfileClick ปกติ
+      // (เปิด PIN reveal) แทนที่จะเป็น handleDemoLogin() การ์ดพิเศษ ตัดแถวดิบทิ้งแล้ว unshift
+      // DEMO_PROFILE เดียวกับ initial state เสมอ เพื่อให้การ์ด demo คงพฤติกรรม/ตำแหน่งเดิมทุกครั้ง
+      nextProfiles = nextProfiles.filter(user => user.id !== DEMO_PROFILE.id);
+      nextProfiles.unshift(DEMO_PROFILE);
       setProfiles(nextProfiles);
       setError('');
     } catch (err) {
@@ -220,15 +222,32 @@ export default function ProfileGalleryPage({ initialProfiles = [] }) {
     setShowPassword(false);
   };
 
-  const handleDemoLogin = () => {
-    selectUser({
-      id: DEMO_PROFILE.id,
-      displayName: DEMO_PROFILE.displayName,
-      avatar: DEMO_PROFILE.avatar,
-      role: 'demo',
-      isDemo: true
-    });
-    router.replace('/');
+  // TD-H09: routes the demo login through the same session-cookie-issuing path as every other
+  // profile (previously called `selectUser()` directly — no ft_session/ft_csrf cookie was ever
+  // issued, so the demo account's first API call 401'd). Password is a fixed, never-checked
+  // placeholder — see spec-demo-profile-login-fix.md §2/§4; the passwordless bypass is gated
+  // server-side on `user.isDemo`, not on anything sent from here.
+  const handleDemoLogin = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/auth/profile-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: DEMO_PROFILE.id, password: 'demo' })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data?.error || 'ไม่สามารถเข้าสู่ระบบสาธิตได้');
+        return;
+      }
+      selectUser(data.user);
+      router.replace('/');
+    } catch (err) {
+      console.error('เข้าสู่ระบบสาธิตไม่สำเร็จ', err);
+      setError('ไม่สามารถเข้าสู่ระบบสาธิตได้ กรุณาลองใหม่');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleLogin = async (event, profile) => {
@@ -242,7 +261,7 @@ export default function ProfileGalleryPage({ initialProfiles = [] }) {
     try {
       const res = await fetch('/api/auth/profile-login', {
         method: 'POST',
-        headers: withApiTokenHeaders({ 'Content-Type': 'application/json' }),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: profile.id, password })
       });
       const data = await res.json();
@@ -273,9 +292,24 @@ export default function ProfileGalleryPage({ initialProfiles = [] }) {
         </div>
 
         {loading && (
-          <div className="rounded-md border border-border-default bg-surface-1 py-space-6 text-center text-sm text-secondary shadow-elev-1">
-            กำลังโหลดรายชื่อผู้ใช้...
-          </div>
+          <LoadingSkeleton label="กำลังโหลดรายชื่อผู้ใช้..." className="grid grid-cols-1 gap-space-4 sm:grid-cols-2">
+            {/* การ์ด demo — เต็มความกว้าง แนวนอน (เทียบ profiles.js:384-406 การ์ดจริง) */}
+            <div className={`${CARD_SKELETON} flex-row items-center sm:col-span-2`}>
+              <SkeletonBlock className="h-16 w-16 shrink-0 rounded-md" />
+              <div className="flex min-w-0 flex-1 flex-col gap-space-2">
+                <SkeletonBlock className="h-[26px] w-[180px]" />
+                <SkeletonBlock className="h-[26px] w-[120px] rounded-full" />
+                <SkeletonBlock className="h-[22px] w-full max-w-[280px]" />
+              </div>
+            </div>
+            {/* การ์ดผู้ใช้จริง — แนวตั้ง จำนวนจริงยังไม่รู้ตอนนี้ ใช้ 2 ใบตามแบบ CreditCardDashboard.js:176-177 */}
+            {[0, 1].map((index) => (
+              <div key={index} className={`${CARD_SKELETON} flex-col items-center`}>
+                <SkeletonBlock className="h-16 w-16 rounded-md" />
+                <SkeletonBlock className="h-[26px] w-[120px]" />
+              </div>
+            ))}
+          </LoadingSkeleton>
         )}
 
         {!loading && error && (

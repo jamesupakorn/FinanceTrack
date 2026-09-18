@@ -7,7 +7,7 @@
  * DELETE - ลบเป้าหมาย
  */
 
-import { assertApiToken } from '../../src/shared/utils/backend/apiTokenAuth';
+import { assertUserId } from '../../src/shared/utils/backend/userRequest';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
 import crypto from 'crypto';
 import {
@@ -17,18 +17,6 @@ import {
 
 const GOALS_JSON_FILE = 'savings-goals.json';
 const SAVINGS_JSON_FILE = 'savings.json';
-
-function assertAuth(req, res) {
-  return assertApiToken(req, res);
-}
-
-function getUserId(req) {
-  const id =
-    req.query?.userId ||
-    req.body?.userId ||
-    req.headers?.['x-user-id'];
-  return typeof id === 'string' ? id.trim() : null;
-}
 
 function toAllocationPercent(value) {
   if (value == null || value === '') return null;
@@ -203,12 +191,8 @@ function handleJsonMode(req, res, userId) {
 // ---- main handler ----
 
 export default async function handler(req, res) {
-  if (!assertAuth(req, res)) return;
-
-  const userId = getUserId(req);
-  if (!userId) {
-    return res.status(400).json({ error: 'userId required' });
-  }
+  const userId = assertUserId(req, res);
+  if (!userId) return;
 
   if (isJsonMode()) {
     return handleJsonMode(req, res, userId);

@@ -19,8 +19,16 @@ function getRawBody(req) {
 
 function verifySignature(rawBody, signature, secret) {
   if (!signature || !secret) return false;
-  const hash = crypto.createHmac('sha256', secret).update(rawBody).digest('base64');
-  return hash === signature;
+  const expectedSignature = crypto.createHmac('sha256', secret).update(rawBody).digest();
+  const providedSignature = Buffer.from(String(signature), 'base64');
+  return safeEqual(expectedSignature, providedSignature);
+}
+
+function safeEqual(a, b) {
+  if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b) || a.length !== b.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(a, b);
 }
 
 function parseLinkCommand(text = '') {
@@ -93,13 +101,12 @@ export default async function handler(req, res) {
     }
   }
 
-  console.log('LINE webhook events:', events.map(event => ({
-    type: event.type,
-    source: event.source,
-    message: event.message
-  })));
+  console.log('LINE webhook events:', {
+    count: events.length,
+    types: events.map(event => event.type)
+  });
   if (linked.length > 0) {
-    console.log('LINE linked users:', linked);
+    console.log('LINE linked users:', linked.length);
   }
 
   return res.status(200).json({ ok: true });

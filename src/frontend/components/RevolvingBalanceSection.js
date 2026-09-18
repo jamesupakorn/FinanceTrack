@@ -27,6 +27,7 @@ import { creditCardAPI } from '../../shared/utils/frontend/apiUtils';
 import { formatCurrency, parseAndFormat } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
+import LoadingSkeleton, { SkeletonBlock } from './LoadingSkeleton';
 
 const EMPTY_CYCLE = {
   newSpend: 0,
@@ -176,7 +177,30 @@ export default function RevolvingBalanceSection({
       </div>
 
       {loading ? (
-        <p className="m-0 text-sm text-tertiary">กำลังโหลดยอดใช้จ่ายหมุนเวียน...</p>
+        // โครงร่างแทนสถานะ "รวยที่สุด" ของจริง (hasSomethingDue && !settled) จึงอาจสูงเกินจริงเล็กน้อยเมื่อ
+        // บัตรชำระแล้ว/ยังไม่เคยใช้ — เลือกฝั่งนี้โดยตั้งใจ เพราะปุ่มจ่ายเงินคือเหตุผลที่ผู้ใช้เปิดหน้านี้
+        // ถ้าจองที่ให้ไม่พอ ปุ่มจะโผล่มาใต้นิ้วหลังโหลดเสร็จ (เสี่ยงกดพลาด) — UX_SPEC §4 C-5
+        // หัวข้อ section (:173-176) อยู่นอก branch นี้อยู่แล้ว จึงคงอยู่ตลอด
+        <LoadingSkeleton label="กำลังโหลดยอดใช้จ่ายหมุนเวียน..." className="flex flex-col gap-space-2">
+          <div className="flex items-center justify-between gap-space-3 rounded-sm border border-border-subtle bg-surface-2 px-space-3 py-space-2">
+            <SkeletonBlock on="surface-2" className="h-[22px] w-[72px]" />
+            <SkeletonBlock on="surface-2" className="h-[22px] w-[96px]" />
+          </div>
+          <SkeletonBlock className="h-[22px] w-[200px]" />
+          <SkeletonBlock className="h-12 w-full" />
+          <SkeletonBlock className="h-[18px] w-[180px]" />
+          <div className="h-px bg-border-subtle" />
+          <SkeletonBlock className="h-[22px] w-[160px]" />
+          {/* ยอดที่ต้องชำระ = text-3xl clamp(2rem,1.6rem+2vw,2.75rem) × 1.2 → 40px ที่ 390px, 53px ที่ ≥1024px */}
+          <SkeletonBlock className="h-[40px] w-[200px] md:h-[53px]" />
+          <SkeletonBlock className="h-[18px] w-[220px]" />
+          <SkeletonBlock className="h-[18px] w-[160px]" />
+          <div className="mt-space-2 flex flex-col gap-space-2 md:flex-row">
+            <SkeletonBlock className="h-12 w-full" />
+            <SkeletonBlock className="h-12 w-full" />
+          </div>
+          <SkeletonBlock className="mt-space-1 h-11 w-full" />
+        </LoadingSkeleton>
       ) : (
         <>
           {currentCycle.carriedBalance > 0 ? (

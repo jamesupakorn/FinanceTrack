@@ -45,7 +45,7 @@ import { useSession } from '../contexts/SessionContext';
 import { Icons } from './Icons';
 import ChangePasswordModal from './ChangePasswordModal';
 import ExpenseCalendarModal from './ExpenseCalendarModal';
-import { withApiTokenHeaders } from '../../shared/utils/frontend/apiToken';
+import { withCsrfHeaders } from '../../shared/utils/frontend/apiUtils';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
@@ -194,8 +194,9 @@ export default function Layout({
     try {
       const response = await fetch('/api/change_password', {
         method: 'POST',
-        headers: withApiTokenHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ currentPassword, newPassword, userId: currentUser?.id })
+        // POST ผ่าน assertUserId → ต้องมี X-CSRF-Token ด้วย (TD-C02 B3) เพราะ call site นี้ไม่ผ่าน jsonFetch
+        headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ currentPassword, newPassword })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {

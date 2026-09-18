@@ -30,6 +30,7 @@ import { round2 } from '../../shared/utils/creditCardUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
 import { Icons } from './Icons';
+import LoadingSkeleton, { SkeletonBlock } from './LoadingSkeleton';
 
 const MAX_MONTHS = 6;
 const MONTH_RE = /^\d{4}-\d{2}$/;
@@ -151,7 +152,65 @@ export default function MonthComparison() {
   }, [rows]);
 
   if (rows === null) {
-    return <p className="m-0 text-sm text-secondary">กำลังโหลดข้อมูลเปรียบเทียบ...</p>;
+    // โครงร่างต้องมี [container-type:inline-size] และ @container query ชุดเดียวกับของจริง (:171, :177,
+    // :218) ไม่งั้นใน /reports ที่ lg วางการ์ดนี้ในคอลัมน์แคบ โครงร่างจะเลือกทรงผิดทาง — บั๊กประเภทเดียวกับ
+    // BUG-A2-1 ที่คอมเมนต์ :166-170 ถูกเขียนขึ้นมาแก้
+    // ใช้ <div> ไม่ใช่ <table> เปล่า: ตารางว่างใน a11y tree แย่กว่าไม่มีตาราง และ role="status" ประกาศให้แล้ว
+    return (
+      <LoadingSkeleton
+        label="กำลังโหลดข้อมูลเปรียบเทียบ..."
+        className="flex flex-col gap-space-4 [container-type:inline-size]"
+      >
+        <SkeletonBlock className="h-[18px] w-full max-w-[420px]" />
+
+        {/* container ≥640px — ทรงตาราง C5: 8 คอลัมน์ คอลัมน์ตัวเลขชิดขวา */}
+        <div className="hidden [@container(min-width:640px)]:block">
+          <div className="flex items-center gap-space-2 border-b border-border-subtle px-space-2 py-space-3">
+            <SkeletonBlock className="h-[18px] w-[72px] flex-[1.2]" />
+            {[0, 1, 2, 3, 4, 5, 6].map((index) => (
+              <div key={index} className="flex flex-1 justify-end">
+                <SkeletonBlock className="h-[18px] w-[56px]" />
+              </div>
+            ))}
+          </div>
+          {[0, 1, 2].map((row) => (
+            <div key={row} className="flex items-center gap-space-2 border-b border-border-subtle px-space-2 py-space-3 last:border-b-0">
+              <SkeletonBlock className="h-[22px] w-[88px] flex-[1.2]" />
+              {[0, 1, 2, 3, 4, 5, 6].map((index) => (
+                <div key={index} className="flex flex-1 justify-end">
+                  <SkeletonBlock className="h-[22px] w-[72px]" />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* container <640px — การ์ดต่อเดือน (:218-236) */}
+        <div className="flex flex-col gap-space-3 [@container(min-width:640px)]:hidden">
+          {[0, 1, 2].map((card) => (
+            <div key={card} className="rounded-md border border-border-default bg-surface-2 p-space-4">
+              <div className="mb-space-2 flex items-center justify-between gap-space-3">
+                <SkeletonBlock on="surface-2" className="h-[26px] w-[120px]" />
+                <SkeletonBlock on="surface-2" className="h-6 w-[96px] rounded-full" />
+              </div>
+              <div className="flex flex-col">
+                {[0, 1, 2, 3, 4].map((index) => (
+                  <div key={index} className="flex min-h-11 items-center justify-between gap-space-3 border-b border-border-subtle py-space-2">
+                    <SkeletonBlock on="surface-2" className="h-[26px] w-[96px]" />
+                    <SkeletonBlock on="surface-2" className="h-[26px] w-[80px]" />
+                  </div>
+                ))}
+                {/* แถวสุดท้าย "สุทธิ" — emphasized: pt-space-3, text-lg (ComparisonRow :83-90) */}
+                <div className="flex min-h-11 items-center justify-between gap-space-3 py-space-2 pt-space-3">
+                  <SkeletonBlock on="surface-2" className="h-[27px] w-[64px]" />
+                  <SkeletonBlock on="surface-2" className="h-[27px] w-[104px]" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </LoadingSkeleton>
+    );
   }
 
   if (loadError) {

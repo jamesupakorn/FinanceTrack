@@ -8,16 +8,16 @@
  * - คำนวณสรุปยอดตามบัญชีและยอดรวมค่าใช้จ่าย
  */
 
-import { mapDocToFlatItemObjectWithTotals, removeSummaryFields } from '../../src/shared/utils/backend/apiUtils.js';
-import { assertUserId } from '../../src/shared/utils/backend/userRequest.js';
-import { getAccountSummary, getExpenseTotals, extractRemovalKeys } from '../../src/shared/utils/commonUtils.js';
+import { mapDocToFlatItemObjectWithTotals, stripKnownTotalFields } from '../../src/shared/utils/backend/apiUtils';
+import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { getAccountSummary, getExpenseTotals, extractRemovalKeys } from '../../src/shared/utils/commonUtils';
 import {
   loadCreditCardContext,
   safeBuildCreditCardRows,
   safeGetCreditCardMonths,
   applyCreditCardPaidFromExpensePayload,
   stripCreditCardKeys
-} from '../../src/shared/utils/backend/creditCardSync.js';
+} from '../../src/shared/utils/backend/creditCardSync';
 import { getUserBankAccounts } from '../../lib/userStore.js';
 import {
   isJsonMode,
@@ -27,7 +27,7 @@ import {
 import {
   enforceSharedMonthWindowJson,
   enforceSharedMonthWindowMongo
-} from '../../src/shared/utils/backend/sharedMonthWindow.js';
+} from '../../src/shared/utils/backend/sharedMonthWindow';
 import {
   getUserData,
   updateUserData,
@@ -104,6 +104,26 @@ async function applyCreditCardPaid(userId, expenseData, month) {
 }
 
 /**
+ * แปลง Mongo doc เป็น flat object อย่างปลอดภัย (ตัด _id/userId ก่อน map)
+ * คืน null ถ้า mapping ล้มเหลว — เรียกใช้ได้ทั้งจาก single-month และ all-months branch
+ * เพื่อไม่ให้ GET handler มี try/catch ซ้อนหลายชั้น (TD-M02)
+ * @param {object} doc - Mongo document ดิบ (มี _id/userId ติดมาด้วย)
+ * @param {string} monthLabel - เดือนของ doc นี้ ใช้สำหรับ log เท่านั้น
+ * @returns {object|null}
+ */
+function safeMapExpenseDoc(doc, monthLabel) {
+  try {
+    const docForMapping = { ...doc };
+    delete docForMapping._id;
+    delete docForMapping.userId;
+    return mapDocToFlatItemObjectWithTotals(docForMapping);
+  } catch (err) {
+    console.error('Error mapping expense doc for month:', monthLabel, err, doc);
+    return null;
+  }
+}
+
+/**
  * อ่านข้อมูลค่าใช้จ่ายในโหมด JSON
  * - ถ้ามีเดือน: คืนข้อมูลเดือนนั้นพร้อมสรุปยอด
  * - ถ้าไม่มีเดือน: คืนข้อมูลทุกเดือน
@@ -163,7 +183,7 @@ async function handleJsonExpensePost(req, res, userId) {
   // (BR-CC-007 · BR-CC-016) — month จำเป็นเพราะคีย์ ccr_ ไม่ได้เข้ารหัสเดือนไว้ในตัวเอง
   const payload = await applyCreditCardPaid(userId, expense_data, month);
   const removalList = extractRemovalKeys(payload);
-  const cleanData = removeSummaryFields(payload);
+  const cleanData = stripKnownTotalFields(payload);
   delete cleanData.__removeKeys;
   updateUserData(JSON_FILENAME, userId, (bucket) => {
     const nextBucket = { ...bucket };
@@ -217,96 +237,62 @@ export default async function handler(req, res) {
       const context = await loadCreditCardSyncContext(userId);
 
       if (month) {
-        let doc;
-        try {
-          doc = await collection.findOne({ month, ...userFilter });
-        } catch (err) {
-          console.error('Error fetching doc for month:', month, err);
-          return res.status(500).json({ error: 'Database query error' });
-        }
+        const doc = await collection.findOne({ month, ...userFilter });
         const derived = safeBuildCreditCardRows(context, month, doc?.bankAccounts);
+        const derivedOnlyOrEmpty = () => (
+          Object.keys(derived).length ? buildDerivedOnlyMonth(derived) : {}
+        );
+
         if (!doc || typeof doc !== 'object') {
           // เดือนที่ยังไม่เคยบันทึก แต่มีงวดผ่อนครบกำหนด ต้องคืนแถวนั้นด้วย (AC-31)
-          if (Object.keys(derived).length) {
-            return res.status(200).json(buildDerivedOnlyMonth(derived));
+          if (!Object.keys(derived).length) {
+            console.error('No expense data found for this month:', month);
           }
-          console.error('No expense data found for this month:', month);
-          return res.status(200).json({});
+          return res.status(200).json(derivedOnlyOrEmpty());
         }
-        let flat;
-        try {
-          const docForMapping = { ...doc };
-          delete docForMapping._id;
-          delete docForMapping.userId;
-          flat = mapDocToFlatItemObjectWithTotals(docForMapping);
-        } catch (err) {
-          console.error('Error mapping expense doc for month:', month, err, doc);
-          if (Object.keys(derived).length) {
-            return res.status(200).json(buildDerivedOnlyMonth(derived));
-          }
-          return res.status(200).json({});
+
+        const mapped = safeMapExpenseDoc(doc, month);
+        if (mapped === null) {
+          // มี doc แต่ map ไม่สำเร็จ — เสื่อมสภาพเป็น derived-only/empty เหมือนกรณีไม่มี doc (soft-fail)
+          return res.status(200).json(derivedOnlyOrEmpty());
         }
+
         // merge ก่อนเช็คว่าว่างหรือไม่ มิฉะนั้นเดือนที่มีแต่แถวผ่อนจะถูกทิ้ง
-        flat = Object.assign(flat || {}, derived);
+        const flat = Object.assign(mapped, derived);
         if (Object.keys(flat).length === 0) {
           console.error('Malformed expense data for this month:', month, flat);
           return res.status(200).json({});
         }
-        try {
-          flat.accountSummary = getAccountSummary(flat, flat.bankAccounts);
-        } catch (err) {
-          console.error('Error in getAccountSummary:', month, err, flat);
-          return res.status(500).json({ error: 'Error in account summary calculation' });
-        }
-        let totals;
-        try {
-          totals = getExpenseTotals(flat);
-        } catch (err) {
-          console.error('Error in getExpenseTotals:', month, err, flat);
-          return res.status(500).json({ error: 'Error in expense totals calculation' });
-        }
-        try {
-          flat.totalActualPaid = totals.totalActualPaid;
-        } catch (err) {
-          console.error('Error setting totals in flat:', month, err, flat, totals);
-          return res.status(500).json({ error: 'Error setting totals in response' });
-        }
-        try {
-          res.status(200).json(flat);
-        } catch (err) {
-          console.error('Error serializing response:', month, err, flat);
-          return res.status(500).json({ error: 'Error serializing response' });
-        }
-      } else {
-        const allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
-        const withTotals = {};
-        allDocs.forEach(doc => {
-          // ข้าม document ที่เป็น metadata หรือโครงสร้างไม่ถูกต้อง
-          if (!doc || typeof doc !== 'object') return;
-          if (!doc.month || doc.months || doc.items) return;
-          let flat;
-          try {
-            const docForMapping = { ...doc };
-            delete docForMapping._id;
-            delete docForMapping.userId;
-            flat = mapDocToFlatItemObjectWithTotals(docForMapping);
-          } catch (err) {
-            console.error('Error mapping expense doc:', doc.month, err, doc);
-            return;
-          }
-          if (!flat || Object.keys(flat).length === 0) return;
-          Object.assign(flat, safeBuildCreditCardRows(context, doc.month, doc.bankAccounts));
-          flat.accountSummary = getAccountSummary(flat, flat.bankAccounts);
-          const totals = getExpenseTotals(flat);
-          flat.totalActualPaid = totals.totalActualPaid;
-          withTotals[doc.month] = flat;
-        });
-        // เดือนที่มีเฉพาะงวดผ่อน (ยังไม่มีเอกสาร) ต้องปรากฏใน branch ทุกเดือนด้วย (AC-34)
-        mergeCreditCardOnlyMonths(withTotals, context);
-        res.status(200).json(withTotals);
+
+        flat.accountSummary = getAccountSummary(flat, flat.bankAccounts);
+        const totals = getExpenseTotals(flat);
+        flat.totalActualPaid = totals.totalActualPaid;
+        return res.status(200).json(flat);
       }
+
+      const allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
+      const withTotals = {};
+      allDocs.forEach(doc => {
+        // ข้าม document ที่เป็น metadata หรือโครงสร้างไม่ถูกต้อง
+        if (!doc || typeof doc !== 'object') return;
+        if (!doc.month || doc.months || doc.items) return;
+        const flat = safeMapExpenseDoc(doc, doc.month);
+        if (!flat || Object.keys(flat).length === 0) return;
+        Object.assign(flat, safeBuildCreditCardRows(context, doc.month, doc.bankAccounts));
+        flat.accountSummary = getAccountSummary(flat, flat.bankAccounts);
+        const totals = getExpenseTotals(flat);
+        flat.totalActualPaid = totals.totalActualPaid;
+        withTotals[doc.month] = flat;
+      });
+      // เดือนที่มีเฉพาะงวดผ่อน (ยังไม่มีเอกสาร) ต้องปรากฏใน branch ทุกเดือนด้วย (AC-34)
+      mergeCreditCardOnlyMonths(withTotals, context);
+      return res.status(200).json(withTotals);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to read monthly expense data' });
+      console.error('Failed to read monthly expense data (mongo GET):', {
+        userId,
+        month: req.query?.month
+      }, error);
+      return res.status(500).json({ error: 'Failed to read monthly expense data' });
     }
   } else if (req.method === 'POST') {
     try {
@@ -317,7 +303,7 @@ export default async function handler(req, res) {
         const payload = await applyCreditCardPaid(userId, expense_data, month);
         // ลบ field summary ก่อนบันทึก
         const removalList = extractRemovalKeys(payload);
-        const cleanData = removeSummaryFields(payload);
+        const cleanData = stripKnownTotalFields(payload);
         delete cleanData.__removeKeys;
         const removalSet = new Set(removalList);
         const setData = Object.fromEntries(

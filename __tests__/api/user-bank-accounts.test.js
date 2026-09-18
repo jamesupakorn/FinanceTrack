@@ -9,7 +9,7 @@
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createMocks } from 'node-mocks-http';
 
-const TEST_TOKEN = 'test-token';
+const TEST_SECRET = 'test-secret-do-not-use-in-prod';
 const TEST_USER_ID = 'test-user-1';
 
 const DEFAULT_THRESHOLDS = {
@@ -23,26 +23,22 @@ let mongod;
 let handler;
 let getDbPromise;
 let db;
+let sessionCookie; // { signSession, createSessionId, signCsrfToken, SESSION_COOKIE_NAME }
 
 beforeAll(async () => {
   mongod = await MongoMemoryServer.create();
 
   process.env.MONGODB_URI = mongod.getUri();
   process.env.DATA_MODE = 'mongo';
-  process.env.API_ACCESS_TOKEN = TEST_TOKEN;
-  // Make sure no higher-precedence token source (encrypted/base64) from a real .env.local leaks in
-  // and overrides the plain test token above (see apiTokenAuth.js's precedence order).
-  delete process.env.API_ACCESS_TOKEN_ENCRYPTED;
-  delete process.env.API_ACCESS_TOKEN_ENCRYPTION_KEY;
-  delete process.env.API_ACCESS_TOKEN_B64;
-  delete process.env.API_TOKEN_B64;
-  delete process.env.API_TOKEN;
+  // TD-C02 B2: userId มาจาก session cookie เท่านั้น — ทุก request ในไฟล์นี้จึงต้องแนบ ft_session
+  process.env.SESSION_SECRET = TEST_SECRET;
 
   jest.resetModules();
 
   // Fresh `require` (not a top-of-file static `import`) so dataMode.config.js/userStore.js/the
   // handler re-read the env vars set above, rather than whatever was resolved at first import.
   handler = require('../../pages/api/user-bank-accounts').default;
+  sessionCookie = require('../../src/shared/utils/backend/sessionCookie');
   ({ getDbPromise } = require('../../lib/mongodb'));
   db = await getDbPromise();
 }, 60000);
@@ -64,17 +60,29 @@ beforeEach(async () => {
   }
 });
 
-function makeReqRes({ method = 'GET', query = {}, body, headers = {} } = {}) {
+/**
+ * request ที่ผ่านด่าน auth ครบ: session cookie ของ `userId`
+ * (+ X-CSRF-Token ที่ผูกกับ sid เดียวกัน เมื่อเป็น method ที่เปลี่ยนข้อมูล)
+ * TD-C02 follow-up: ไม่มี Authorization/Bearer อีกแล้ว — static API token ถูกถอดออกทั้งระบบ
+ */
+function makeReqRes({ method = 'GET', userId = TEST_USER_ID, query = {}, body, headers = {} } = {}) {
+  const { signSession, createSessionId, signCsrfToken, SESSION_COOKIE_NAME } = sessionCookie;
+  const sid = createSessionId();
+  const mutating = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
   return createMocks({
     method,
     query,
     body,
-    headers: { authorization: `Bearer ${TEST_TOKEN}`, ...headers }
+    cookies: userId ? { [SESSION_COOKIE_NAME]: signSession(userId, sid) } : {},
+    headers: {
+      ...(mutating ? { 'x-csrf-token': signCsrfToken(sid) } : {}),
+      ...headers
+    }
   });
 }
 
 describe('/api/user-bank-accounts (Mongo mode)', () => {
-  it('GET without an Authorization header returns 401', async () => {
+  it('GET without a session cookie returns 401', async () => {
     const { req, res } = createMocks({ method: 'GET', query: { userId: TEST_USER_ID } });
 
     await handler(req, res);
@@ -82,8 +90,54 @@ describe('/api/user-bank-accounts (Mongo mode)', () => {
     expect(res._getStatusCode()).toBe(401);
   });
 
+  // TD-C02 B2 regression: a client-supplied userId with no session cookie must never authenticate.
+  // TD-C02 follow-up: an Authorization header is now meaningless here — it must not open any door.
+  it('GET with an arbitrary Bearer header and query userId but no session cookie returns 401', async () => {
+    const { req, res } = createMocks({
+      method: 'GET',
+      query: { userId: TEST_USER_ID },
+      headers: { authorization: 'Bearer anything-at-all' }
+    });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(401);
+  });
+
+  it('POST with a valid session but no X-CSRF-Token returns 403 and does not write', async () => {
+    const { req, res } = makeReqRes({
+      method: 'POST',
+      body: { bankAccounts: [{ name: 'ไม่ควรถูกบันทึก', balance: 1 }] },
+      headers: { 'x-csrf-token': '' }
+    });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(403);
+    expect(await db.collection('users').findOne({ id: TEST_USER_ID })).toBeNull();
+  });
+
+  it('the session cookie wins over a spoofed query userId (data is scoped to the cookie user)', async () => {
+    await db.collection('users').insertOne({ id: TEST_USER_ID, displayName: 'Test User', bankAccounts: [] });
+    const accounts = [{ name: 'กรุงไทย', balance: 5 }];
+    const { req, res } = makeReqRes({
+      method: 'POST',
+      userId: TEST_USER_ID,
+      query: { userId: 'someone-else' },
+      body: { bankAccounts: accounts }
+    });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const victim = await db.collection('users').findOne({ id: 'someone-else' });
+    expect(victim).toBeNull();
+    const owner = await db.collection('users').findOne({ id: TEST_USER_ID });
+    expect(owner.bankAccounts).toEqual(accounts);
+  });
+
   it('GET for a user with no document yet returns 200 with documented defaults', async () => {
-    const { req, res } = makeReqRes({ query: { userId: 'user-with-no-document' } });
+    const { req, res } = makeReqRes({ userId: 'user-with-no-document' });
 
     await handler(req, res);
 
@@ -91,8 +145,7 @@ describe('/api/user-bank-accounts (Mongo mode)', () => {
     const data = JSON.parse(res._getData());
     expect(data).toEqual({
       bankAccounts: [],
-      budgetThresholds: DEFAULT_THRESHOLDS,
-      monthlySummaryEnabled: true
+      budgetThresholds: DEFAULT_THRESHOLDS
     });
   });
 
@@ -106,7 +159,6 @@ describe('/api/user-bank-accounts (Mongo mode)', () => {
     const newAccounts = [{ name: 'กสิกรไทย', balance: 1000 }];
     const { req: postReq, res: postRes } = makeReqRes({
       method: 'POST',
-      query: { userId: TEST_USER_ID },
       body: { bankAccounts: newAccounts }
     });
 
@@ -117,7 +169,7 @@ describe('/api/user-bank-accounts (Mongo mode)', () => {
     expect(postData).toEqual({ success: true, bankAccounts: newAccounts });
 
     // Real read-after-write against the actual in-memory Mongo instance — not a stubbed value.
-    const { req: getReq, res: getRes } = makeReqRes({ query: { userId: TEST_USER_ID } });
+    const { req: getReq, res: getRes } = makeReqRes();
     await handler(getReq, getRes);
 
     expect(getRes._getStatusCode()).toBe(200);
@@ -135,7 +187,6 @@ describe('/api/user-bank-accounts (Mongo mode)', () => {
     const invalidThresholds = { ...DEFAULT_THRESHOLDS, generalExpense: -1 };
     const { req, res } = makeReqRes({
       method: 'POST',
-      query: { userId: TEST_USER_ID },
       body: { budgetThresholds: invalidThresholds }
     });
 
@@ -148,7 +199,7 @@ describe('/api/user-bank-accounts (Mongo mode)', () => {
   });
 
   it('DELETE (unsupported method) returns 405 with an Allow header', async () => {
-    const { req, res } = makeReqRes({ method: 'DELETE', query: { userId: TEST_USER_ID } });
+    const { req, res } = makeReqRes({ method: 'DELETE' });
 
     await handler(req, res);
 

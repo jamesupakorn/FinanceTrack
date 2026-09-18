@@ -29,6 +29,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BUDGET_THRESHOLD_KEYS, DEFAULT_BUDGET_THRESHOLDS, BUDGET_ROW_DEFS } from '../../shared/utils/frontend/monthlySummary';
+import LoadingSkeleton, { SkeletonBlock } from './LoadingSkeleton';
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 const INPUT = `h-11 w-24 rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-right text-base text-primary outline-none ${FOCUS_RING}`;
@@ -268,6 +269,55 @@ export default function BudgetThresholdForm({ values, loading, loadFailed, savin
   };
 
   const disableSave = loadFailed || saving || overCap;
+
+  // ระหว่างโหลด: เดิมฟอร์มโชว์ DEFAULT_BUDGET_THRESHOLDS ทั้ง AllocationBar, ช่องกรอกทั้ง 3 และเงินออม
+  // ที่ derive มา — ผู้ใช้เห็น "ค่าเริ่มต้น" ราวกับเป็นค่าที่ตัวเองบันทึกไว้จนกว่า request จะกลับ
+  // (อาการตรงตามที่ TD-M05 เขียนไว้ว่า "renders stale state while fetching") แทนที่ด้วยโครงร่างที่ไม่มี
+  // ตัวเลขใด ๆ จนกว่าจะเป็นตัวเลขของผู้ใช้จริง — UX_SPEC-td-m05-pattern-c.md §2.2
+  // loadFailed กับ loading เป็นจริงพร้อมกันไม่ได้ (settings.js:47-56 ตั้ง loadFailed ใน catch แล้วปิด
+  // loading ใน finally) แบนเนอร์ error จึงไม่ถูกบังโดย early return นี้
+  if (loading) {
+    return (
+      <LoadingSkeleton label="กำลังโหลดเกณฑ์สุขภาพงบประมาณ..." className="flex flex-col gap-space-5">
+        {/* AllocationBar (:100-138) */}
+        <div className="flex flex-col gap-space-3">
+          <SkeletonBlock className="h-8 w-full rounded-full" />
+          <div className="grid grid-cols-2 gap-x-space-4 gap-y-space-2 sm:grid-cols-4">
+            {[0, 1, 2, 3].map((index) => <SkeletonBlock key={index} className="h-[18px]" />)}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-space-4">
+          {/* 3 แถวที่กรอกเองได้ (:291-316) — คลาส wrapper ชุดเดียวกับของจริงเพื่อให้สลับ stack/grid ที่ sm เอง */}
+          {[0, 1, 2].map((index) => (
+            <div key={index} className="flex flex-col gap-space-1 p-space-1 sm:grid sm:grid-cols-[1fr_auto] sm:items-center sm:gap-space-4">
+              <SkeletonBlock className="h-[22px] w-[200px]" />
+              <div className="flex items-center gap-space-2 sm:justify-self-end">
+                <SkeletonBlock className="h-11 w-24" />
+                <SkeletonBlock className="h-[18px] w-[120px]" />
+              </div>
+              <SkeletonBlock className="h-[18px] w-[240px] sm:col-span-2" />
+            </div>
+          ))}
+
+          {/* เงินออม — read-only, กรอบ dashed บน bg-surface-2 (:321-332) */}
+          <div className="flex flex-col gap-space-1 rounded-sm border border-dashed border-border-default bg-surface-2 p-space-3">
+            <div className="flex items-center justify-between gap-space-3">
+              <SkeletonBlock on="surface-2" className="h-[22px] w-[140px]" />
+              <SkeletonBlock on="surface-2" className="h-[27px] w-[72px]" />
+            </div>
+            <SkeletonBlock on="surface-2" className="h-[18px] w-[260px]" />
+          </div>
+        </div>
+
+        {/* แถวปุ่ม (:341-348) */}
+        <div className="flex items-center justify-between gap-space-3 border-t border-border-subtle pt-space-4 max-sm:flex-col-reverse max-sm:items-stretch">
+          <SkeletonBlock className="h-11 w-full sm:w-[124px]" />
+          <SkeletonBlock className="h-11 w-full sm:w-[96px]" />
+        </div>
+      </LoadingSkeleton>
+    );
+  }
 
   return (
     <form className="flex flex-col gap-space-5" onSubmit={handleSubmit} noValidate>

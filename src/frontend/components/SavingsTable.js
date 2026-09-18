@@ -21,6 +21,7 @@ import { mapSavingsApiToList } from '../../shared/utils/savingsUtils';
 import { savingsAPI, savingsGoalsAPI } from '../../shared/utils/frontend/apiUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
+import LoadingNotice from './LoadingNotice';
 
 function genId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -242,9 +243,7 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
   return (
     <div>
       {isLoading && (
-        <div role="status" aria-live="polite" className="mb-space-4 rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">
-          กำลังโหลด...
-        </div>
+        <LoadingNotice className="mb-space-4" />
       )}
 
       <div className="mb-space-4 flex flex-wrap items-start justify-between gap-space-3">

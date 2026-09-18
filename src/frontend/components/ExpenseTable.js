@@ -46,8 +46,8 @@ import {
 } from '../../shared/utils/dateUtils';
 import { isCreditCardRowKey, isRevolvingRowKey } from '../../shared/utils/creditCardUtils';
 import BankAccountTable from './BankAccountTable';
-import { expenseAPI, creditCardAPI } from '../../shared/utils/frontend/apiUtils';
-import { withApiTokenHeaders } from '../../shared/utils/frontend/apiToken';
+import LoadingNotice from './LoadingNotice';
+import { expenseAPI, creditCardAPI, withCsrfHeaders } from '../../shared/utils/frontend/apiUtils';
 import { useSession } from '../contexts/SessionContext';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
@@ -97,13 +97,23 @@ const formatDueDayText = (dueDayValue) => {
 };
 
 
-const describeDueTiming = (dueDayValue, paid, monthKey) => {
+const describeDueTiming = (dueDayValue, paid, monthKey, amount) => {
   const parsedDate = getDueDateFromDay(dueDayValue, monthKey);
   const dueDayText = formatDueDayText(dueDayValue);
   if (paid) {
     return {
       status: 'done',
       badge: 'ชำระแล้ว',
+      helper: dueDayText ? `ครบกำหนดทุก${dueDayText}` : '',
+      date: parsedDate,
+      diffDays: null
+    };
+  }
+  // ยอด 0/ว่าง → ยังไม่นับเกินกำหนด เหมือน line_due_notify.js:462-463 และ expenseEvents.js
+  if (!(amount > 0)) {
+    return {
+      status: 'none',
+      badge: 'ยังไม่กรอกยอด',
       helper: dueDayText ? `ครบกำหนดทุก${dueDayText}` : '',
       date: parsedDate,
       diffDays: null
@@ -423,11 +433,11 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
       // อัปเดตบัญชีในโปรไฟล์ user (เพื่อให้เดือนหน้าใช้เป็นค่าเริ่มต้น)
       if (currentUser?.id) {
         try {
-          // ต้องแนบ Bearer token เพราะ endpoint นี้ผ่าน assertApiToken (เดียวกับ TD-H05)
+          // ต้องแนบ X-CSRF-Token เพราะ POST ผ่าน assertUserId (TD-C02 B3) — call site นี้ไม่ผ่าน jsonFetch
           await fetch('/api/user-bank-accounts', {
             method: 'POST',
-            headers: withApiTokenHeaders({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ bankAccounts: normalizedAccounts, userId: currentUser.id })
+            headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ bankAccounts: normalizedAccounts })
           });
         } catch (error) {
           console.warn('Warning: Could not update user bank accounts:', error);
@@ -508,6 +518,8 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
       const paid = row.paid === true || row.paid === 'true';
       if (paid) return;
       const amount = parseToNumber(row.actual);
+      // ยอด 0/ว่าง → ยังไม่นับเกินกำหนด เหมือน line_due_notify.js:462-463 และ expenseEvents.js
+      if (!(amount > 0)) return;
       const parsedDate = getDueDateFromDay(row.dueDay, selectedMonth);
       if (!parsedDate) {
         pendingTotal += amount;
@@ -666,7 +678,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
       )}
 
       {isLoading && !hasExpenseRows && (
-        <div role="status" aria-live="polite" className="rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">กำลังโหลดข้อมูล...</div>
+        <LoadingNotice />
       )}
 
       {hasExpenseRows && (
@@ -691,7 +703,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
                   const selectedAccount = (typeof row.account === 'string' && row.account.trim().length > 0)
                     ? row.account
                     : (bankAccounts[0] || 'ไม่ระบุบัญชี');
-                  const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth);
+                  const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth, parseToNumber(row.actual));
                   const isCreditCardRow = isCreditCardRowKey(item);
                   const meta = installmentMeta[item];
 
@@ -838,7 +850,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
               const selectedAccount = (typeof row.account === 'string' && row.account.trim().length > 0)
                 ? row.account
                 : (bankAccounts[0] || 'ไม่ระบุบัญชี');
-              const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth);
+              const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth, parseToNumber(row.actual));
               const isCreditCardRow = isCreditCardRowKey(item);
               const meta = installmentMeta[item];
 
