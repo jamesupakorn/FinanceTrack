@@ -1,5 +1,5 @@
 /**
- * creditCardSync.js  (server-only)
+ * creditCardSync.ts  (server-only)
  * เชื่อมแผนผ่อนชำระ + ยอดใช้จ่ายหมุนเวียน เข้ากับ ExpenseTable
  * แบบ derive-on-read / strip-on-write (ADR-009 · ADR-011 · BR-CC-007 · BR-CC-016)
  *
@@ -32,6 +32,92 @@ import { getUserCreditData, updateUserCreditData } from './creditCardStore';
 
 export { INSTALLMENT_KEY_RE, INSTALLMENT_KEY_PREFIX, REVOLVING_KEY_PREFIX };
 
+// ---------------------------------------------------------------------------
+// Local structural types — narrow shapes reflecting only the fields this file
+// actually reads/writes, same "type only what's needed" precedent as
+// creditCardRevolving.ts's own CardLike/PlanLike (TD-H02, slice 13)
+// ---------------------------------------------------------------------------
+
+interface SyncCard {
+  id?: string;
+  name?: string;
+  bankName?: string;
+  dueDay?: number | string;
+  [key: string]: unknown;
+}
+
+interface SyncScheduleRow {
+  no?: number;
+  dueMonth?: string;
+  payment?: number | string;
+  paid?: boolean;
+  paidAt?: string | null;
+  paidSource?: string | null;
+  [key: string]: unknown;
+}
+
+interface SyncPlan {
+  id?: string;
+  cardId?: string;
+  itemName?: string;
+  months?: number;
+  status?: string;
+  schedule?: SyncScheduleRow[];
+  updatedAt?: string;
+  [key: string]: unknown;
+}
+
+interface SyncCycle {
+  id?: string;
+  cardId?: string;
+  month?: string;
+  newSpend?: number | string;
+  paymentAction?: string | null;
+  paidAt?: string | null;
+  paidSource?: string | null;
+  [key: string]: unknown;
+}
+
+/** Loose shape accepted by the 4 read/derive functions — matches this file's own original JSDoc
+ * (`@param {object} creditData - {cards, plans}`), deliberately not tied by name to
+ * creditCardStore.ts's own CreditData (module-private, not exported). Structurally compatible either
+ * way: CreditData's required `unknown[]` fields satisfy these optional ones with zero cast. */
+interface CreditDataLike {
+  cards?: unknown;
+  plans?: unknown;
+  cycles?: unknown;
+}
+
+/** The 2 update-instruction shapes derived from parsing ExpenseTable payload keys. */
+interface InstallmentUpdate {
+  planId: string;
+  installmentNo: number;
+  paid: boolean;
+}
+interface RevolvingUpdate {
+  cardId: string;
+  paid: boolean;
+}
+
+/** One derived ExpenseTable row (the shape both buildInstallmentExpenseRows/buildRevolvingExpenseRows
+ * return per key) — dueDay stays `unknown` (not `number | string`) because this file never itself
+ * calls `resolveDueDayForMonth` on it; it only forwards `card.dueDay` verbatim for a downstream
+ * consumer (expenseEvents.ts) to interpret. */
+interface DerivedExpenseRow {
+  name: string;
+  actual: number;
+  account: string;
+  paid: boolean;
+  dueDay: unknown;
+}
+
+/** Minimal shape needed to read `.paid` off an ExpenseTable payload row after the existing
+ * `typeof row !== 'object'` runtime guard (same "narrow `object` doesn't have an index signature, cast
+ * immediately after the existing guard" pattern as slice 9's ExpenseRowLike). */
+interface PayloadRow {
+  paid?: unknown;
+}
+
 /**
  * เลือกชื่อบัญชีสำหรับแถวผ่อนชำระ
  *
@@ -43,7 +129,7 @@ export { INSTALLMENT_KEY_RE, INSTALLMENT_KEY_PREFIX, REVOLVING_KEY_PREFIX };
  * จึงใช้ bankName ของบัตรเมื่อตรงกับบัญชีของผู้ใช้พอดี มิฉะนั้นใช้ชื่อบัตร (ไม่ว่างเสมอ)
  * @returns {string}
  */
-function resolveRowAccount(card, bankAccounts = []) {
+function resolveRowAccount(card: SyncCard, bankAccounts: unknown[] = []): string {
   const bankName = String(card?.bankName || '').trim();
   const accounts = Array.isArray(bankAccounts)
     ? bankAccounts.map(item => String(item || '').trim()).filter(Boolean)
@@ -57,7 +143,7 @@ function resolveRowAccount(card, bankAccounts = []) {
  * แผนนี้ให้แถวของงวดนี้หรือไม่
  * แผนที่ถูกยกเลิกยังคงงวดที่ "ชำระแล้ว" ไว้เป็นประวัติ แต่ไม่ให้งวดอนาคตที่ยังไม่ชำระ (BR-CC-010)
  */
-function shouldIncludeRow(plan, row) {
+function shouldIncludeRow(plan: SyncPlan | undefined, row: SyncScheduleRow | undefined | null): boolean {
   if (!row) return false;
   if (plan?.status === PLAN_STATUS.CANCELLED) return row.paid === true;
   return true;
@@ -70,12 +156,16 @@ function shouldIncludeRow(plan, row) {
  * @param {array} bankAccounts - บัญชีธนาคารของผู้ใช้ (ใช้จับคู่ชื่อบัญชี)
  * @returns {object} map ของ { 'cci_xxx_NN': {name, actual, account, paid, dueDay} } — อาจว่าง
  */
-export function buildInstallmentExpenseRows(creditData, month, bankAccounts = []) {
-  const rows = {};
+export function buildInstallmentExpenseRows(
+  creditData: CreditDataLike | null | undefined,
+  month: string,
+  bankAccounts: unknown[] = []
+): Record<string, DerivedExpenseRow> {
+  const rows: Record<string, DerivedExpenseRow> = {};
   if (!creditData || typeof month !== 'string' || !/^\d{4}-\d{2}$/.test(month)) return rows;
 
-  const cards = Array.isArray(creditData.cards) ? creditData.cards : [];
-  const plans = Array.isArray(creditData.plans) ? creditData.plans : [];
+  const cards = (Array.isArray(creditData.cards) ? creditData.cards : []) as SyncCard[];
+  const plans = (Array.isArray(creditData.plans) ? creditData.plans : []) as SyncPlan[];
   if (!plans.length) return rows;
 
   const cardById = new Map(cards.map(card => [card?.id, card]));
@@ -83,11 +173,23 @@ export function buildInstallmentExpenseRows(creditData, month, bankAccounts = []
   plans.forEach(plan => {
     const card = cardById.get(plan?.cardId);
     if (!card) return;
+    // Narrowing guard (§Design A.5.2): a plan lacking `id` could never have produced a valid,
+    // matchable `cci_`-prefixed key in the original untyped `.js` either — behavior-preserving.
+    if (!plan.id) return;
+    // Additional cast (beyond the 4 documented in §Design A.5, required by `tsc`'s real run, not
+    // predicted in the spec): TypeScript's control-flow narrowing of `plan.id` (a property access,
+    // not a local variable) does not survive across the nested `schedule.forEach` closure below —
+    // captured into a local `const` here so the narrowing carries through. Zero behavior change:
+    // `planId` is read once, synchronously, from the same already-guarded `plan.id`.
+    const planId = plan.id;
     const schedule = Array.isArray(plan.schedule) ? plan.schedule : [];
     schedule.forEach(row => {
       if (row?.dueMonth !== month) return;
       if (!shouldIncludeRow(plan, row)) return;
-      rows[buildInstallmentRowKey(plan.id, row.no)] = {
+      // Narrowing guard (§Design A.5.2): a schedule row lacking `no` could never have produced a
+      // valid, matchable key either — behavior-preserving.
+      if (row.no === undefined) return;
+      rows[buildInstallmentRowKey(planId, row.no)] = {
         name: `${plan.itemName} (งวด ${row.no}/${plan.months})`,
         actual: Number(row.payment) || 0,
         account: resolveRowAccount(card, bankAccounts),
@@ -108,15 +210,22 @@ export function buildInstallmentExpenseRows(creditData, month, bankAccounts = []
  * @param {array} bankAccounts
  * @returns {object} map ของ { 'ccr_xxx': {name, actual, account, paid, dueDay} } — อาจว่าง
  */
-export function buildRevolvingExpenseRows(creditData, month, bankAccounts = []) {
-  const rows = {};
+export function buildRevolvingExpenseRows(
+  creditData: CreditDataLike | null | undefined,
+  month: string,
+  bankAccounts: unknown[] = []
+): Record<string, DerivedExpenseRow> {
+  const rows: Record<string, DerivedExpenseRow> = {};
   if (!creditData || typeof month !== 'string' || !/^\d{4}-\d{2}$/.test(month)) return rows;
 
-  const cards = Array.isArray(creditData.cards) ? creditData.cards : [];
-  const cycles = Array.isArray(creditData.cycles) ? creditData.cycles : [];
+  const cards = (Array.isArray(creditData.cards) ? creditData.cards : []) as SyncCard[];
+  const cycles = (Array.isArray(creditData.cycles) ? creditData.cycles : []) as SyncCycle[];
   if (!cards.length || !cycles.length) return rows;
 
   cards.forEach(card => {
+    // Narrowing guard (§Design A.5.3): buildRevolvingCycles itself already returns an empty chain
+    // when `!cardId`, so this makes an already-true runtime outcome explicit for the type-checker.
+    if (!card.id) return;
     const chain = buildRevolvingCycles(card, cycles, { throughMonth: month });
     const cycle = chain.find(item => item.month === month);
     if (!cycle || !(cycle.amountDue > 0)) return;
@@ -140,15 +249,20 @@ export function buildRevolvingExpenseRows(creditData, month, bankAccounts = []) 
  * @param {object} creditData
  * @returns {string[]}
  */
-export function getInstallmentMonths(creditData) {
-  const months = new Set();
-  const cards = Array.isArray(creditData?.cards) ? creditData.cards : [];
-  const plans = Array.isArray(creditData?.plans) ? creditData.plans : [];
+export function getInstallmentMonths(creditData: CreditDataLike | null | undefined): string[] {
+  const months = new Set<string>();
+  const cardsRaw = creditData?.cards;
+  const plansRaw = creditData?.plans;
+  const cards = (Array.isArray(cardsRaw) ? cardsRaw : []) as SyncCard[];
+  const plans = (Array.isArray(plansRaw) ? plansRaw : []) as SyncPlan[];
   if (!plans.length || !cards.length) return [];
   const cardIds = new Set(cards.map(card => card?.id));
 
   plans.forEach(plan => {
     if (!cardIds.has(plan?.cardId)) return;
+    // Narrowing guard (§Design A.5.4): `plan` here is already `SyncPlan` (see above), so
+    // `plan.schedule` is already typed `SyncScheduleRow[] | undefined` — no additional cast beyond
+    // the top-of-function `SyncPlan[]` cast is needed.
     (Array.isArray(plan.schedule) ? plan.schedule : []).forEach(row => {
       if (!shouldIncludeRow(plan, row)) return;
       if (typeof row?.dueMonth === 'string') months.add(row.dueMonth);
@@ -164,11 +278,13 @@ export function getInstallmentMonths(creditData) {
  * @param {object} creditData
  * @returns {string[]}
  */
-export function getCreditCardMonths(creditData) {
+export function getCreditCardMonths(creditData: CreditDataLike | null | undefined): string[] {
   const months = new Set(getInstallmentMonths(creditData));
 
-  const cards = Array.isArray(creditData?.cards) ? creditData.cards : [];
-  const cycles = Array.isArray(creditData?.cycles) ? creditData.cycles : [];
+  const cardsRaw = creditData?.cards;
+  const cyclesRaw = creditData?.cycles;
+  const cards = (Array.isArray(cardsRaw) ? cardsRaw : []) as SyncCard[];
+  const cycles = (Array.isArray(cyclesRaw) ? cyclesRaw : []) as SyncCycle[];
   if (cards.length && cycles.length) {
     // materialise ถึงเดือนปัจจุบันเสมอ เพื่อให้เดือนที่มีแต่ยอดยกมาก็ปรากฏ
     const throughMonth = getCurrentMonthKey();
@@ -182,22 +298,28 @@ export function getCreditCardMonths(creditData) {
   return Array.from(months);
 }
 
-function generateCycleId() {
+function generateCycleId(): string {
   return `rc_${crypto.randomBytes(6).toString('hex')}`;
 }
 
 /** อัปเดตตารางผ่อนตาม paid ที่ส่งกลับมา — คืน { plans, applied } */
-function applyInstallmentUpdates(data, updates) {
+function applyInstallmentUpdates(
+  data: { plans: unknown[] },
+  updates: InstallmentUpdate[]
+): { plans: unknown[]; applied: number } {
   if (!updates.length) return { plans: data.plans, applied: 0 };
 
+  // Cast immediately after arriving from an `unknown[]`-typed store boundary (§Design A.4).
+  const planList = data.plans as SyncPlan[];
+
   let applied = 0;
-  const plans = data.plans.map(plan => {
+  const plans = planList.map(plan => {
     const planUpdates = updates.filter(update => update.planId === plan?.id);
     if (!planUpdates.length) return plan;
     // แผนที่ยกเลิกแล้วเป็นสถานะสุดท้าย ห้ามแก้สถานะการชำระอีก (BR-CC-009)
     if (plan.status === PLAN_STATUS.CANCELLED) return plan;
 
-    const schedule = Array.isArray(plan.schedule) ? [...plan.schedule] : [];
+    const schedule: SyncScheduleRow[] = Array.isArray(plan.schedule) ? [...plan.schedule] : [];
     let changed = false;
     planUpdates.forEach(({ installmentNo, paid }) => {
       const index = schedule.findIndex(row => row?.no === installmentNo);
@@ -230,14 +352,22 @@ function applyInstallmentUpdates(data, updates) {
  * ไม่มี cycle เก็บไว้ + paid=true → สร้างใหม่ด้วย newSpend: 0 มิฉะนั้นปุ่มบนแถวยอดยกมาจะกดไม่ติด
  * @returns {{cycles: array, applied: number}}
  */
-function applyRevolvingUpdates(data, updates, month) {
+function applyRevolvingUpdates(
+  data: { cards: unknown[]; cycles: unknown[] },
+  updates: RevolvingUpdate[],
+  month: string
+): { cycles: unknown[]; applied: number } {
   if (!updates.length || typeof month !== 'string' || !/^\d{4}-\d{2}$/.test(month)) {
     return { cycles: data.cycles, applied: 0 };
   }
 
-  const cardIds = new Set(data.cards.map(card => card?.id));
+  // Cast immediately after arriving from an `unknown[]`-typed store boundary (§Design A.4).
+  const cardList = data.cards as SyncCard[];
+  const cycleList = data.cycles as SyncCycle[];
+
+  const cardIds = new Set(cardList.map(card => card?.id));
   const now = new Date().toISOString();
-  let cycles = [...data.cycles];
+  let cycles = [...cycleList];
   let applied = 0;
 
   updates.forEach(({ cardId, paid }) => {
@@ -301,15 +431,22 @@ function applyRevolvingUpdates(data, updates, month) {
  * @param {string} month - บังคับสำหรับแถว ccr_ เพราะคีย์ ccr_ ไม่ได้เข้ารหัสเดือนไว้ในตัวเอง
  * @returns {Promise<number>} จำนวนรายการที่ถูกอัปเดต
  */
-export async function applyCreditCardPaidFromExpensePayload(userId, expenseData, month) {
+export async function applyCreditCardPaidFromExpensePayload(
+  userId: unknown,
+  expenseData: Record<string, unknown> | null | undefined,
+  month: string
+): Promise<number> {
   if (!userId || !expenseData || typeof expenseData !== 'object') return 0;
 
-  const installmentUpdates = [];
-  const revolvingUpdates = [];
+  const installmentUpdates: InstallmentUpdate[] = [];
+  const revolvingUpdates: RevolvingUpdate[] = [];
   Object.keys(expenseData).forEach(key => {
     const row = expenseData[key];
     if (!row || typeof row !== 'object') return;
-    const paid = row.paid === true || row.paid === 'true';
+    // Narrowing guard (§Design A.5.1): identical runtime comparison, only the compile-time view of
+    // `row` changes.
+    const payloadRow = row as PayloadRow;
+    const paid = payloadRow.paid === true || payloadRow.paid === 'true';
 
     const installment = parseInstallmentRowKey(key);
     if (installment) {
@@ -340,10 +477,12 @@ export async function applyCreditCardPaidFromExpensePayload(userId, expenseData,
  * @param {object} expenseData
  * @returns {object} payload ชุดใหม่ที่ปลอดคีย์ cci_ / ccr_
  */
-export function stripCreditCardKeys(expenseData) {
+export function stripCreditCardKeys(
+  expenseData: Record<string, unknown> | null | undefined
+): Record<string, unknown> | null | undefined {
   if (!expenseData || typeof expenseData !== 'object') return expenseData;
 
-  const cleaned = {};
+  const cleaned: Record<string, unknown> = {};
   Object.keys(expenseData).forEach(key => {
     if (isCreditCardRowKey(key)) return;
     cleaned[key] = expenseData[key];
@@ -351,7 +490,7 @@ export function stripCreditCardKeys(expenseData) {
 
   if (Array.isArray(cleaned.__removeKeys)) {
     cleaned.__removeKeys = cleaned.__removeKeys.filter(
-      key => typeof key === 'string' && !isCreditCardRowKey(key)
+      (key: unknown) => typeof key === 'string' && !isCreditCardRowKey(key)
     );
   }
 
@@ -367,7 +506,10 @@ export function stripCreditCardKeys(expenseData) {
  * @param {string} userId
  * @returns {Promise<{creditData: object, bankAccounts: string[]}|null>}
  */
-export async function loadCreditCardContext(userId, bankAccounts = []) {
+export async function loadCreditCardContext(
+  userId: unknown,
+  bankAccounts: unknown[] = []
+): Promise<{ creditData: CreditDataLike; bankAccounts: unknown[] } | null> {
   try {
     const creditData = await getUserCreditData(userId);
     if (!creditData) return null;
@@ -381,7 +523,7 @@ export async function loadCreditCardContext(userId, bankAccounts = []) {
   }
 }
 
-function mergeAccounts(context, extraBankAccounts) {
+function mergeAccounts(context: { bankAccounts?: unknown }, extraBankAccounts: unknown[]): unknown[] {
   return Array.from(new Set([
     ...(Array.isArray(context.bankAccounts) ? context.bankAccounts : []),
     ...(Array.isArray(extraBankAccounts) ? extraBankAccounts : [])
@@ -392,7 +534,11 @@ function mergeAccounts(context, extraBankAccounts) {
  * เรียก buildInstallmentExpenseRows แบบไม่มีทางโยน error ออกมา
  * @returns {object} map แถว (ว่างเมื่อ context เป็น null หรือเกิดข้อผิดพลาด)
  */
-export function safeBuildInstallmentRows(context, month, extraBankAccounts = []) {
+export function safeBuildInstallmentRows(
+  context: { creditData: CreditDataLike; bankAccounts: unknown[] } | null | undefined,
+  month: string,
+  extraBankAccounts: unknown[] = []
+): Record<string, DerivedExpenseRow> {
   if (!context) return {};
   try {
     return buildInstallmentExpenseRows(context.creditData, month, mergeAccounts(context, extraBankAccounts));
@@ -403,7 +549,11 @@ export function safeBuildInstallmentRows(context, month, extraBankAccounts = [])
 }
 
 /** เรียก buildRevolvingExpenseRows แบบไม่มีทางโยน error ออกมา */
-export function safeBuildRevolvingRows(context, month, extraBankAccounts = []) {
+export function safeBuildRevolvingRows(
+  context: { creditData: CreditDataLike; bankAccounts: unknown[] } | null | undefined,
+  month: string,
+  extraBankAccounts: unknown[] = []
+): Record<string, DerivedExpenseRow> {
   if (!context) return {};
   try {
     return buildRevolvingExpenseRows(context.creditData, month, mergeAccounts(context, extraBankAccounts));
@@ -418,7 +568,11 @@ export function safeBuildRevolvingRows(context, month, extraBankAccounts = []) {
  * monthly_expense.js เรียกตัวนี้ตัวเดียวทุกจุด แทนที่จะเพิ่ม call ที่ 7 ในแต่ละจุด
  * @returns {object} map แถว cci_ + ccr_
  */
-export function safeBuildCreditCardRows(context, month, extraBankAccounts = []) {
+export function safeBuildCreditCardRows(
+  context: { creditData: CreditDataLike; bankAccounts: unknown[] } | null | undefined,
+  month: string,
+  extraBankAccounts: unknown[] = []
+): Record<string, DerivedExpenseRow> {
   return {
     ...safeBuildInstallmentRows(context, month, extraBankAccounts),
     ...safeBuildRevolvingRows(context, month, extraBankAccounts)
@@ -426,7 +580,9 @@ export function safeBuildCreditCardRows(context, month, extraBankAccounts = []) 
 }
 
 /** เรียก getCreditCardMonths แบบไม่มีทางโยน error ออกมา */
-export function safeGetCreditCardMonths(context) {
+export function safeGetCreditCardMonths(
+  context: { creditData: CreditDataLike; bankAccounts: unknown[] } | null | undefined
+): string[] {
   if (!context) return [];
   try {
     return getCreditCardMonths(context.creditData);

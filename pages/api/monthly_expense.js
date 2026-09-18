@@ -17,7 +17,7 @@ import {
   safeGetCreditCardMonths,
   applyCreditCardPaidFromExpensePayload,
   stripCreditCardKeys
-} from '../../src/shared/utils/backend/creditCardSync.js';
+} from '../../src/shared/utils/backend/creditCardSync';
 import { getUserBankAccounts } from '../../lib/userStore.js';
 import {
   isJsonMode,
