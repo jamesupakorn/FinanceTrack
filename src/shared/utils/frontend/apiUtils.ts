@@ -327,6 +327,11 @@ export const dailyExpenseAPI = {
  */
 export const userSettingsAPI = {
 	get: async (): Promise<any> => jsonFetch(buildUrl('/api/user-profile-settings')),
+	saveMonthlySummaryEnabled: async (enabled: boolean): Promise<any> => jsonFetch('/api/user-profile-settings', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ monthlySummaryEnabled: enabled })
+	}),
 	saveThresholds: async (budgetThresholds: unknown): Promise<any> => jsonFetch('/api/user-profile-settings', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },

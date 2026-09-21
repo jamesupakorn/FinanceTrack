@@ -145,7 +145,8 @@ describe('/api/user-bank-accounts (Mongo mode)', () => {
     const data = JSON.parse(res._getData());
     expect(data).toEqual({
       bankAccounts: [],
-      budgetThresholds: DEFAULT_THRESHOLDS
+      budgetThresholds: DEFAULT_THRESHOLDS,
+      monthlySummaryEnabled: true
     });
   });
 

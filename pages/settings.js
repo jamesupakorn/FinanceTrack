@@ -32,6 +32,8 @@ export default function SettingsPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [monthlySummaryEnabled, setMonthlySummaryEnabled] = useState(true);
+  const [savingNotification, setSavingNotification] = useState(false);
 
   // ยังไม่ได้บันทึกแล้วกดออกจากหน้า — เตือนด้วย native confirm (ฟอร์มเดียว ค่าเดียว ไม่คุ้มสร้างโมดัล
   // เต็มรูปแบบแบบ UnsavedChangesDialog ของ /workspace ที่ออกแบบมาสำหรับ 7 section พร้อมกัน)
@@ -47,6 +49,7 @@ export default function SettingsPage() {
     try {
       const data = await userSettingsAPI.get();
       setThresholds(data?.budgetThresholds || DEFAULT_BUDGET_THRESHOLDS);
+      setMonthlySummaryEnabled(data?.monthlySummaryEnabled !== false);
     } catch (error) {
       console.error('Failed to load budget thresholds:', error);
       setThresholds(DEFAULT_BUDGET_THRESHOLDS);
@@ -80,9 +83,48 @@ export default function SettingsPage() {
     }
   };
 
+  const handleMonthlySummaryToggle = async (event) => {
+    const enabled = event.target.checked;
+    setMonthlySummaryEnabled(enabled);
+    setSavingNotification(true);
+    try {
+      await userSettingsAPI.saveMonthlySummaryEnabled(enabled);
+      showToast(enabled ? 'เปิดส่งสรุปการเงินเข้า LINE แล้ว' : 'ปิดส่งสรุปการเงินเข้า LINE แล้ว');
+    } catch (error) {
+      setMonthlySummaryEnabled(!enabled);
+      showToast('บันทึกการตั้งค่า LINE ไม่สำเร็จ', 'error');
+    } finally {
+      setSavingNotification(false);
+    }
+  };
+
   return (
     <Layout activeNav="settings" title="ตั้งค่า" onBeforeNavigate={handleBeforeNavigate}>
       <div className="flex w-full max-w-2xl flex-col gap-space-5">
+        <section className={CARD}>
+          <h2 className="m-0 text-xl font-semibold text-primary">สรุปการเงินทาง LINE</h2>
+          <label className="mt-space-4 flex min-h-16 cursor-pointer items-center gap-space-3 rounded-sm border border-border-default bg-surface-2 p-space-3">
+            <input
+              className="peer sr-only"
+              type="checkbox"
+              checked={monthlySummaryEnabled}
+              onChange={handleMonthlySummaryToggle}
+              disabled={savingNotification || loading}
+            />
+            <span
+              aria-hidden="true"
+              className="relative inline-flex h-[26px] w-11 shrink-0 items-center rounded-full bg-border-default transition-colors duration-base peer-checked:bg-accent peer-checked:[&>span]:translate-x-[21px] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-accent peer-focus-visible:outline-offset-2"
+            >
+              <span className="h-5 w-5 translate-x-[3px] rounded-full bg-primary transition-transform duration-base" />
+            </span>
+            <span className="flex flex-col">
+              <strong className="text-sm font-semibold text-primary">ส่งสรุปการเงินอัตโนมัติทุกสิ้นเดือน</strong>
+              <small className="text-xs text-secondary">{monthlySummaryEnabled ? 'เปิดใช้งานอยู่' : 'ปิดใช้งานอยู่'}</small>
+            </span>
+          </label>
+          <p className="m-0 mt-space-3 text-sm text-secondary">ส่งให้ LINE ที่เชื่อมกับโปรไฟล์นี้ โดยแยกการตั้งค่าตามผู้ใช้</p>
+        </section>
+
         <section className={CARD}>
           <h2 className="m-0 text-xl font-semibold text-primary">เกณฑ์สุขภาพงบประมาณ</h2>
           <p className="m-0 mt-space-2 text-sm text-secondary">เมื่อยอดใช้จ่ายหรือเงินออมของเดือนข้ามเกณฑ์ที่ตั้งไว้ แถบสถานะในหน้าภาพรวมจะเปลี่ยนสี เพื่อเตือนให้คุณรู้ทันที</p>
