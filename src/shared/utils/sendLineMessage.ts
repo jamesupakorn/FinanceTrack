@@ -5,10 +5,10 @@ import { getLineToken, getLineUserId } from './lineConfig';
 
 // pushLineApiCall: primitive ที่รวม logic การส่ง LINE push message ทั้งหมด
 // (token/recipient resolution, guard, fetch, response parsing, error handling)
-// ใช้โดย sendLineMessage()
+// ใช้ร่วมกันโดย sendLineMessage() และ sendLineFlexMessage()
 // หมายเหตุ: log เฉพาะ boolean/count/status เท่านั้น ห้าม log recipient id, เนื้อหาข้อความ, หรือ raw response body
 async function pushLineApiCall(
-  messages: Array<{ type: string; text: string }>,
+  messages: Array<Record<string, unknown>>,
   userId: string | null = null
 ): Promise<Record<string, unknown>> {
   const token = getLineToken();
@@ -38,7 +38,8 @@ async function pushLineApiCall(
   console.log('LINE API response:', { status: response.status, ok: response.ok });
   if (!response.ok) {
     console.error('LINE API error: status=', response.status);
-    throw new Error(result.message || 'ส่งข้อความไม่สำเร็จ');
+    // แนบ status ให้ผู้เรียกแยก transient (5xx) ออกจาก permanent (4xx) ได้ — ไม่กระทบผู้เรียกเดิมที่อ่านแค่ message
+    throw Object.assign(new Error((result.message as string) || 'ส่งข้อความไม่สำเร็จ'), { status: response.status });
   }
   return result;
 }
@@ -56,4 +57,13 @@ export async function sendLineMessage(
     throw new Error('ข้อมูลไม่ครบถ้วน');
   }
   return pushLineApiCall([{ type: 'text', text: message }], userId);
+}
+
+export async function sendLineFlexMessage(
+  altText: string,
+  contents: Record<string, unknown>,
+  userId: string | null = null
+): Promise<Record<string, unknown>> {
+  if (!altText || !contents) throw new Error('ข้อมูลไม่ครบถ้วน');
+  return pushLineApiCall([{ type: 'flex', altText, contents }], userId);
 }

@@ -3,6 +3,10 @@
     {
       "path": "/api/line_due_notify",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/line_monthly_summary",
+      "schedule": "0 13 * * *"
     }
   ]
 }
