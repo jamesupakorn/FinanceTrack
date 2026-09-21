@@ -150,6 +150,38 @@ describe('/api/user-bank-accounts (Mongo mode)', () => {
     });
   });
 
+  describe('monthlySummaryEnabled (AC-14)', () => {
+    it('a monthlySummaryEnabled-only POST persists and does not clobber bankAccounts or budgetThresholds', async () => {
+      const accounts = [{ name: 'กสิกรไทย', balance: 1000 }];
+      await db.collection('users').insertOne({
+        id: TEST_USER_ID, displayName: 'Test User', bankAccounts: accounts, budgetThresholds: DEFAULT_THRESHOLDS
+      });
+
+      const { req, res } = makeReqRes({ method: 'POST', body: { monthlySummaryEnabled: false } });
+      await handler(req, res);
+
+      expect(res._getStatusCode()).toBe(200);
+      expect(JSON.parse(res._getData())).toEqual({ success: true, monthlySummaryEnabled: false });
+      const doc = await db.collection('users').findOne({ id: TEST_USER_ID });
+      expect(doc.monthlySummaryEnabled).toBe(false);
+      expect(doc.bankAccounts).toEqual(accounts);
+      expect(doc.budgetThresholds).toEqual(DEFAULT_THRESHOLDS);
+
+      const { req: getReq, res: getRes } = makeReqRes();
+      await handler(getReq, getRes);
+      expect(JSON.parse(getRes._getData()).monthlySummaryEnabled).toBe(false);
+    });
+
+    it.each([['"false"', 'false'], ['0', 0], ['null', null]])('rejects non-boolean %s with 400 and writes nothing', async (_label, value) => {
+      await db.collection('users').insertOne({ id: TEST_USER_ID, displayName: 'Test User', bankAccounts: [] });
+      const { req, res } = makeReqRes({ method: 'POST', body: { monthlySummaryEnabled: value } });
+      await handler(req, res);
+      expect(res._getStatusCode()).toBe(400);
+      const doc = await db.collection('users').findOne({ id: TEST_USER_ID });
+      expect(doc.monthlySummaryEnabled).toBeUndefined();
+    });
+  });
+
   it('POST with a valid bankAccounts array persists, and a following GET proves the round trip', async () => {
     await db.collection('users').insertOne({
       id: TEST_USER_ID,

@@ -7,6 +7,7 @@ import {
   markUserMonthlySummarySent
 } from '../../lib/userStore';
 import { sendLineFlexMessage, sendLineMessage } from '../../src/shared/utils/sendLineMessage';
+import { assertScopedUserId } from '../../src/shared/utils/backend/userRequest';
 import { withLineRetry } from '../../src/shared/utils/backend/lineRetry';
 import { getCurrentDateInfo, formatMonthKeyTH } from '../../src/shared/utils/dateUtils';
 import {
@@ -15,12 +16,16 @@ import {
   formatMonthlySummaryText
 } from '../../src/shared/utils/backend/monthlyLineSummary';
 
-async function getRecipients(targetUserId) {
-  // Reject non-string userId before it can shape a Mongo filter (crafted objects like
-  // { $ne: null } could otherwise change query semantics). undefined/null/'' still mean
-  // "no filter, all users" — unchanged from today, matches JSON mode's `!targetUserId` branch.
-  if (targetUserId !== undefined && targetUserId !== null && typeof targetUserId !== 'string') {
-    return [];
+async function getRecipients(rawTargetUserId) {
+  // undefined/null/'' = ไม่กรอง (ส่งทุกคน) — ค่าอื่นต้องผ่าน assertScopedUserId ที่ใช้ร่วมกัน (arch C-4)
+  // ไม่ผ่าน (ไม่ใช่ string เช่น { $ne: null } หรือว่างหลัง trim) = ไม่ตรงกับใครเลย ไม่ปล่อยเข้า Mongo filter
+  let targetUserId = null;
+  if (rawTargetUserId !== undefined && rawTargetUserId !== null && rawTargetUserId !== '') {
+    try {
+      targetUserId = assertScopedUserId(rawTargetUserId, 'line_monthly_summary');
+    } catch (error) {
+      return [];
+    }
   }
   if (isJsonMode()) {
     return loadUsers().filter(user => user.LineId && (!targetUserId || user.id === targetUserId));

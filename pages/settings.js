@@ -89,10 +89,10 @@ export default function SettingsPage() {
     setSavingNotification(true);
     try {
       await userSettingsAPI.saveMonthlySummaryEnabled(enabled);
-      showToast(enabled ? 'เปิดส่งสรุปการเงินเข้า LINE แล้ว' : 'ปิดส่งสรุปการเงินเข้า LINE แล้ว');
+      showToast('บันทึกการตั้งค่าแล้ว');
     } catch (error) {
       setMonthlySummaryEnabled(!enabled);
-      showToast('บันทึกการตั้งค่า LINE ไม่สำเร็จ', 'error');
+      showToast('บันทึกไม่สำเร็จ', 'error');
     } finally {
       setSavingNotification(false);
     }
@@ -101,6 +101,22 @@ export default function SettingsPage() {
   return (
     <Layout activeNav="settings" title="ตั้งค่า" onBeforeNavigate={handleBeforeNavigate}>
       <div className="flex w-full max-w-2xl flex-col gap-space-5">
+        <section className={CARD}>
+          <h2 className="m-0 text-xl font-semibold text-primary">เกณฑ์สุขภาพงบประมาณ</h2>
+          <p className="m-0 mt-space-2 text-sm text-secondary">เมื่อยอดใช้จ่ายหรือเงินออมของเดือนข้ามเกณฑ์ที่ตั้งไว้ แถบสถานะในหน้าภาพรวมจะเปลี่ยนสี เพื่อเตือนให้คุณรู้ทันที</p>
+          <p className="m-0 mb-space-4 mt-space-1 text-sm text-secondary">เงินเหลือของเดือนยืนยันเพิ่มเข้าเงินออมได้จากหน้าภาพรวมเช่นกัน</p>
+
+          <BudgetThresholdForm
+            values={thresholds}
+            loading={loading}
+            loadFailed={loadFailed}
+            saving={saving}
+            onSave={handleSave}
+            onRetryLoad={loadThresholds}
+            onDirtyChange={setIsDirty}
+          />
+        </section>
+
         <section className={CARD}>
           <h2 className="m-0 text-xl font-semibold text-primary">สรุปการเงินทาง LINE</h2>
           <label className="mt-space-4 flex min-h-16 cursor-pointer items-center gap-space-3 rounded-sm border border-border-default bg-surface-2 p-space-3">
@@ -122,23 +138,7 @@ export default function SettingsPage() {
               <small className="text-xs text-secondary">{monthlySummaryEnabled ? 'เปิดใช้งานอยู่' : 'ปิดใช้งานอยู่'}</small>
             </span>
           </label>
-          <p className="m-0 mt-space-3 text-sm text-secondary">ส่งให้ LINE ที่เชื่อมกับโปรไฟล์นี้ โดยแยกการตั้งค่าตามผู้ใช้</p>
-        </section>
-
-        <section className={CARD}>
-          <h2 className="m-0 text-xl font-semibold text-primary">เกณฑ์สุขภาพงบประมาณ</h2>
-          <p className="m-0 mt-space-2 text-sm text-secondary">เมื่อยอดใช้จ่ายหรือเงินออมของเดือนข้ามเกณฑ์ที่ตั้งไว้ แถบสถานะในหน้าภาพรวมจะเปลี่ยนสี เพื่อเตือนให้คุณรู้ทันที</p>
-          <p className="m-0 mb-space-4 mt-space-1 text-sm text-secondary">เงินเหลือของเดือนยืนยันเพิ่มเข้าเงินออมได้จากหน้าภาพรวมเช่นกัน</p>
-
-          <BudgetThresholdForm
-            values={thresholds}
-            loading={loading}
-            loadFailed={loadFailed}
-            saving={saving}
-            onSave={handleSave}
-            onRetryLoad={loadThresholds}
-            onDirtyChange={setIsDirty}
-          />
+          <p className="m-0 mt-space-3 text-sm text-secondary">ส่งวันสุดท้ายของเดือน เวลา 20:00 น. ให้ LINE ที่เชื่อมกับโปรไฟล์นี้ (ตั้งค่าแยกตามผู้ใช้)</p>
         </section>
       </div>
     </Layout>

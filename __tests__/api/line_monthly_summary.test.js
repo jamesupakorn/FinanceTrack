@@ -373,6 +373,14 @@ describe('/api/line_monthly_summary (Mongo mode)', () => {
   });
 
   describe('getRecipients type guard (hardening: .pipeline/spec-line-monthly-summary-hardening.md)', () => {
+    it('treats a blank (whitespace-only) userId as matching nobody, via the shared assertScopedUserId guard (C-4)', async () => {
+      await db.collection('users').insertOne({ id: TEST_USER_ID, LineId: 'line-a', monthlySummaryEnabled: true });
+      const { req, res } = makeReqRes({ body: { date: '2024-01-31', userId: '   ' } });
+      await handler(req, res);
+      expect(JSON.parse(res._getData()).results).toEqual([]);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it('treats a non-string userId as matching nobody instead of leaking Mongo-filter behavior', async () => {
       await db.collection('users').insertMany([
         { id: TEST_USER_ID, LineId: 'line-a', monthlySummaryEnabled: true },
