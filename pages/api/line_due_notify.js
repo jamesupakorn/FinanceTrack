@@ -410,6 +410,79 @@ function extractCronSecret(req) {
 }
 
 /**
+ * ประมวลผลและส่งข้อความแจ้งเตือนค่าใช้จ่ายของผู้ใช้ 1 คน
+ * คืน result object เสมอ (ไม่ push เอง) เพื่อให้ผู้เรียกครอบ try/catch รายผู้ใช้ได้ที่จุดเดียว
+ */
+async function notifyExpenseForUser(user, target, notifyMode) {
+  const expenseDoc = await getExpenseDocForMonth(user.id, target.monthKey);
+  const prevMonthKey = getPrevMonthKey(target.monthKey);
+  const prevExpenseDoc = await getExpenseDocForMonth(user.id, prevMonthKey);
+
+  if (!expenseDoc && !prevExpenseDoc) {
+    return { userId: user.id, sent: false, reason: 'no expense data' };
+  }
+
+  const groupedItems = { due: [], dueSoon: [], overdue: [], otherUnpaid: [] };
+
+  // classify current month items
+  if (expenseDoc) {
+    const items = extractExpenseItems(expenseDoc);
+    items.filter(item => {
+      if (isPaidFlag(item.paid)) return false;
+      const amount = Number(item.actual || 0);
+      return !Number.isNaN(amount) && amount > 0;
+    }).forEach(item => {
+      const { status } = getDueStatus(item, target);
+      if (status === 'due') { groupedItems.due.push(item); return; }
+      if (status === 'overdue') { groupedItems.overdue.push(item); return; }
+      if (status === 'dueSoon') { groupedItems.dueSoon.push(item); return; }
+      // invalid (no dueDay) หรือ upcoming → otherUnpaid
+      groupedItems.otherUnpaid.push(item);
+    });
+  }
+
+  // prev month: unpaid items ทั้งหมดถือว่าเลยกำหนดแล้ว
+  if (prevExpenseDoc) {
+    const prevItems = extractExpenseItems(prevExpenseDoc);
+    prevItems.filter(item => {
+      if (isPaidFlag(item.paid)) return false;
+      const amount = Number(item.actual || 0);
+      return !Number.isNaN(amount) && amount > 0;
+    }).forEach(item => {
+      groupedItems.overdue.push({ ...item, _fromMonth: prevMonthKey });
+    });
+  }
+
+  if (notifyMode === 'due') {
+    groupedItems.overdue = [];
+    groupedItems.otherUnpaid = [];
+  }
+
+  if (notifyMode === 'both') {
+    groupedItems.otherUnpaid = [];
+  }
+
+  const totalMatched = groupedItems.due.length + groupedItems.dueSoon.length + groupedItems.overdue.length + groupedItems.otherUnpaid.length;
+
+  if (!totalMatched) {
+    return { userId: user.id, sent: false, reason: 'no due, near-due, or overdue items' };
+  }
+
+  try {
+    const message = buildMessage(target, groupedItems, notifyMode);
+    await sendLineMessage(message, user.LineId);
+    return { userId: user.id, sent: true, count: totalMatched, breakdown: {
+      due: groupedItems.due.length,
+      dueSoon: groupedItems.dueSoon.length,
+      overdue: groupedItems.overdue.length,
+      otherUnpaid: groupedItems.otherUnpaid.length
+    } };
+  } catch (error) {
+    return { userId: user.id, sent: false, reason: error.message };
+  }
+}
+
+/**
  * ตัวจัดการหลักของ API แจ้งเตือนค่าใช้จ่ายผ่าน LINE
  * ตรวจสอบสิทธิ์ด้วย CRON_SECRET (บังคับเสมอ ไม่มีทางลัดอื่น) และส่งข้อความตามเงื่อนไข
  * @param {object} req - Express request (GET/POST)
@@ -443,73 +516,12 @@ export default async function handler(req, res) {
   const results = [];
 
   for (const user of users) {
-    const expenseDoc = await getExpenseDocForMonth(user.id, target.monthKey);
-    const prevMonthKey = getPrevMonthKey(target.monthKey);
-    const prevExpenseDoc = await getExpenseDocForMonth(user.id, prevMonthKey);
-
-    if (!expenseDoc && !prevExpenseDoc) {
-      results.push({ userId: user.id, sent: false, reason: 'no expense data' });
-      continue;
-    }
-
-    const groupedItems = { due: [], dueSoon: [], overdue: [], otherUnpaid: [] };
-
-    // classify current month items
-    if (expenseDoc) {
-      const items = extractExpenseItems(expenseDoc);
-      items.filter(item => {
-        if (isPaidFlag(item.paid)) return false;
-        const amount = Number(item.actual || 0);
-        return !Number.isNaN(amount) && amount > 0;
-      }).forEach(item => {
-        const { status } = getDueStatus(item, target);
-        if (status === 'due') { groupedItems.due.push(item); return; }
-        if (status === 'overdue') { groupedItems.overdue.push(item); return; }
-        if (status === 'dueSoon') { groupedItems.dueSoon.push(item); return; }
-        // invalid (no dueDay) หรือ upcoming → otherUnpaid
-        groupedItems.otherUnpaid.push(item);
-      });
-    }
-
-    // prev month: unpaid items ทั้งหมดถือว่าเลยกำหนดแล้ว
-    if (prevExpenseDoc) {
-      const prevItems = extractExpenseItems(prevExpenseDoc);
-      prevItems.filter(item => {
-        if (isPaidFlag(item.paid)) return false;
-        const amount = Number(item.actual || 0);
-        return !Number.isNaN(amount) && amount > 0;
-      }).forEach(item => {
-        groupedItems.overdue.push({ ...item, _fromMonth: prevMonthKey });
-      });
-    }
-
-    if (notifyMode === 'due') {
-      groupedItems.overdue = [];
-      groupedItems.otherUnpaid = [];
-    }
-
-    if (notifyMode === 'both') {
-      groupedItems.otherUnpaid = [];
-    }
-
-    const totalMatched = groupedItems.due.length + groupedItems.dueSoon.length + groupedItems.overdue.length + groupedItems.otherUnpaid.length;
-
-    if (!totalMatched) {
-      results.push({ userId: user.id, sent: false, reason: 'no due, near-due, or overdue items' });
-      continue;
-    }
-
+    // แยกผู้ใช้ทีละคน: ผู้ใช้คนหนึ่งดึงข้อมูล/สร้างข้อความพัง ต้องไม่ทำให้คนที่เหลือไม่ได้รับแจ้งเตือน
     try {
-      const message = buildMessage(target, groupedItems, notifyMode);
-      await sendLineMessage(message, user.LineId);
-      results.push({ userId: user.id, sent: true, count: totalMatched, breakdown: {
-        due: groupedItems.due.length,
-        dueSoon: groupedItems.dueSoon.length,
-        overdue: groupedItems.overdue.length,
-        otherUnpaid: groupedItems.otherUnpaid.length
-      } });
+      results.push(await notifyExpenseForUser(user, target, notifyMode));
     } catch (error) {
-      results.push({ userId: user.id, sent: false, reason: error.message });
+      console.error('due notify failed for one user:', error?.message);
+      results.push({ userId: user.id, sent: false, reason: 'user processing failed' });
     }
   }
 
@@ -525,14 +537,14 @@ export default async function handler(req, res) {
       continue;
     }
 
-    const cardEvents = collectCardDueEvents(creditData, target);
-    const message = buildCreditCardMessage(target, cardEvents);
-    if (!message) {
-      creditCardResults.push({ userId: user.id, sent: false, reason: 'no credit card due items' });
-      continue;
-    }
-
     try {
+      const cardEvents = collectCardDueEvents(creditData, target);
+      const message = buildCreditCardMessage(target, cardEvents);
+      if (!message) {
+        creditCardResults.push({ userId: user.id, sent: false, reason: 'no credit card due items' });
+        continue;
+      }
+
       await sendLineMessage(message, user.LineId);
       creditCardResults.push({
         userId: user.id,

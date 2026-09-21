@@ -5,6 +5,19 @@
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createMocks } from 'node-mocks-http';
 
+// ห่อ getMongoCollection ด้วย jest.fn เพื่อบังคับให้การดึงข้อมูลของผู้ใช้บางคนพังได้ในเทสต์ isolation
+// (ค่าเริ่มต้นเรียกของจริงเสมอ — ทุกเทสต์อื่นยังคุยกับ Mongo จริงเหมือนเดิม)
+jest.mock('../../lib/dataSource', () => {
+  const actual = jest.requireActual('../../lib/dataSource');
+  return { ...actual, getMongoCollection: jest.fn(actual.getMongoCollection) };
+});
+
+// เหมือนด้านบน: ให้ getUserCreditData คืนข้อมูลที่ทำให้ collectCardDueEvents พังได้เป็นรายผู้ใช้
+jest.mock('../../src/shared/utils/backend/creditCardStore', () => {
+  const actual = jest.requireActual('../../src/shared/utils/backend/creditCardStore');
+  return { ...actual, getUserCreditData: jest.fn(actual.getUserCreditData) };
+});
+
 const TEST_CRON_SECRET = 'test-cron-secret';
 const TEST_USER_ID = 'user-a';
 
@@ -144,5 +157,86 @@ describe('/api/line_due_notify — CRON_SECRET เป็นด่านเดี
     });
     await handler(req, res);
     expect(res._getStatusCode()).toBe(200);
+  });
+});
+
+describe('/api/line_due_notify — per-user isolation', () => {
+  const seedDueUsers = async () => {
+    // beforeEach ล้าง implementation ของ fetchMock — เทสต์กลุ่มนี้ส่งข้อความจริงจึงต้องตั้งคำตอบ LINE เอง
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    const users = ['user-1', 'user-2', 'user-3'];
+    await db.collection('users').insertMany(users.map(id => ({ id, LineId: `line-${id}` })));
+    await db.collection('monthly_expense').insertMany(users.map(id => ({
+      userId: id,
+      month: '2024-01',
+      rent: { name: 'ค่าเช่า', actual: 1000, dueDay: 15 }
+    })));
+    return users;
+  };
+
+  afterEach(() => {
+    require('../../lib/dataSource').getMongoCollection.mockImplementation(
+      jest.requireActual('../../lib/dataSource').getMongoCollection
+    );
+  });
+
+  it('ผู้ใช้คนแรกดึงข้อมูลพัง → คนที่ 2 และ 3 ยังได้รับแจ้งเตือน และ response ยังเป็น 200', async () => {
+    await seedDueUsers();
+    const actual = jest.requireActual('../../lib/dataSource');
+    let failed = false;
+    require('../../lib/dataSource').getMongoCollection.mockImplementation(async (name) => {
+      // การอ่าน monthly_expense ครั้งแรกเป็นของ user-1 (ลำดับตาม insert) — ทำให้พังครั้งเดียว
+      if (name === 'monthly_expense' && !failed) {
+        failed = true;
+        throw new Error('boom');
+      }
+      return actual.getMongoCollection(name);
+    });
+
+    const { req, res } = makeReqRes({ body: { date: '2024-01-15' } });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const { results } = JSON.parse(res._getData());
+    expect(results).toHaveLength(3);
+    expect(results[0]).toEqual({ userId: 'user-1', sent: false, reason: 'user processing failed' });
+    expect(results.slice(1).map(r => [r.userId, r.sent])).toEqual([['user-2', true], ['user-3', true]]);
+    // เหตุผลภายในของ error ต้องไม่รั่วออกไปใน response
+    expect(JSON.stringify(results)).not.toContain('boom');
+    // ส่งข้อความจริงเฉพาะ 2 คนที่ไม่พัง (ไม่มีบัตรเครดิต จึงไม่มีข้อความที่สอง)
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('ทุกคนปกติ → ส่งครบทุกคนเหมือนเดิม (พฤติกรรมเดิมไม่เปลี่ยน)', async () => {
+    await seedDueUsers();
+    const { req, res } = makeReqRes({ body: { date: '2024-01-15' } });
+    await handler(req, res);
+
+    const { results } = JSON.parse(res._getData());
+    expect(results.map(r => r.sent)).toEqual([true, true, true]);
+    expect(results[0]).toMatchObject({ count: 1, breakdown: { due: 1, dueSoon: 0, overdue: 0, otherUnpaid: 0 } });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('บัตรเครดิต: สร้างข้อความของผู้ใช้คนแรกพัง → ผู้ใช้คนถัดไปยังถูกประมวลผล และ response ยังเป็น 200', async () => {
+    await seedDueUsers();
+    const store = require('../../src/shared/utils/backend/creditCardStore');
+    const actual = jest.requireActual('../../src/shared/utils/backend/creditCardStore');
+    // getter โยน error เมื่อ collectCardDueEvents อ่าน .cards — อยู่ในส่วนที่เคยไม่ได้ครอบ try
+    store.getUserCreditData.mockImplementation(async (userId) => (
+      userId === 'user-1' ? { get cards() { throw new Error('bad card data'); } } : actual.getUserCreditData(userId)
+    ));
+    try {
+      const { req, res } = makeReqRes({ body: { date: '2024-01-15' } });
+      await handler(req, res);
+
+      expect(res._getStatusCode()).toBe(200);
+      const { creditCardResults } = JSON.parse(res._getData());
+      expect(creditCardResults).toHaveLength(3);
+      expect(creditCardResults[0]).toMatchObject({ userId: 'user-1', sent: false });
+      expect(creditCardResults[1]).toEqual({ userId: 'user-2', sent: false, reason: 'no credit card due items' });
+    } finally {
+      store.getUserCreditData.mockImplementation(actual.getUserCreditData);
+    }
   });
 });
