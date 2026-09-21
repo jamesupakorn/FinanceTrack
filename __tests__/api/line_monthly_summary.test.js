@@ -118,6 +118,72 @@ describe('/api/line_monthly_summary (Mongo mode)', () => {
     });
   });
 
+  describe('AC-1: per-user isolation', () => {
+    it('keeps sending to the remaining users when one user throws', async () => {
+      // user แรกมี id ว่าง → assertUserScope โยน error ในรอบของตัวเอง (ข้อมูลพังจริง ไม่ใช่ mock)
+      await db.collection('users').insertMany([
+        { id: ' ', LineId: 'line-1', monthlySummaryEnabled: true },
+        { id: 'user-2', LineId: 'line-2', monthlySummaryEnabled: true },
+        { id: 'user-3', LineId: 'line-3', monthlySummaryEnabled: true }
+      ]);
+      mockLineSuccess();
+
+      const { req, res } = makeReqRes({ body: { date: '2024-01-31' } });
+      await handler(req, res);
+
+      expect(res._getStatusCode()).toBe(200);
+      const { results } = JSON.parse(res._getData());
+      expect(results).toHaveLength(3);
+      expect(results[0]).toMatchObject({ userId: ' ', sent: false });
+      expect(results.filter(r => r.sent).map(r => r.userId)).toEqual(['user-2', 'user-3']);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('AC-2: outbound retry', () => {
+    const seed = () => db.collection('users').insertOne({ id: TEST_USER_ID, LineId: 'line-a', monthlySummaryEnabled: true });
+    const run = async () => {
+      const { req, res } = makeReqRes({ body: { date: '2024-01-31', userId: TEST_USER_ID } });
+      await handler(req, res);
+      return JSON.parse(res._getData()).results[0];
+    };
+
+    it('retries once on 5xx and succeeds', async () => {
+      await seed();
+      fetchMock
+        .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) });
+      expect(await run()).toMatchObject({ sent: true, format: 'flex' });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry on 4xx for the same message', async () => {
+      await seed();
+      fetchMock.mockResolvedValue({ ok: false, status: 400, json: async () => ({}) });
+      await run();
+      // flex (1 attempt) + text fallback (1 attempt), no retries
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('retries once after a network error', async () => {
+      await seed();
+      fetchMock
+        .mockRejectedValueOnce(new TypeError('fetch failed'))
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) });
+      expect(await run()).toMatchObject({ sent: true, format: 'flex' });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('gives up after the second 5xx and does not mark sent', async () => {
+      await seed();
+      fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+      expect(await run()).toMatchObject({ sent: false });
+      // flex: 2 attempts, text fallback: 2 attempts
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect((await db.collection('users').findOne({ id: TEST_USER_ID })).lastMonthlySummarySent).toBeUndefined();
+    });
+  });
+
   describe('AC-1: non-last-day-of-month gating', () => {
     it('returns skipped and never calls LINE when the date is not the last day of the month', async () => {
       await db.collection('users').insertOne({ id: TEST_USER_ID, LineId: 'line-a', monthlySummaryEnabled: true });
@@ -237,7 +303,7 @@ describe('/api/line_monthly_summary (Mongo mode)', () => {
 
       // First call (flex) fails, second call (text fallback) succeeds.
       fetchMock
-        .mockResolvedValueOnce({ ok: false, json: async () => ({ message: 'invalid flex' }) })
+        .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ message: 'invalid flex' }) })
         .mockResolvedValueOnce({ ok: true, json: async () => ({}) });
 
       const { req, res } = makeReqRes({ body: { date: '2024-01-31', userId: TEST_USER_ID } });
@@ -258,7 +324,7 @@ describe('/api/line_monthly_summary (Mongo mode)', () => {
 
     it('does not mark sent when both flex and text fallback fail', async () => {
       await db.collection('users').insertOne({ id: TEST_USER_ID, LineId: 'line-a', monthlySummaryEnabled: true });
-      fetchMock.mockResolvedValue({ ok: false, json: async () => ({ message: 'down' }) });
+      fetchMock.mockResolvedValue({ ok: false, status: 400, json: async () => ({ message: 'down' }) });
 
       const { req, res } = makeReqRes({ body: { date: '2024-01-31', userId: TEST_USER_ID } });
       await handler(req, res);

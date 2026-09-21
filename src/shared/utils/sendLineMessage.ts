@@ -38,7 +38,8 @@ async function pushLineApiCall(
   console.log('LINE API response:', { status: response.status, ok: response.ok });
   if (!response.ok) {
     console.error('LINE API error: status=', response.status);
-    throw new Error(result.message || 'ส่งข้อความไม่สำเร็จ');
+    // แนบ status ให้ผู้เรียกแยก transient (5xx) ออกจาก permanent (4xx) ได้ — ไม่กระทบผู้เรียกเดิมที่อ่านแค่ message
+    throw Object.assign(new Error((result.message as string) || 'ส่งข้อความไม่สำเร็จ'), { status: response.status });
   }
   return result;
 }

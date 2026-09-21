@@ -7,6 +7,7 @@ import {
   markUserMonthlySummarySent
 } from '../../lib/userStore';
 import { sendLineFlexMessage, sendLineMessage } from '../../src/shared/utils/sendLineMessage';
+import { withLineRetry } from '../../src/shared/utils/backend/lineRetry';
 import { getCurrentDateInfo, formatMonthKeyTH } from '../../src/shared/utils/dateUtils';
 import {
   buildMonthlySummaryPayload,
@@ -103,9 +104,9 @@ export default async function handler(req, res) {
       const altText = `สรุปการเงินประจำเดือน ${monthLabel}`;
       let format = 'flex';
       try {
-        await sendLineFlexMessage(altText, buildMonthlySummaryFlex(monthLabel, payload), user.LineId);
+        await withLineRetry(() => sendLineFlexMessage(altText, buildMonthlySummaryFlex(monthLabel, payload), user.LineId));
       } catch (flexError) {
-        await sendLineMessage(formatMonthlySummaryText(monthLabel, payload), user.LineId);
+        await withLineRetry(() => sendLineMessage(formatMonthlySummaryText(monthLabel, payload), user.LineId));
         format = 'text-fallback';
       }
       await markUserMonthlySummarySent(user.id, target.monthKey);
