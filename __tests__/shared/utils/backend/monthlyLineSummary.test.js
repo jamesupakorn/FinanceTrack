@@ -67,7 +67,7 @@ describe('buildMonthlySummaryPayload (JSON mode, mocked data seams)', () => {
 
     // Goal: target 10000, current summed from savings_list matching goal name case-insensitively = 2000
     expect(payload.goals).toEqual([
-      { name: 'กองทุนฉุกเฉิน', current: 2000, target: 10000, remaining: 8000 }
+      { name: 'กองทุนฉุกเฉิน', current: 2000, target: 10000, remaining: 8000, progress: 20 }
     ]);
   });
 
@@ -155,5 +155,41 @@ describe('buildMonthlySummaryFlex', () => {
     const flex = buildMonthlySummaryFlex('ม.ค. 2567', { ...payload, goals: [] });
     const flattened = JSON.stringify(flex);
     expect(flattened).toContain('ยังไม่มีเป้าหมายเงินออมที่กำลังดำเนินการ');
+  });
+});
+
+describe('buildMonthlySummaryPayload — comparison & upcoming (AC-7/AC-9)', () => {
+  it('diffs against the previous month and lists next-month dues across the Dec→Jan boundary', async () => {
+    const userUtils = require('../../../../src/backend/data/userUtils.js');
+    userUtils.getUserData.mockImplementation((filename) => {
+      if (filename === 'monthly_income.json') {
+        return { '2024-11': { รวม: 40000, salary: 40000 }, '2024-12': { รวม: 50000, salary: 50000 } };
+      }
+      if (filename === 'monthly_expense.json') {
+        return {
+          '2024-11': { ค่าเช่า: { actual: 8000, paid: true } },
+          '2024-12': { ค่าเช่า: { actual: 10000, paid: true } },
+          '2025-01': { ค่าเช่า: { actual: 10000, dueDay: 5 } }
+        };
+      }
+      return {};
+    });
+
+    const payload = await buildMonthlySummaryPayload('u001', '2024-12');
+
+    expect(payload.comparison.income).toMatchObject({ current: 50000, previous: 40000, percent: 25 });
+    expect(payload.comparison.expense).toMatchObject({ current: 10000, previous: 8000, percent: 25 });
+    expect(payload.upcoming.monthKey).toBe('2025-01');
+    expect(payload.upcoming.items).toEqual([{ name: 'ค่าเช่า', amount: 10000, day: 5 }]);
+  });
+
+  it('marks comparison as noPrevious when the previous month has no documents', async () => {
+    const userUtils = require('../../../../src/backend/data/userUtils.js');
+    userUtils.getUserData.mockImplementation((filename) =>
+      filename === 'monthly_income.json' ? { '2024-12': { รวม: 50000, salary: 50000 } } : {});
+
+    const payload = await buildMonthlySummaryPayload('u001', '2024-12');
+    expect(payload.comparison.income.state).toBe('noPrevious');
+    expect(payload.upcoming).toBeNull();
   });
 });
