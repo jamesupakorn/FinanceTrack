@@ -78,9 +78,13 @@ export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const source = req.method === 'GET' ? req.query || {} : req.body || {};
+  const force = source.force === true || source.force === 'true';
+  if (force && (typeof source.userId !== 'string' || !source.userId.trim())) {
+    return res.status(400).json({ error: 'force requires a userId' });
+  }
   const target = getCurrentDateInfo(source.date);
   if (!target) return res.status(400).json({ error: 'invalid date' });
-  if (target.day !== target.daysInMonth) {
+  if (!force && target.day !== target.daysInMonth) {
     return res.status(200).json({ success: true, skipped: true, reason: 'not the last day of the month' });
   }
 
@@ -100,7 +104,7 @@ export default async function handler(req, res) {
     }
     try {
       const lastSent = await getUserLastMonthlySummarySent(user.id);
-      if (lastSent === target.monthKey) {
+      if (!force && lastSent === target.monthKey) {
         results.push({ userId: user.id, sent: false, reason: 'monthly summary already sent' });
         continue;
       }
@@ -114,8 +118,8 @@ export default async function handler(req, res) {
         await withLineRetry(() => sendLineMessage(formatMonthlySummaryText(monthLabel, payload), user.LineId));
         format = 'text-fallback';
       }
-      await markUserMonthlySummarySent(user.id, target.monthKey);
-      results.push({ userId: user.id, sent: true, month: target.monthKey, format });
+      if (!force) await markUserMonthlySummarySent(user.id, target.monthKey);
+      results.push({ userId: user.id, sent: true, month: target.monthKey, format, forced: force });
     } catch (error) {
       results.push({ userId: user.id, sent: false, reason: error.message });
     }
