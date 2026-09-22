@@ -240,3 +240,147 @@ describe('/api/line_due_notify — per-user isolation', () => {
     }
   });
 });
+
+// spec-line-notify-account-grouping.md AC-9: message-format coverage สำหรับการจัดกลุ่มรายการตามบัญชี
+describe('/api/line_due_notify — จัดกลุ่มรายการตามบัญชีในข้อความ (AC-1…AC-6)', () => {
+  const FMT_USER_ID = 'user-fmt';
+  const TARGET_DATE = '2024-01-15'; // target.day = 15, daysInMonth = 31
+
+  // seed ผู้ใช้ 1 คนพร้อม monthly_expense ของเดือนเป้าหมาย (และเดือนก่อนหน้าถ้าระบุ)
+  const seedUser = async ({ currentItems, prevItems } = {}) => {
+    await db.collection('users').insertOne({ id: FMT_USER_ID, LineId: `line-${FMT_USER_ID}` });
+    if (currentItems) {
+      await db.collection('monthly_expense').insertOne({ userId: FMT_USER_ID, month: '2024-01', ...currentItems });
+    }
+    if (prevItems) {
+      await db.collection('monthly_expense').insertOne({ userId: FMT_USER_ID, month: '2023-12', ...prevItems });
+    }
+  };
+
+  // เรียก handler แล้วดึงข้อความ LINE ฉบับล่าสุดที่ถูกส่งออก (ข้อความค่าใช้จ่าย ไม่ใช่บัตรเครดิต)
+  const sendAndGetMessage = async (mode = 'both') => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    const { req, res } = makeReqRes({ body: { date: TARGET_DATE, userId: FMT_USER_ID, mode } });
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    expect(fetchMock).toHaveBeenCalled();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    return body.messages[0].text;
+  };
+
+  it('1) สองบัญชีสลับกันในรายการต้นทาง → สอง heading คนละกลุ่ม บัญชีที่ปรากฏก่อนขึ้นก่อน', async () => {
+    await seedUser({
+      currentItems: {
+        // ลำดับ: บช1, บช2, บช1 (สลับกัน) — กลุ่มต้องรวมตามบัญชี ไม่ใช่ตามลำดับปรากฏของแต่ละแถว
+        itemA: { name: 'ค่าไฟ', actual: 500, dueDay: 15, account: 'บช1' },
+        itemB: { name: 'ค่าเน็ต', actual: 590, dueDay: 15, account: 'บช2' },
+        itemC: { name: 'ค่าน้ำ', actual: 210, dueDay: 15, account: 'บช1' }
+      }
+    });
+
+    const text = await sendAndGetMessage();
+
+    const idxAcc1 = text.indexOf('บช1');
+    const idxAcc2 = text.indexOf('บช2');
+    const idxFai = text.indexOf('ค่าไฟ');
+    const idxNet = text.indexOf('ค่าเน็ต');
+    const idxNam = text.indexOf('ค่าน้ำ');
+
+    expect(idxAcc1).toBeGreaterThan(-1);
+    expect(idxAcc2).toBeGreaterThan(-1);
+    // บช1 ขึ้นก่อน (ปรากฏก่อนใน items) แล้วค่อยตามด้วย บช2
+    expect(idxAcc1).toBeLessThan(idxAcc2);
+    // ทั้งค่าไฟและค่าน้ำอยู่ใต้กลุ่มบช1 (ก่อน heading บช2)
+    expect(idxFai).toBeGreaterThan(idxAcc1);
+    expect(idxNam).toBeGreaterThan(idxAcc1);
+    expect(idxFai).toBeLessThan(idxAcc2);
+    expect(idxNam).toBeLessThan(idxAcc2);
+    // ค่าเน็ตอยู่ใต้กลุ่มบช2
+    expect(idxNet).toBeGreaterThan(idxAcc2);
+    expect(text).not.toContain('อื่นๆ');
+  });
+
+  it('2) รายการไม่มีบัญชีอยู่ตัวแรกในต้นทาง → ยังคงถูกจัดไว้ท้ายสุดใต้ "อื่นๆ"', async () => {
+    await seedUser({
+      currentItems: {
+        // itemZ ไม่มี account และมาก่อนในลำดับ items — ต้องไม่ทำให้ "อื่นๆ" ขึ้นก่อนกลุ่มที่มีชื่อบัญชี
+        itemZ: { name: 'ค่าส่วนกลาง', actual: 100, dueDay: 15 },
+        itemA: { name: 'ค่าไฟ', actual: 500, dueDay: 15, account: 'บช1' }
+      }
+    });
+
+    const text = await sendAndGetMessage();
+
+    const idxAcc1 = text.indexOf('บช1');
+    const idxOther = text.indexOf('อื่นๆ');
+    const idxCentral = text.indexOf('ค่าส่วนกลาง');
+
+    expect(idxAcc1).toBeGreaterThan(-1);
+    expect(idxOther).toBeGreaterThan(-1);
+    // "อื่นๆ" ต้องอยู่หลังกลุ่มที่มีชื่อบัญชี แม้รายการไม่มีบัญชีจะมาก่อนใน items
+    expect(idxOther).toBeGreaterThan(idxAcc1);
+    expect(idxCentral).toBeGreaterThan(idxOther);
+  });
+
+  it('3) ไม่มีเลขลำดับและไม่มี " | " ต่อท้ายบัญชีในข้อความอีกต่อไป', async () => {
+    await seedUser({
+      currentItems: {
+        itemA: { name: 'ค่าไฟ', actual: 500, dueDay: 15, account: 'บช1' },
+        itemB: { name: 'ค่าเน็ต', actual: 590, dueDay: 15, account: 'บช2' }
+      }
+    });
+
+    const text = await sendAndGetMessage();
+
+    expect(text).not.toMatch(/^\d+\. /m);
+    expect(text).not.toContain(' | ');
+    expect(text).toContain('• ค่าไฟ — 500 บาท');
+    expect(text).toContain('• ค่าเน็ต — 590 บาท');
+  });
+
+  it('4) รายการค้างชำระ (แสดงวันที่) ยังแสดง 📅 ใต้ bullet ที่ถูกต้อง ส่วนรายการครบกำหนดวันนี้ไม่แสดง', async () => {
+    await seedUser({
+      currentItems: {
+        itemDue: { name: 'ค่าไฟ', actual: 500, dueDay: 15, account: 'บช1' }, // ครบกำหนดวันนี้ → hideDate
+        itemOverdue: { name: 'ค่าน้ำ', actual: 210, dueDay: 10, account: 'บช1' } // เลยกำหนดแล้ว → แสดงวันที่
+      }
+    });
+
+    const text = await sendAndGetMessage();
+
+    const dueSectionEnd = text.indexOf('⚠️ ค้างชำระ');
+    const dueSectionText = text.slice(0, dueSectionEnd);
+    const overdueSectionText = text.slice(dueSectionEnd);
+
+    expect(dueSectionText).toContain('• ค่าไฟ — 500 บาท');
+    expect(dueSectionText).not.toContain('📅');
+
+    expect(overdueSectionText).toContain('• ค่าน้ำ — 210 บาท');
+    expect(overdueSectionText).toContain('📅');
+  });
+
+  it('5) รายการค้างจากเดือนก่อนยังแสดง "(ค้างจาก …)" ต่อท้ายชื่อรายการ', async () => {
+    await seedUser({
+      prevItems: {
+        itemGas: { name: 'ค่าแก๊ส', actual: 300, dueDay: 10, account: 'บช1' }
+      }
+    });
+
+    const text = await sendAndGetMessage();
+
+    expect(text).toContain('• ค่าแก๊ส — 300 บาท (ค้างจาก ธ.ค. 2566)');
+  });
+
+  it('6) ทุกรายการในหมวดไม่มีบัญชีเลย → ตัด heading "อื่นๆ" ทิ้ง แสดง bullet ตรงใต้หัวข้อ section เลย', async () => {
+    await seedUser({
+      currentItems: {
+        itemOnly: { name: 'ค่าไฟ', actual: 500, dueDay: 15 } // ไม่มี account เลยทั้ง section
+      }
+    });
+
+    const text = await sendAndGetMessage();
+
+    expect(text).not.toContain('อื่นๆ');
+    expect(text).toContain('✅ ครบกำหนดวันนี้\n• ค่าไฟ — 500 บาท');
+  });
+});
