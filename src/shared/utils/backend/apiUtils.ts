@@ -1,9 +1,14 @@
 import type { ExpenseItem } from '../../types/domain';
+import { calculateOvertimeTotal, normaliseOvertimeRows } from '../overtimeUtils';
 
 /** Module-private shape for calculateSalarySummary's single caller (pages/api/salary.js). */
 interface SalaryBreakdown {
   income?: Record<string, unknown>;
   deduct?: Record<string, unknown>;
+  /** แถว OT ที่บันทึกไว้ (ดิบ) — normalise ที่นี่ก่อนคำนวณเสมอ */
+  overtime?: unknown;
+  /** ต้องส่งมาด้วยทุกครั้ง มิฉะนั้น OT จะคิดเป็น 0 เงียบ ๆ (V-1, DATA_MODEL inv. 5) */
+  month?: string;
 }
 
 // Salary summary calculation
@@ -12,7 +17,16 @@ export function calculateSalarySummary(salaryData: SalaryBreakdown): {
   total_deduct: number;
   net_income: number;
 } {
-  const total_income = Object.values(salaryData.income || {}).reduce((sum: number, val) => sum + (parseFloat(String(val)) || 0), 0);
+  const incomeTotal = Object.values(salaryData.income || {}).reduce((sum: number, val) => sum + (parseFloat(String(val)) || 0), 0);
+  // ยอด OT ที่คำนวณได้ บวกเพิ่มจากผลรวม income — ยอด OT แบบเดิม (income.overtime_*) อยู่ในผลรวม
+  // ข้างบนแล้ว จึงไม่ถูกนับซ้ำที่นี่ (D-1 / BR-OT-009)
+  // salary อ่านด้วย parseFloat(String()) ชุดเดียวกับผลรวม income เพื่อไม่ให้สองฝั่งตีค่าต่างกัน (A-3)
+  const overtimeTotal = calculateOvertimeTotal(
+    normaliseOvertimeRows(salaryData.overtime),
+    parseFloat(String(salaryData.income?.salary)) || 0,
+    salaryData.month ?? ''
+  );
+  const total_income = incomeTotal + overtimeTotal;
   const total_deduct = Object.values(salaryData.deduct || {}).reduce((sum: number, val) => sum + (parseFloat(String(val)) || 0), 0);
   const net_income = total_income - total_deduct;
   return { total_income, total_deduct, net_income };

@@ -264,10 +264,13 @@ export const salaryAPI = {
 		const months = await jsonFetch(buildUrl(API_URLS.SALARY));
 		return { months };
 	},
-	save: async (month: string, income: unknown, deduct: unknown, note: string = ''): Promise<any> => jsonFetch(API_URLS.SALARY, {
+	// overtime อยู่ตำแหน่งที่ 5 เท่านั้น — ตำแหน่งที่ 4 เป็นของ note ที่ MonthManager.js:296 ส่งแบบ
+	// positional อยู่แล้ว การแทรกที่ 4 จะทำให้อาร์เรย์แถว OT ไปลงใน note เงียบ ๆ (V-6)
+	// ผู้เรียกที่ไม่ส่ง overtime = ล้างแถว OT ของเดือนนั้น เพราะฝั่งเซิร์ฟเวอร์เขียนทับทุกครั้ง (A-9)
+	save: async (month: string, income: unknown, deduct: unknown, note: string = '', overtime: unknown = []): Promise<any> => jsonFetch(API_URLS.SALARY, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: withUserPayload({ month, income, deduct, note })
+		body: withUserPayload({ month, income, deduct, note, overtime })
 	}),
 	delete: async (month: string): Promise<any> => jsonFetch(buildUrl(API_URLS.SALARY, { month }), {
 		method: 'DELETE'

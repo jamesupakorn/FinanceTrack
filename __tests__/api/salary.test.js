@@ -12,6 +12,7 @@
 // pick up the test env instead of whatever was cached from an earlier test file/process.
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createMocks } from 'node-mocks-http';
+import { SALARY_OT_PARITY_SCENARIOS, pickParityFields } from './salaryOvertimeParity.fixtures';
 
 const TEST_SECRET = 'test-secret-do-not-use-in-prod';
 const USER_A = 'test-user-a';
@@ -78,13 +79,10 @@ function makeReqRes({ method = 'GET', userId = USER_A, query = {}, body, headers
   });
 }
 
+// โครงสร้าง income เริ่มต้นหลังถอดคีย์ overtime_* แบบยอดคงที่ออก (spec §createDefaultSalaryStructure, V-8)
+// OT ไม่ได้อยู่ใน income อีกต่อไป — อยู่ใน overtime[] และคำนวณยอดตอนอ่าน
 const ZERO_INCOME = {
   salary: 0,
-  overtime_1x: 0,
-  overtime_1_5x: 0,
-  overtime_2x: 0,
-  overtime_3x: 0,
-  overtime_other: 0,
   bonus: 0,
   other_income: 0
 };
@@ -419,5 +417,66 @@ describe('/api/salary (Mongo mode)', () => {
     // User B's out-of-range document survives untouched — proves the userFilter-scoped deletion
     // boundary holds across collections too.
     expect(await db.collection('salary').findOne({ userId: USER_B, month: '2020-01' })).not.toBeNull();
+  });
+});
+
+// เคสชุดเดียวกันนี้ถูกรันอีกรอบใน salary-json-mode.test.js — ความเท่ากันของสองโหมด (AC-OT-21)
+// จึงถูกบังคับด้วยไฟล์ fixture ร่วม ไม่ใช่ด้วยการที่คนเขียนเทสต์จำได้ว่าเคยเขียนอะไรไว้ฝั่งไหน
+describe('/api/salary — overtime (Mongo mode)', () => {
+  SALARY_OT_PARITY_SCENARIOS.forEach((scenario) => {
+    it(scenario.name, async () => {
+      for (const seed of scenario.seeds || []) {
+        await db.collection('salary').insertOne({ ...seed, userId: USER_A });
+      }
+
+      for (const body of scenario.posts || []) {
+        const { req, res } = makeReqRes({ method: 'POST', body });
+        await handler(req, res);
+        expect(res._getStatusCode()).toBe(201);
+      }
+
+      if (scenario.getAll) {
+        const { req, res } = makeReqRes({ query: {} });
+        await handler(req, res);
+        expect(res._getStatusCode()).toBe(200);
+        const data = JSON.parse(res._getData());
+        Object.entries(scenario.expectedAll).forEach(([month, expected]) => {
+          expect(pickParityFields(data[month])).toEqual(expected);
+        });
+      } else {
+        const { req, res } = makeReqRes({ query: { month: scenario.get } });
+        await handler(req, res);
+        expect(res._getStatusCode()).toBe(200);
+        expect(pickParityFields(JSON.parse(res._getData()))).toEqual(scenario.expected);
+      }
+
+      // อ่านจากเอกสารที่บันทึกจริง ไม่ใช่จาก response — V-1/AC-OT-20 พังได้โดยที่ response ยังดูถูก
+      for (const [month, expected] of Object.entries(scenario.stored || {})) {
+        const doc = await db.collection('salary').findOne({ userId: USER_A, month });
+        Object.entries(expected).forEach(([field, value]) => {
+          expect(doc[field]).toEqual(value);
+        });
+      }
+    });
+  });
+
+  it('never persists overtimeLegacy, even when a client sends it (DATA_MODEL inv. 4, edge 25)', async () => {
+    const { req, res } = makeReqRes({
+      method: 'POST',
+      body: {
+        month: '2026-09',
+        income: { salary: 30000, overtime_1_5x: 3200 },
+        deduct: {},
+        overtime: [],
+        overtimeLegacy: [{ id: 'legacy_overtime_1_5x', key: 'overtime_1_5x', label: 'x', amount: 999 }]
+      }
+    });
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(201);
+
+    const doc = await db.collection('salary').findOne({ userId: USER_A, month: '2026-09' });
+    expect(doc.overtimeLegacy).toBeUndefined();
+    // 30,000 + 3,200 — ยอด 999 ที่ client แนบมาไม่ถูกนับ
+    expect(doc.summary.total_income).toBe(33200);
   });
 });
