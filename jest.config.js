@@ -10,7 +10,10 @@ const customJestConfig = {
   // Mongo driver or other Node-only server modules opt into `/** @jest-environment node */`
   // per-file, since jsdom lacks the `net`/`tls` modules the `mongodb` package needs.
   testEnvironment: 'jest-environment-jsdom',
-  testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],
+  // `*.fixtures.js` คือข้อมูลเคสที่ไฟล์เทสต์หลายไฟล์ import ร่วมกัน ไม่ใช่ชุดเทสต์ในตัวเอง —
+  // testMatch ปริยายของ next/jest จับทุกไฟล์ใน __tests__ จึงต้องกันไว้ ไม่งั้นจะฟ้อง
+  // "must contain at least one test"
+  testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/', '\\.fixtures\\.js$'],
 };
 
 module.exports = createJestConfig(customJestConfig);

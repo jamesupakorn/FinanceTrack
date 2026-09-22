@@ -126,7 +126,8 @@ describe('SalaryModal — sticky footer structure', () => {
     await user.click(save);
 
     await waitFor(() => expect(salaryAPI.save).toHaveBeenCalledTimes(1));
-    expect(salaryAPI.save).toHaveBeenCalledWith('2026-01', expect.any(Object), expect.any(Object));
+    // 5 arguments since the OT feature — note stays 4th ('' on every save), overtime is 5th (A-6/V-6)
+    expect(salaryAPI.save).toHaveBeenCalledWith('2026-01', expect.any(Object), expect.any(Object), '', []);
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
   });
 
@@ -140,12 +141,14 @@ describe('SalaryModal — sticky footer structure', () => {
     // กลางการพิมพ์ แล้ว blur handler จะ format ค่าทิ้งกลางคัน (artifact ของเทสต์ ไม่ใช่บั๊กของโปรดักต์)
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('ปิด')));
 
+    // แถวแรกของรายได้คือแถวเงินเดือนที่ล็อกไว้ — aria-label ของช่องจำนวนเงินเป็น `จำนวนเงินเงินเดือน`
+    // (เฉพาะแถวนั้น) ไม่ใช่ `จำนวนเงินรายการรายได้` ของแถวทั่วไป (UX spec §3)
     const salaryRow = () => getBody().querySelector('[data-salary-type="income"]');
-    await user.type(within(salaryRow()).getByLabelText('จำนวนเงินรายการรายได้'), '1000');
-    expect(within(salaryRow()).getByLabelText('จำนวนเงินรายการรายได้')).toHaveValue('1000');
+    await user.type(within(salaryRow()).getByLabelText('จำนวนเงินเงินเดือน'), '1000');
+    expect(within(salaryRow()).getByLabelText('จำนวนเงินเงินเดือน')).toHaveValue('1000');
 
     await user.click(screen.getByLabelText('ล้างข้อมูล'));
-    expect(within(salaryRow()).getByLabelText('จำนวนเงินรายการรายได้')).toHaveValue('');
+    expect(within(salaryRow()).getByLabelText('จำนวนเงินเงินเดือน')).toHaveValue('');
   });
 
   it('E-7: while saving, the footer button shows กำลังบันทึก... and is disabled', async () => {
