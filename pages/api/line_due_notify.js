@@ -142,17 +142,43 @@ function buildMessage(target, groupedItems, notifyMode) {
   return [header, ...sections, footer].join('\n\n');
 }
 
+const OTHER_ACCOUNT_LABEL = 'อื่นๆ';
+
+/**
+ * จัดกลุ่มรายการตามบัญชี โดยคงลำดับการปรากฏครั้งแรกของแต่ละบัญชี
+ * รายการที่ไม่มีบัญชีถูกรวมไว้ในกลุ่มท้ายสุดชื่อ "อื่นๆ"
+ * @param {array} items - รายการค่าใช้จ่าย
+ * @returns {array} กลุ่มรายการ [{ account, items }]
+ */
+function groupItemsByAccount(items) {
+  const named = new Map(); // Map คง insertion order ตามลำดับปรากฏครั้งแรก
+  const unnamed = [];
+  for (const item of items) {
+    if (!item.account) { unnamed.push(item); continue; }
+    if (!named.has(item.account)) named.set(item.account, []);
+    named.get(item.account).push(item);
+  }
+  const groups = [...named.entries()].map(([account, groupItems]) => ({ account, items: groupItems }));
+  if (unnamed.length) groups.push({ account: OTHER_ACCOUNT_LABEL, items: unnamed });
+  return groups;
+}
+
 function buildSection(title, items, target, opts = {}) {
-  const lines = items.map((item, index) => formatLineItem(item, index, target, opts));
+  const groups = groupItemsByAccount(items);
+  // ถ้ามีกลุ่มเดียวและเป็นกลุ่ม "อื่นๆ" (ไม่มีรายการไหนมีบัญชีเลย) ให้ตัด heading ทิ้ง เพราะไม่ได้ช่วยจัดกลุ่มอะไร
+  const showHeadings = !(groups.length === 1 && groups[0].account === OTHER_ACCOUNT_LABEL);
+  const lines = groups.flatMap(group => [
+    ...(showHeadings ? [group.account] : []),
+    ...group.items.map(item => formatLineItem(item, target, opts))
+  ]);
   return [title, ...lines].join('\n');
 }
 
-function formatLineItem(item, index, target, opts = {}) {
+function formatLineItem(item, target, opts = {}) {
   const name = item.name || 'รายการไม่มีชื่อ';
   const amount = formatAmount(item.actual || 0);
-  const account = item.account ? ` | ${item.account}` : '';
   const fromMonth = item._fromMonth ? ` (ค้างจาก ${formatMonthKeyTH(item._fromMonth)})` : '';
-  const firstLine = `${index + 1}. ${name} — ${amount} บาท${account}${fromMonth}`;
+  const firstLine = `• ${name} — ${amount} บาท${fromMonth}`;
   if (opts.hideDate) return firstLine;
   const dueDay = getDueDayNumber(item);
   const dueDateText = dueDay ? buildDueDateString(target, dueDay) : null;
