@@ -13,6 +13,11 @@ import {
 	getUserData,
 	updateUserData,
 } from '../../src/backend/data/userUtils.js';
+import {
+	normaliseOvertimeRows,
+	extractLegacyOvertimeRows,
+	stripLegacyOvertimeKeys
+} from '../../src/shared/utils/overtimeUtils';
 
 const COLLECTION_NAME = 'salary';
 const JSON_FILENAME = 'salary.json';
@@ -20,12 +25,9 @@ const JSON_FILENAME = 'salary.json';
 function createDefaultSalaryStructure() {
 	return {
 		income: {
+			// คีย์ overtime_* แบบยอดคงที่ถูกถอดออกจาก default แล้ว — OT คำนวณจาก overtime[] แทน
+			// เอกสารเก่าที่มีคีย์เหล่านี้อยู่ยังเก็บไว้ตลอดไป ไม่มี migration (DATA_MODEL)
 			salary: 0,
-			overtime_1x: 0,
-			overtime_1_5x: 0,
-			overtime_2x: 0,
-			overtime_3x: 0,
-			overtime_other: 0,
 			bonus: 0,
 			other_income: 0
 		},
@@ -34,6 +36,7 @@ function createDefaultSalaryStructure() {
 			social_security: 0,
 			tax: 0
 		},
+		overtime: [],
 		summary: {
 			total_income: 0,
 			total_deduct: 0,
@@ -41,6 +44,21 @@ function createDefaultSalaryStructure() {
 		},
 		saved_at: new Date().toISOString(),
 		note: ""
+	};
+}
+
+/**
+ * ตัวแปลงตอน GET ที่ใช้ร่วมกันทุกเส้นทาง (JSON/Mongo × ระบุเดือน/ไม่ระบุเดือน) — A-2
+ * 1. normalise overtime ให้เป็น OvertimeRow[] เสมอ (เอกสารเก่าไม่มีฟิลด์นี้ หรือมีสมาชิกเพี้ยน)
+ * 2. derive overtimeLegacy จาก income — เป็นการแปลงตอนแสดงผลล้วน ๆ **ไม่แตะ income** (D-1)
+ * summary ของเอกสารที่บันทึกแล้วคืนตามที่เก็บไว้ ส่วน carry-forward คำนวณใหม่ที่ call site
+ */
+function decorateSalaryDocForGet(doc) {
+	const income = doc.income || {};
+	return {
+		...doc,
+		overtime: normaliseOvertimeRows(doc.overtime),
+		overtimeLegacy: extractLegacyOvertimeRows(income)
 	};
 }
 
@@ -75,36 +93,46 @@ function handleJsonSalaryGet(req, res, userId) {
 			const prevDoc = findPrevMonthDoc(bucket, month);
 			doc = withGeneratedId({
 				...createDefaultSalaryStructure(),
-				...(prevDoc ? { income: prevDoc.income || {}, deduct: prevDoc.deduct || {} } : {}),
+				// เงินเดือนเกิดซ้ำทุกเดือน แต่ OT ไม่ — ยอด OT แบบเดิมถูกตัดออกจาก income ที่คัดลอกมา
+				// และ overtime[] ไม่ถูก carry-forward (คงเป็น [] ตาม default) — V-3 / BR-OT-007/008
+				...(prevDoc ? { income: stripLegacyOvertimeKeys(prevDoc.income || {}), deduct: prevDoc.deduct || {} } : {}),
 				month,
 			});
+			// summary ของ default structure เป็น object ที่ truthy อยู่แล้ว `||` ด้านล่างจึงไม่ทำงาน
+			// ทำให้เดือน carry-forward เคยคืน summary เป็นศูนย์ทั้งชุด — คำนวณใหม่ตรงนี้ให้ตรงกับฝั่ง
+			// Mongo (A-5 / AC-OT-26) และต้องทำ *หลัง* ตัดคีย์ OT เดิมออกแล้วเท่านั้น (A-1)
+			doc.summary = calculateSalarySummary({ ...doc, month });
 			// ไม่บันทึก carry-over ลงไฟล์ — แค่คืนข้อมูลเพื่อแสดงผล
 			// บันทึกจริงเมื่อ user กด save (POST) เท่านั้น
 		}
-		const summary = doc.summary || calculateSalarySummary(doc);
-		return res.json({ ...doc, summary });
+		const summary = doc.summary || calculateSalarySummary({ ...doc, month });
+		return res.json(decorateSalaryDocForGet({ ...doc, summary }));
 	}
 	const allData = {};
 	Object.entries(bucket).forEach(([monthKey, doc]) => {
 		if (!doc || !doc.month) return;
-		const summary = doc.summary || calculateSalarySummary(doc);
-		allData[monthKey] = { ...doc, summary };
+		const summary = doc.summary || calculateSalarySummary({ ...doc, month: doc.month });
+		allData[monthKey] = decorateSalaryDocForGet({ ...doc, summary });
 	});
 	return res.json(allData);
 }
 
 function handleJsonSalaryPost(req, res, userId) {
-	const { month, income, deduct, note } = req.body;
+	const { month, income, deduct, note, overtime } = req.body;
 	if (!month) {
 		return res.status(400).json({ error: 'กรุณาระบุเดือน' });
 	}
 	const salaryData = {
 		income: income || {},
 		deduct: deduct || {},
+		// เขียนทุกครั้งแม้เป็น [] — การเขียนเป็นแบบ merge ระดับบนสุด ถ้าไม่ส่งจะเหลือแถวเดิมค้างไว้
+		// (DATA_MODEL inv. 3) และ normalise ทิ้ง property อื่น เช่น amount ที่ client ส่งมา (inv. 4)
+		overtime: normaliseOvertimeRows(overtime),
 		note: note || '',
 		saved_at: new Date().toISOString()
 	};
-	salaryData.summary = calculateSalarySummary(salaryData);
+	// ต้องส่ง month เข้าไปด้วย ไม่งั้น OT จะคิดเป็น 0 ใน summary ที่บันทึกจริง ขณะที่ UI แสดงเลขถูก (V-1)
+	salaryData.summary = calculateSalarySummary({ ...salaryData, month });
 	updateUserData(JSON_FILENAME, userId, (bucket) => {
 		const nextBucket = { ...bucket };
 		const existing = nextBucket[month] || {};
@@ -169,10 +197,12 @@ export default async function handler(req, res) {
 					const prevDoc = priorDocs.find((d) => hasMeaningfulSalaryData(d)) || null;
 					doc = { ...createDefaultSalaryStructure(), month };
 					if (prevDoc) {
-						doc.income = prevDoc.income || {};
+						// ตัดคีย์ OT เดิมออก *ก่อน* คำนวณ summary ไม่งั้นยอดที่ตัดทิ้งจะถูกนับต่อ (V-3 / A-1)
+						// และไม่ carry-forward overtime[] — คงเป็น [] ตาม default (BR-OT-007/008)
+						doc.income = stripLegacyOvertimeKeys(prevDoc.income || {});
 						doc.deduct = prevDoc.deduct || {};
 					}
-					doc.summary = calculateSalarySummary(doc);
+					doc.summary = calculateSalarySummary({ ...doc, month });
 					// ไม่บันทึก carry-over ลง DB — แค่คืนข้อมูลเพื่อแสดงผล
 					// บันทึกจริงเมื่อ user กด save (POST) เท่านั้น
 				} else {
@@ -186,40 +216,43 @@ export default async function handler(req, res) {
 				const sanitizedDoc = { ...doc };
 				delete sanitizedDoc._id;
 				delete sanitizedDoc.userId;
-				let summary = doc && doc.summary ? doc.summary : calculateSalarySummary(doc);
-				return res.json({
+				let summary = doc && doc.summary ? doc.summary : calculateSalarySummary({ ...doc, month });
+				return res.json(decorateSalaryDocForGet({
 					...sanitizedDoc,
 					summary
-				});
+				}));
 			} else {
 			// return all
 			const allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
 			const allData = {};
 			allDocs.forEach(doc => {
 				// Ensure summary is present
-				let summary = doc && doc.summary ? doc.summary : calculateSalarySummary(doc);
+				let summary = doc && doc.summary ? doc.summary : calculateSalarySummary({ ...doc, month: doc.month });
 				const sanitizedDoc = { ...doc };
 				delete sanitizedDoc._id;
 				delete sanitizedDoc.userId;
-				allData[doc.month] = {
+				allData[doc.month] = decorateSalaryDocForGet({
 					...sanitizedDoc,
 					summary
-				};
+				});
 			});
 			return res.json(allData);
 			}
 		} else if (req.method === 'POST') {
-			const { month, income, deduct, note } = req.body;
+			const { month, income, deduct, note, overtime } = req.body;
 			if (!month) {
 				return res.status(400).json({ error: 'กรุณาระบุเดือน' });
 			}
 			const salaryData = {
 				income: income || {},
 				deduct: deduct || {},
+				// $set แบบ merge ระดับบนสุด — ต้องเขียน overtime ทุกครั้งแม้เป็น [] (DATA_MODEL inv. 3)
+				overtime: normaliseOvertimeRows(overtime),
 				note: note || "",
 				saved_at: new Date().toISOString()
 			};
-			salaryData.summary = calculateSalarySummary(salaryData);
+			// V-1: month ต้องถึง calculateSalarySummary ไม่งั้น total_income ที่เก็บจะขาด OT ไปเงียบ ๆ
+			salaryData.summary = calculateSalarySummary({ ...salaryData, month });
 			await collection.updateOne(
 				{ month, ...userFilter },
 				{ $set: { ...salaryData, month, ...userFilter } },

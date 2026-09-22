@@ -38,14 +38,20 @@ function captureToasts() {
 }
 
 describe('SalaryCalculator', () => {
-  it('1. initial render with no selectedMonth shows the full 8/3-item preset lists, all values empty, and does not call getByMonth', () => {
+  it('1. initial render with no selectedMonth shows the full 3/3-item preset lists (salary row locked, no flat OT presets), all values empty, and does not call getByMonth', () => {
     render(<SalaryCalculator />);
 
-    expect(screen.getAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(8);
+    // 3 income presets (salary/bonus/other_income) but only 2 name inputs: the locked เงินเดือน row
+    // renders its label as static text (AC-OT-10). The five flat overtime_* presets are gone (AC-OT-17).
+    expect(screen.getAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(2);
     expect(screen.getAllByLabelText('แก้ไขชื่อรายการค่าใช้จ่ายหักออก')).toHaveLength(3);
-    expect(screen.getByDisplayValue('เงินเดือน')).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-salary-type="income"]')).toHaveLength(3);
+    expect(screen.getByText('เงินเดือน')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('เงินเดือน')).not.toBeInTheDocument(); // static label, not an input
+    expect(screen.getByLabelText('จำนวนเงินเงินเดือน')).toBeInTheDocument();
+    expect(screen.queryByText('ค่าล่วงเวลา 1.5 เท่า')).not.toBeInTheDocument();
     expect(screen.getByDisplayValue('หักภาษี')).toBeInTheDocument();
-    expect(screen.getAllByDisplayValue('')).toHaveLength(11); // every amount input starts empty
+    expect(screen.getAllByDisplayValue('')).toHaveLength(6); // 3 income + 3 deduction amount inputs
 
     expect(screen.getByText('คำนวณเงินเดือน - กรุณาเลือกเดือน')).toBeInTheDocument();
     expect(salaryAPI.getByMonth).not.toHaveBeenCalled();
@@ -71,9 +77,12 @@ describe('SalaryCalculator', () => {
 
     await screen.findByDisplayValue('30,000.00');
 
-    // Income: exactly 3 rows — เงินเดือน/โบนัส/งานเสริม — not the full 8-item preset list.
-    expect(screen.getAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(3);
-    expect(screen.getByDisplayValue('เงินเดือน')).toBeInTheDocument();
+    // Income: exactly 3 rows — เงินเดือน/โบนัส/งานเสริม — not the full preset list. Only 2 of them
+    // have a name input; เงินเดือน is locked and renders as static text (AC-OT-10).
+    expect(document.querySelectorAll('[data-salary-type="income"]')).toHaveLength(3);
+    expect(screen.getAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(2);
+    expect(screen.getByText('เงินเดือน')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('เงินเดือน')).not.toBeInTheDocument();
     expect(screen.getByDisplayValue('30,000.00')).toBeInTheDocument();
     expect(screen.getByDisplayValue('โบนัส')).toBeInTheDocument();
     expect(screen.getByDisplayValue('5,000.00')).toBeInTheDocument();
@@ -88,15 +97,19 @@ describe('SalaryCalculator', () => {
     expect(screen.getByDisplayValue('750.00')).toBeInTheDocument();
   });
 
-  it('4. an all-zero/empty section falls back to exactly one blank row, not the full preset list', async () => {
+  it('4. income with salary: 0 renders the force-injected locked เงินเดือน row (not a blank custom row); an all-zero deduction section still falls back to one blank row', async () => {
     salaryAPI.getByMonth.mockResolvedValue({ income: { salary: 0 }, deduct: {} });
     render(<SalaryCalculator selectedMonth="2026-01" />);
 
-    await screen.findByDisplayValue('รายได้ใหม่');
+    await screen.findByDisplayValue('รายการหักใหม่');
 
-    const incomeLabels = screen.getAllByLabelText('แก้ไขชื่อรายการรายได้');
-    expect(incomeLabels).toHaveLength(1);
-    expect(incomeLabels[0]).toHaveValue('รายได้ใหม่');
+    // AC-OT-04 / V-4: buildItemsFromSource drops presets whose value is 0, so without the forced
+    // injection this month would have no salary row at all — and the OT formula would have no divisor.
+    expect(document.querySelectorAll('[data-salary-type="income"]')).toHaveLength(1);
+    expect(screen.getByText('เงินเดือน')).toBeInTheDocument();
+    expect(screen.getByLabelText('จำนวนเงินเงินเดือน')).toHaveValue('');
+    expect(screen.queryAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(0);
+    expect(screen.queryByDisplayValue('รายได้ใหม่')).not.toBeInTheDocument();
 
     const deductionLabels = screen.getAllByLabelText('แก้ไขชื่อรายการค่าใช้จ่ายหักออก');
     expect(deductionLabels).toHaveLength(1);
@@ -111,9 +124,11 @@ describe('SalaryCalculator', () => {
 
     await waitFor(() => expect(consoleErrorSpy).toHaveBeenCalled());
 
-    expect(screen.getAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(8);
+    expect(screen.getAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(2);
     expect(screen.getAllByLabelText('แก้ไขชื่อรายการค่าใช้จ่ายหักออก')).toHaveLength(3);
-    expect(screen.getAllByDisplayValue('')).toHaveLength(11);
+    expect(document.querySelectorAll('[data-salary-type="income"]')).toHaveLength(3);
+    expect(screen.getByText('เงินเดือน')).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue('')).toHaveLength(6);
 
     consoleErrorSpy.mockRestore();
   });
@@ -125,9 +140,11 @@ describe('SalaryCalculator', () => {
 
     rerender(<SalaryCalculator selectedMonth={null} />);
 
-    expect(screen.getAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(8);
+    expect(screen.getAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-salary-type="income"]')).toHaveLength(3);
+    expect(screen.getByText('เงินเดือน')).toBeInTheDocument();
     expect(screen.queryByDisplayValue('5,000.00')).not.toBeInTheDocument();
-    expect(screen.getAllByDisplayValue('')).toHaveLength(11);
+    expect(screen.getAllByDisplayValue('')).toHaveLength(6);
   });
 
   it('7. K16: เงินได้สุทธิ recalculates live from typed input, no blur required', async () => {
@@ -136,8 +153,10 @@ describe('SalaryCalculator', () => {
 
     expect(getNetIncomeText()).toBe(formatCurrency(0));
 
-    const salaryRow = screen.getByDisplayValue('เงินเดือน').closest('[data-salary-type="income"]');
-    const amountInput = within(salaryRow).getByLabelText('จำนวนเงินรายการรายได้');
+    // The locked salary row is located by its static label text, and its amount input carries the
+    // row-specific aria-label `จำนวนเงินเงินเดือน` (UX spec §3), not the generic รายการรายได้ one.
+    const salaryRow = screen.getByText('เงินเดือน').closest('[data-salary-type="income"]');
+    const amountInput = within(salaryRow).getByLabelText('จำนวนเงินเงินเดือน');
 
     await user.type(amountInput, '5');
     expect(getNetIncomeText()).toBe(formatCurrency(5));
@@ -150,8 +169,8 @@ describe('SalaryCalculator', () => {
     const user = userEvent.setup();
     render(<SalaryCalculator />);
 
-    const salaryRow = screen.getByDisplayValue('เงินเดือน').closest('[data-salary-type="income"]');
-    const amountInput = within(salaryRow).getByLabelText('จำนวนเงินรายการรายได้');
+    const salaryRow = screen.getByText('เงินเดือน').closest('[data-salary-type="income"]');
+    const amountInput = within(salaryRow).getByLabelText('จำนวนเงินเงินเดือน');
 
     await user.type(amountInput, '5000');
     expect(amountInput.value).toBe('5000'); // raw, uncommaed, while still focused
@@ -206,21 +225,32 @@ describe('SalaryCalculator', () => {
     expect(screen.getByDisplayValue('C')).toBeInTheDocument();
   });
 
-  it('11. removing the last remaining item in a section leaves exactly one fresh blank row, not zero rows', async () => {
+  it('11. removing the only custom income row leaves the locked เงินเดือน row (not a fresh blank one); the deduction section still falls back to one fresh blank row', async () => {
     salaryAPI.getByMonth.mockResolvedValue({
       income: { item_x: 100, __labels: { item_x: 'X' } },
-      deduct: {},
+      deduct: { tax: 1500 },
     });
     const user = userEvent.setup();
     render(<SalaryCalculator selectedMonth="2026-01" />);
     await screen.findByDisplayValue('X');
 
-    const deleteButton = screen.getByLabelText('ลบรายการรายได้นี้');
-    await user.click(deleteButton);
+    await user.click(screen.getByLabelText('ลบรายการรายได้นี้'));
 
-    const remainingLabels = screen.getAllByLabelText('แก้ไขชื่อรายการรายได้');
-    expect(remainingLabels).toHaveLength(1);
-    expect(remainingLabels[0]).toHaveValue('รายได้ใหม่');
+    // The locked salary row is always present, so the income list can never empty out — the
+    // createNewItem fallback is unreachable here (AC-OT-04), and no blank row must be invented.
+    expect(document.querySelectorAll('[data-salary-type="income"]')).toHaveLength(1);
+    expect(screen.getByText('เงินเดือน')).toBeInTheDocument();
+    expect(screen.queryAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(0);
+    expect(screen.queryByDisplayValue('รายได้ใหม่')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('X')).not.toBeInTheDocument();
+
+    // The fallback itself is unchanged — it is still reachable from the deduction section, which has
+    // no locked row. (Kept here so removing it from handleRemoveItem still fails a test.)
+    await user.click(screen.getByLabelText('ลบรายการค่าใช้จ่ายหักออกนี้'));
+
+    const remainingDeductionLabels = screen.getAllByLabelText('แก้ไขชื่อรายการค่าใช้จ่ายหักออก');
+    expect(remainingDeductionLabels).toHaveLength(1);
+    expect(remainingDeductionLabels[0]).toHaveValue('รายการหักใหม่');
   });
 
   it('12. clearAll clears every value input without calling any save API', async () => {
@@ -231,7 +261,8 @@ describe('SalaryCalculator', () => {
 
     await user.click(screen.getByRole('button', { name: 'ล้างข้อมูล' }));
 
-    expect(screen.getByDisplayValue('เงินเดือน')).toBeInTheDocument(); // labels unchanged
+    expect(screen.getByText('เงินเดือน')).toBeInTheDocument(); // locked row survives clearAll
+    expect(screen.getByLabelText('จำนวนเงินเงินเดือน')).toHaveValue(''); // only its value is blanked
     expect(screen.getByDisplayValue('หักภาษี')).toBeInTheDocument();
     expect(screen.queryByDisplayValue('30,000.00')).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue('1,500.00')).not.toBeInTheDocument();
@@ -279,7 +310,11 @@ describe('SalaryCalculator', () => {
     expect(salaryAPI.save).toHaveBeenCalledWith(
       '2026-01',
       { salary: 30000, __labels: { salary: 'เงินเดือน' } },
-      { tax: 1500, provident_fund: 750, __labels: { tax: 'หักภาษี', provident_fund: 'หักกองทุนสำรองเลี้ยงชีพ' } }
+      { tax: 1500, provident_fund: 750, __labels: { tax: 'หักภาษี', provident_fund: 'หักกองทุนสำรองเลี้ยงชีพ' } },
+      // A-6: note stays 4th and is still wiped to '' on every save; overtime is the 5th argument.
+      // Swapping the two would land the OT row array in `note` with no error and no visible symptom.
+      '',
+      []
     );
     expect(taxAPI.updateMonthlyDeductionFields).toHaveBeenCalledWith('2026', '01', {
       tax: 1500,

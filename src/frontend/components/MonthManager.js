@@ -32,6 +32,7 @@ import { getNextMonth } from '../../shared/utils/frontend/numberUtils';
 import { getMonthData, getPrevMonth, formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { stripLegacyOvertimeKeys } from '../../shared/utils/overtimeUtils';
 import { Icons } from './Icons';
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
@@ -293,6 +294,9 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, months, o
       await Promise.all([
         expenseAPI.save(month, {}),
         incomeAPI.save(month, {}),
+        // เดือนที่สร้างใหม่ไม่มีแถว OT ให้คัดลอก — ไม่ส่งอาร์กิวเมนต์ที่ 5 โดยตั้งใจ เพราะค่า default ของ
+        // salaryAPI.save คือ [] อยู่แล้ว ผลลัพธ์ที่บันทึกจึงเป็น overtime: [] เท่ากับส่งเองทุกประการ
+        // (spec §MonthManager / AC-OT-23 ระบุว่า call site นี้ต้องไม่ถูกแก้)
         salaryAPI.save(month, {}, {}, ''),
         savingsAPI.saveList ? savingsAPI.saveList(month, []) : Promise.resolve(),
         investmentAPI.saveList ? investmentAPI.saveList(month, []) : Promise.resolve()
@@ -364,11 +368,17 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, months, o
       await Promise.all([
         expenseAPI.save(selectedMonth, expensePrev),
         incomeAPI.save(selectedMonth, incomePrev),
+        // OT: คัดลอก "แถวชั่วโมง" มาด้วย แต่ไม่คัดลอก "ยอด OT แบบคงที่ของเดิม" (BR-OT-007/008, AC-OT-15)
+        // ความไม่สมมาตรนี้ตั้งใจ: การคัดลอกเป็นคำสั่งที่ผู้ใช้กดยืนยันเอง การคัดชั่วโมง OT มาแก้ต่อจึงคือ
+        // สิ่งที่ผู้ใช้ขอ ส่วนยอดคงที่ของเดิมเป็นประวัติที่ผูกกับเดือนนั้นเดือนเดียว คัดลอกมาเท่ากับติดป้าย
+        // OT ของอีกเดือนว่าเป็นของเดือนนี้ (ต่างจาก carry-forward ที่เป็นการคัดลอกโดยปริยาย ห้ามคัดทั้งคู่)
+        // ตำแหน่งที่ 5 เท่านั้น — ตำแหน่งที่ 4 เป็นของ note (A-6/V-6) และการไม่ส่งเลยจะล้างแถว OT ทิ้ง (A-9)
         salaryAPI.save(
           selectedMonth,
-          salaryPrevDoc?.income || {},
+          stripLegacyOvertimeKeys(salaryPrevDoc?.income || {}),
           salaryPrevDoc?.deduct || {},
-          salaryPrevDoc?.note || ''
+          salaryPrevDoc?.note || '',
+          salaryPrevDoc?.overtime || []
         ),
         savingsAPI.saveList ? savingsAPI.saveList(selectedMonth, savingsPrev) : Promise.resolve(),
         investmentAPI.saveList ? investmentAPI.saveList(selectedMonth, investmentPrev) : Promise.resolve(),
