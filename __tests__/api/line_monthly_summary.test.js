@@ -211,6 +211,33 @@ describe('/api/line_monthly_summary (Mongo mode)', () => {
       expect(data.month).toBe('2024-01');
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
+
+    it('force sends one targeted user outside month-end without changing that month\'s dedup marker', async () => {
+      await db.collection('users').insertOne({
+        id: TEST_USER_ID,
+        LineId: 'line-a',
+        monthlySummaryEnabled: true,
+        lastMonthlySummarySent: '2024-01'
+      });
+      mockLineSuccess();
+
+      const { req, res } = makeReqRes({ body: { date: '2024-01-15', userId: TEST_USER_ID, force: true } });
+      await handler(req, res);
+
+      const data = JSON.parse(res._getData());
+      expect(data.results).toEqual([expect.objectContaining({ userId: TEST_USER_ID, sent: true, forced: true })]);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect((await db.collection('users').findOne({ id: TEST_USER_ID })).lastMonthlySummarySent).toBe('2024-01');
+    });
+
+    it('rejects force mode without an explicit userId', async () => {
+      const { req, res } = makeReqRes({ body: { date: '2024-01-15', force: true } });
+      await handler(req, res);
+
+      expect(res._getStatusCode()).toBe(400);
+      expect(JSON.parse(res._getData())).toEqual({ error: 'force requires a userId' });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 
   describe('AC-3: preference off / no LINE ID', () => {
