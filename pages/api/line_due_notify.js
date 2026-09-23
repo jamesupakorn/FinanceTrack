@@ -14,7 +14,7 @@
  * - mode: รูปแบบแจ้งเตือน 'due' | 'unpaid' | 'both'
  */
 
-import { sendLineMessage } from '../../src/shared/utils/sendLineMessage';
+import { sendLineMessage, sendLineFlexMessage } from '../../src/shared/utils/sendLineMessage';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
 import { isPaidFlag } from '../../src/shared/utils/commonUtils';
 import crypto from 'crypto';
@@ -37,6 +37,13 @@ import {
   buildDueDateString
 } from '../../src/shared/utils/dateUtils';
 import { loadUsers, getUserData } from '../../src/backend/data/userUtils.js';
+import {
+  LINE_THEME,
+  textComponent,
+  separator,
+  tintBox,
+  ctaButton
+} from '../../src/shared/utils/backend/lineFlexTheme';
 
 const JSON_EXPENSE_FILE = 'monthly_expense.json';
 const DUE_SOON_DAYS = 3;
@@ -140,6 +147,123 @@ function buildMessage(target, groupedItems, notifyMode) {
   ].filter(Boolean);
   const footer = footerLines.join('\n');
   return [header, ...sections, footer].join('\n\n');
+}
+
+/**
+ * หา headerTitle เดียวกับที่ buildMessage() ใช้ — แยกออกมาเป็นฟังก์ชันเล็กเพื่อให้ altText ของ Flex
+ * (ที่ต้องคำนวณก่อนเรียก buildDueNotifyFlex) ใช้ค่าเดียวกันได้โดยไม่ต้อง copy-paste ผิดที่ผิดทาง
+ * buildMessage() เองไม่ถูกแตะ ยังคง byte-identical (AC-22)
+ */
+function deriveDueHeaderTitle(groupedItems, notifyMode) {
+  const hasDue = groupedItems.due.length > 0;
+  const hasOverdue = groupedItems.overdue.length > 0;
+  const hasDueSoon = groupedItems.dueSoon.length > 0;
+  return notifyMode === 'unpaid'
+    ? 'รายการค้างชำระ'
+    : hasDue && hasOverdue
+      ? 'ครบกำหนดวันนี้ + ค้างชำระ'
+      : hasDueSoon
+        ? `กำหนดการใกล้ชำระ (ภายใน ${DUE_SOON_DAYS} วัน)`
+      : hasDue
+        ? 'ครบกำหนดวันนี้'
+        : 'ค้างชำระ';
+}
+
+/** หนึ่งแถวรายการในสไตล์ Flex — ชื่อ+จำนวนเงินเป็นคอลัมน์ในแนวนอน แล้วตามด้วยบรรทัดวันที่ (ถ้ามี) */
+function buildFlexItemRow(item, target, opts = {}) {
+  const name = item.name || 'รายการไม่มีชื่อ';
+  const fromMonth = item._fromMonth ? ` (ค้างจาก ${formatMonthKeyTH(item._fromMonth)})` : '';
+  const row = {
+    type: 'box', layout: 'horizontal', spacing: 'sm', contents: [
+      { ...textComponent(`${name}${fromMonth}`, 'sm', LINE_THEME.textPrimary), flex: 3 },
+      { ...textComponent(`${formatAmount(item.actual || 0)} บาท`, 'sm', LINE_THEME.textPrimary, '700'), flex: 2, align: 'end' }
+    ]
+  };
+  if (opts.hideDate) return [row];
+  const dueDay = getDueDayNumber(item);
+  const dueDateText = dueDay ? buildDueDateString(target, dueDay) : null;
+  return dueDateText ? [row, textComponent(`📅 ${dueDateText}`, 'xs', LINE_THEME.textSecondary)] : [row];
+}
+
+/** หนึ่ง section ในสไตล์ Flex — หัวข้อ section แล้วตามด้วยกลุ่มบัญชี (เรียก groupItemsByAccount() เดิม ไม่แก้) */
+function buildFlexSection(title, items, target, opts, titleColor) {
+  const groups = groupItemsByAccount(items);
+  const showHeadings = !(groups.length === 1 && groups[0].account === OTHER_ACCOUNT_LABEL);
+  const groupContents = groups.flatMap(group => [
+    ...(showHeadings ? [textComponent(group.account, 'sm', LINE_THEME.textSecondary, '700')] : []),
+    ...group.items.flatMap(item => buildFlexItemRow(item, target, opts))
+  ]);
+  return [textComponent(title, 'md', titleColor, '700'), ...groupContents];
+}
+
+/**
+ * สร้างข้อความแจ้งเตือนค่าใช้จ่ายแบบ Flex (ธีมสว่าง) — โครงสร้าง/ลำดับข้อมูลเหมือน buildMessage() ทุกประการ
+ * (สเปก AC-8…AC-15) เปลี่ยนแค่รูปแบบการแสดงผลจากข้อความล้วนเป็น Flex bubble
+ * @param {object} target - ข้อมูลวันเป้าหมาย
+ * @param {object} groupedItems - รายการที่จัดกลุ่มตามสถานะ
+ * @param {string} notifyMode - โหมดแจ้งเตือน
+ * @returns {object} Flex bubble
+ */
+function buildDueNotifyFlex(target, groupedItems, notifyMode) {
+  const hasDue = groupedItems.due.length > 0;
+  const hasOverdue = groupedItems.overdue.length > 0;
+  const headerTitle = deriveDueHeaderTitle(groupedItems, notifyMode);
+  const monthLabel = formatMonthKeyTH(target.monthKey);
+  const statusColor = (hasDue || hasOverdue) ? LINE_THEME.danger : LINE_THEME.warning;
+
+  const dueSection = groupedItems.due.length
+    ? buildFlexSection('✅ ครบกำหนดวันนี้', groupedItems.due, target, { hideDate: true }, LINE_THEME.danger)
+    : null;
+  const dueSoonSection = groupedItems.dueSoon.length
+    ? buildFlexSection(`⏳ ใกล้ครบกำหนด (อีกไม่เกิน ${DUE_SOON_DAYS} วัน)`, groupedItems.dueSoon, target, {}, LINE_THEME.warning)
+    : null;
+  const overdueSection = groupedItems.overdue.length
+    ? buildFlexSection('⚠️ ค้างชำระ', groupedItems.overdue, target, {}, LINE_THEME.danger)
+    : null;
+  const unpaidSection = notifyMode === 'unpaid' && groupedItems.otherUnpaid.length
+    ? buildFlexSection('🗂️ รายการยังไม่ถึงกำหนด', groupedItems.otherUnpaid, target, { hideDate: true }, LINE_THEME.textSecondary)
+    : null;
+  const sections = [dueSection, dueSoonSection, overdueSection, unpaidSection].filter(Boolean);
+  const sectionContents = sections.flatMap((section, index) => [
+    ...section,
+    ...(index < sections.length - 1 ? [separator('lg')] : [])
+  ]);
+
+  const todayItems = [...groupedItems.due, ...groupedItems.overdue];
+  const upcomingItems = [...groupedItems.dueSoon, ...groupedItems.otherUnpaid];
+  const todayTotal = sumItemAmounts(todayItems);
+  const upcomingTotal = sumItemAmounts(upcomingItems);
+  const hasToday = todayItems.length > 0;
+  const totalsBox = tintBox(hasToday ? LINE_THEME.tintDanger : LINE_THEME.tintSuccess, [
+    textComponent('ต้องจ่ายวันนี้/ค้างชำระ', 'sm', LINE_THEME.textSecondary),
+    textComponent(`${formatAmount(todayTotal)} บาท`, 'xxl', hasToday ? LINE_THEME.danger : LINE_THEME.success, '700'),
+    textComponent(`(${todayItems.length} รายการ)`, 'xs', LINE_THEME.textSecondary),
+    ...(upcomingItems.length
+      ? [textComponent(`ใกล้ครบกำหนด ${formatAmount(upcomingTotal)} บาท (${upcomingItems.length} รายการ)`, 'xs', LINE_THEME.warning)]
+      : [])
+  ]);
+
+  return {
+    type: 'bubble', size: 'mega',
+    styles: { body: { backgroundColor: LINE_THEME.surface }, footer: { backgroundColor: LINE_THEME.surfaceFooter } },
+    body: {
+      type: 'box', layout: 'vertical', paddingAll: 'xl', contents: [
+        textComponent('FinanceTrack', 'sm', LINE_THEME.brand, '700'),
+        textComponent('🔔 แจ้งเตือนค่าใช้จ่าย', 'xl', LINE_THEME.textPrimary, '700'),
+        textComponent(headerTitle, 'md', statusColor, '700'),
+        textComponent(`เดือน ${monthLabel}`, 'sm', LINE_THEME.textSecondary),
+        textComponent(`วันที่ ${formatThaiDate(target)}`, 'sm', LINE_THEME.textSecondary),
+        separator('xl'),
+        ...sectionContents,
+        totalsBox
+      ]
+    },
+    footer: {
+      type: 'box', layout: 'vertical', spacing: 'sm', contents: [
+        ctaButton('อัปเดตสถานะ', 'https://finance-track-one.vercel.app/')
+      ]
+    }
+  };
 }
 
 const OTHER_ACCOUNT_LABEL = 'อื่นๆ';
@@ -400,6 +524,101 @@ function buildCreditCardMessage(target, cardEvents) {
   return [header, ...sections, footer].join('\n\n');
 }
 
+/** headerTitle เดียวกับ buildCreditCardMessage() — แยกไว้ให้ altText ของ Flex ใช้ค่าเดียวกัน ไม่ต้อง copy สูตรผิด */
+function deriveCardHeaderTitle(overdueCount, upcomingCount) {
+  return overdueCount && upcomingCount
+    ? 'ครบกำหนดชำระ + เลยกำหนด'
+    : overdueCount
+      ? 'เลยกำหนดชำระ'
+      : 'ครบกำหนดชำระ';
+}
+
+/** หนึ่ง block ต่อบัตรในสไตล์ Flex — ชื่อบัตร+ยอดรวมเป็นแถวแนวนอน แล้วตามด้วยเวลา/ยอดหมุนเวียน/รายการงวด */
+function buildFlexCardEventBlock(event) {
+  const last4 = event.card.last4 ? ` (····${event.card.last4})` : '';
+  const headRow = {
+    type: 'box', layout: 'horizontal', spacing: 'sm', contents: [
+      { ...textComponent(`${event.card.name}${last4}`, 'sm', LINE_THEME.textPrimary, '700'), flex: 3 },
+      { ...textComponent(`${formatAmount(event.total)} บาท`, 'sm', LINE_THEME.textPrimary, '700'), flex: 2, align: 'end' }
+    ]
+  };
+  const timingColor = (event.status === 'due' || event.status === 'overdue') ? LINE_THEME.danger : LINE_THEME.warning;
+  const timingLine = textComponent(`📅 ${event.dueDateText} (${describeCardTiming(event)})`, 'xs', timingColor);
+  // R-7: buildRevolvingLine() คืนสตริงที่มี indent 3 ช่องนำหน้าไว้ใช้ในข้อความ text — ใน Flex ตัดออกด้วย trimStart()
+  // ยอมรับ coupling นี้อย่างตั้งใจแทนการรีแฟกเตอร์ buildRevolvingLine() (สเปก R-7, architecture-review finding 1)
+  const revolvingLineText = buildRevolvingLine(event.revolving);
+  const revolvingLine = revolvingLineText ? textComponent(revolvingLineText.trimStart(), 'xs', LINE_THEME.textSecondary) : null;
+  const itemLines = event.items.map(item => textComponent(
+    `${item.plan.itemName} — งวด ${item.row.no}/${item.plan.months} (เหลืออีก ${item.remaining} งวด) ${formatAmount(item.row.payment)} บาท`,
+    'xs', LINE_THEME.textSecondary
+  ));
+  return [headRow, timingLine, ...(revolvingLine ? [revolvingLine] : []), ...itemLines];
+}
+
+/**
+ * สร้างข้อความแจ้งเตือนบัตรเครดิตแบบ Flex (ธีมสว่าง) — โครงสร้าง/ลำดับข้อมูลเหมือน buildCreditCardMessage()
+ * ทุกประการ (สเปก AC-16…AC-20) คืน null เมื่อไม่มีอะไรต้องแจ้งเงื่อนไขเดียวกับฉบับข้อความ ห้ามส่งข้อความเปล่า
+ * @param {object} target - ข้อมูลวันเป้าหมาย
+ * @param {array} cardEvents - ผลจาก collectCardDueEvents
+ * @returns {object|null} Flex bubble หรือ null
+ */
+function buildCreditCardFlex(target, cardEvents) {
+  if (!Array.isArray(cardEvents) || !cardEvents.length) return null;
+
+  const overdue = cardEvents.filter(event => event.status === 'overdue');
+  const upcoming = cardEvents.filter(event => event.status !== 'overdue');
+  const headerTitle = deriveCardHeaderTitle(overdue.length, upcoming.length);
+  const statusColor = overdue.length ? LINE_THEME.danger : LINE_THEME.warning;
+
+  const overdueSection = overdue.length
+    ? [textComponent('⚠️ เลยกำหนดชำระ', 'md', LINE_THEME.danger, '700'), ...overdue.flatMap(buildFlexCardEventBlock)]
+    : null;
+  const upcomingSection = upcoming.length
+    ? [textComponent('📌 ครบกำหนดชำระ', 'md', LINE_THEME.warning, '700'), ...upcoming.flatMap(buildFlexCardEventBlock)]
+    : null;
+  const sections = [overdueSection, upcomingSection].filter(Boolean);
+  const sectionContents = sections.flatMap((section, index) => [
+    ...section,
+    ...(index < sections.length - 1 ? [separator('lg')] : [])
+  ]);
+
+  const grandTotal = cardEvents.reduce((sum, event) => sum + event.total, 0);
+  const installmentCount = cardEvents.reduce((sum, event) => sum + event.items.length, 0);
+  const revolvingCount = cardEvents.filter(event => event.revolving).length;
+  const countParts = [
+    `${cardEvents.length} บัตร`,
+    `${installmentCount} งวด`,
+    ...(revolvingCount ? [`${revolvingCount} ยอดหมุนเวียน`] : [])
+  ].join(' · ');
+  const totalsBox = tintBox(LINE_THEME.tintDanger, [
+    textComponent('รวมต้องชำระ', 'sm', LINE_THEME.textSecondary),
+    textComponent(`${formatAmount(grandTotal)} บาท`, 'xxl', LINE_THEME.danger, '700'),
+    textComponent(countParts, 'xs', LINE_THEME.textSecondary)
+  ]);
+
+  return {
+    type: 'bubble', size: 'mega',
+    styles: { body: { backgroundColor: LINE_THEME.surface }, footer: { backgroundColor: LINE_THEME.surfaceFooter } },
+    body: {
+      type: 'box', layout: 'vertical', paddingAll: 'xl', contents: [
+        textComponent('FinanceTrack', 'sm', LINE_THEME.brand, '700'),
+        textComponent('💳 แจ้งเตือนบัตรเครดิต', 'xl', LINE_THEME.textPrimary, '700'),
+        textComponent(headerTitle, 'md', statusColor, '700'),
+        textComponent(`เดือน ${formatMonthKeyTH(target.monthKey)}`, 'sm', LINE_THEME.textSecondary),
+        textComponent(`วันที่ ${formatThaiDate(target)}`, 'sm', LINE_THEME.textSecondary),
+        separator('xl'),
+        ...sectionContents,
+        totalsBox
+      ]
+    },
+    footer: {
+      type: 'box', layout: 'vertical', spacing: 'sm', contents: [
+        ctaButton('จัดการบัตร', 'https://finance-track-one.vercel.app/credit-cards')
+      ]
+    }
+  };
+}
+
 /** เทียบสตริงแบบ constant-time เพื่อไม่ให้เวลาตอบกลับบอกใบ้ว่าตรงกันกี่ตัวอักษร */
 function secretsMatch(provided, expected) {
   if (typeof provided !== 'string' || typeof expected !== 'string') return false;
@@ -495,9 +714,18 @@ async function notifyExpenseForUser(user, target, notifyMode) {
   }
 
   try {
-    const message = buildMessage(target, groupedItems, notifyMode);
-    await sendLineMessage(message, user.LineId);
-    return { userId: user.id, sent: true, count: totalMatched, breakdown: {
+    // ลอง Flex (ธีมสว่าง) ก่อนเสมอ ล้มเหลว (เช่น LINE reject payload) ค่อย fallback เป็นข้อความล้วนเดิม
+    // ไม่มี withLineRetry ในไฟล์นี้ — ตั้งใจไม่เพิ่ม (AC-14)
+    let format = 'flex';
+    try {
+      const headerTitle = deriveDueHeaderTitle(groupedItems, notifyMode);
+      const altText = `🔔 FinanceTrack ${headerTitle} · ${formatThaiDate(target)}`;
+      await sendLineFlexMessage(altText, buildDueNotifyFlex(target, groupedItems, notifyMode), user.LineId);
+    } catch (flexError) {
+      await sendLineMessage(buildMessage(target, groupedItems, notifyMode), user.LineId);
+      format = 'text-fallback';
+    }
+    return { userId: user.id, sent: true, count: totalMatched, format, breakdown: {
       due: groupedItems.due.length,
       dueSoon: groupedItems.dueSoon.length,
       overdue: groupedItems.overdue.length,
@@ -565,19 +793,31 @@ export default async function handler(req, res) {
 
     try {
       const cardEvents = collectCardDueEvents(creditData, target);
-      const message = buildCreditCardMessage(target, cardEvents);
-      if (!message) {
+      // null-guard ต้องเช็คก่อนพยายามส่งทั้งสองทาง (Flex/text) — ห้ามส่งข้อความเปล่า (AC-16, AC-21)
+      const flexPayload = buildCreditCardFlex(target, cardEvents);
+      if (!flexPayload) {
         creditCardResults.push({ userId: user.id, sent: false, reason: 'no credit card due items' });
         continue;
       }
 
-      await sendLineMessage(message, user.LineId);
+      let format = 'flex';
+      try {
+        const overdueCount = cardEvents.filter(event => event.status === 'overdue').length;
+        const upcomingCount = cardEvents.length - overdueCount;
+        const headerTitle = deriveCardHeaderTitle(overdueCount, upcomingCount);
+        const altText = `💳 FinanceTrack ${headerTitle} · ${formatThaiDate(target)}`;
+        await sendLineFlexMessage(altText, flexPayload, user.LineId);
+      } catch (flexError) {
+        await sendLineMessage(buildCreditCardMessage(target, cardEvents), user.LineId);
+        format = 'text-fallback';
+      }
       creditCardResults.push({
         userId: user.id,
         sent: true,
         cardCount: cardEvents.length,
         installmentCount: cardEvents.reduce((sum, event) => sum + event.items.length, 0),
-        revolvingCount: cardEvents.filter(event => event.revolving).length
+        revolvingCount: cardEvents.filter(event => event.revolving).length,
+        format
       });
     } catch (error) {
       creditCardResults.push({ userId: user.id, sent: false, reason: error.message });

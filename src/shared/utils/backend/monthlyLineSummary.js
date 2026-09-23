@@ -11,6 +11,7 @@ import {
   getPrevMonthKey,
   getNextMonthKey
 } from './monthlySummaryContent';
+import { LINE_THEME, textComponent, valueRow as sharedValueRow } from './lineFlexTheme';
 
 function amount(value) {
   const numeric = Number(value || 0);
@@ -113,20 +114,15 @@ export async function buildMonthlySummaryPayload(userId, monthKey) {
   };
 }
 
-function textComponent(text, size = 'sm', color = '#f8fbff', weight = '400') {
-  return { type: 'text', text: String(text || ' '), size, color, weight: weight === '700' ? 'bold' : 'regular', flex: 1, wrap: true };
-}
-
-function valueRow(icon, label, value, color = '#c7ccd6') {
-  return {
-    type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'md', alignItems: 'center',
-    contents: [textComponent(icon, 'sm', color, '700'), textComponent(label, 'sm', '#b7bdc9'), textComponent(`${amount(value)} บาท`, 'sm', '#f8fbff', '700')]
-  };
+// textComponent/valueRow มาจากโมดูลกลาง (AC-1) — valueRow รับค่าที่ format เป็น string แล้วเท่านั้น
+// (AC-3: ห้าม unify amount() กับ formatAmount() ของ line_due_notify.js) จึงต้องห่อ amount(value) ที่ call site
+function valueRow(icon, label, value, color = LINE_THEME.textSecondary) {
+  return sharedValueRow(icon, label, `${amount(value)} บาท`, color);
 }
 
 function deltaRow(delta, prefix = '') {
   if (!delta) return [];
-  return [textComponent(`${prefix}${formatDeltaLabel(delta)}`, 'xs', '#8d95a3')];
+  return [textComponent(`${prefix}${formatDeltaLabel(delta)}`, 'xs', LINE_THEME.textSecondary)];
 }
 
 function expenseDeltaRow(comparison) {
@@ -137,54 +133,56 @@ function expenseDeltaRow(comparison) {
 function upcomingSection(upcoming) {
   if (!upcoming) return [];
   return [
-    textComponent('📅 ต้องจ่ายเดือนหน้า', 'md', '#f8fbff', '700'),
-    ...upcoming.items.map(item => textComponent(`${item.name} — ${amount(item.amount)} บาท (วันที่ ${item.day})`, 'sm', '#c7ccd6')),
-    ...(upcoming.extraCount > 0 ? [textComponent(`และอีก ${upcoming.extraCount} รายการ`, 'xs', '#8d95a3')] : [])
+    textComponent('📅 ต้องจ่ายเดือนหน้า', 'md', LINE_THEME.textPrimary, '700'),
+    ...upcoming.items.map(item => textComponent(`${item.name} — ${amount(item.amount)} บาท (วันที่ ${item.day})`, 'sm', LINE_THEME.textSecondary)),
+    ...(upcoming.extraCount > 0 ? [textComponent(`และอีก ${upcoming.extraCount} รายการ`, 'xs', LINE_THEME.textSecondary)] : [])
   ];
 }
 
 export function buildMonthlySummaryFlex(monthLabel, payload) {
   const { model, taxAccumulated, goals, comparison, upcoming } = payload;
-  const netColor = model.netCashFlow >= 0 ? '#35d07f' : '#ff6b72';
+  const isPositiveNet = model.netCashFlow >= 0;
+  const netColor = isPositiveNet ? LINE_THEME.success : LINE_THEME.danger;
+  const netTint = isPositiveNet ? LINE_THEME.tintSuccess : LINE_THEME.tintDanger;
   const goalContents = goals.length
     ? goals.slice(0, 4).flatMap(goal => [
-      valueRow('🎯', goal.name, goal.current, '#8ac7ff'),
-      valueRow(' ', 'คงเหลือ', goal.remaining, '#b7bdc9'),
-      ...(goal.progress === undefined ? [] : [textComponent(`ถึงเป้าแล้ว ${goal.progress}%`, 'xs', '#8ac7ff')])
+      valueRow('🎯', goal.name, goal.current, LINE_THEME.info),
+      valueRow(' ', 'คงเหลือ', goal.remaining, LINE_THEME.textSecondary),
+      ...(goal.progress === undefined ? [] : [textComponent(`ถึงเป้าแล้ว ${goal.progress}%`, 'xs', LINE_THEME.info)])
     ])
-    : [textComponent('ยังไม่มีเป้าหมายเงินออมที่กำลังดำเนินการ', 'sm', '#8d95a3')];
+    : [textComponent('ยังไม่มีเป้าหมายเงินออมที่กำลังดำเนินการ', 'sm', LINE_THEME.textSecondary)];
 
   return {
-    type: 'bubble', size: 'mega', styles: { body: { backgroundColor: '#121214' }, footer: { backgroundColor: '#18181b' } },
+    type: 'bubble', size: 'mega', styles: { body: { backgroundColor: LINE_THEME.surface }, footer: { backgroundColor: LINE_THEME.surfaceFooter } },
     body: {
       type: 'box', layout: 'vertical', paddingAll: 'xl', contents: [
-        textComponent('FinanceTrack', 'sm', '#8ac7ff', '700'),
-        textComponent('สรุปการเงินประจำเดือน', 'xl', '#f8fbff', '700'),
-        textComponent(monthLabel, 'sm', '#9aa2b1'),
-        { type: 'box', layout: 'vertical', margin: 'xl', paddingAll: 'lg', backgroundColor: '#1d2b24', cornerRadius: 'md', contents: [
-          textComponent('กระแสเงินสดสุทธิ', 'sm', '#b7bdc9'),
-          textComponent(`${model.netCashFlow >= 0 ? '+' : '-'}${amount(Math.abs(model.netCashFlow))} บาท`, 'xxl', netColor, '700')
+        textComponent('FinanceTrack', 'sm', LINE_THEME.brand, '700'),
+        textComponent('สรุปการเงินประจำเดือน', 'xl', LINE_THEME.textPrimary, '700'),
+        textComponent(monthLabel, 'sm', LINE_THEME.textSecondary),
+        { type: 'box', layout: 'vertical', margin: 'xl', paddingAll: 'lg', backgroundColor: netTint, cornerRadius: 'md', contents: [
+          textComponent('กระแสเงินสดสุทธิ', 'sm', LINE_THEME.textSecondary),
+          textComponent(`${isPositiveNet ? '+' : '-'}${amount(Math.abs(model.netCashFlow))} บาท`, 'xxl', netColor, '700')
         ] },
-        { type: 'separator', margin: 'xl', color: '#2e2e33' },
+        { type: 'separator', margin: 'xl', color: LINE_THEME.separator },
         valueRow('💰', 'รายรับ', model.totalIncome),
         ...deltaRow(comparison?.income),
-        valueRow('🔴', 'รายจ่ายทั่วไป', model.generalExpense, '#ff858b'),
-        valueRow('🟡', 'รายจ่ายประจำวัน', model.dailyExpense, '#ffd166'),
-        valueRow('🟢', 'เงินออม', model.savings, '#35d07f'),
+        valueRow('🔴', 'รายจ่ายทั่วไป', model.generalExpense, LINE_THEME.danger),
+        valueRow('🟡', 'รายจ่ายประจำวัน', model.dailyExpense, LINE_THEME.warning),
+        valueRow('🟢', 'เงินออม', model.savings, LINE_THEME.success),
         ...deltaRow(comparison?.savings),
         ...expenseDeltaRow(comparison),
-        valueRow('💳', 'บัตรเครดิต', model.creditCard, '#8ac7ff'),
-        { type: 'separator', margin: 'xl', color: '#2e2e33' },
-        textComponent('🧾 ภาษีสะสม', 'md', '#f8fbff', '700'),
+        valueRow('💳', 'บัตรเครดิต', model.creditCard, LINE_THEME.info),
+        { type: 'separator', margin: 'xl', color: LINE_THEME.separator },
+        textComponent('🧾 ภาษีสะสม', 'md', LINE_THEME.textPrimary, '700'),
         valueRow('', 'ยอดสะสม', taxAccumulated),
-        textComponent('🎯 เป้าหมายเงินออม', 'md', '#f8fbff', '700'),
+        textComponent('🎯 เป้าหมายเงินออม', 'md', LINE_THEME.textPrimary, '700'),
         ...goalContents,
         ...upcomingSection(upcoming)
       ]
     },
     footer: {
       type: 'box', layout: 'vertical', spacing: 'sm', contents: [
-        { type: 'button', style: 'primary', color: '#3d8bfd', action: { type: 'uri', label: 'เปิด FinanceTrack', uri: 'https://finance-track-one.vercel.app/' } }
+        { type: 'button', style: 'primary', color: LINE_THEME.brand, action: { type: 'uri', label: 'เปิด FinanceTrack', uri: 'https://finance-track-one.vercel.app/' } }
       ]
     }
   };
