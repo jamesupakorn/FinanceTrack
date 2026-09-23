@@ -18,6 +18,22 @@ jest.mock('../../src/shared/utils/backend/creditCardStore', () => {
   return { ...actual, getUserCreditData: jest.fn(actual.getUserCreditData) };
 });
 
+// spec-line-flex-light-theme.md AC-24: helper ที่เดินโครงสร้าง Flex `contents` แล้วรวบรวมข้อความ
+// ของทุกโหนด type:'text' ตามลำดับที่ปรากฏในเอกสาร (document order) — ใช้แทนการอ่าน `.text` ตรงๆ
+// แบบเดิม เพราะข้อความหลักตอนนี้เป็น Flex ไม่ใช่ plain text แล้ว
+function collectFlexTextNodes(node, out = []) {
+  if (!node || typeof node !== 'object') return out;
+  if (Array.isArray(node)) {
+    node.forEach(item => collectFlexTextNodes(item, out));
+    return out;
+  }
+  if (node.type === 'text' && typeof node.text === 'string') out.push(node.text);
+  Object.values(node).forEach(value => {
+    if (value && typeof value === 'object') collectFlexTextNodes(value, out);
+  });
+  return out;
+}
+
 const TEST_CRON_SECRET = 'test-cron-secret';
 const TEST_USER_ID = 'user-a';
 
@@ -258,6 +274,8 @@ describe('/api/line_due_notify — จัดกลุ่มรายการต
   };
 
   // เรียก handler แล้วดึงข้อความ LINE ฉบับล่าสุดที่ถูกส่งออก (ข้อความค่าใช้จ่าย ไม่ใช่บัตรเครดิต)
+  // คืนทั้ง text (ทุกโหนดต่อกันด้วย '\n' — ใช้กับ indexOf/toContain แบบเดิม) และ nodes (array แต่ละ
+  // text node ตามลำดับ — ใช้เมื่อต้องเช็คว่าสองโหนดอยู่ติดกัน เพราะ Flex แยกชื่อ/จำนวนเงินเป็นคนละโหนด)
   const sendAndGetMessage = async (mode = 'both') => {
     fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
     const { req, res } = makeReqRes({ body: { date: TARGET_DATE, userId: FMT_USER_ID, mode } });
@@ -265,7 +283,10 @@ describe('/api/line_due_notify — จัดกลุ่มรายการต
     expect(res._getStatusCode()).toBe(200);
     expect(fetchMock).toHaveBeenCalled();
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    return body.messages[0].text;
+    const message = body.messages[0];
+    expect(message.type).toBe('flex');
+    const nodes = collectFlexTextNodes(message.contents);
+    return { text: nodes.join('\n'), nodes };
   };
 
   it('1) สองบัญชีสลับกันในรายการต้นทาง → สอง heading คนละกลุ่ม บัญชีที่ปรากฏก่อนขึ้นก่อน', async () => {
@@ -278,7 +299,7 @@ describe('/api/line_due_notify — จัดกลุ่มรายการต
       }
     });
 
-    const text = await sendAndGetMessage();
+    const { text } = await sendAndGetMessage();
 
     const idxAcc1 = text.indexOf('บช1');
     const idxAcc2 = text.indexOf('บช2');
@@ -309,7 +330,7 @@ describe('/api/line_due_notify — จัดกลุ่มรายการต
       }
     });
 
-    const text = await sendAndGetMessage();
+    const { text } = await sendAndGetMessage();
 
     const idxAcc1 = text.indexOf('บช1');
     const idxOther = text.indexOf('อื่นๆ');
@@ -330,15 +351,22 @@ describe('/api/line_due_notify — จัดกลุ่มรายการต
       }
     });
 
-    const text = await sendAndGetMessage();
+    const { text, nodes } = await sendAndGetMessage();
 
-    expect(text).not.toMatch(/^\d+\. /m);
+    // ไม่มีโหนดไหนขึ้นต้นด้วยเลขลำดับแบบ "1. " (แทนที่การเช็คบนสตริงเดียวแบบเดิม ซึ่งไม่มีความหมาย
+    // อีกต่อไปเมื่อชื่อ/จำนวนเงินถูกแยกเป็นคนละโหนดแล้ว)
+    nodes.forEach(node => expect(node).not.toMatch(/^\d+\. /));
     expect(text).not.toContain(' | ');
-    expect(text).toContain('• ค่าไฟ — 500 บาท');
-    expect(text).toContain('• ค่าเน็ต — 590 บาท');
+    // AC-11: bullet "• " ถูกตัดออกใน Flex, ชื่อกับจำนวนเงินเป็นคนละโหนดที่อยู่ติดกัน
+    const faiIdx = nodes.indexOf('ค่าไฟ');
+    const netIdx = nodes.indexOf('ค่าเน็ต');
+    expect(faiIdx).toBeGreaterThan(-1);
+    expect(netIdx).toBeGreaterThan(-1);
+    expect(nodes[faiIdx + 1]).toBe('500 บาท');
+    expect(nodes[netIdx + 1]).toBe('590 บาท');
   });
 
-  it('4) รายการค้างชำระ (แสดงวันที่) ยังแสดง 📅 ใต้ bullet ที่ถูกต้อง ส่วนรายการครบกำหนดวันนี้ไม่แสดง', async () => {
+  it('4) รายการค้างชำระ (แสดงวันที่) ยังแสดง 📅 ใต้ชื่อรายการที่ถูกต้อง ส่วนรายการครบกำหนดวันนี้ไม่แสดง', async () => {
     await seedUser({
       currentItems: {
         itemDue: { name: 'ค่าไฟ', actual: 500, dueDay: 15, account: 'บช1' }, // ครบกำหนดวันนี้ → hideDate
@@ -346,16 +374,16 @@ describe('/api/line_due_notify — จัดกลุ่มรายการต
       }
     });
 
-    const text = await sendAndGetMessage();
+    const { text } = await sendAndGetMessage();
 
     const dueSectionEnd = text.indexOf('⚠️ ค้างชำระ');
     const dueSectionText = text.slice(0, dueSectionEnd);
     const overdueSectionText = text.slice(dueSectionEnd);
 
-    expect(dueSectionText).toContain('• ค่าไฟ — 500 บาท');
+    expect(dueSectionText).toContain('ค่าไฟ');
     expect(dueSectionText).not.toContain('📅');
 
-    expect(overdueSectionText).toContain('• ค่าน้ำ — 210 บาท');
+    expect(overdueSectionText).toContain('ค่าน้ำ');
     expect(overdueSectionText).toContain('📅');
   });
 
@@ -366,21 +394,161 @@ describe('/api/line_due_notify — จัดกลุ่มรายการต
       }
     });
 
-    const text = await sendAndGetMessage();
+    const { nodes } = await sendAndGetMessage();
 
-    expect(text).toContain('• ค่าแก๊ส — 300 บาท (ค้างจาก ธ.ค. 2566)');
+    const nameIdx = nodes.findIndex(node => node.includes('ค่าแก๊ส'));
+    expect(nameIdx).toBeGreaterThan(-1);
+    expect(nodes[nameIdx]).toBe('ค่าแก๊ส (ค้างจาก ธ.ค. 2566)');
+    expect(nodes[nameIdx + 1]).toBe('300 บาท');
   });
 
-  it('6) ทุกรายการในหมวดไม่มีบัญชีเลย → ตัด heading "อื่นๆ" ทิ้ง แสดง bullet ตรงใต้หัวข้อ section เลย', async () => {
+  it('6) ทุกรายการในหมวดไม่มีบัญชีเลย → ตัด heading "อื่นๆ" ทิ้ง แสดงชื่อรายการตรงใต้หัวข้อ section เลย', async () => {
     await seedUser({
       currentItems: {
         itemOnly: { name: 'ค่าไฟ', actual: 500, dueDay: 15 } // ไม่มี account เลยทั้ง section
       }
     });
 
-    const text = await sendAndGetMessage();
+    const { text, nodes } = await sendAndGetMessage();
 
     expect(text).not.toContain('อื่นๆ');
-    expect(text).toContain('✅ ครบกำหนดวันนี้\n• ค่าไฟ — 500 บาท');
+    const titleIdx = nodes.indexOf('✅ ครบกำหนดวันนี้');
+    expect(titleIdx).toBeGreaterThan(-1);
+    expect(nodes[titleIdx + 1]).toBe('ค่าไฟ');
+    expect(nodes[titleIdx + 2]).toBe('500 บาท');
+  });
+
+  it('7) ส่งข้อความแบบ Flex สำเร็จ → messages[0].type เป็น flex (AC-25)', async () => {
+    await seedUser({
+      currentItems: { itemA: { name: 'ค่าไฟ', actual: 500, dueDay: 15, account: 'บช1' } }
+    });
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    const { req, res } = makeReqRes({ body: { date: TARGET_DATE, userId: FMT_USER_ID, mode: 'both' } });
+    await handler(req, res);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.messages[0].type).toBe('flex');
+    const data = JSON.parse(res._getData());
+    expect(data.results[0]).toMatchObject({ sent: true, format: 'flex' });
+  });
+
+  it('8) Flex ส่งไม่สำเร็จ → fallback เป็นข้อความล้วน และรายงาน format: text-fallback (AC-14/AC-25)', async () => {
+    await seedUser({
+      currentItems: { itemA: { name: 'ค่าไฟ', actual: 500, dueDay: 15, account: 'บช1' } }
+    });
+    // เรียกครั้งแรก (flex) ล้มเหลว ครั้งที่สอง (text fallback) สำเร็จ
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ message: 'invalid flex' }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) });
+
+    const { req, res } = makeReqRes({ body: { date: TARGET_DATE, userId: FMT_USER_ID, mode: 'both' } });
+    await handler(req, res);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, firstOptions] = fetchMock.mock.calls[0];
+    expect(JSON.parse(firstOptions.body).messages[0].type).toBe('flex');
+    const [, secondOptions] = fetchMock.mock.calls[1];
+    const secondBody = JSON.parse(secondOptions.body);
+    expect(secondBody.messages[0].type).toBe('text');
+    expect(secondBody.messages[0].text).toContain('ค่าไฟ');
+
+    const data = JSON.parse(res._getData());
+    expect(data.results[0]).toMatchObject({ sent: true, format: 'text-fallback' });
+  });
+
+  it('9) ทั้ง Flex และ text fallback ล้มเหลว → sent: false และไม่มีความพยายามครั้งที่สาม (พิสูจน์ไม่มี retry, AC-14)', async () => {
+    await seedUser({
+      currentItems: { itemA: { name: 'ค่าไฟ', actual: 500, dueDay: 15, account: 'บช1' } }
+    });
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({ message: 'down' }) });
+
+    const { req, res } = makeReqRes({ body: { date: TARGET_DATE, userId: FMT_USER_ID, mode: 'both' } });
+    await handler(req, res);
+
+    // flex 1 ครั้ง + text fallback 1 ครั้ง = 2 ครั้งพอดี ไม่มี retry ใดๆ
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const data = JSON.parse(res._getData());
+    expect(data.results[0]).toMatchObject({ sent: false });
+  });
+});
+
+// spec-line-flex-light-theme.md AC-25: message-format coverage สำหรับข้อความบัตรเครดิตแบบ Flex
+describe('/api/line_due_notify — บัตรเครดิตแบบ Flex (AC-16…AC-21, AC-25)', () => {
+  const CC_USER_ID = 'user-cc-flex';
+  const TARGET_DATE = '2024-01-15';
+
+  const seedCardUser = async ({ cards = [], plans = [], cycles = [] } = {}) => {
+    await db.collection('users').insertOne({ id: CC_USER_ID, LineId: `line-${CC_USER_ID}` });
+    await db.collection('credit_cards').insertOne({ userId: CC_USER_ID, cards, plans, cycles });
+  };
+
+  it('ไม่มีเหตุการณ์บัตรครบกำหนดเลย → ไม่มีการเรียก fetch สำหรับข้อความบัตรของผู้ใช้คนนี้เลย (AC-16 empty-message guard)', async () => {
+    await seedCardUser({ cards: [{ id: 'card-1', name: 'บัตร A', dueDay: 15 }] });
+    // ไม่ seed monthly_expense → ไม่มีข้อความค่าใช้จ่ายเช่นกัน ทำให้ fetch ทั้งหมดต้องเป็นศูนย์
+    const { req, res } = makeReqRes({ body: { date: '2024-01-01', userId: CC_USER_ID, mode: 'both' } });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const { creditCardResults } = JSON.parse(res._getData());
+    expect(creditCardResults).toEqual([{ userId: CC_USER_ID, sent: false, reason: 'no credit card due items' }]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('บัตรมีทั้งยอดหมุนเวียนและงวดผ่อนครบกำหนด → ส่งเป็น Flex และยอดหมุนเวียนอยู่ก่อนงวดผ่อนเสมอ (AC-18 ordering)', async () => {
+    await seedCardUser({
+      cards: [{ id: 'card-1', name: 'บัตร A', dueDay: 15 }],
+      plans: [{
+        id: 'plan-1', cardId: 'card-1', itemName: 'มือถือ', months: 10, status: 'ongoing',
+        schedule: [{ no: 1, dueMonth: '2024-01', payment: 1000, paid: false }]
+      }],
+      cycles: [{
+        cardId: 'card-1', month: '2024-01', newSpend: 5000, paymentAction: null
+      }]
+    });
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+
+    const { req, res } = makeReqRes({ body: { date: TARGET_DATE, userId: CC_USER_ID, mode: 'both' } });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const { creditCardResults } = JSON.parse(res._getData());
+    expect(creditCardResults[0]).toMatchObject({ userId: CC_USER_ID, sent: true, format: 'flex' });
+
+    const call = fetchMock.mock.calls.find(c => {
+      const b = JSON.parse(c[1].body);
+      return b.messages[0].type === 'flex' && b.to === `line-${CC_USER_ID}`;
+    });
+    expect(call).toBeTruthy();
+    const message = JSON.parse(call[1].body).messages[0];
+    const nodes = collectFlexTextNodes(message.contents);
+    const revolvingIdx = nodes.findIndex(node => node.includes('ยอดใช้จ่ายหมุนเวียน'));
+    const installmentIdx = nodes.findIndex(node => node.includes('มือถือ'));
+    expect(revolvingIdx).toBeGreaterThan(-1);
+    expect(installmentIdx).toBeGreaterThan(-1);
+    expect(revolvingIdx).toBeLessThan(installmentIdx);
+  });
+
+  it('Flex ล้มเหลว → fallback เป็นข้อความบัตรเครดิตแบบข้อความล้วน (AC-21)', async () => {
+    await seedCardUser({
+      cards: [{ id: 'card-1', name: 'บัตร A', dueDay: 15 }],
+      plans: [{
+        id: 'plan-1', cardId: 'card-1', itemName: 'มือถือ', months: 10, status: 'ongoing',
+        schedule: [{ no: 1, dueMonth: '2024-01', payment: 1000, paid: false }]
+      }]
+    });
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ message: 'invalid flex' }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) });
+
+    const { req, res } = makeReqRes({ body: { date: TARGET_DATE, userId: CC_USER_ID, mode: 'both' } });
+    await handler(req, res);
+
+    const { creditCardResults } = JSON.parse(res._getData());
+    expect(creditCardResults[0]).toMatchObject({ userId: CC_USER_ID, sent: true, format: 'text-fallback' });
+    const secondCall = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+    const secondBody = JSON.parse(secondCall[1].body);
+    expect(secondBody.messages[0].type).toBe('text');
+    expect(secondBody.messages[0].text).toContain('มือถือ');
   });
 });

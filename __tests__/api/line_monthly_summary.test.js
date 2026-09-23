@@ -372,6 +372,44 @@ describe('/api/line_monthly_summary (Mongo mode)', () => {
     });
   });
 
+  // spec-line-flex-light-theme.md AC-25: ยืนยันว่าการ์ดสรุปรายเดือนเปลี่ยนเป็นธีมสว่างแล้วจริงๆ
+  // (ไม่ใช่แค่เพิ่มโมดูลใหม่เฉยๆ) และสีของกล่อง highlight ตอบสนองตามเครื่องหมายของกระแสเงินสดสุทธิ
+  describe('AC-5 / AC-25: ธีมสว่าง (recolour only)', () => {
+    it('body ใช้พื้นหลังสีขาว และไม่มีสีจากธีมมืดเดิมหลงเหลืออยู่เลย', async () => {
+      await db.collection('users').insertOne({ id: TEST_USER_ID, LineId: 'line-a', monthlySummaryEnabled: true });
+      mockLineSuccess();
+
+      const { req, res } = makeReqRes({ body: { date: '2024-01-31', userId: TEST_USER_ID } });
+      await handler(req, res);
+
+      const [, options] = fetchMock.mock.calls[0];
+      const sentBody = JSON.parse(options.body);
+      const flex = sentBody.messages[0].contents;
+      expect(flex.styles.body.backgroundColor).toBe('#ffffff');
+
+      const serialized = JSON.stringify(flex);
+      expect(serialized).not.toMatch(/#121214|#18181b|#f8fbff|#2e2e33|#8d95a3/);
+    });
+
+    it('กระแสเงินสดสุทธิติดลบ → กล่อง highlight เป็น tintDanger และตัวเลขเป็นสี danger', async () => {
+      await db.collection('users').insertOne({ id: TEST_USER_ID, LineId: 'line-a', monthlySummaryEnabled: true });
+      // รายจ่ายมากกว่ารายรับ → netCashFlow ติดลบ
+      await db.collection('monthly_income').insertOne({ userId: TEST_USER_ID, month: '2024-01', salary: { name: 'เงินเดือน', amount: 100 } });
+      await db.collection('monthly_expense').insertOne({ userId: TEST_USER_ID, month: '2024-01', rent: { name: 'ค่าเช่า', actual: 5000, dueDay: 1 } });
+      mockLineSuccess();
+
+      const { req, res } = makeReqRes({ body: { date: '2024-01-31', userId: TEST_USER_ID } });
+      await handler(req, res);
+
+      const [, options] = fetchMock.mock.calls[0];
+      const flex = JSON.parse(options.body).messages[0].contents;
+      const netBox = flex.body.contents.find(node => node.type === 'box' && node.backgroundColor);
+      expect(netBox.backgroundColor).toBe('#fdecee'); // tintDanger
+      const netFigure = netBox.contents.find(node => node.text && node.text.includes('บาท'));
+      expect(netFigure.color).toBe('#c62f3f'); // danger
+    });
+  });
+
   describe('getRecipients type guard (hardening: .pipeline/spec-line-monthly-summary-hardening.md)', () => {
     it('treats a blank (whitespace-only) userId as matching nobody, via the shared assertScopedUserId guard (C-4)', async () => {
       await db.collection('users').insertOne({ id: TEST_USER_ID, LineId: 'line-a', monthlySummaryEnabled: true });
