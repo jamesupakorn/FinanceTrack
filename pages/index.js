@@ -516,8 +516,10 @@ export default function DashboardPage() {
       <div role="status" aria-busy="true">
         <span className="sr-only">กำลังโหลดภาพรวม...</span>
         <div className="flex flex-col gap-space-4 lg:grid lg:grid-cols-12 lg:items-start lg:gap-space-5">
-          {/* 1. ครบกำหนด (J1) */}
-          <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-5 lg:row-start-1`}>
+          {/* โครงเดียวกับ body จริง: 2 สแตกอิสระที่ lg (ซ้าย 5/12 = ครบกำหนด → วงแหวน, ขวา 7/12 = ปฏิทิน →
+              สุขภาพงบประมาณ) แล้วทางลัดเต็มความกว้าง; DOM = ลำดับภาพทุก tier */}
+          <div className={`${GRID_ITEM} flex flex-col gap-space-4 lg:col-span-5 lg:gap-space-5`}>
+            {/* 1. ครบกำหนด (J1) */}
             <div className={CARD}>
               <div className="mb-space-4 h-6 w-2/3 animate-pulse rounded-sm bg-surface-2" />
               <div className="flex flex-col gap-space-3">
@@ -527,49 +529,30 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
-          </div>
 
-          {/* 2. วงแหวนกระแสเงินสด */}
-          <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-5 lg:row-start-2`}>
+            {/* 2. วงแหวนกระแสเงินสด (สแตกซ้าย ต่อจากครบกำหนด) */}
             <div className={CARD}>
               {/* h-[31px], not h-6 (24px) — real <h2 className="text-xl"> is 30.8px under the fontSize
                   scale (§3.2), not Tailwind's stock 20px text-xl (Stage 4 round-2 finding) */}
               <div className="mb-space-4 h-[31px] w-2/3 animate-pulse rounded-sm bg-surface-2" />
               <div className="mx-auto mb-space-4 h-[220px] w-[220px] animate-pulse rounded-full bg-surface-2" />
               <div className="flex flex-col gap-space-1">
-                {/* h-[79px] md:h-14 — CashFlowRing's own [@container(max-width:330px)] threshold wraps
+                {/* h-[79px] md:h-11 — CashFlowRing's own [@container(max-width:330px)] threshold wraps
                     each legend row to two lines at base tier (measured 79.375px live), but the ring
-                    card is wide enough at md+ that no row wraps (measured 56px = h-14, was regressed to
-                    a flat h-[76px] with no tier split in the previous pass — Stage 4 round-2 finding) */}
+                    card is wide enough at md+ that no row wraps (rows are min-h-11 = 44px since
+                    dashboard-layout-balance Increment 1; was h-14/56px before). h-[79px] to be
+                    re-measured live. The over-income line below the ring (~20px) is data-dependent
+                    and deliberately not reserved here (R-3, same precedent as BudgetHealth auto-expand) */}
                 {Array.from({ length: 5 }).map((_, index) => (
                   // eslint-disable-next-line react/no-array-index-key
-                  <div key={index} className="h-[79px] animate-pulse rounded-sm bg-surface-2 md:h-14" />
+                  <div key={index} className="h-[79px] animate-pulse rounded-sm bg-surface-2 md:h-11" />
                 ))}
               </div>
             </div>
           </div>
 
-          {/* 3. สุขภาพงบประมาณ — พับเก็บเป็นค่าเริ่มต้นทุก tier รวม lg (AC-DB-29) แต่ TransferableSavingsAction
-              (BudgetHealthPanel.js:148-154) render อยู่นอก !collapsed guard เสมอ ไม่ว่าจะพับหรือกาง — สเกเลตัน
-              นี้จึงจงใจ target แค่ baseline "พับ" เท่านั้น (h-11 หัวข้อ + บล็อกนี้) ไม่ไล่ตามความสูงตอน
-              auto-expand (attentionCount > 0) อีกต่อไป — กรณีนั้นความสูงแปรผันตามจำนวนแถวที่ต้องระวัง
-              ประมาณล่วงหน้าไม่ได้จริง (สเปกเก่าเคยลองไล่ตามและพลาดหลัก 500-700px ทุกครั้ง) ผู้ใช้ตัดสินใจแล้วว่า
-              ให้ BudgetHealthPanel เองรับผิดชอบ "การขยับความสูงให้นุ่มนวล" ตอน auto-expand ด้วยแอนิเมชันแทน
-              (ดู BudgetHealthPanel.js) — ไม่ใช่หน้าที่ของสเกเลตันอีกต่อไป (BUG-DG-2 resolution, Stage 4 round 3)
-              h-[121px] md:h-[66px] — TransferableSavingsAction (บล็อกเดียวที่ค้ำความสูงขั้นต่ำ) เป็น flex-col
-              ที่ base แต่ md:flex-row (BudgetHealthPanel.js) จึงเตี้ยลงที่ md+ เดิมสเกเลตันมีแค่ค่าเดียว
-              (base-tier only) ทำให้ overshoot ที่ md+ (Stage 4 round-2 finding) — เอา mt-space-4 เดิมออกด้วย
-              เพราะ TransferableSavingsAction จริงมี pt-space-4 เป็น padding ภายในตัวเองอยู่แล้ว (ไม่ใช่ margin
-              ภายนอก) ระยะห่างนี้จึงถูกนับซ้ำสองชั้นในสเกเลตันเดิม */}
-          <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-5 lg:row-start-3`}>
-            <div className={CARD}>
-              <div className="h-11 animate-pulse rounded-sm bg-surface-2" />
-              <div className="h-[121px] animate-pulse rounded-md bg-surface-2 md:h-[66px]" />
-            </div>
-          </div>
-
-          {/* 4. ปฏิทิน — สองรูปแบบคู่กันตาม tier (ดูหมายเหตุด้านบน) */}
-          <div className={`${GRID_ITEM} lg:col-start-6 lg:col-span-7 lg:row-start-1 lg:row-span-3`}>
+          <div className={`${GRID_ITEM} flex flex-col gap-space-4 lg:col-span-7 lg:gap-space-5`}>
+            {/* 4. ปฏิทิน (สแตกขวา ก่อนสุขภาพงบประมาณ) — สองรูปแบบคู่กันตาม tier (ดูหมายเหตุด้านบน) */}
             <div className={CARD}>
               {/* base/md: พับเก็บ — แถวหัวข้อเดียว */}
               <div className="h-11 animate-pulse rounded-sm bg-surface-2 lg:hidden" />
@@ -615,10 +598,27 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
+
+            {/* 3. สุขภาพงบประมาณ (สแตกขวา ต่อจากปฏิทิน) — พับเก็บเป็นค่าเริ่มต้นทุก tier รวม lg (AC-DB-29) แต่ TransferableSavingsAction
+                (BudgetHealthPanel.js:148-154) render อยู่นอก !collapsed guard เสมอ ไม่ว่าจะพับหรือกาง — สเกเลตัน
+                นี้จึงจงใจ target แค่ baseline "พับ" เท่านั้น (h-11 หัวข้อ + บล็อกนี้) ไม่ไล่ตามความสูงตอน
+                auto-expand (attentionCount > 0) อีกต่อไป — กรณีนั้นความสูงแปรผันตามจำนวนแถวที่ต้องระวัง
+                ประมาณล่วงหน้าไม่ได้จริง (สเปกเก่าเคยลองไล่ตามและพลาดหลัก 500-700px ทุกครั้ง) ผู้ใช้ตัดสินใจแล้วว่า
+                ให้ BudgetHealthPanel เองรับผิดชอบ "การขยับความสูงให้นุ่มนวล" ตอน auto-expand ด้วยแอนิเมชันแทน
+                (ดู BudgetHealthPanel.js) — ไม่ใช่หน้าที่ของสเกเลตันอีกต่อไป (BUG-DG-2 resolution, Stage 4 round 3)
+                h-[121px] md:h-[66px] — TransferableSavingsAction (บล็อกเดียวที่ค้ำความสูงขั้นต่ำ) เป็น flex-col
+                ที่ base แต่ md:flex-row (BudgetHealthPanel.js) จึงเตี้ยลงที่ md+ เดิมสเกเลตันมีแค่ค่าเดียว
+                (base-tier only) ทำให้ overshoot ที่ md+ (Stage 4 round-2 finding) — เอา mt-space-4 เดิมออกด้วย
+                เพราะ TransferableSavingsAction จริงมี pt-space-4 เป็น padding ภายในตัวเองอยู่แล้ว (ไม่ใช่ margin
+                ภายนอก) ระยะห่างนี้จึงถูกนับซ้ำสองชั้นในสเกเลตันเดิม */}
+            <div className={CARD}>
+              <div className="h-11 animate-pulse rounded-sm bg-surface-2" />
+              <div className="h-[121px] animate-pulse rounded-md bg-surface-2 md:h-[66px]" />
+            </div>
           </div>
 
           {/* 5. ทางลัด */}
-          <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-12 lg:row-start-4`}>
+          <div className={`${GRID_ITEM} lg:col-span-12`}>
             <div className={CARD}>
               <div className="mb-space-4 h-[31px] w-1/3 animate-pulse rounded-sm bg-surface-2" />
               {/* ความสูงจริงต่อไทล์ไม่เท่ากันทุกไทล์ — ขึ้นกับว่า label ของไทล์นั้นตัดบรรทัดหรือไม่ (2 บรรทัด
@@ -699,10 +699,12 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ลำดับ DOM จริง (ไม่ใช่แค่ผังภาพ) ตาม UX_SPEC §6.3: ครบกำหนด (J1) → วงแหวน → สุขภาพงบประมาณ →
-            ปฏิทิน → ทางลัด — จัดผัง 2 คอลัมน์ด้วย CSS grid เฉพาะที่ lg (§6.4) เท่านั้น (Finding 4) */}
+        {/* ลำดับ DOM จริง = ลำดับภาพ = ลำดับ Tab ทุก tier: ครบกำหนด (J1) → วงแหวน → ปฏิทิน → สุขภาพงบประมาณ →
+            ทางลัด — ที่ lg เป็น 2 สแตกอิสระ (ซ้าย 5/12: ครบกำหนด+วงแหวน, ขวา 7/12: ปฏิทิน+สุขภาพงบประมาณ)
+            ไม่แชร์แถว/ไม่ใช้ row-span/order/masonry เพื่อให้ความสูงของสองสแตกไม่ผูกกัน (ไม่เกิดช่องว่างใต้ปฏิทิน)
+            แก้ไขจาก UX_SPEC §6.3/§6.4 ตามภาคผนวกใน UX_SPEC-dashboard-layout-balance.md §8 */}
         <div className="flex flex-col gap-space-4 lg:grid lg:grid-cols-12 lg:items-start lg:gap-space-5">
-          <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-5 lg:row-start-1`}>
+          <div className={`${GRID_ITEM} flex flex-col gap-space-4 lg:col-span-5 lg:gap-space-5`}>
             <UpcomingPayments
               upcoming={upcoming}
               filter={ringFilter}
@@ -714,31 +716,17 @@ export default function DashboardPage() {
               onRevolvingMinimum={handleRevolvingMinimumClick}
               highlightedKey={highlightedKey}
             />
-          </div>
 
-          {isCarryoverOnly ? (
-            <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-5 lg:row-start-2`}>
+            {isCarryoverOnly ? (
               <div className="rounded-md border border-dashed border-border-default bg-surface-1 p-space-4 text-center text-secondary">
                 ยังไม่มีข้อมูลรายรับ/รายจ่ายอื่นสำหรับเดือนนี้
               </div>
-            </div>
-          ) : (
-            <>
-              <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-5 lg:row-start-2`}>
-                <CashFlowRing model={model} selected={ringFilter} onSelect={setRingFilter} monthLabel={monthLabel} />
-              </div>
-              <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-5 lg:row-start-3`}>
-                <BudgetHealthPanel
-                  model={model}
-                  thresholds={budgetThresholds}
-                  onConfirmTransfer={handleConfirmTransfer}
-                  isConfirmingTransfer={isConfirmingTransfer}
-                />
-              </div>
-            </>
-          )}
+            ) : (
+              <CashFlowRing model={model} selected={ringFilter} onSelect={setRingFilter} monthLabel={monthLabel} />
+            )}
+          </div>
 
-          <div className={`${GRID_ITEM} lg:col-start-6 lg:col-span-7 lg:row-start-1 lg:row-span-3`}>
+          <div className={`${GRID_ITEM} flex flex-col gap-space-4 lg:col-span-7 lg:gap-space-5`}>
             <DashboardCalendarSection
               headingRef={calendarHeadingRef}
               monthKey={selectedMonth}
@@ -754,9 +742,18 @@ export default function DashboardPage() {
               onRevolvingMinimum={handleRevolvingMinimumClick}
               onRevolvingCancel={handleRevolvingCancel}
             />
+
+            {!isCarryoverOnly && (
+              <BudgetHealthPanel
+                model={model}
+                thresholds={budgetThresholds}
+                onConfirmTransfer={handleConfirmTransfer}
+                isConfirmingTransfer={isConfirmingTransfer}
+              />
+            )}
           </div>
 
-          <div className={`${GRID_ITEM} lg:col-start-1 lg:col-span-12 lg:row-start-4`}>
+          <div className={`${GRID_ITEM} lg:col-span-12`}>
             {renderQuickActions()}
           </div>
         </div>
