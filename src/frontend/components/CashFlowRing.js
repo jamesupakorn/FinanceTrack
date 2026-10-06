@@ -9,6 +9,9 @@
  * ปุ่ม legend 4 แถว (รายจ่ายทั่วไป/รายจ่ายประจำวัน/เงินออม/บัตรเครดิต) เป็นตัวกรองรายการ "ครบกำหนด"
  * แถวรายรับเป็นแค่ตัวบอก ไม่ใช่ปุ่ม (มันคือฐาน 100% ของกราฟเอง)
  *
+ * ตัวเลขกลางวง: fontSize คำนวณจาก fitRingFontSize() (pure, SSR-safe) ให้พอดีรูวงเสมอ;
+ * บรรทัด "เกินรายรับ" อยู่นอก SVG เป็น HTML aria-hidden ใต้วง (dashboard-layout-balance D-4)
+ *
  * Graphite redesign (Dashboard pass) — Tailwind only, no *.module.css. ใช้ร่วมกับ /reports
  * (SummaryReport.js, interactive=false) ดังนั้น container-query fix ของ BUG-A2-1 (legend ล้นทับกัน
  * เมื่อ .ringSection ถูกวางในคอนเทนเนอร์แคบ) ต้องอยู่รอดการย้าย — ทำผ่าน Tailwind v3.4 arbitrary-
@@ -17,6 +20,7 @@
  */
 
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
+import { fitRingFontSize } from '../../shared/utils/frontend/ringTextFit';
 
 const RADIUS_OUTER = 104;
 const RADIUS_INNER = 84;
@@ -48,7 +52,7 @@ function sanitizeNumber(value) {
 // รูปแบบ C4 (§5 component vocabulary): ชื่อซ้าย + จำนวนเงิน/เปอร์เซ็นต์ขวา, tabular-nums เสมอ (N3)
 // container query (BUG-A2-1): เมื่อ .ringSection แคบ ≤330px (เช่น /reports .chartsSection) ห่อบรรทัดแทนทับกัน
 const LEGEND_ROW_BASE =
-  'flex min-h-14 items-center gap-space-3 rounded-sm border-l-2 border-transparent px-space-2 py-space-2 ' +
+  'flex min-h-11 items-center gap-space-3 rounded-sm border-l-2 border-transparent px-space-2 py-space-2 ' +
   'text-sm text-primary [@container(max-width:330px)]:flex-wrap [@container(max-width:330px)]:gap-y-1';
 
 export default function CashFlowRing({ model, selected, onSelect, monthLabel, interactive = true }) {
@@ -105,6 +109,8 @@ export default function CashFlowRing({ model, selected, onSelect, monthLabel, in
   const handleToggle = (id) => onSelect?.(isSelected(id) ? null : id);
 
   const overAmount = overIncome ? sanitizeNumber(totalOutflow - totalIncome) : 0;
+  const netText = `${netCashFlow >= 0 ? '+' : '−'}${formatCurrency(Math.abs(netCashFlow))} ฿`;
+  const netFontSize = fitRingFontSize(netText);
 
   const ariaLabel = `โครงสร้างกระแสเงินสดเดือน${monthLabel || ''}: รายรับ ${formatCurrency(totalIncome)} บาท, `
     + segments.map((s) => `${s.label} ${formatCurrency(s.amount)} บาท คิดเป็น ${(s.trueRatio * 100).toFixed(1)}% ของรายรับ`).join(', ')
@@ -114,7 +120,7 @@ export default function CashFlowRing({ model, selected, onSelect, monthLabel, in
     <section className="rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5 [container-type:inline-size]">
       <h2 className="mb-space-4 text-xl font-semibold text-primary">โครงสร้างกระแสเงินสดเดือนนี้</h2>
 
-      <div className="mb-space-4 flex justify-center">
+      <div className="mb-space-4 flex flex-col items-center">
         <svg
           width="220"
           height="220"
@@ -167,17 +173,18 @@ export default function CashFlowRing({ model, selected, onSelect, monthLabel, in
           <text x="120" y="112" textAnchor="middle" fontSize="13" fill="var(--text-secondary)">กระแสเงินสดเดือนนี้</text>
           <text
             className="tabular-nums"
-            x="120" y="138" textAnchor="middle" fontSize="26" fontWeight="600"
+            x="120" y="138" textAnchor="middle" fontSize={netFontSize} fontWeight="600"
             fill={netCashFlow >= 0 ? 'var(--pos)' : 'var(--neg)'}
           >
-            {`${netCashFlow >= 0 ? '+' : '−'}${formatCurrency(Math.abs(netCashFlow))} ฿`}
+            {netText}
           </text>
-          {overIncome && (
-            <text className="tabular-nums" x="120" y="156" textAnchor="middle" fontSize="12" fill="var(--neg)">
-              {`เกินรายรับ ${formatCurrency(overAmount)} ฿`}
-            </text>
-          )}
         </svg>
+
+        {overIncome && (
+          <p className="mt-space-2 text-center text-sm text-neg tabular-nums" aria-hidden="true">
+            {`เกินรายรับ ${formatCurrency(overAmount)} ฿`}
+          </p>
+        )}
 
         {/* รายการตัวเลข 5 ค่าเดียวกันสำหรับ screen reader อ่านทีละตัว (AC-DB-22) */}
         <ul className="sr-only">

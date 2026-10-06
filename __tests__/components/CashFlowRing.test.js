@@ -178,4 +178,63 @@ describe('CashFlowRing', () => {
       expect(creditCardArc).toHaveAttribute('opacity', '0.45');
     });
   });
+
+  describe('centre fit and over-income placement (dashboard-layout-balance)', () => {
+    const overModel = () =>
+      buildModel({
+        totalIncome: 30000,
+        totalOutflow: 36000,
+        netCashFlow: -6000,
+        generalExpense: 20000,
+        dailyExpense: 6000,
+        savings: 8000,
+        creditCard: 2000
+      });
+
+    it('main centre text font-size is within [14, 26] and shrinks for long values', () => {
+      const { container, rerender } = render(<CashFlowRing model={buildModel({ netCashFlow: 0 })} />);
+      const mainText = () => container.querySelector('svg text.tabular-nums');
+      expect(Number(mainText().getAttribute('font-size'))).toBe(26);
+
+      rerender(<CashFlowRing model={buildModel({ netCashFlow: -1234567.89 })} />);
+      const size = Number(mainText().getAttribute('font-size'));
+      expect(size).toBeGreaterThanOrEqual(14);
+      expect(size).toBeLessThan(26);
+    });
+
+    it('N-3: over-income line is not inside the SVG; exactly one aria-hidden <p> follows the svg', () => {
+      const { container } = render(<CashFlowRing model={overModel()} />);
+      const svg = container.querySelector('svg');
+      const svgTexts = Array.from(svg.querySelectorAll('text'));
+      expect(svgTexts.some((t) => t.textContent.includes('เกินรายรับ'))).toBe(false);
+
+      const lines = Array.from(container.querySelectorAll('p[aria-hidden="true"]')).filter((p) =>
+        p.textContent.includes('เกินรายรับ')
+      );
+      expect(lines).toHaveLength(1);
+      expect(lines[0].textContent).toBe('เกินรายรับ 6,000.00 ฿');
+      expect(svg.compareDocumentPosition(lines[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(svg.contains(lines[0])).toBe(false);
+    });
+
+    it('AC-DLB-15: svg aria-label and role stay unchanged when over income', () => {
+      render(<CashFlowRing model={overModel()} monthLabel="กันยายน 2569" />);
+      const svg = screen.getByRole('img');
+      expect(svg.getAttribute('aria-label')).toBe(
+        'โครงสร้างกระแสเงินสดเดือนกันยายน 2569: รายรับ 30,000.00 บาท, '
+        + 'รายจ่ายทั่วไป 20,000.00 บาท คิดเป็น 37.5% ของรายรับ, '
+        + 'รายจ่ายประจำวัน 6,000.00 บาท คิดเป็น 12.5% ของรายรับ, '
+        + 'เงินออม 8,000.00 บาท คิดเป็น 20.0% ของรายรับ, '
+        + 'บัตรเครดิต 2,000.00 บาท คิดเป็น 5.0% ของรายรับ, '
+        + 'กระแสเงินสดสุทธิ ลบ 6,000.00 บาท'
+      );
+    });
+
+    it('legend rows use min-h-11 (44px), not min-h-14', () => {
+      render(<CashFlowRing model={buildModel()} />);
+      const row = screen.getByRole('button', { name: /รายจ่ายทั่วไป/ });
+      expect(row.className).toContain('min-h-11');
+      expect(row.className).not.toContain('min-h-14');
+    });
+  });
 });
