@@ -65,7 +65,7 @@ function createInitialForm(plan, lockedCardId, cards) {
       monthsPreset: MONTH_PRESETS.includes(plan.months) ? String(plan.months) : CUSTOM_MONTHS,
       months: String(plan.months || ''),
       startMonth: plan.startMonth || getCurrentMonthKey(),
-      interestMode: plan.interestMode || 'manual',
+      interestMode: plan.interestMode || 'calculated',
       manualFeePerMonth: plan.interestMode === 'manual' ? parseAndFormat(plan.manualFeePerMonth || 0) : '',
       annualRate: plan.interestMode === 'calculated' ? String(plan.annualRate ?? '') : '',
       calcMethod: plan.calcMethod || 'flat'
@@ -78,7 +78,7 @@ function createInitialForm(plan, lockedCardId, cards) {
     monthsPreset: '10',
     months: '10',
     startMonth: getCurrentMonthKey(),
-    interestMode: 'manual',
+    interestMode: 'calculated',
     manualFeePerMonth: '',
     annualRate: '',
     calcMethod: 'flat'
@@ -425,48 +425,24 @@ export default function InstallmentPlanForm({
                   <button
                     type="button"
                     role="radio"
-                    aria-checked={form.interestMode === 'manual'}
-                    className={`${RADIO_OPTION} ${form.interestMode === 'manual' ? RADIO_OPTION_ACTIVE : ''}`}
-                    onClick={() => setFieldAndPreview('interestMode', 'manual')}
-                  >
-                    กรอกยอดเอง
-                  </button>
-                  <button
-                    type="button"
-                    role="radio"
                     aria-checked={form.interestMode === 'calculated'}
                     className={`${RADIO_OPTION} ${form.interestMode === 'calculated' ? RADIO_OPTION_ACTIVE : ''}`}
                     onClick={() => setFieldAndPreview('interestMode', 'calculated')}
                   >
                     คำนวณจาก %/ปี
                   </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={form.interestMode === 'manual'}
+                    className={`${RADIO_OPTION} ${form.interestMode === 'manual' ? RADIO_OPTION_ACTIVE : ''}`}
+                    onClick={() => setFieldAndPreview('interestMode', 'manual')}
+                  >
+                    กรอกยอดเอง
+                  </button>
                 </div>
 
-                {form.interestMode === 'manual' ? (
-                  <div className="flex flex-col gap-space-1">
-                    <label className={LABEL} htmlFor="ip-fee">
-                      ค่าธรรมเนียม/ดอกเบี้ย ต่องวด (บาท) <span className="text-neg">*</span>
-                    </label>
-                    <input
-                      id="ip-fee"
-                      name="manualFeePerMonth"
-                      type="text"
-                      inputMode="decimal"
-                      className={INPUT}
-                      value={form.manualFeePerMonth}
-                      onChange={(event) => setField('manualFeePerMonth', event.target.value)}
-                      onBlur={(event) => {
-                        if (event.target.value.trim()) setField('manualFeePerMonth', parseAndFormat(event.target.value));
-                        refreshPreview();
-                      }}
-                      placeholder="150"
-                      aria-invalid={errors.manualFeePerMonth ? 'true' : undefined}
-                      aria-describedby={describedBy('manualFeePerMonth')}
-                    />
-                    <span className={HELPER}>ใส่ยอดตามที่ระบุในใบแจ้งหนี้ ทุกงวดเท่ากัน ระบบจะไม่คำนวณเพิ่ม</span>
-                    {errors.manualFeePerMonth && <span id="plan-manualFeePerMonth-error" className={ERROR_TEXT}>{errors.manualFeePerMonth}</span>}
-                  </div>
-                ) : (
+                {form.interestMode !== 'manual' ? (
                   <>
                     <div className="flex flex-col gap-space-1">
                       <label className={LABEL} htmlFor="ip-rate">
@@ -522,6 +498,30 @@ export default function InstallmentPlanForm({
                       {errors.calcMethod && <span id="plan-calcMethod-error" className={ERROR_TEXT}>{errors.calcMethod}</span>}
                     </div>
                   </>
+                ) : (
+                  <div className="flex flex-col gap-space-1">
+                    <label className={LABEL} htmlFor="ip-fee">
+                      ค่าธรรมเนียม/ดอกเบี้ย ต่องวด (บาท) <span className="text-neg">*</span>
+                    </label>
+                    <input
+                      id="ip-fee"
+                      name="manualFeePerMonth"
+                      type="text"
+                      inputMode="decimal"
+                      className={INPUT}
+                      value={form.manualFeePerMonth}
+                      onChange={(event) => setField('manualFeePerMonth', event.target.value)}
+                      onBlur={(event) => {
+                        if (event.target.value.trim()) setField('manualFeePerMonth', parseAndFormat(event.target.value));
+                        refreshPreview();
+                      }}
+                      placeholder="150"
+                      aria-invalid={errors.manualFeePerMonth ? 'true' : undefined}
+                      aria-describedby={describedBy('manualFeePerMonth')}
+                    />
+                    <span className={HELPER}>ใส่ยอดตามที่ระบุในใบแจ้งหนี้ ทุกงวดเท่ากัน ระบบจะไม่คำนวณเพิ่ม</span>
+                    {errors.manualFeePerMonth && <span id="plan-manualFeePerMonth-error" className={ERROR_TEXT}>{errors.manualFeePerMonth}</span>}
+                  </div>
                 )}
               </fieldset>
 
