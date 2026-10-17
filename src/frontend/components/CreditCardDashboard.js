@@ -27,6 +27,7 @@ import {
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { fitFontSizeCss } from '../../shared/utils/frontend/ringTextFit';
 import { Icons } from './Icons';
+import BankIssuerMark from './BankIssuerMark';
 
 const UPCOMING_WINDOW_DAYS = 7;
 const UPCOMING_MAX_ITEMS = 5;
@@ -334,7 +335,7 @@ export default function CreditCardDashboard({
               <div key={card.id} className={`${CARD} flex flex-col gap-space-2 min-w-0 [container-type:inline-size]`} style={{ borderLeft: `4px solid ${card.color || 'var(--color-accent, #D4A857)'}` }}>
                 <div className="flex items-start justify-between gap-space-2">
                   <span className="inline-flex min-w-0 items-center gap-space-2 text-base font-semibold text-primary">
-                    <span className="h-3 w-3 shrink-0 rounded-xs" style={{ background: card.color }} aria-hidden="true" />
+                    <BankIssuerMark card={card} size={24} />
                     {card.name}
                   </span>
                   <CardMenu

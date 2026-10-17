@@ -29,6 +29,7 @@ import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { BP } from '../../shared/utils/frontend/breakpoints';
 import { Icons } from './Icons';
 import RevolvingBalanceSection from './RevolvingBalanceSection';
+import BankIssuerMark from './BankIssuerMark';
 
 const COLLAPSED_UNPAID_PREVIEW = 6;
 const LONG_PLAN_THRESHOLD = 12;
@@ -368,7 +369,7 @@ export default function CreditCardDetail({
           <div className="h-[10px]" style={{ background: card.color || 'var(--color-accent, #D4A857)' }} />
           <div className="flex flex-col gap-space-2 p-space-4">
             <span className="inline-flex items-center gap-space-2 text-base font-bold text-primary">
-              <span className="h-3 w-3 shrink-0 rounded-xs" style={{ background: card.color }} aria-hidden="true" />
+              <BankIssuerMark card={card} size={32} />
               {card.name}
             </span>
             <span className="text-xs text-tertiary">

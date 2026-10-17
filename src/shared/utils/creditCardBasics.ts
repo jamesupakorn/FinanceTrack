@@ -13,13 +13,17 @@ import {
   getDaysInMonth,
   resolveDueDayForMonth
 } from './dateUtils';
+import { BANK_ISSUERS } from './creditCardBankCatalog';
 
 // ---------------------------------------------------------------------------
 // ค่าคงที่
 // ---------------------------------------------------------------------------
 
-/** ชุดสีประจำบัตร (คงที่ 8 สี) — สีเป็นแค่การตกแต่ง ทุกที่ที่มีสีต้องมีชื่อบัตรกำกับเสมอ */
-export const CARD_COLORS: string[] = [
+/**
+ * สีพื้นฐาน 8 สีเดิม — ลำดับห้ามเปลี่ยน: index 0 เป็นค่า default/fallback ใน 3 จุด (V-5)
+ * export เพื่อให้ฟอร์มแสดงเฉพาะ 8 สีนี้เมื่อเลือก "อื่นๆ" (D-5)
+ */
+export const BASE_CARD_COLORS: readonly string[] = [
   '#5d5bff',
   '#22c1a4',
   '#f2994a',
@@ -29,6 +33,16 @@ export const CARD_COLORS: string[] = [
   '#f2c94c',
   '#6b7280'
 ];
+
+/**
+ * ชุดสีประจำบัตร = 8 สีเดิม (BASE_CARD_COLORS) + สีแบรนด์ของผู้ออกบัตรจาก BANK_ISSUERS (BR-CC-021)
+ * append-only หลัง release — ห้าม reorder หรือ prepend สีแบรนด์ (CARD_COLORS[0] ต้องเป็น
+ * default/fallback เดิมเสมอ, V-5) ซ้ำกับสีที่มีอยู่แล้วจะถูก de-duplicate (Set)
+ */
+export const CARD_COLORS: string[] = Array.from(new Set([
+  ...BASE_CARD_COLORS,
+  ...Object.values(BANK_ISSUERS).map((issuer) => issuer.color)
+]));
 
 /** เพดานขนาดข้อมูลต่อผู้ใช้ (BR-CC-012 · BR-CC-018) */
 export const MAX_CARDS_PER_USER: number = 20;

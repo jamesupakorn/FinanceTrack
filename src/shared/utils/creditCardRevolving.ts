@@ -26,6 +26,7 @@ import {
   normaliseDayValue
 } from './creditCardBasics';
 import { END_OF_MONTH_DUE_DAY } from './dateUtils';
+import { isBankIssuerKey, type BankIssuerKey } from './creditCardBankCatalog';
 
 // ---------------------------------------------------------------------------
 // Local structural types — narrow shapes reflecting only the fields this file
@@ -564,6 +565,7 @@ type CardInputLike = {
   statementDay?: number | string | null;
   dueDay?: number | string | null;
   color?: unknown;
+  bankIssuer?: unknown;
 };
 
 /**
@@ -578,6 +580,7 @@ export function validateCardInput(input: CardInputLike = {}): {
     bankName: string;
     last4: string;
     color: string;
+    bankIssuer?: BankIssuerKey;
     creditLimit: number;
     annualRate: number;
     minPaymentPercent: number;
@@ -634,6 +637,7 @@ export function validateCardInput(input: CardInputLike = {}): {
       bankName,
       last4,
       color,
+      ...(isBankIssuerKey(input.bankIssuer) ? { bankIssuer: input.bankIssuer } : {}),
       creditLimit: Number.isFinite(rawLimit) && rawLimit >= 0 ? round2(rawLimit) : 0,
       annualRate: Number.isFinite(rawAnnualRate) ? round2(rawAnnualRate) : DEFAULT_ANNUAL_RATE,
       minPaymentPercent: Number.isFinite(rawMinPercent) ? round2(rawMinPercent) : DEFAULT_MIN_PAYMENT_PERCENT,
