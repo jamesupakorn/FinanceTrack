@@ -1,3 +1,5 @@
+const fs = require('node:fs');
+const path = require('node:path');
 const {
   BANK_ISSUERS,
   BANK_ISSUER_KEYS,
@@ -30,6 +32,24 @@ describe('creditCardBankCatalog — hex format (part of AC-BI-05)', () => {
     BANK_ISSUER_KEYS.forEach((key) => {
       expect(BANK_ISSUERS[key].color).toMatch(hexPattern);
     });
+  });
+});
+
+describe('creditCardBankCatalog — logo assets', () => {
+  it('maps each configured logo to an existing local asset', () => {
+    BANK_ISSUER_KEYS.filter((key) => BANK_ISSUERS[key].logo !== null).forEach((key) => {
+      const logo = BANK_ISSUERS[key].logo;
+      expect(logo).toMatch(/^\/bank-logos\/[^/]+\.(svg|png)$/);
+      expect(fs.existsSync(path.join(__dirname, '../../../public', logo.slice(1)))).toBe(true);
+    });
+  });
+
+  it('"other" remains the only issuer on the colour-dot fallback', () => {
+    expect(BANK_ISSUER_KEYS.filter((key) => BANK_ISSUERS[key].logo === null)).toEqual(['other']);
+  });
+
+  it('"other" has no logo and keeps the colour-dot fallback', () => {
+    expect(BANK_ISSUERS.other.logo).toBeNull();
   });
 });
 

@@ -12,17 +12,17 @@
 
 /** ลำดับการประกาศ = ลำดับ dropdown (ES2015+ guarantee สำหรับ non-integer key) จบท้ายด้วย 'other' */
 export const BANK_ISSUERS = {
-  kbank:       { label: 'ธนาคารกสิกรไทย',      color: '#138f2d', logo: null },
-  scb:         { label: 'ธนาคารไทยพาณิชย์',    color: '#4e2a84', logo: null },
-  ktb:         { label: 'ธนาคารกรุงไทย',        color: '#1ba5e1', logo: null },
-  bbl:         { label: 'ธนาคารกรุงเทพ',        color: '#1e4598', logo: null },
-  krungsri:    { label: 'ธนาคารกรุงศรีอยุธยา',  color: '#fec43b', logo: null },
-  ttb:         { label: 'ธนาคารทีทีบี',         color: '#004b93', logo: null },
-  uob:         { label: 'ธนาคารยูโอบี',         color: '#0b3979', logo: null },
+  kbank:       { label: 'ธนาคารกสิกรไทย',      color: '#138f2d', logo: '/bank-logos/kbank.svg' },
+  scb:         { label: 'ธนาคารไทยพาณิชย์',    color: '#4e2a84', logo: '/bank-logos/scb.svg' },
+  ktb:         { label: 'ธนาคารกรุงไทย',        color: '#1ba5e1', logo: '/bank-logos/ktb.svg' },
+  bbl:         { label: 'ธนาคารกรุงเทพ',        color: '#1e4598', logo: '/bank-logos/bbl.svg' },
+  krungsri:    { label: 'ธนาคารกรุงศรีอยุธยา',  color: '#fec43b', logo: '/bank-logos/krungsri.svg' },
+  ttb:         { label: 'ธนาคารทีทีบี',         color: '#004b93', logo: '/bank-logos/ttb.svg' },
+  uob:         { label: 'ธนาคารยูโอบี',         color: '#0b3979', logo: '/bank-logos/uob.svg' },
   // รวม Citibank Thailand (UOB ซื้อกิจการ consumer business ปี 2023)
-  ktc:         { label: 'เคทีซี',               color: '#00338e', logo: null },
-  aeon:        { label: 'อิออน',                color: '#e4002b', logo: null },
-  firstchoice: { label: 'เฟิร์สช้อยส์',         color: '#f26522', logo: null },
+  ktc:         { label: 'เคทีซี',               color: '#00338e', logo: '/bank-logos/ktc.svg' },
+  aeon:        { label: 'อิออน',                color: '#e4002b', logo: '/bank-logos/aeon.svg' },
+  firstchoice: { label: 'เฟิร์สช้อยส์',         color: '#f26522', logo: '/bank-logos/firstchoice.svg' },
   shopee:      { label: 'Shopee',               color: '#ee4d2d', logo: '/bank-logos/shopee.svg' },
   // ครอบคลุม SPayLater + SEasyCash; ผลิตภัณฑ์ย่อยระบุในช่อง bankName
   other:       { label: 'อื่นๆ',                color: '#6b7280', logo: null }
