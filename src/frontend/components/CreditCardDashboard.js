@@ -25,6 +25,7 @@ import {
   PLAN_STATUS
 } from '../../shared/utils/creditCardUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
+import { fitFontSizeCss } from '../../shared/utils/frontend/ringTextFit';
 import { Icons } from './Icons';
 
 const UPCOMING_WINDOW_DAYS = 7;
@@ -33,6 +34,8 @@ const HIGH_UTILISATION_PERCENT = 80;
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 const CARD = 'rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5';
+// รักษา line-box เดิมของ text-2xl ไว้แม้ font-size จะหดลง เพื่อให้แถว caption ของ 4 tile เรียงกันพอดี (spec D-5)
+const TILE_AMOUNT_LINE_HEIGHT = 'calc(var(--text-2xl) * 1.3)';
 const BTN_PRIMARY = `inline-flex min-h-11 items-center justify-center gap-space-2 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent transition-colors duration-fast ease-graphite hover:opacity-90 ${FOCUS_RING}`;
 const BTN_GHOST = `inline-flex min-h-11 items-center justify-center gap-space-2 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING}`;
 const ICON_BTN = `flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border border-border-default bg-surface-2 text-secondary transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING}`;
@@ -209,20 +212,35 @@ export default function CreditCardDashboard({
     <div className="flex flex-col gap-space-5">
       {/* summary — desktop 4 tiles (C3 stats) */}
       <div className="hidden grid-cols-4 gap-space-3 md:grid" aria-live="polite">
-        <div className={CARD}>
+        <div className={`${CARD} min-w-0 [container-type:inline-size]`}>
           <p className="m-0 mb-space-1 text-sm text-secondary">หนี้คงเหลือรวม</p>
-          <p className="m-0 font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary">{formatCurrency(totals?.remainingPayable || 0)}</p>
+          <p
+            className="m-0 whitespace-nowrap font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary"
+            style={{ fontSize: fitFontSizeCss(formatCurrency(totals?.remainingPayable || 0)), lineHeight: TILE_AMOUNT_LINE_HEIGHT }}
+          >
+            {formatCurrency(totals?.remainingPayable || 0)}
+          </p>
           <span className="text-xs text-tertiary">บาท</span>
         </div>
-        <div className={CARD}>
+        <div className={`${CARD} min-w-0 [container-type:inline-size]`}>
           <p className="m-0 mb-space-1 text-sm text-secondary">ครบกำหนดเร็ว ๆ นี้</p>
-          <p className="m-0 font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary">{formatCurrency(monthlyDueTotal)}</p>
+          <p
+            className="m-0 whitespace-nowrap font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary"
+            style={{ fontSize: fitFontSizeCss(formatCurrency(monthlyDueTotal)), lineHeight: TILE_AMOUNT_LINE_HEIGHT }}
+          >
+            {formatCurrency(monthlyDueTotal)}
+          </p>
           <span className="text-xs text-tertiary">{`บาท · ${dueCardCount} บัตร`}</span>
         </div>
-        <div className={CARD}>
+        <div className={`${CARD} min-w-0 [container-type:inline-size]`}>
           <p className="m-0 mb-space-1 text-sm text-secondary">วงเงินคงเหลือ</p>
-          <p className="m-0 font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary">{formatCurrency(totals?.availableCredit || 0)}</p>
-          <span className="text-xs text-tertiary">{`/ ${formatCurrency(totals?.creditLimit || 0)} บาท`}</span>
+          <p
+            className="m-0 whitespace-nowrap font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary"
+            style={{ fontSize: fitFontSizeCss(formatCurrency(totals?.availableCredit || 0)), lineHeight: TILE_AMOUNT_LINE_HEIGHT }}
+          >
+            {formatCurrency(totals?.availableCredit || 0)}
+          </p>
+          <span className="text-xs text-tertiary">{`/ `}<span className="whitespace-nowrap">{formatCurrency(totals?.creditLimit || 0)}</span>{` บาท`}</span>
         </div>
         <div className={CARD}>
           <p className="m-0 mb-space-1 text-sm text-secondary">แผนที่กำลังผ่อน</p>
@@ -232,11 +250,15 @@ export default function CreditCardDashboard({
       </div>
 
       {/* summary — mobile single card (J1: อ่านหนี้รวมได้โดยไม่ต้อง scroll) */}
-      <div className={`${CARD} md:hidden`} aria-live="polite">
+      <div className={`${CARD} min-w-0 md:hidden`} aria-live="polite">
         <p className="m-0 mb-space-1 text-sm text-secondary">หนี้คงเหลือรวม</p>
-        <p className="m-0 font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary">{`${formatCurrency(totals?.remainingPayable || 0)} บาท`}</p>
+        <p className="m-0 font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary">
+          <span className="whitespace-nowrap">{formatCurrency(totals?.remainingPayable || 0)}</span>{' บาท'}
+        </p>
         <p className="m-0 mt-space-1 text-xs text-tertiary">
-          {`ครบกำหนดเร็ว ๆ นี้ ${formatCurrency(monthlyDueTotal)} · เหลือวงเงิน ${formatCurrency(totals?.availableCredit || 0)} · ${totals?.ongoingPlanCount || 0} แผน`}
+          {'ครบกำหนดเร็ว ๆ นี้ '}<span className="whitespace-nowrap">{formatCurrency(monthlyDueTotal)}</span>
+          {' · เหลือวงเงิน '}<span className="whitespace-nowrap">{formatCurrency(totals?.availableCredit || 0)}</span>
+          {` · ${totals?.ongoingPlanCount || 0} แผน`}
         </p>
       </div>
 
@@ -309,7 +331,7 @@ export default function CreditCardDashboard({
             // มาจาก resolveCardNextDueDate() ที่ backend คำนวณรวมทั้งงวดผ่อนและ cycle หมุนเวียนแล้ว
             const dueSoon = nextDueDiff !== null && nextDueDiff <= UPCOMING_WINDOW_DAYS;
             return (
-              <div key={card.id} className={`${CARD} flex flex-col gap-space-2`} style={{ borderLeft: `4px solid ${card.color || 'var(--color-accent, #D4A857)'}` }}>
+              <div key={card.id} className={`${CARD} flex flex-col gap-space-2 min-w-0 [container-type:inline-size]`} style={{ borderLeft: `4px solid ${card.color || 'var(--color-accent, #D4A857)'}` }}>
                 <div className="flex items-start justify-between gap-space-2">
                   <span className="inline-flex min-w-0 items-center gap-space-2 text-base font-semibold text-primary">
                     <span className="h-3 w-3 shrink-0 rounded-xs" style={{ background: card.color }} aria-hidden="true" />
@@ -327,7 +349,12 @@ export default function CreditCardDashboard({
                 </span>
 
                 <span className="mt-space-1 text-xs text-tertiary">ยอดครบกำหนดรอบนี้</span>
-                <span className="font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary">{`${formatCurrency(card.revolvingTotalDue || 0)} บาท`}</span>
+                <span
+                  className="font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary"
+                  style={{ fontSize: fitFontSizeCss(formatCurrency(card.revolvingTotalDue || 0)), lineHeight: TILE_AMOUNT_LINE_HEIGHT }}
+                >
+                  <span className="whitespace-nowrap">{formatCurrency(card.revolvingTotalDue || 0)}</span>{' บาท'}
+                </span>
                 <span className="text-xs text-secondary">{`หนี้คงเหลือรวม ${formatCurrency(card.remainingPayable)} บาท`}</span>
 
                 {dueSoon && (

@@ -4,6 +4,10 @@ import {
   RING_TEXT_MAX_SIZE,
   RING_TEXT_MIN_SIZE
 } from '../../../../src/shared/utils/frontend/ringTextFit';
+import {
+  estimateMonoEmWidth,
+  fitFontSizeCss
+} from '../../../../src/shared/utils/frontend/ringTextFit';
 
 describe('fitRingFontSize (AC-DLB-11)', () => {
   it('returns max size for short values and empty input', () => {
@@ -39,5 +43,41 @@ describe('estimateEmWidth', () => {
     expect(estimateEmWidth('+0.00 ฿')).toBeCloseTo(3.54, 5);
     expect(estimateEmWidth('ั')).toBe(0);
     expect(estimateEmWidth('')).toBe(0);
+  });
+});
+
+describe('estimateMonoEmWidth (AC-CLO-01)', () => {
+  it('counts every glyph, including punctuation, at 0.62em', () => {
+    expect(estimateMonoEmWidth('1,234,567.89')).toBeCloseTo(7.44, 5);
+  });
+
+  it('returns 0 for empty, null and undefined', () => {
+    expect(estimateMonoEmWidth('')).toBe(0);
+    expect(estimateMonoEmWidth(null)).toBe(0);
+    expect(estimateMonoEmWidth(undefined)).toBe(0);
+  });
+
+  it('counts a base glyph plus a Thai combining mark as 1 glyph', () => {
+    expect(estimateMonoEmWidth('ก' + 'ั')).toBeCloseTo(0.62, 5);
+  });
+});
+
+describe('fitFontSizeCss (AC-CLO-02)', () => {
+  it('returns the exact clamp() string for a long amount', () => {
+    expect(fitFontSizeCss('1,234,567.89')).toBe('clamp(14px, calc(100cqi / 7.44), var(--text-2xl))');
+  });
+
+  it('returns the maxCss cap unchanged for empty input', () => {
+    expect(fitFontSizeCss('')).toBe('var(--text-2xl)');
+  });
+
+  it('is deterministic for the same input', () => {
+    expect(fitFontSizeCss('1,234,567.89')).toBe(fitFontSizeCss('1,234,567.89'));
+  });
+
+  it('honours custom minPx and maxCss verbatim', () => {
+    expect(fitFontSizeCss('1,234,567.89', { minPx: 12, maxCss: '20px' })).toBe(
+      'clamp(12px, calc(100cqi / 7.44), 20px)'
+    );
   });
 });
