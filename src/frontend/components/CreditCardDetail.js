@@ -395,16 +395,16 @@ export default function CreditCardDetail({
             {creditLimit > 0 && (
               <>
                 <div className="flex items-center justify-between gap-space-3 py-[2px] text-sm">
-                  <span className="text-tertiary">วงเงิน</span>
-                  <span className="font-semibold text-primary">{formatCurrency(creditLimit)}</span>
+                  <span className="min-w-0 text-tertiary">วงเงิน</span>
+                  <span className="whitespace-nowrap font-semibold text-primary">{formatCurrency(creditLimit)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-space-3 py-[2px] text-sm">
-                  <span className="text-tertiary">ใช้ไป</span>
-                  <span className="font-semibold text-primary">{formatCurrency(card.remainingPrincipal)}</span>
+                  <span className="min-w-0 text-tertiary">ใช้ไป</span>
+                  <span className="whitespace-nowrap font-semibold text-primary">{formatCurrency(card.remainingPrincipal)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-space-3 py-[2px] text-sm">
-                  <span className="text-tertiary">คงเหลือ</span>
-                  <span className="font-semibold text-primary">{formatCurrency(card.availableCredit)}</span>
+                  <span className="min-w-0 text-tertiary">คงเหลือ</span>
+                  <span className="whitespace-nowrap font-semibold text-primary">{formatCurrency(card.availableCredit)}</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-surface-3">
                   <div
