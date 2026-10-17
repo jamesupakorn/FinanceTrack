@@ -26,7 +26,11 @@ import {
   validatePlanInput,
   getCurrentMonthKey,
   addMonths,
-  MAX_INSTALLMENTS_PER_PLAN
+  MAX_INSTALLMENTS_PER_PLAN,
+  computeStartMonthFromPurchase,
+  isValidPurchaseDate,
+  formatIsoDateTH,
+  formatDayLabel
 } from '../../shared/utils/creditCardUtils';
 import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
 import { formatCurrency, parseAndFormat } from '../../shared/utils/frontend/numberUtils';
@@ -56,6 +60,24 @@ function buildStartMonthOptions() {
   return options;
 }
 
+/**
+ * วันนี้แบบ local 'YYYY-MM-DD' — ห้ามใช้ toISOString() เพราะเป็นวันที่ UTC
+ * (ระหว่าง 00:00–06:59 น. เวลาไทยจะยังเป็น "เมื่อวาน" ตาม UTC)
+ */
+function todayIsoDate() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+/** ข้อความอธิบายการคำนวณรอบบิล ตามวันสรุปยอดของบัตรที่เลือก (UX_SPEC §4) */
+function buildCycleHelperText(card) {
+  const suffix = ' — ซื้อหลังวันสรุปยอดจะไปรอบบิลเดือนถัดไป เปลี่ยนเองได้ถ้าธนาคารตัดรอบต่างจากนี้';
+  const label = formatDayLabel(card?.statementDay);
+  if (label === '-') return `คำนวณจากวันสรุปยอดของบัตร${suffix}`;
+  if (label === 'สิ้นเดือน') return `คำนวณจากวันสรุปยอดของบัตร (สิ้นเดือน)${suffix}`;
+  return `คำนวณจากวันสรุปยอดของบัตร (วันที่ ${label})${suffix}`;
+}
+
 function createInitialForm(plan, lockedCardId, cards) {
   if (plan) {
     return {
@@ -64,20 +86,27 @@ function createInitialForm(plan, lockedCardId, cards) {
       totalPrice: parseAndFormat(plan.totalPrice || 0),
       monthsPreset: MONTH_PRESETS.includes(plan.months) ? String(plan.months) : CUSTOM_MONTHS,
       months: String(plan.months || ''),
+      // ไม่ recompute ตอนโหลด — startMonth ที่บันทึกไว้อาจเป็นค่าที่ user override เองมาก่อน (AC-PD-33)
       startMonth: plan.startMonth || getCurrentMonthKey(),
+      purchaseDate: isValidPurchaseDate(plan.purchaseDate) ? plan.purchaseDate : '',
       interestMode: plan.interestMode || 'calculated',
       manualFeePerMonth: plan.interestMode === 'manual' ? parseAndFormat(plan.manualFeePerMonth || 0) : '',
       annualRate: plan.interestMode === 'calculated' ? String(plan.annualRate ?? '') : '',
       calcMethod: plan.calcMethod || 'flat'
     };
   }
+  const cardId = lockedCardId || cards[0]?.id || '';
+  const card = cards.find(item => item.id === cardId);
+  const purchaseDate = todayIsoDate();
   return {
-    cardId: lockedCardId || cards[0]?.id || '',
+    cardId,
     itemName: '',
     totalPrice: '',
     monthsPreset: '10',
     months: '10',
-    startMonth: getCurrentMonthKey(),
+    // แผนใหม่: คำนวณรอบบิลจากวันนี้ + วันสรุปยอดของบัตรที่เลือกไว้แล้ว (N-2)
+    startMonth: computeStartMonthFromPurchase(purchaseDate, card?.statementDay) || getCurrentMonthKey(),
+    purchaseDate,
     interestMode: 'calculated',
     manualFeePerMonth: '',
     annualRate: '',
@@ -116,6 +145,9 @@ export default function InstallmentPlanForm({
     [plan]
   );
   const financialsLocked = Boolean(plan) && installmentsPaid > 0;
+  // required เฉพาะแผนใหม่ หรือแผนที่มี purchaseDate บันทึกไว้แล้ว — ฝั่ง server ใช้ predicate
+  // เดียวกันจาก existing plan ที่ query มา (`Boolean(existing?.purchaseDate)`) client/server จึงไม่ขัดกัน
+  const requirePurchaseDate = !plan || Boolean(plan?.purchaseDate);
 
   useEffect(() => {
     if (!open) return;
@@ -159,13 +191,20 @@ export default function InstallmentPlanForm({
     };
   }, [open]);
 
-  const startMonthOptions = useMemo(buildStartMonthOptions, []);
+  // ตัวเลือกเดือน: ช่วง ±12 เดือนตามปริยาย union กับค่าปัจจุบัน — ถ้าค่าที่คำนวณ/บันทึกไว้อยู่นอกช่วง
+  // (ซื้อมานานกว่า 12 เดือน) select ต้องยังโชว์เดือนนั้นจริง ไม่ใช่เดือนแรกของลิสต์เฉยๆ (C-4, V-7, AC-PD-34)
+  const startMonthOptions = useMemo(() => {
+    const base = buildStartMonthOptions();
+    return form.startMonth && !base.includes(form.startMonth)
+      ? [...base, form.startMonth].sort()
+      : base;
+  }, [form.startMonth]);
 
   // อ่านจาก ref เพื่อให้พรีวิวอัปเดตเฉพาะตอนที่ previewToken เปลี่ยน (blur / เปลี่ยน select)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const preview = useMemo(() => {
     const current = formRef.current;
-    const result = validatePlanInput(current);
+    const result = validatePlanInput(current, { requirePurchaseDate });
     if (!result.valid) return null;
     const computed = buildSchedule(result.value);
     return {
@@ -184,6 +223,32 @@ export default function InstallmentPlanForm({
   /** เปลี่ยนค่าแล้วคำนวณพรีวิวทันที — ใช้กับ select / radio ที่ไม่มีปัญหา focus */
   const setFieldAndPreview = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
+    setPreviewToken(token => token + 1);
+  };
+
+  /**
+   * คำนวณ "รอบบิลเดือน" ใหม่จาก (วันที่ซื้อ, บัตรที่เลือก) แล้วเขียนทับ startMonth เฉพาะเมื่อ
+   * คำนวณได้ (ไม่ใช่ '' — วันที่ยังพิมพ์ไม่ครบ หรือบัตรไม่มี statementDay ที่ใช้ได้ ก็คงค่าเดิมไว้ไม่ล้าง)
+   *
+   * C-2 (architecture review, ยืนยันจากผู้ใช้ 2026-10-17): แผนเดิมที่มี purchaseDate บันทึกไว้แล้ว
+   * (เคยผ่าน flow นี้มาก่อน) ต้อง "ไม่" recompute ซ้ำ แก้วันที่ซื้อได้แต่ startMonth ต้องไม่ขยับตาม —
+   * ป้องกันไม่ให้การแก้ไขแผนเก่าที่ยังไม่จ่ายเลื่อนกำหนดทุกงวดที่เหลือไปทั้งเดือนแบบไม่รู้ตัว
+   * เงื่อนไข guard เดียวกันนี้ใช้ทั้งกับ "เปลี่ยนวันที่ซื้อ" และ "เปลี่ยนบัตร" (N-1) — ไม่แยกเคส
+   */
+  const withComputedStartMonth = (next) => {
+    if (plan) return next; // C-2 guard (F-1) — แผนเดิมทุกแผน (รวม legacy ที่ยังไม่มี purchaseDate) ไม่ recompute startMonth
+    const card = cards.find(item => item.id === next.cardId);
+    const computed = computeStartMonthFromPurchase(next.purchaseDate, card?.statementDay);
+    return computed ? { ...next, startMonth: computed } : next;
+  };
+
+  const handlePurchaseDateChange = (value) => {
+    setForm(prev => withComputedStartMonth({ ...prev, purchaseDate: value }));
+    setPreviewToken(token => token + 1);
+  };
+
+  const handleCardChange = (cardId) => {
+    setForm(prev => withComputedStartMonth({ ...prev, cardId }));
     setPreviewToken(token => token + 1);
   };
 
@@ -212,7 +277,7 @@ export default function InstallmentPlanForm({
       return;
     }
 
-    const result = validatePlanInput(form);
+    const result = validatePlanInput(form, { requirePurchaseDate });
     if (!result.valid) {
       setErrors(result.errors);
       showToast('กรุณาตรวจสอบข้อมูลแผนผ่อนอีกครั้ง', 'error');
@@ -282,7 +347,7 @@ export default function InstallmentPlanForm({
                 name="cardId"
                 className={INPUT}
                 value={form.cardId}
-                onChange={(event) => setFieldAndPreview('cardId', event.target.value)}
+                onChange={(event) => handleCardChange(event.target.value)}
                 aria-invalid={errors.cardId ? 'true' : undefined}
                 aria-describedby={describedBy('cardId')}
               >
@@ -390,30 +455,84 @@ export default function InstallmentPlanForm({
             </div>
           </div>
 
-          <div className="flex flex-col gap-space-1">
-            <label className={LABEL} htmlFor="ip-start">
-              เริ่มผ่อนเดือน <span className="text-neg">*</span>
-            </label>
-            {financialsLocked ? (
-              <div className={READONLY_FIELD}>
-                <Icons.Lock size={14} className="shrink-0 opacity-70" />
-                {formatMonthKeyTH(plan.startMonth)}
+          {financialsLocked ? (
+            plan.purchaseDate ? (
+              // แผนล็อกที่มี purchaseDate บันทึกไว้ — โชว์ 2 tile (UX §3.4)
+              <div className="grid grid-cols-2 gap-space-3">
+                <div className="flex flex-col gap-space-1">
+                  <span className={LABEL}>วันที่ซื้อ</span>
+                  <div className={READONLY_FIELD}>
+                    <Icons.Lock size={14} className="shrink-0 opacity-70" />
+                    {formatIsoDateTH(plan.purchaseDate)}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-space-1">
+                  <span className={LABEL}>รอบบิลเดือน</span>
+                  <div className={READONLY_FIELD}>
+                    <Icons.Lock size={14} className="shrink-0 opacity-70" />
+                    {formatMonthKeyTH(plan.startMonth)}
+                  </div>
+                </div>
               </div>
             ) : (
-              <select
-                id="ip-start"
-                name="startMonth"
-                className={INPUT}
-                value={form.startMonth}
-                onChange={(event) => setFieldAndPreview('startMonth', event.target.value)}
-              >
-                {startMonthOptions.map(monthKey => (
-                  <option key={monthKey} value={monthKey}>{formatMonthKeyTH(monthKey)}</option>
-                ))}
-              </select>
-            )}
-            {errors.startMonth && <span id="plan-startMonth-error" className={ERROR_TEXT}>{errors.startMonth}</span>}
-          </div>
+              // แผนเก่าที่ไม่มี purchaseDate — tile เดียวเต็มแถวแบบเดิม (N-4, ไม่มี tile วันที่ซื้อว่างๆ)
+              <div className="flex flex-col gap-space-1">
+                <span className={LABEL}>รอบบิลเดือน</span>
+                <div className={READONLY_FIELD}>
+                  <Icons.Lock size={14} className="shrink-0 opacity-70" />
+                  {formatMonthKeyTH(plan.startMonth)}
+                </div>
+              </div>
+            )
+          ) : (
+            <div className="grid grid-cols-2 gap-space-3">
+              <div className="flex min-w-0 flex-col gap-space-1">
+                <label className={LABEL} htmlFor="ip-purchase">
+                  วันที่ซื้อ {requirePurchaseDate && <span className="text-neg">*</span>}
+                </label>
+                <input
+                  id="ip-purchase"
+                  name="purchaseDate"
+                  type="date"
+                  className={`${INPUT} min-w-0`}
+                  value={form.purchaseDate}
+                  onChange={(event) => handlePurchaseDateChange(event.target.value)}
+                  aria-required={requirePurchaseDate ? 'true' : undefined}
+                  aria-invalid={errors.purchaseDate ? 'true' : undefined}
+                  aria-describedby={`ip-cycle-help${errors.purchaseDate ? ' plan-purchaseDate-error' : ''}`}
+                />
+                {errors.purchaseDate && <span id="plan-purchaseDate-error" className={ERROR_TEXT}>{errors.purchaseDate}</span>}
+              </div>
+              <div className="flex min-w-0 flex-col gap-space-1">
+                <label className={LABEL} htmlFor="ip-start">
+                  รอบบิลเดือน <span className="text-neg">*</span>
+                </label>
+                <select
+                  id="ip-start"
+                  name="startMonth"
+                  className={INPUT}
+                  value={form.startMonth}
+                  onChange={(event) => setFieldAndPreview('startMonth', event.target.value)}
+                  aria-invalid={errors.startMonth ? 'true' : undefined}
+                  aria-describedby={`ip-cycle-help${errors.startMonth ? ' plan-startMonth-error' : ''}`}
+                >
+                  {startMonthOptions.map(monthKey => (
+                    <option key={monthKey} value={monthKey}>{formatMonthKeyTH(monthKey)}</option>
+                  ))}
+                </select>
+                {errors.startMonth && <span id="plan-startMonth-error" className={ERROR_TEXT}>{errors.startMonth}</span>}
+              </div>
+              <span id="ip-cycle-help" className={`${HELPER} col-span-2`}>
+                {buildCycleHelperText(selectedCard)}
+                {!requirePurchaseDate && (
+                  <>
+                    <br />
+                    แผนนี้สร้างก่อนมีช่องวันที่ซื้อ จะใส่หรือเว้นว่างไว้ก็ได้
+                  </>
+                )}
+              </span>
+            </div>
+          )}
 
           {!financialsLocked && (
             <>

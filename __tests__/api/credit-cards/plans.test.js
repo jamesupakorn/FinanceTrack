@@ -339,7 +339,7 @@ describe('/api/credit-cards/plans (Mongo mode, real DB)', () => {
     await seedCreditDoc(USER_A, { cards: [makeCard()] });
     const { req, res } = makeReqRes({
       method: 'POST',
-      body: { plan: { cardId: 'cc_a', itemName: '', totalPrice: 100, months: 1, startMonth: '2026-01', interestMode: 'manual' } }
+      body: { plan: { cardId: 'cc_a', itemName: '', totalPrice: 100, months: 1, startMonth: '2026-01', interestMode: 'manual', purchaseDate: '2026-01-01' } }
     });
 
     await handler(req, res);
@@ -354,7 +354,7 @@ describe('/api/credit-cards/plans (Mongo mode, real DB)', () => {
   it('10. POST with a nonexistent cardId returns 404 and does not write', async () => {
     const { req, res } = makeReqRes({
       method: 'POST',
-      body: { plan: { cardId: 'cc_missing', itemName: 'x', totalPrice: 100, months: 1, startMonth: '2026-01', interestMode: 'manual' } }
+      body: { plan: { cardId: 'cc_missing', itemName: 'x', totalPrice: 100, months: 1, startMonth: '2026-01', interestMode: 'manual', purchaseDate: '2026-01-01' } }
     });
 
     await handler(req, res);
@@ -377,7 +377,7 @@ describe('/api/credit-cards/plans (Mongo mode, real DB)', () => {
 
     const { req, res } = makeReqRes({
       method: 'POST',
-      body: { plan: { cardId: 'cc_a', itemName: 'ที่ 51', totalPrice: 100, months: 1, startMonth: '2026-01', interestMode: 'manual' } }
+      body: { plan: { cardId: 'cc_a', itemName: 'ที่ 51', totalPrice: 100, months: 1, startMonth: '2026-01', interestMode: 'manual', purchaseDate: '2026-01-01' } }
     });
     await handler(req, res);
 
@@ -403,7 +403,8 @@ describe('/api/credit-cards/plans (Mongo mode, real DB)', () => {
           months: 3,
           startMonth: '2026-01',
           interestMode: 'manual',
-          manualFeePerMonth: 0
+          manualFeePerMonth: 0,
+          purchaseDate: '2026-01-01'
         }
       }
     });
@@ -441,7 +442,8 @@ describe('/api/credit-cards/plans (Mongo mode, real DB)', () => {
           startMonth: '2026-01',
           interestMode: 'calculated',
           calcMethod: 'flat',
-          annualRate: 12
+          annualRate: 12,
+          purchaseDate: '2026-01-01'
         }
       }
     });
@@ -476,7 +478,8 @@ describe('/api/credit-cards/plans (Mongo mode, real DB)', () => {
           startMonth: '2026-01',
           interestMode: 'calculated',
           calcMethod: 'effective',
-          annualRate: 100
+          annualRate: 100,
+          purchaseDate: '2026-01-01'
         }
       }
     });
@@ -496,6 +499,76 @@ describe('/api/credit-cards/plans (Mongo mode, real DB)', () => {
     await handler(getReq, getRes);
     const getBody = JSON.parse(getRes._getData());
     expect(getBody.plans[0].schedule).toEqual(EFFECTIVE_SCHEDULE);
+  });
+
+  // --- purchaseDate (AC-PD-20..22) ----------------------------------------------------------
+
+  it('AC-PD-20. POST with purchaseDate + startMonth → 200, stored doc keeps both verbatim (no server recompute)', async () => {
+    await seedCreditDoc(USER_A, { cards: [makeCard()] });
+    const { req, res } = makeReqRes({
+      method: 'POST',
+      body: {
+        plan: {
+          cardId: 'cc_a',
+          itemName: 'ของใช้',
+          totalPrice: 1000,
+          months: 3,
+          startMonth: '2026-01',
+          interestMode: 'manual',
+          manualFeePerMonth: 0,
+          purchaseDate: '2026-01-20'
+        }
+      }
+    });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const body = JSON.parse(res._getData());
+    expect(body.plan.purchaseDate).toBe('2026-01-20');
+    expect(body.plan.startMonth).toBe('2026-01');
+
+    // Read back from the stored document directly, not just the response (F-5/AC-PD-20).
+    const doc = await db.collection('credit_cards').findOne({ userId: USER_A });
+    expect(doc.plans[0].purchaseDate).toBe('2026-01-20');
+    expect(doc.plans[0].startMonth).toBe('2026-01');
+
+    const { req: getReq, res: getRes } = makeReqRes();
+    await handler(getReq, getRes);
+    const getBody = JSON.parse(getRes._getData());
+    expect(getBody.plans[0].purchaseDate).toBe('2026-01-20');
+    expect(getBody.plans[0].startMonth).toBe('2026-01');
+  });
+
+  it('AC-PD-21. POST with no purchaseDate → 400, errors.purchaseDate, nothing written', async () => {
+    await seedCreditDoc(USER_A, { cards: [makeCard()] });
+    const { req, res } = makeReqRes({
+      method: 'POST',
+      body: { plan: { cardId: 'cc_a', itemName: 'ของใช้', totalPrice: 100, months: 1, startMonth: '2026-01', interestMode: 'manual' } }
+    });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(400);
+    const body = JSON.parse(res._getData());
+    expect(body.errors.purchaseDate).toBe('กรุณาเลือกวันที่ซื้อ');
+
+    const doc = await db.collection('credit_cards').findOne({ userId: USER_A });
+    expect(doc?.plans ?? []).toEqual([]);
+  });
+
+  it('AC-PD-22. POST with an invalid calendar date (2026-02-30) → 400, errors.purchaseDate', async () => {
+    await seedCreditDoc(USER_A, { cards: [makeCard()] });
+    const { req, res } = makeReqRes({
+      method: 'POST',
+      body: { plan: { cardId: 'cc_a', itemName: 'ของใช้', totalPrice: 100, months: 1, startMonth: '2026-01', interestMode: 'manual', purchaseDate: '2026-02-30' } }
+    });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(400);
+    const body = JSON.parse(res._getData());
+    expect(body.errors.purchaseDate).toBe('วันที่ซื้อไม่ถูกต้อง');
   });
 
   // --- PUT ---------------------------------------------------------------------------------
@@ -599,6 +672,85 @@ describe('/api/credit-cards/plans (Mongo mode, real DB)', () => {
 
     expect(res._getStatusCode()).toBe(404);
     expect(JSON.parse(res._getData())).toEqual({ error: 'card not found' });
+  });
+
+  // --- purchaseDate on PUT (AC-PD-23..27) ---------------------------------------------------
+
+  it('AC-PD-23. Legacy plan (no purchaseDate) + PUT { months: 2 } → 200, stored doc still has no purchaseDate key', async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard()],
+      plans: [manualPlanSeed({ id: 'ip_legacy' })]
+    });
+
+    const { req, res } = makeReqRes({ method: 'PUT', body: { planId: 'ip_legacy', patch: { months: 2 } } });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const doc = await db.collection('credit_cards').findOne({ userId: USER_A });
+    const stored = doc.plans.find(plan => plan.id === 'ip_legacy');
+    expect(stored).not.toHaveProperty('purchaseDate');
+  });
+
+  it('AC-PD-24. Dated plan + PUT { months: 2 } → 200, stored purchaseDate is preserved', async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard()],
+      plans: [manualPlanSeed({ id: 'ip_dated', purchaseDate: '2026-01-10' })]
+    });
+
+    const { req, res } = makeReqRes({ method: 'PUT', body: { planId: 'ip_dated', patch: { months: 2 } } });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const doc = await db.collection('credit_cards').findOne({ userId: USER_A });
+    const stored = doc.plans.find(plan => plan.id === 'ip_dated');
+    expect(stored.purchaseDate).toBe('2026-01-10');
+  });
+
+  it('AC-PD-25. Dated plan + PUT { purchaseDate: \'\' } → 400, errors.purchaseDate, stored value unchanged', async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard()],
+      plans: [manualPlanSeed({ id: 'ip_clear', purchaseDate: '2026-01-10' })]
+    });
+
+    const { req, res } = makeReqRes({ method: 'PUT', body: { planId: 'ip_clear', patch: { purchaseDate: '' } } });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(400);
+    const body = JSON.parse(res._getData());
+    expect(body.errors.purchaseDate).toBe('กรุณาเลือกวันที่ซื้อ');
+
+    const doc = await db.collection('credit_cards').findOne({ userId: USER_A });
+    const stored = doc.plans.find(plan => plan.id === 'ip_clear');
+    expect(stored.purchaseDate).toBe('2026-01-10');
+  });
+
+  it('AC-PD-26. Plan with a paid installment + PUT { purchaseDate } → 409 before validation', async () => {
+    const paidSchedule = MANUAL_SCHEDULE.map((row, i) => (i === 0 ? { ...row, paid: true, paidAt: new Date().toISOString(), paidSource: 'credit_card' } : row));
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard()],
+      plans: [manualPlanSeed({ id: 'ip_paid_date', purchaseDate: '2026-01-10', schedule: paidSchedule })]
+    });
+
+    const { req, res } = makeReqRes({ method: 'PUT', body: { planId: 'ip_paid_date', patch: { purchaseDate: '2026-01-15' } } });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(409);
+    expect(JSON.parse(res._getData())).toEqual({ error: 'plan has paid installments', installmentsPaid: 1 });
+  });
+
+  it('AC-PD-27. Dated plan + non-financial PUT { itemName } → 200, stored purchaseDate is preserved', async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard()],
+      plans: [manualPlanSeed({ id: 'ip_rename_dated', purchaseDate: '2026-01-10' })]
+    });
+
+    const { req, res } = makeReqRes({ method: 'PUT', body: { planId: 'ip_rename_dated', patch: { itemName: 'ใหม่' } } });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const doc = await db.collection('credit_cards').findOne({ userId: USER_A });
+    const stored = doc.plans.find(plan => plan.id === 'ip_rename_dated');
+    expect(stored.purchaseDate).toBe('2026-01-10');
   });
 
   // --- PATCH ---------------------------------------------------------------------------------

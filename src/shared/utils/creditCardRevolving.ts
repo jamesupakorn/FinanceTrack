@@ -23,7 +23,8 @@ import {
   addMonths,
   getCurrentMonthKey,
   resolveInstallmentDueDate,
-  normaliseDayValue
+  normaliseDayValue,
+  isValidPurchaseDate
 } from './creditCardBasics';
 import { END_OF_MONTH_DUE_DAY } from './dateUtils';
 import { isBankIssuerKey, type BankIssuerKey } from './creditCardBankCatalog';
@@ -696,6 +697,7 @@ type PlanInputLike = {
   totalPrice?: number | string;
   months?: number | string;
   startMonth?: unknown;
+  purchaseDate?: unknown;
   interestMode?: unknown;
   manualFeePerMonth?: number | string | null;
   annualRate?: number | string;
@@ -704,9 +706,14 @@ type PlanInputLike = {
 
 /**
  * ตรวจข้อมูลแผนผ่อน
+ * @param options.requirePurchaseDate บังคับให้ต้องมี purchaseDate หรือไม่ (ค่าเริ่มต้น false —
+ *   caller-scoped per D-1: plan ใหม่ (POST) บังคับ, plan เก่า (legacy PUT) ไม่บังคับ)
  * @returns {{valid: boolean, errors: object, value: object}}
  */
-export function validatePlanInput(input: PlanInputLike = {}): {
+export function validatePlanInput(
+  input: PlanInputLike = {},
+  { requirePurchaseDate = false }: { requirePurchaseDate?: boolean } = {}
+): {
   valid: boolean;
   errors: Record<string, string>;
   value: {
@@ -715,6 +722,7 @@ export function validatePlanInput(input: PlanInputLike = {}): {
     totalPrice: number;
     months: number;
     startMonth: string;
+    purchaseDate: string;
     interestMode: string;
     manualFeePerMonth: number;
     annualRate: number;
@@ -741,6 +749,20 @@ export function validatePlanInput(input: PlanInputLike = {}): {
 
   const startMonth = String(input.startMonth ?? '').trim();
   if (!MONTH_KEY_RE.test(startMonth)) errors.startMonth = 'กรุณาเลือกเดือนเริ่มผ่อน';
+
+  // purchaseDate ไม่ผูกกับ startMonth — ไม่เคยใช้คำนวณหรือตรวจ startMonth (BR-CC-026, ผู้ใช้ override ได้)
+  // requirePurchaseDate เป็น caller-scoped (D-1): ค่าเริ่มต้น false ทำให้ caller เดิมทุกจุดพฤติกรรมเหมือนเดิม
+  const hasPurchaseDate = input.purchaseDate !== undefined
+    && input.purchaseDate !== null
+    && input.purchaseDate !== '';
+  const purchaseDateText = hasPurchaseDate ? String(input.purchaseDate).trim() : '';
+  if (!hasPurchaseDate) {
+    if (requirePurchaseDate) errors.purchaseDate = 'กรุณาเลือกวันที่ซื้อ';
+  } else if (!isValidPurchaseDate(purchaseDateText)) {
+    errors.purchaseDate = 'วันที่ซื้อไม่ถูกต้อง';
+  }
+  // ไม่เขียน '' เข้า value เมื่อไม่ผ่าน/ไม่มีค่า — ให้ composePlan (ขั้นตอนถัดไป) omit คีย์นี้เอง
+  const purchaseDate = errors.purchaseDate ? '' : purchaseDateText;
 
   const interestMode = typeof input.interestMode === 'string' && INTEREST_MODES.some(mode => mode === input.interestMode)
     ? input.interestMode
@@ -781,6 +803,7 @@ export function validatePlanInput(input: PlanInputLike = {}): {
       totalPrice: Number.isFinite(totalPrice) ? round2(totalPrice) : 0,
       months: Number.isFinite(months) ? months : 0,
       startMonth,
+      purchaseDate,
       interestMode,
       manualFeePerMonth,
       annualRate,
