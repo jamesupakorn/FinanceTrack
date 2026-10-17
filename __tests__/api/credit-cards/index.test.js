@@ -445,6 +445,74 @@ describe('/api/credit-cards (Mongo mode, real DB)', () => {
     expect(getBody.cards[0].name).toBe('ของบี');
   });
 
+  // --- bankIssuer round-trip (feature: credit-card-bank-issuer-logo, AC-BI-11..13) ----------
+
+  it('AC-BI-11. POST create with bankIssuer stores it verbatim, and GET returns it', async () => {
+    const { req, res } = makeReqRes({
+      method: 'POST',
+      body: { card: { name: 'บัตร SCB', bankIssuer: 'scb' } }
+    });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const body = JSON.parse(res._getData());
+    expect(body.card.bankIssuer).toBe('scb');
+
+    const doc = await db.collection('credit_cards').findOne({ userId: USER_A });
+    expect(doc.cards[0].bankIssuer).toBe('scb');
+
+    const { req: getReq, res: getRes } = makeReqRes();
+    await handler(getReq, getRes);
+    const getBody = JSON.parse(getRes._getData());
+    expect(getBody.cards[0].bankIssuer).toBe('scb');
+  });
+
+  it('AC-BI-12. POST create with no bankIssuer stores no bankIssuer property (no silent coercion to "other")', async () => {
+    const { req, res } = makeReqRes({
+      method: 'POST',
+      body: { card: { name: 'บัตรไม่มีผู้ออก' } }
+    });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+
+    // Checked by reading the stored doc directly, not the response (AC-BI-12's own instruction).
+    const doc = await db.collection('credit_cards').findOne({ userId: USER_A });
+    expect('bankIssuer' in doc.cards[0]).toBe(false);
+  });
+
+  it('AC-BI-13. POST edit with only name changed on a card seeded with bankIssuer keeps it stored', async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [{
+        id: 'cc_bi_edit',
+        name: 'เดิม',
+        creditLimit: 1000,
+        annualRate: 0,
+        minPaymentPercent: 10,
+        statementDay: 5,
+        dueDay: 20,
+        color: '#5d5bff',
+        bankName: '',
+        last4: '',
+        bankIssuer: 'scb'
+      }]
+    });
+
+    const { req, res } = makeReqRes({
+      method: 'POST',
+      body: { card: { id: 'cc_bi_edit', name: 'ใหม่' } }
+    });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const body = JSON.parse(res._getData());
+    expect(body.card.name).toBe('ใหม่');
+    expect(body.card.bankIssuer).toBe('scb');
+
+    const doc = await db.collection('credit_cards').findOne({ userId: USER_A });
+    expect(doc.cards[0].bankIssuer).toBe('scb');
+  });
+
   // --- DELETE -------------------------------------------------------------------------------
 
   it('15. DELETE with missing/blank cardId returns 400', async () => {

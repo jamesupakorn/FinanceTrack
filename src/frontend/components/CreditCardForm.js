@@ -21,11 +21,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CARD_COLORS, validateCardInput } from '../../shared/utils/creditCardUtils';
+import { BASE_CARD_COLORS } from '../../shared/utils/creditCardBasics';
+import { BANK_ISSUERS, BANK_ISSUER_KEYS, isBankIssuerKey } from '../../shared/utils/creditCardBankCatalog';
 import { END_OF_MONTH_DUE_DAY } from '../../shared/utils/dateUtils';
 import { parseAndFormat } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
 import { Icons } from './Icons';
+import BankIssuerMark from './BankIssuerMark';
 
 const DAY_OPTIONS = Array.from({ length: 31 }, (_, index) => String(index + 1));
 
@@ -38,6 +41,7 @@ const GROUP_TITLE = 'text-xs font-semibold uppercase tracking-[0.02em] text-tert
 
 const emptyForm = {
   name: '',
+  bankIssuer: '',
   bankName: '',
   last4: '',
   color: CARD_COLORS[0],
@@ -76,6 +80,9 @@ export default function CreditCardForm({
     setForm(card
       ? {
         name: card.name || '',
+        // บัตรที่ bankIssuer ไม่รู้จัก (ว่าง/เก่า/hand-edited) โหลดเป็น '' เสมอ — ห้ามโหลดเป็น 'other'
+        // เพราะจะเขียน 'other' กลับตอน save ครั้งถัดไปทั้งที่ผู้ใช้ไม่ได้แก้ช่องนี้ (D-2, BR-CC-020)
+        bankIssuer: isBankIssuerKey(card.bankIssuer) ? card.bankIssuer : '',
         bankName: card.bankName || '',
         last4: card.last4 || '',
         color: CARD_COLORS.includes(card.color) ? card.color : CARD_COLORS[0],
@@ -130,6 +137,32 @@ export default function CreditCardForm({
 
   const setField = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  // เรียกเฉพาะจาก onChange ของ select ผู้ออกบัตรเท่านั้น (ห้ามเรียกตอน load/mount/useEffect —
+  // AC-BI-20/35, pitfall #5/#5a/#5b): setForm ครั้งเดียวต่อการเปลี่ยน ไม่แตะ bankName (AC-BI-19)
+  const handleIssuerChange = (key) => {
+    if (!isBankIssuerKey(key)) return;
+    setForm(prev => (key === 'other'
+      // "อื่นๆ": เคลียร์สีทันทีไม่ว่าก่อนหน้าเป็นสีอะไร ไม่ pre-select swatch ใดเลย (N-3, AC-BI-17/33)
+      ? { ...prev, bankIssuer: key, color: '' }
+      // ผู้ออกบัตรที่มีชื่อ: เซ็ตสีแบรนด์พร้อมกันในการอัปเดตเดียว (G-1)
+      : { ...prev, bankIssuer: key, color: BANK_ISSUERS[key].color }));
+  };
+
+  // กริดสีถูกกรองตามผู้ออกบัตรที่ select แสดงอยู่ (D-5): '' (บัตรใหม่/บัตรเก่า) และ 'other' ทั้งคู่
+  // แสดงเป็น "อื่นๆ" จึงได้กริด 8 สีฐานเท่านั้น — ผู้ออกบัตรที่มีชื่อได้กริดเต็ม 19 สี
+  const isNamedIssuer = isBankIssuerKey(form.bankIssuer) && form.bankIssuer !== 'other';
+  const swatchColors = isNamedIssuer ? CARD_COLORS : BASE_CARD_COLORS;
+
+  // aria-label ของแต่ละสวอทช์: สีฐาน 8 สีแรกใช้ "สีที่ N" เดิมเสมอ (รวม #6b7280 ซึ่งเป็น index 7
+  // ของสีฐานด้วย แม้จะเป็นสีของ 'other' ก็ตาม — ตรวจสีฐานก่อนเสมอ) ส่วนสีแบรนด์ที่ไม่ใช่สีฐานใช้
+  // "สี{ชื่อผู้ออกบัตร}"
+  const getSwatchLabel = (color) => {
+    const baseIndex = BASE_CARD_COLORS.indexOf(color);
+    if (baseIndex !== -1) return `สีที่ ${baseIndex + 1}`;
+    const issuerEntry = Object.entries(BANK_ISSUERS).find(([key, issuer]) => key !== 'other' && issuer.color === color);
+    return issuerEntry ? `สี${issuerEntry[1].label}` : `สีที่ ${swatchColors.indexOf(color) + 1}`;
   };
 
   const handleSubmit = (event) => {
@@ -204,7 +237,30 @@ export default function CreditCardForm({
             </div>
 
             <div className="flex flex-col gap-space-1">
-              <label className={LABEL} htmlFor="cc-bank">ธนาคาร</label>
+              <label className={LABEL} htmlFor="cc-issuer">ธนาคาร / ผู้ออกบัตร</label>
+              <div className="flex items-center gap-space-2">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border border-border-interactive bg-surface-2">
+                  {/* Preview เป็น decorative เสมอ (alt="") เพราะ select ข้าง ๆ บอกชื่อผู้ออกบัตรอยู่แล้ว */}
+                  <BankIssuerMark card={{ bankIssuer: form.bankIssuer, color: form.color }} size={40} decorative />
+                </div>
+                <select
+                  id="cc-issuer"
+                  name="bankIssuer"
+                  className={`${INPUT} flex-1`}
+                  value={form.bankIssuer || 'other'}
+                  onChange={(event) => handleIssuerChange(event.target.value)}
+                  aria-describedby="cc-issuer-help"
+                >
+                  {BANK_ISSUER_KEYS.map((key) => (
+                    <option key={key} value={key}>{BANK_ISSUERS[key].label}</option>
+                  ))}
+                </select>
+              </div>
+              <span id="cc-issuer-help" className={HELPER}>เลือกแล้วระบบจะเลือกสีแบรนด์ให้ เปลี่ยนสีเองได้ด้านล่าง</span>
+            </div>
+
+            <div className="flex flex-col gap-space-1">
+              <label className={LABEL} htmlFor="cc-bank">ชื่อบัญชีที่ใช้รวมยอด / ชื่อผลิตภัณฑ์ (ไม่บังคับ)</label>
               <input
                 id="cc-bank"
                 name="bankName"
@@ -213,9 +269,11 @@ export default function CreditCardForm({
                 maxLength={40}
                 value={form.bankName}
                 onChange={(event) => setField('bankName', event.target.value)}
-                placeholder="KTC"
+                placeholder="เช่น KTC หรือ SPayLater"
+                aria-describedby="cc-bank-help-1 cc-bank-help-2"
               />
-              <span className={HELPER}>ถ้าตรงกับชื่อบัญชีธนาคารที่ใช้อยู่ ระบบจะรวมยอดผ่อนเข้าบัญชีนั้น</span>
+              <span id="cc-bank-help-1" className={HELPER}>ถ้าตรงกับชื่อบัญชีธนาคารที่ใช้อยู่ ระบบจะรวมยอดผ่อนเข้าบัญชีนั้น</span>
+              <span id="cc-bank-help-2" className={HELPER}>ใส่ชื่อผลิตภัณฑ์เพิ่มได้ เช่น SPayLater</span>
             </div>
 
             <div className="flex flex-col gap-space-1">
@@ -238,8 +296,11 @@ export default function CreditCardForm({
 
             <div className="flex flex-col gap-space-1">
               <span className={LABEL} id="cc-color-label">สีประจำบัตร</span>
-              <div className="grid grid-cols-8 gap-space-2" role="radiogroup" aria-labelledby="cc-color-label">
-                {CARD_COLORS.map((color, index) => {
+              {/* flex-wrap แทน grid-cols-8 เดิม (D-4): 8 สีล้นที่ 375px อยู่แล้ว, 19 สีจะยิ่งล้นหนักกว่า
+                  จำนวนสวอทช์ขึ้นกับผู้ออกบัตรที่ select แสดง (D-5) — ผู้ออกบัตรมีชื่อ = 19 สี (CARD_COLORS)
+                  'อื่นๆ'/ว่าง = 8 สีฐานเท่านั้น (BASE_CARD_COLORS) ไม่มีสีแบรนด์ของผู้ออกบัตรอื่นหลุดเข้ามา */}
+              <div className="flex flex-wrap gap-space-2" role="radiogroup" aria-labelledby="cc-color-label">
+                {swatchColors.map((color) => {
                   const selected = form.color === color;
                   return (
                     <button
@@ -247,7 +308,7 @@ export default function CreditCardForm({
                       type="button"
                       role="radio"
                       aria-checked={selected}
-                      aria-label={`สีที่ ${index + 1}${usedColors.has(color) ? ' (ใช้กับบัตรอื่นแล้ว)' : ''}`}
+                      aria-label={`${getSwatchLabel(color)}${usedColors.has(color) ? ' (ใช้กับบัตรอื่นแล้ว)' : ''}`}
                       className={`relative flex h-11 w-11 items-center justify-center rounded-sm border-2 text-white ${selected ? 'border-white shadow-[0_0_0_3px_rgba(212,168,87,0.45)]' : 'border-transparent'} ${FOCUS_RING} ${usedColors.has(color) ? 'after:absolute after:bottom-1 after:h-1 after:w-1 after:rounded-full after:bg-white/85 after:content-[\'\']' : ''}`}
                       style={{ background: color }}
                       onClick={() => setField('color', color)}
