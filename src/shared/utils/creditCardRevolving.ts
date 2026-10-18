@@ -2,7 +2,7 @@
 // ยอดใช้จ่ายหมุนเวียน (section 5) · สรุปข้อมูล (section 6) · validation (section 7)
 //
 // ย้ายออกมาจาก creditCardUtils.js (TD-H02 sub-slice 3/3, FINAL) — creditCardUtils.js ยังคง
-// re-export สัญลักษณ์ทั้ง 13 ตัวที่ export จากไฟล์นี้ ไม่มีการเปลี่ยนพฤติกรรมใด ๆ ในไฟล์นี้ —
+// re-export สัญลักษณ์ทั้ง 14 ตัวที่ export จากไฟล์นี้ (ตัวที่ 14 isValidCashbackAmount เพิ่มในรอบ credit-card-cashback) ไม่มีการเปลี่ยนพฤติกรรมใด ๆ ในไฟล์นี้ —
 // เฉพาะการเพิ่ม type annotation เท่านั้น (ยกเว้นจุดที่ TypeScript's strict mode บังคับให้เปลี่ยน
 // .includes() บน readonly const-tuple เป็น .some() เพื่อเลี่ยงการเพิ่ม `as` cast อีกจุด — ผลลัพธ์
 // รันไทม์เหมือนเดิมทุกกรณี ดูรายละเอียดใน changes-td-h02-creditcard-revolving.md)
@@ -54,6 +54,8 @@ type StoredRevolvingCycle = {
   cardId?: string;
   month?: string;
   newSpend?: number | string;
+  /** แคชแบคของรอบบิล — ไม่มี key = 0 (BR-CC-028) เขียนผ่าน PATCH เท่านั้น */
+  cashbackAmount?: number | string;
   paymentAction?: string | null;
   paidAt?: string | null;
   paidSource?: string | null;
@@ -65,14 +67,21 @@ type RevolvingCycleRow = {
   cardId: string;
   month: string;
   newSpend: number;
+  /** echo ของแคชแบคที่เก็บไว้ อ่านแบบ defensive (≥ 0 เสมอ) */
+  cashbackAmount: number;
+  /** ติดลบได้ = เครดิตยกมาจากเดือนก่อน (BR-CC-029) */
   carriedBalance: number;
+  /** ติดลบได้ = เดือนเครดิต (BR-CC-029/030) */
   totalDue: number;
   minPaymentDue: number;
   paymentAction: PaymentAction;
   amountDue: number;
   paidAmount: number;
   interest: number;
+  /** ติดลบได้ = เครดิตยกไปเดือนหน้า */
   closingBalance: number;
+  /** เครดิตที่ยกไปเดือนหน้า = max(0, −closingBalance) ไม่ติดลบเสมอ */
+  creditBalance: number;
   paidAt: string | null;
   paidSource: string | null;
   minimumPreview: {
@@ -91,6 +100,8 @@ type RevolvingSummary = {
   due: number;
   outstanding: number;
   carryForward: number;
+  /** เครดิตที่ยกไปเดือนหน้า (≥ 0) — รายงานแยกจากตัวเลขหนี้ซึ่งไม่ติดลบเสมอ (BR-CC-031) */
+  credit: number;
   paymentAction: PaymentAction;
   cycle: RevolvingCycleRow | null;
 };
@@ -149,6 +160,16 @@ export function normaliseCardDefaults(card: CardLike = {}): CardLike & { annualR
 export function isValidPaymentAction(value: unknown): value is PaymentAction {
   if (value === null) return true;
   return typeof value === 'string' && PAYMENT_ACTIONS.some(action => action === value);
+}
+
+/**
+ * true เมื่อเป็นยอดแคชแบคที่ถูกต้อง: ตัวเลข (หรือข้อความตัวเลข มี comma ได้) ที่ไม่ติดลบ
+ * ค่าว่าง ('' / null / undefined) ไม่ใช่ค่าที่ถูกต้อง: ผู้เรียกต้องตัดสินเองว่า "ไม่ได้ส่งมา" (BR-CC-032)
+ */
+export function isValidCashbackAmount(value: unknown): boolean {
+  if (typeof value !== 'number' && typeof value !== 'string') return false;
+  const amount = toAmount(value);
+  return Number.isFinite(amount) && amount >= 0;
 }
 
 /** month key ที่เก่ากว่าในสองค่า (รูปแบบ YYYY-MM เทียบแบบ lexicographic ได้ตรงตามลำดับเวลา) */
@@ -252,28 +273,39 @@ export function buildRevolvingCycles(
     if (!stored && carried === 0) continue;
 
     const newSpend = round2(Math.max(0, toAmount(stored?.newSpend ?? '') || 0));
+    // แคชแบคเป็นค่าไม่ติดลบเสมอ — อ่านแบบ defensive แบบเดียวกับ newSpend (ค่าเสีย/ติดลบในข้อมูล = 0)
+    const cashbackAmount = round2(Math.max(0, toAmount(stored?.cashbackAmount ?? '') || 0));
     const carriedBalance = carried;
-    const totalDue = round2(carriedBalance + newSpend);
-    const minPaymentDue = Math.min(totalDue, round2(totalDue * minPct / 100));
+    // ⚠ ห้าม Math.max(0, …) ตรงนี้ — แคชแบคที่เกินยอดต้องกลายเป็นเครดิตยกไปเดือนหน้า (BR-CC-029, ADR-026)
+    const totalDue = round2(carriedBalance + newSpend - cashbackAmount);
+    // เดือนเครดิต: ไม่มีอะไรต้องจ่าย ไม่มีดอกเบี้ย และเครดิตต้องไม่หายไม่ว่า paymentAction จะเป็นอะไร (BR-CC-030)
+    const isCreditCycle = totalDue < 0;
+    // gate ที่ totalDue > 0: Math.min(totalDue, …) บนยอดติดลบจะได้ขั้นต่ำติดลบ (V-2)
+    const minPaymentDue = totalDue > 0 ? Math.min(totalDue, round2(totalDue * minPct / 100)) : 0;
     const action: PaymentAction = isValidPaymentAction(stored?.paymentAction) ? (stored?.paymentAction ?? null) : null;
 
     // ผลลัพธ์ถ้าเลือก "จ่ายขั้นต่ำ" — ใช้แสดงในกล่องยืนยันเท่านั้น ไม่ใช่ดอกเบี้ยที่เกิดขึ้นจริง
     // มีไว้เพื่อให้ UI ไม่ต้องคำนวณเงินเอง (ดอกเบี้ยเกิดจากการกดยืนยันเท่านั้น — BR-CC-015)
     const minimumRemaining = round2(totalDue - minPaymentDue);
-    const minimumInterest = round2(minimumRemaining * monthlyRate);
+    // floor ที่ 0: ไม่มีดอกเบี้ยบนเครดิต (V-3)
+    const minimumInterest = round2(Math.max(0, minimumRemaining) * monthlyRate);
 
     let paidAmount = 0;
     let interest = 0;
     let closingBalance = totalDue;
 
-    if (action === 'full') {
-      paidAmount = totalDue;
-      interest = 0;
-      closingBalance = 0;
-    } else if (action === 'minimum') {
-      paidAmount = minPaymentDue;
-      interest = minimumInterest;
-      closingBalance = round2(minimumRemaining + minimumInterest);
+    // เดือนเครดิตข้ามทั้งสอง branch: 'full' จะตั้ง closingBalance = 0 ซึ่งลบเครดิตทิ้ง (V-4)
+    // จึงคง paidAmount 0 · interest 0 · closingBalance = totalDue (เครดิต) ไม่ว่า action จะเป็นอะไร
+    if (!isCreditCycle) {
+      if (action === 'full') {
+        paidAmount = totalDue;
+        interest = 0;
+        closingBalance = 0;
+      } else if (action === 'minimum') {
+        paidAmount = minPaymentDue;
+        interest = minimumInterest;
+        closingBalance = round2(minimumRemaining + minimumInterest);
+      }
     }
 
     derived.push({
@@ -281,15 +313,19 @@ export function buildRevolvingCycles(
       cardId,
       month,
       newSpend,
+      cashbackAmount,
       carriedBalance,
       totalDue,
       minPaymentDue,
+      // รายงานตามที่เก็บไว้ แม้เป็นเดือนเครดิต (N-2)
       paymentAction: action,
       // ยังไม่ตัดสินใจ = เป็นหนี้ทั้งใบแจ้งหนี้ ไม่ใช่แค่ขั้นต่ำ (BR-CC-014)
-      amountDue: action === 'minimum' ? minPaymentDue : totalDue,
+      // เดือนเครดิต = 0 ที่ต้นทาง ผู้ใช้ปลายทางทุกตัว gate ที่ amountDue > 0 (BR-CC-030)
+      amountDue: isCreditCycle ? 0 : (action === 'minimum' ? minPaymentDue : totalDue),
       paidAmount,
       interest,
       closingBalance,
+      creditBalance: round2(Math.max(0, -closingBalance)),
       paidAt: stored?.paidAt || null,
       paidSource: stored?.paidSource || null,
       minimumPreview: {
@@ -326,7 +362,7 @@ export function isRevolvingChainTruncated(derivedCycles: unknown[] & { truncated
  * สรุปยอดหมุนเวียนของบัตร ณ เดือนหนึ่ง
  * @param {array} derivedCycles - ผลจาก buildRevolvingCycles
  * @param {{asOfMonth?: string}} options
- * @returns {{totalDue, minDue, due, outstanding, carryForward, paymentAction, cycle}}
+ * @returns {{totalDue, minDue, due, outstanding, carryForward, credit, paymentAction, cycle}}
  */
 export function summariseRevolving(derivedCycles: RevolvingCycleRow[] = [], options: { asOfMonth?: string } = {}): RevolvingSummary {
   const asOfMonth = typeof options.asOfMonth === 'string' && MONTH_KEY_RE.test(options.asOfMonth)
@@ -342,19 +378,25 @@ export function summariseRevolving(derivedCycles: RevolvingCycleRow[] = [], opti
       due: 0,
       outstanding: 0,
       carryForward: 0,
+      credit: 0,
       paymentAction: null,
       cycle: null
     };
   }
 
+  // ขอบเขตสรุป: ตัวเลข "หนี้" ไม่ติดลบเสมอ เครดิตรายงานแยก (BR-CC-031)
+  // มิฉะนั้นเครดิตจะไปหักหนี้ผ่อนชำระ/หนี้บัตรใบอื่น และทำให้ availableCredit เกินวงเงิน
+  // ⚠ นี่คือจุดเดียวที่ floor — ห้ามย้ายเข้าไปใน buildRevolvingCycles (เครดิตต้องยกไปเดือนหน้าได้, BR-CC-029)
+  const balance = cycle.paymentAction === null ? cycle.totalDue : cycle.closingBalance;
   return {
-    totalDue: cycle.totalDue,
-    minDue: cycle.minPaymentDue,
+    totalDue: Math.max(0, cycle.totalDue),
+    minDue: cycle.minPaymentDue, // ≥ 0 อยู่แล้วจาก buildRevolvingCycles
     // ยังต้อง "จ่ายออก" อีกเท่าไรในเดือนนี้
-    due: cycle.paymentAction === null ? cycle.totalDue : 0,
+    due: cycle.paymentAction === null ? Math.max(0, cycle.totalDue) : 0,
     // ยอดหนี้ที่ยังกินวงเงินอยู่จริง ๆ ตอนนี้
-    outstanding: cycle.paymentAction === null ? cycle.totalDue : cycle.closingBalance,
-    carryForward: cycle.closingBalance,
+    outstanding: Math.max(0, balance),
+    carryForward: Math.max(0, cycle.closingBalance),
+    credit: cycle.creditBalance,
     paymentAction: cycle.paymentAction,
     cycle
   };
@@ -452,6 +494,7 @@ export function summariseCard(
   revolvingOutstanding: number;
   revolvingCarryForward: number;
   revolvingAction: PaymentAction;
+  revolvingCredit: number;
   availableCredit: number;
   ongoingPlanCount: number;
   nextDueDate: string | null;
@@ -496,6 +539,8 @@ export function summariseCard(
     revolvingOutstanding: revolving.outstanding,
     revolvingCarryForward: revolving.carryForward,
     revolvingAction: revolving.paymentAction,
+    // เครดิตแคชแบคแสดงแยกเท่านั้น ไม่หักหนี้ผ่อน/ไม่เพิ่ม availableCredit (N-1, BR-CC-031)
+    revolvingCredit: revolving.credit,
     availableCredit: round2(Math.max(0, creditLimit - remainingPrincipal)),
     ongoingPlanCount: ongoingPlans.length,
     nextDueDate: resolveCardNextDueDate(card, ongoingPlans, derivedCycles)

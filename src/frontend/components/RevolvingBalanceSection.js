@@ -15,13 +15,15 @@
  * - onChanged {function} แจ้งหน้าแม่ให้โหลดยอดรวมของบัตรใหม่
  *
  * ช่องตัวเลขเป็น type="text" + inputMode เสมอ (ADR-006) และบันทึกตอน blur ไม่ใช่ทุกคีย์
+ * แคชแบค (credit-card-cashback): totalDue/carriedBalance/closingBalance ของ server อาจติดลบ = เครดิต
+ *   คอมโพเนนต์แค่สลับเครื่องหมายเพื่อแสดงผล (formatBalance) ไม่ได้คำนวณเงินเพิ่ม
  * ปุ่มทุกปุ่มสูง ≥ 44px
  *
  * Graphite redesign (credit-cards-graphite pass) — Tailwind แทน CreditCard.module.css แล้ว
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getCurrentMonthKey, formatDayLabel } from '../../shared/utils/creditCardUtils';
+import { getCurrentMonthKey, formatDayLabel, isValidCashbackAmount } from '../../shared/utils/creditCardUtils';
 import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
 import { creditCardAPI } from '../../shared/utils/frontend/apiUtils';
 import { formatCurrency, parseAndFormat } from '../../shared/utils/frontend/numberUtils';
@@ -39,9 +41,14 @@ const EMPTY_CYCLE = {
   paidAmount: 0,
   interest: 0,
   closingBalance: 0,
+  cashbackAmount: 0,
+  creditBalance: 0,
   stored: false,
   isImplicit: true
 };
+
+/** แสดงยอดคงเหลือแบบมีเครื่องหมาย — ติดลบ = เครดิต (แสดงผลเท่านั้น ไม่ใช่การคำนวณเงิน) */
+const formatBalance = (value) => (Number(value) < 0 ? `เครดิต ${formatCurrency(-Number(value))}` : formatCurrency(value));
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 const CARD = 'rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5';
@@ -59,6 +66,7 @@ export default function RevolvingBalanceSection({
   const [cycles, setCycles] = useState([]);
   const [truncated, setTruncated] = useState(false);
   const [spendDraft, setSpendDraft] = useState('');
+  const [cashbackDraft, setCashbackDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(!isMobileView);
@@ -76,6 +84,7 @@ export default function RevolvingBalanceSection({
     setTruncated(response?.truncated === true);
     const current = nextCycles.find(item => item.month === month);
     setSpendDraft(current ? parseAndFormat(current.newSpend) : '');
+    setCashbackDraft(current ? parseAndFormat(current.cashbackAmount || 0) : '');
   }, [month]);
 
   useEffect(() => {
@@ -92,6 +101,7 @@ export default function RevolvingBalanceSection({
         setCycles([]);
         setTruncated(false);
         setSpendDraft('');
+        setCashbackDraft('');
         showToast('โหลดยอดใช้จ่ายหมุนเวียนไม่สำเร็จ', 'error');
       })
       .finally(() => {
@@ -140,6 +150,25 @@ export default function RevolvingBalanceSection({
     );
   };
 
+  // รูปแบบเดียวกับ handleSpendBlur: ว่าง = ล้างเป็น '0.00' (ห้ามส่ง '' เพราะ server ถือว่า no-op)
+  const handleCashbackBlur = (rawValue) => {
+    const stored = parseAndFormat(currentCycle.cashbackAmount || 0);
+    const trimmed = rawValue.trim();
+    if (trimmed && !isValidCashbackAmount(trimmed)) {
+      setCashbackDraft(stored);
+      showToast('แคชแบคต้องเป็นตัวเลขไม่ติดลบ', 'error');
+      return;
+    }
+    const formatted = trimmed ? parseAndFormat(trimmed) : '0.00';
+    setCashbackDraft(formatted);
+    if (formatted === stored) return;
+    runAction(
+      () => creditCardAPI.saveRevolvingCashback(cardId, month, formatted),
+      'บันทึกแคชแบคแล้ว',
+      'บันทึกแคชแบคไม่สำเร็จ'
+    );
+  };
+
   const handlePayFull = () => runAction(
     () => creditCardAPI.setRevolvingAction(cardId, month, 'full'),
     'บันทึกจ่ายเต็มจำนวนแล้ว',
@@ -168,6 +197,13 @@ export default function RevolvingBalanceSection({
 
   const settled = currentCycle.paymentAction !== null;
   const hasSomethingDue = currentCycle.totalDue > 0;
+  const cashbackAmount = Number(currentCycle.cashbackAmount) || 0;
+  const isCredit = currentCycle.totalDue < 0;
+  // แคชแบคหักยอดหมดพอดี: แสดงแค่บรรทัดศูนย์ ไม่แสดง settled panel ("จ่ายเต็มแล้ว 0.00" จะอ่านแล้วผิด — C-8)
+  // เดือนที่ totalDue = 0 โดยไม่มีแคชแบค ยังแสดง settled panel เหมือนเดิม
+  const isZeroAfterCashback = currentCycle.totalDue === 0 && cashbackAmount > 0;
+  // paymentAction ที่บันทึกไว้บนเดือนเครดิต/ศูนย์หลังแคชแบคยังเก็บไว้ แต่ไม่มีผล จึงซ่อนไว้ (N-2)
+  const showSettledPanel = settled && !isCredit && !isZeroAfterCashback;
 
   return (
     <section className={`${CARD} flex flex-col gap-space-2`} aria-label="ยอดใช้จ่ายหมุนเวียน">
@@ -208,12 +244,23 @@ export default function RevolvingBalanceSection({
               <span className="text-tertiary">ยอดยกมา</span>
               <span className="font-semibold text-primary">{`${formatCurrency(currentCycle.carriedBalance)} ฿`}</span>
             </div>
+          ) : currentCycle.carriedBalance < 0 ? (
+            <div className="flex items-center justify-between gap-space-3 rounded-sm border border-border-subtle bg-surface-2 px-space-3 py-space-2 text-sm">
+              <span className="text-tertiary">เครดิตยกมา</span>
+              <span className="font-semibold text-pos">{`${formatCurrency(-currentCycle.carriedBalance)} ฿`}</span>
+            </div>
           ) : null}
           {currentCycle.carriedBalance > 0 && previousMonthCycle && (
             <span className="text-xs text-tertiary">
               {`ยกมาจาก ${formatMonthKeyTH(previousMonthCycle.month)}`}
               {previousMonthCycle.interest > 0 ? ` · รวมดอกเบี้ย ${formatCurrency(previousMonthCycle.interest)} ฿` : ''}
               {' · คำนวณจากเดือนก่อนหน้าโดยอัตโนมัติ'}
+            </span>
+          )}
+          {/* เครดิตไม่มีดอกเบี้ย (BR-CC-030) จึงไม่มีส่วน "รวมดอกเบี้ย" */}
+          {currentCycle.carriedBalance < 0 && previousMonthCycle && (
+            <span className="text-xs text-tertiary">
+              {`ยกมาจาก ${formatMonthKeyTH(previousMonthCycle.month)} · คำนวณจากเดือนก่อนหน้าโดยอัตโนมัติ`}
             </span>
           )}
           {!currentCycle.stored && currentCycle.carriedBalance === 0 && (
@@ -237,11 +284,34 @@ export default function RevolvingBalanceSection({
           />
           <span className="text-xs text-tertiary">กรอกยอดจาก statement ของเดือนนี้</span>
 
+          <label className="mt-space-1 text-sm font-semibold text-secondary" htmlFor="revolving-cashback">
+            แคชแบคที่ได้รับเดือนนี้ (บาท)
+          </label>
+          <input
+            id="revolving-cashback"
+            name="cashbackAmount"
+            type="text"
+            inputMode="decimal"
+            aria-describedby="revolving-cashback-help"
+            className={`min-h-12 w-full rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-right font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums text-primary outline-none transition-colors duration-fast ease-graphite focus:border-accent disabled:opacity-60 ${FOCUS_RING}`}
+            value={cashbackDraft}
+            disabled={busy}
+            onChange={(event) => setCashbackDraft(event.target.value)}
+            onBlur={(event) => handleCashbackBlur(event.target.value)}
+            placeholder="0.00"
+          />
+          <span id="revolving-cashback-help" className="text-xs text-tertiary">
+            กรอกยอดเงินคืนตามที่แสดงใน statement · หักออกจากยอดที่ต้องชำระ ถ้าเกินยอด ส่วนที่เหลือจะยกไปหักเดือนหน้า
+          </span>
+
           {hasSomethingDue && (
             <>
               <div className="h-px bg-border-subtle" />
               <span className="text-sm font-semibold text-secondary">ยอดที่ต้องชำระทั้งหมด</span>
               <span className="font-[family-name:var(--font-numeric)] text-3xl font-bold tabular-nums text-primary">{`${formatCurrency(currentCycle.totalDue)} ฿`}</span>
+              {cashbackAmount > 0 && (
+                <span className="text-xs text-pos">{`หักแคชแบคแล้ว ${formatCurrency(cashbackAmount)} ฿`}</span>
+              )}
               <span className="text-xs text-tertiary">
                 {`ขั้นต่ำ ${card.minPaymentPercent ?? 10}% = ${formatCurrency(currentCycle.minPaymentDue)} ฿`}
               </span>
@@ -272,7 +342,27 @@ export default function RevolvingBalanceSection({
             </div>
           )}
 
-          {settled && (
+          {isZeroAfterCashback && (
+            <>
+              <div className="h-px bg-border-subtle" />
+              <p className="m-0 text-sm text-tertiary">แคชแบคหักยอดเดือนนี้หมดพอดี · ไม่มียอดต้องชำระ</p>
+            </>
+          )}
+
+          {isCredit && (
+            <>
+              <div className="h-px bg-border-subtle" />
+              <div className="flex flex-col gap-space-1 rounded-sm border border-pos/40 border-l-[3px] border-l-pos bg-pos/10 p-space-3">
+                <span className="text-sm font-bold text-pos">
+                  {`เครดิตคงเหลือ ${formatCurrency(currentCycle.creditBalance)} ฿`}
+                </span>
+                <span className="text-xs text-tertiary">ไม่มียอดต้องชำระเดือนนี้</span>
+                <span className="text-xs text-tertiary">เครดิตจะยกไปหักยอดเดือนหน้าโดยอัตโนมัติ</span>
+              </div>
+            </>
+          )}
+
+          {showSettledPanel && (
             <>
               <div className="flex flex-col gap-space-1 rounded-sm border border-pos/40 border-l-[3px] border-l-pos bg-pos/10 p-space-3 opacity-90">
                 <span className="text-sm font-bold text-pos">
@@ -326,6 +416,7 @@ export default function RevolvingBalanceSection({
                           <th className="whitespace-nowrap border-b border-border-default px-space-2 py-space-2 text-left font-semibold text-tertiary">เดือน</th>
                           <th className="whitespace-nowrap border-b border-border-default px-space-2 py-space-2 text-right font-semibold text-tertiary">ยกมา</th>
                           <th className="whitespace-nowrap border-b border-border-default px-space-2 py-space-2 text-right font-semibold text-tertiary">ใช้จ่าย</th>
+                          <th className="whitespace-nowrap border-b border-border-default px-space-2 py-space-2 text-right font-semibold text-tertiary">แคชแบค</th>
                           <th className="whitespace-nowrap border-b border-border-default px-space-2 py-space-2 text-left font-semibold text-tertiary">ชำระ</th>
                           <th className="whitespace-nowrap border-b border-border-default px-space-2 py-space-2 text-right font-semibold text-tertiary">ยกไป</th>
                         </tr>
@@ -334,15 +425,18 @@ export default function RevolvingBalanceSection({
                         {history.map(cycle => (
                           <tr key={cycle.month} className={cycle.isImplicit ? 'opacity-60' : ''}>
                             <td className="whitespace-nowrap border-b border-border-subtle px-space-2 py-space-2 text-primary">{formatMonthKeyTH(cycle.month)}</td>
-                            <td className="whitespace-nowrap border-b border-border-subtle px-space-2 py-space-2 text-right font-[family-name:var(--font-numeric)] tabular-nums text-primary">{formatCurrency(cycle.carriedBalance)}</td>
+                            <td className="whitespace-nowrap border-b border-border-subtle px-space-2 py-space-2 text-right font-[family-name:var(--font-numeric)] tabular-nums text-primary">{formatBalance(cycle.carriedBalance)}</td>
                             <td className="whitespace-nowrap border-b border-border-subtle px-space-2 py-space-2 text-right font-[family-name:var(--font-numeric)] tabular-nums text-primary">{cycle.isImplicit ? '—' : formatCurrency(cycle.newSpend)}</td>
+                            <td className="whitespace-nowrap border-b border-border-subtle px-space-2 py-space-2 text-right font-[family-name:var(--font-numeric)] tabular-nums text-primary">{cycle.isImplicit || !(Number(cycle.cashbackAmount) > 0) ? '—' : formatCurrency(cycle.cashbackAmount)}</td>
                             <td className="whitespace-nowrap border-b border-border-subtle px-space-2 py-space-2 text-primary">
-                              {cycle.paymentAction === null
+                              {cycle.totalDue < 0
+                                ? 'มีเครดิต'
+                                : cycle.paymentAction === null
                                 ? 'ยังไม่ชำระ'
                                 : `${cycle.paymentAction === 'minimum' ? 'ขั้นต่ำ' : 'เต็ม'} ${formatCurrency(cycle.paidAmount)}`}
                             </td>
                             <td className="whitespace-nowrap border-b border-border-subtle px-space-2 py-space-2 text-right font-[family-name:var(--font-numeric)] tabular-nums text-primary">
-                              {formatCurrency(cycle.closingBalance)}
+                              {formatBalance(cycle.closingBalance)}
                               {cycle.interest > 0 ? ` (+ดบ ${formatCurrency(cycle.interest)})` : ''}
                             </td>
                           </tr>
@@ -361,17 +455,19 @@ export default function RevolvingBalanceSection({
                         <div className="flex items-baseline justify-between gap-space-2 text-sm text-secondary">
                           <span>{formatMonthKeyTH(cycle.month)}</span>
                           <span>
-                            {cycle.paymentAction === null
+                            {cycle.totalDue < 0
+                              ? 'มีเครดิต'
+                              : cycle.paymentAction === null
                               ? 'ยังไม่ชำระ'
                               : (cycle.paymentAction === 'minimum' ? 'ขั้นต่ำ' : 'เต็ม')}
                           </span>
                         </div>
-                        <span className="font-[family-name:var(--font-numeric)] text-base font-semibold tabular-nums text-primary">{formatCurrency(cycle.totalDue)}</span>
+                        <span className="font-[family-name:var(--font-numeric)] text-base font-semibold tabular-nums text-primary">{formatBalance(cycle.totalDue)}</span>
                         <span className="text-xs text-tertiary">
-                          {`ยกมา ${formatCurrency(cycle.carriedBalance)} · ใช้จ่าย ${cycle.isImplicit ? '—' : formatCurrency(cycle.newSpend)}`}
+                          {`ยกมา ${formatBalance(cycle.carriedBalance)} · ใช้จ่าย ${cycle.isImplicit ? '—' : formatCurrency(cycle.newSpend)}${Number(cycle.cashbackAmount) > 0 ? ` · แคชแบค ${formatCurrency(cycle.cashbackAmount)}` : ''}`}
                         </span>
                         <span className="text-xs text-tertiary">
-                          {`ยกไป ${formatCurrency(cycle.closingBalance)}${cycle.interest > 0 ? ` (+ดบ ${formatCurrency(cycle.interest)})` : ''}`}
+                          {`ยกไป ${formatBalance(cycle.closingBalance)}${cycle.interest > 0 ? ` (+ดบ ${formatCurrency(cycle.interest)})` : ''}`}
                         </span>
                       </div>
                     ))}

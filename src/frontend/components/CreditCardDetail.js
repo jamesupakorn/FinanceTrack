@@ -393,6 +393,14 @@ export default function CreditCardDetail({
               </>
             )}
 
+            {/* เครดิตแคชแบคแสดงแยก ไม่หักจากหนี้คงเหลือ/วงเงิน (N-1, BR-CC-031) */}
+            {Number(card.revolvingCredit) > 0 && (
+              <div className="flex items-center justify-between gap-space-3 py-[2px] text-sm">
+                <span className="text-tertiary">เครดิตแคชแบค</span>
+                <span className="font-semibold text-pos">{formatCurrency(card.revolvingCredit)}</span>
+              </div>
+            )}
+
             {creditLimit > 0 && (
               <>
                 <div className="flex items-center justify-between gap-space-3 py-[2px] text-sm">
