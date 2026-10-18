@@ -128,7 +128,6 @@ export default function CreditCardDashboard({
   onAddPlanForCard,
   onOpenCard,
   onToggleInstallment,
-  onOpenCalendar,
   planCreatedNote = null
 }) {
   const cardById = useMemo(() => new Map(cards.map(card => [card.id, card])), [cards]);
@@ -268,9 +267,6 @@ export default function CreditCardDashboard({
       <div>
         <div className="mb-space-3 flex items-center justify-between gap-space-3">
           <h2 className={SECTION_TITLE}>ครบกำหนดเร็ว ๆ นี้</h2>
-          {upcoming.length > UPCOMING_MAX_ITEMS && (
-            <button type="button" className={BTN_GHOST} onClick={onOpenCalendar}>ดูทั้งหมดในปฏิทิน</button>
-          )}
         </div>
 
         {upcoming.length === 0 ? (
