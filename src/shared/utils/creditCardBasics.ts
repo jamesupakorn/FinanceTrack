@@ -85,6 +85,12 @@ export const REVOLVING_KEY_RE: RegExp = /^ccr_[0-9a-f]{12}$/;
  */
 export const MONTH_KEY_RE: RegExp = /^\d{4}-\d{2}$/;
 
+/**
+ * รูปแบบวันที่ซื้อ 'YYYY-MM-DD' — export เพื่อให้ creditCardRevolving.ts ใช้ตรวจรูปแบบได้
+ * (ไม่ re-export จาก barrel เหมือน MONTH_KEY_RE — V-8)
+ */
+export const PURCHASE_DATE_RE: RegExp = /^\d{4}-\d{2}-\d{2}$/;
+
 // ---------------------------------------------------------------------------
 // ตัวช่วยพื้นฐาน
 // ---------------------------------------------------------------------------
@@ -153,6 +159,49 @@ export function resolveInstallmentDueDate(dueDayValue: number | string, monthKey
   const daysInMonth = getDaysInMonthKey(monthKey);
   const day = resolveDueDayForMonth(dueDayValue, daysInMonth) || daysInMonth;
   return `${monthKey}-${String(day).padStart(2, '0')}`;
+}
+
+/**
+ * true เมื่อเป็น 'YYYY-MM-DD' และเป็นวันที่ที่มีอยู่จริงในปฏิทิน
+ * ปฏิเสธทั้งรูปแบบผิด และวันที่ที่ไม่มีจริง เช่น '2026-02-30', '2026-04-31', '2026-02-29'
+ */
+export function isValidPurchaseDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !PURCHASE_DATE_RE.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  // สร้างจาก component แบบ local — ห้ามใช้ new Date(value) (parse เป็น UTC และ V8 อาจ roll-over วันที่เกิน)
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return false;
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
+/**
+ * คำนวณรอบบิล (YYYY-MM) จากวันที่ซื้อจริงและวันสรุปยอดของบัตร (BR-CC-025)
+ * ซื้อ <= วันสรุปยอด → รอบบิลเดือนที่ซื้อ · ซื้อ > วันสรุปยอด → รอบบิลเดือนถัดไป
+ * @returns 'YYYY-MM' หรือ '' เมื่อคำนวณไม่ได้ (purchaseDate ไม่ถูกต้อง / statementDay ไม่ถูกต้อง)
+ */
+export function computeStartMonthFromPurchase(
+  purchaseDate: string,
+  statementDay: number | string | null | undefined
+): string {
+  if (!isValidPurchaseDate(purchaseDate)) return '';
+  // ห้ามใช้ getCurrentMonthKey(purchaseDate) หรือ new Date(purchaseDate) — ทั้งสองแปลงเป็น UTC
+  // midnight ทำให้เดือนคลาดเคลื่อนได้ในโซนเวลาติดลบ (C-3) ตัด string ตรง ๆ แทน
+  const purchaseMonth = purchaseDate.slice(0, 7);
+
+  // 1) EOM ต้องเช็กก่อนการเปรียบเทียบตัวเลขเสมอ — Number('EOM') เป็น NaN และ NaN เทียบอะไรก็ false
+  //    ถ้าเทียบตรง ๆ ทุกรายการของบัตร EOM จะถูกดันไปเดือนถัดไปแบบเงียบ ๆ (R-1)
+  if (isEndOfMonthDueDay(statementDay)) return purchaseMonth;
+
+  const day = normaliseDayValue(statementDay, { fallbackToEom: true });
+  if (day === null) return '';
+  if (day === END_OF_MONTH_DUE_DAY) return purchaseMonth; // ไม่มีค่า → EOM เหมือน validateCardInput
+
+  // 2) clamp วันสรุปยอดให้ไม่เกินจำนวนวันของเดือนที่ซื้อ (แบบเดียวกับ resolveInstallmentDueDate)
+  const cutoffDay = Math.min(day, getDaysInMonthKey(purchaseMonth));
+  const purchaseDay = Number(purchaseDate.slice(8, 10));
+
+  // 3) เดือนถัดไปผ่าน addMonths เท่านั้น — ทดปีให้เอง (ธ.ค. → ม.ค. ปีถัดไป)
+  return purchaseDay <= cutoffDay ? purchaseMonth : addMonths(purchaseMonth, 1);
 }
 
 /**

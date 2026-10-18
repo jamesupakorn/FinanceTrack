@@ -32,6 +32,8 @@ export {
   getCurrentMonthKey,
   getDaysInMonthKey,
   resolveInstallmentDueDate,
+  isValidPurchaseDate,
+  computeStartMonthFromPurchase,
   formatIsoDateTH,
   diffDaysFromToday,
   describeDueDistance,
