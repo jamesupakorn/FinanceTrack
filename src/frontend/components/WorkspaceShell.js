@@ -19,8 +19,8 @@
  *   (ผ่าน Layout's headerActions prop ซึ่งอยู่ใน .topBar ที่ position:sticky อยู่แล้ว) แตะที่ label
  *   เปิดตัวเลือกเดือนแบบเต็ม (MonthManager, ควบคุมด้วย monthPickerOpen state ตรงนี้) — Finding 4
  * - ปุ่มบันทึกเดิมที่ render ตลอดใน headerActions ย้ายเป็น FAB ลอยมุมขวาล่าง แสดงเฉพาะตอน isDirty
- *   (data-visible) เท่านั้น ที่ lg (sidebar layout) ยังคงปุ่มบันทึกถาวรในเฮดเดอร์แทน FAB ตาม §6.6
- *   ("the sidebar/table layout keeps Save in a non-scrolling header region by construction")
+ *   (data-visible) เท่านั้น — ตอนนี้ FAB เป็นปุ่มบันทึกเดียวที่ทุก breakpoint รวมถึง lg ด้วย (ADR-024
+ *   ยกเลิกปุ่มถาวรในเฮดเดอร์ที่ lg เพราะเฮดเดอร์ไม่ sticky จริงอย่างที่ตั้งใจ)
  * - markDirty เพิ่มเป็นสมาชิกที่สี่ของ payload คู่กับ markClean/guard/registerSave (Q1, ตัวเดียวที่
  *   permitted เพิ่มใน dirty tracking ของไฟล์นี้ — spec.md §Files "The C11 dirty signal") — isDirty
  *   state/setIsDirty(:459 เดิม)/markClean/guard/guardedMonthChange ไม่เปลี่ยนทั้ง shape/timing/semantics
@@ -426,9 +426,9 @@ export default function WorkspaceShell({ section, overlay, children }) {
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
-  // ------------------------------------------------------------------ บันทึก (F1, ปุ่มเดียวคุมทั้ง
-  // FAB มือถือ/sm/md และปุ่มถาวรในเฮดเดอร์ที่ lg)
-  const handleHeaderSave = async () => {
+  // ------------------------------------------------------------------ บันทึก (F1, ปุ่มเดียวคุมทั้งหมด
+  // — Save FAB เป็นตัวเรียกเดียวที่ทุก breakpoint, ADR-024)
+  const handleSave = async () => {
     if (isSaving) return;
     setIsSaving(true);
     try {
@@ -439,8 +439,8 @@ export default function WorkspaceShell({ section, overlay, children }) {
   };
 
   // ------------------------------------------------------------------ เฮดเดอร์: แถบเดือน sticky
-  // (Finding 4) + ปุ่มบันทึกถาวรที่ lg เท่านั้น (Finding 5, §6.6) — ทั้งก้อนอยู่ใน Layout's
-  // headerActions ซึ่งเรนเดอร์ใน Layout.js's <header> ที่ position:sticky อยู่แล้ว
+  // (Finding 4) เท่านั้น — ไม่มีปุ่มบันทึกในเฮดเดอร์อีกต่อไป (ADR-024, ลบ permanent save button ที่ lg
+  // ออกแบบไม่เหลือ fallback) อยู่ใน Layout's headerActions ซึ่งเรนเดอร์ใน Layout.js's <header>
   const headerActions = (
     <div className="flex w-full flex-wrap items-center justify-between gap-space-3 lg:w-auto lg:flex-nowrap">
       <div className="flex items-center gap-space-2">
@@ -473,23 +473,6 @@ export default function WorkspaceShell({ section, overlay, children }) {
           <Icons.ChevronRight size={18} />
         </button>
       </div>
-
-      {/* ปุ่มบันทึกถาวรที่ lg เท่านั้น (§6.6) — มือถือ/sm/md ใช้ FAB แทน (ด้านล่าง, dirty-gated) */}
-      <div className="hidden items-center gap-space-3 lg:flex">
-        <span role="status" aria-live="polite" className="text-xs font-medium text-warn">
-          {isDirty ? '● ยังไม่ได้บันทึก' : ''}
-        </span>
-        <button
-          type="button"
-          onClick={handleHeaderSave}
-          disabled={isSaving}
-          aria-label={sectionMeta.saveLabel}
-          className={`flex h-11 items-center gap-space-2 whitespace-nowrap rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent disabled:opacity-60 ${FOCUS_RING_ON_ACCENT}`}
-        >
-          <Icons.Save size={16} />
-          {isSaving ? 'กำลังบันทึก...' : sectionMeta.saveLabel}
-        </button>
-      </div>
     </div>
   );
 
@@ -511,10 +494,11 @@ export default function WorkspaceShell({ section, overlay, children }) {
       onBeforeNavigate={handleBeforeNavigate}
     >
       <div className="mx-auto max-w-[1200px]">
-        {/* สถานะ "ยังไม่ได้บันทึก" แบบ inline ไม่ sticky (§6.5) — ซ้ำกับชิปในเฮดเดอร์ที่ lg เท่านั้น
-            (ซ่อนตรงนี้ที่ lg กันประกาศซ้ำสองที่) aria-live คงอยู่เสมอไม่ว่า dirty หรือไม่ เพื่อให้
-            screen reader ได้ยินตอนเปลี่ยนสถานะจริง ๆ (K17/E19 — add/remove ต้องสั่น isDirty ให้เห็นผลตรงนี้ด้วย) */}
-        <p role="status" aria-live="polite" className="mb-space-3 min-h-[1em] text-xs font-medium text-warn lg:hidden">
+        {/* สถานะ "ยังไม่ได้บันทึก" แบบ inline ไม่ sticky (§6.5) — ตอนนี้เป็น dirty announcer เดียวที่
+            ทุก breakpoint รวม lg ด้วย (ADR-024, เฮดเดอร์ไม่มีชิปซ้ำแล้ว) aria-live คงอยู่เสมอไม่ว่า
+            dirty หรือไม่ เพื่อให้ screen reader ได้ยินตอนเปลี่ยนสถานะจริง ๆ (K17/E19 — add/remove
+            ต้องสั่น isDirty ให้เห็นผลตรงนี้ด้วย) */}
+        <p role="status" aria-live="polite" className="mb-space-3 min-h-[1em] text-xs font-medium text-warn">
           {isDirty ? '● ยังไม่ได้บันทึก' : ''}
         </p>
 
@@ -567,7 +551,7 @@ export default function WorkspaceShell({ section, overlay, children }) {
         )}
 
         <div
-          className="min-h-[400px] rounded-md border border-border-default bg-surface-1 p-space-4 pb-[calc(var(--nav-safe-bottom,56px)+80px)] shadow-elev-1 md:p-space-5 lg:pb-space-5"
+          className="min-h-[400px] rounded-md border border-border-default bg-surface-1 p-space-4 pb-[calc(var(--nav-safe-bottom,56px)+80px)] shadow-elev-1 md:p-space-5"
           onInput={() => setIsDirty(true)}
           onChange={() => setIsDirty(true)}
         >
@@ -594,16 +578,16 @@ export default function WorkspaceShell({ section, overlay, children }) {
         onRequestClose={() => setMonthPickerOpen(false)}
       />
 
-      {/* Save FAB — dirty-gated, มือถือ/sm/md เท่านั้น (§6.5, Finding 5) ที่ lg ปุ่มบันทึกถาวรอยู่ใน
-          เฮดเดอร์แล้ว (ด้านบน) ตำแหน่งขยับขึ้นเหนือ bottom nav เสมอ (AC-SH-17) */}
+      {/* Save FAB — dirty-gated, ตอนนี้เป็นปุ่มบันทึกเดียวที่ทุก breakpoint รวม lg ด้วย (ADR-024,
+          §6.5, Finding 5) ตำแหน่งขยับขึ้นเหนือ bottom nav เสมอ (AC-SH-17) */}
       <button
         type="button"
-        onClick={handleHeaderSave}
+        onClick={handleSave}
         disabled={!isDirty || isSaving}
         aria-hidden={!isDirty}
         aria-label={sectionMeta.saveLabel}
         data-visible={isDirty}
-        className={`fixed right-space-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-on-accent shadow-elev-3 transition-opacity duration-base ease-graphite lg:hidden ${FOCUS_RING_ON_ACCENT} ${
+        className={`fixed right-space-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-on-accent shadow-elev-3 transition-opacity duration-base ease-graphite ${FOCUS_RING_ON_ACCENT} ${
           isDirty ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
         style={{ bottom: 'calc(var(--nav-safe-bottom, 56px) + 16px)' }}
