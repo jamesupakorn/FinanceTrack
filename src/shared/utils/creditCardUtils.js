@@ -60,6 +60,7 @@ export {
 export {
   normaliseCardDefaults,
   isValidPaymentAction,
+  isValidCashbackAmount,
   buildRevolvingCycles,
   isRevolvingChainTruncated,
   summariseRevolving,

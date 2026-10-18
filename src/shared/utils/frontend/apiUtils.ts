@@ -391,7 +391,7 @@ export const creditCardAPI = {
 		headers: JSON_HEADERS,
 		body: withUserPayload({ planId, mode: 'delete' })
 	}),
-	// ยอดใช้จ่ายหมุนเวียน — ตัวเลขทั้งหมด server คำนวณให้ client ส่งได้แค่ newSpend / paymentAction
+	// ยอดใช้จ่ายหมุนเวียน — ตัวเลขทั้งหมด server คำนวณให้ client ส่งได้แค่ newSpend / paymentAction / cashbackAmount
 	getRevolving: async (filters: Record<string, string | number | undefined | null> = {}): Promise<any> => jsonFetch(buildUrl(CREDIT_CARD_REVOLVING_URL, filters)),
 	saveRevolvingSpend: async (cardId: string, month: string, newSpend: number | string): Promise<any> => jsonFetch(CREDIT_CARD_REVOLVING_URL, {
 		method: 'POST',
@@ -402,6 +402,13 @@ export const creditCardAPI = {
 		method: 'PATCH',
 		headers: JSON_HEADERS,
 		body: withUserPayload({ cardId, month, paymentAction })
+	}),
+	// แคชแบคของรอบ — ห้ามมี key paymentAction ใน body (ไม่งั้น server จะแตะสถานะการชำระ)
+	// `?? null` กัน JSON.stringify ทิ้ง key ที่เป็น undefined: body ที่ไม่มีทั้งสอง key = undo การชำระแบบเดิม
+	saveRevolvingCashback: async (cardId: string, month: string, cashbackAmount: number | string | null | undefined): Promise<any> => jsonFetch(CREDIT_CARD_REVOLVING_URL, {
+		method: 'PATCH',
+		headers: JSON_HEADERS,
+		body: withUserPayload({ cardId, month, cashbackAmount: cashbackAmount ?? null })
 	}),
 	deleteRevolvingCycle: async (cardId: string, month: string): Promise<any> => jsonFetch(CREDIT_CARD_REVOLVING_URL, {
 		method: 'DELETE',

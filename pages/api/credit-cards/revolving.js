@@ -3,7 +3,11 @@
  * จัดการยอดใช้จ่ายหมุนเวียนของบัตร (per-card per-month, เก็บแบบ sparse)
  * - GET    : cycle ที่ derive แล้ว กรองด้วย cardId / month ได้
  * - POST   : upsert ยอดใช้จ่ายใหม่ของเดือน (newSpend)
- * - PATCH  : บันทึกการตัดสินใจชำระ ('full' | 'minimum' | null)
+ * - PATCH  : บันทึกการตัดสินใจชำระ ('full' | 'minimum' | null) และ/หรือแคชแบคของเดือน (cashbackAmount)
+ *            แบบ partial-merge: เขียนเฉพาะ key ที่ส่งมา — PATCH แคชแบคอย่างเดียวไม่แตะ paymentAction /
+ *            paidAt / paidSource / newSpend; คำขอที่ไม่มีทั้งสอง key = ล้าง paymentAction แบบเดิม;
+ *            cashbackAmount ว่าง ('' / null) = ไม่เปลี่ยนค่าที่เก็บไว้ (BR-CC-032)
+ *            แคชแบคเข้าได้ทาง PATCH เท่านั้น — POST เขียนทับ newSpend ทุกครั้ง จึงห้ามใช้ส่งแคชแบค
  * - DELETE : ลบ cycle ที่เก็บไว้ของเดือนนั้น (เดือนถัด ๆ ไป derive ใหม่เอง)
  *
  * ทุก handler: assertUserId → store เท่านั้น ไม่มีข้อยกเว้น (BR-CC-001)
@@ -13,7 +17,8 @@
  * ⚠ server เป็นเจ้าของการคำนวณเงินทั้งหมด (BR-CC-013 / ADR-011)
  *   client ส่ง carriedBalance / totalDue / minPaymentDue / interest / closingBalance /
  *   amountDue / paidAmount มาก็ไม่มีผล — โค้ดนี้ไม่เคยอ่านฟิลด์เหล่านั้นเลย
- *   ที่เก็บจริงมีแค่ { id, cardId, month, newSpend, paymentAction, paidAt, paidSource, createdAt, updatedAt }
+ *   ที่เก็บจริงมีแค่ { id, cardId, month, newSpend, cashbackAmount, paymentAction, paidAt, paidSource,
+ *   createdAt, updatedAt } — cashbackAmount ไม่มีในแถวที่ POST สร้าง/แถวเก่า (อ่านเป็น 0, BR-CC-028)
  */
 
 import crypto from 'crypto';
@@ -25,13 +30,17 @@ import {
   summariseRevolving,
   validateRevolvingCycleInput,
   isValidPaymentAction,
+  isValidCashbackAmount,
   isRevolvingChainTruncated,
   getCurrentMonthKey,
   round2,
+  toAmount,
   MAX_REVOLVING_CYCLES_PER_CARD
 } from '../../../src/shared/utils/creditCardUtils';
 
 const MONTH_KEY_RE = /^\d{4}-\d{2}$/;
+
+const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 
 function generateCycleId() {
   return `rc_${crypto.randomBytes(6).toString('hex')}`;
@@ -224,19 +233,37 @@ async function handlePost(req, res, userId) {
 }
 
 async function handlePatch(req, res, userId) {
-  const cardId = typeof req.body?.cardId === 'string' ? req.body.cardId.trim() : '';
-  const month = typeof req.body?.month === 'string' ? req.body.month.trim() : '';
-  const paymentAction = req.body?.paymentAction ?? null;
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const cardId = typeof body.cardId === 'string' ? body.cardId.trim() : '';
+  const month = typeof body.month === 'string' ? body.month.trim() : '';
+
+  // paymentAction ถูกเขียนเฉพาะเมื่อ "ส่ง key มา" หรือเป็นคำขอแบบเดิมที่ไม่มี cashbackAmount เลย
+  // คำขอแบบเดิม (ไม่มีทั้งสอง key) = พฤติกรรมเดิมทุกประการ: ไม่ส่ง paymentAction = null (BR-CC-032)
+  // ⚠ ถ้าเขียน paymentAction ทุกครั้งเหมือนเดิม PATCH แคชแบคอย่างเดียวจะ "ยกเลิกการชำระ" เงียบ ๆ
+  const applyAction = hasOwn(body, 'paymentAction') || !hasOwn(body, 'cashbackAmount');
+  const paymentAction = applyAction ? (body.paymentAction ?? null) : null;
+  // ค่าว่าง ('' / null / ไม่ส่งมา) = ไม่แตะแคชแบคที่เก็บไว้ — การล้างเป็น 0 ต้องส่ง '0.00' มาเอง
+  const rawCashback = body.cashbackAmount;
+  const applyCashback = rawCashback !== undefined && rawCashback !== null && rawCashback !== '';
 
   if (!cardId || !MONTH_KEY_RE.test(month)) {
     return res.status(400).json({ error: 'cardId and month required' });
   }
-  if (!isValidPaymentAction(paymentAction)) {
+  if (applyAction && !isValidPaymentAction(paymentAction)) {
     return res.status(400).json({ error: 'paymentAction ต้องเป็น full, minimum หรือ null' });
+  }
+  if (applyCashback && !isValidCashbackAmount(rawCashback)) {
+    const message = 'แคชแบคต้องเป็นตัวเลขไม่ติดลบ';
+    return res.status(400).json({ error: message, errors: { cashbackAmount: message } });
   }
   if (!(await ownsCard(userId, cardId))) {
     return res.status(404).json({ error: 'card not found' });
   }
+  // ไม่มีอะไรให้เขียน (เช่น ส่ง cashbackAmount ว่างมาอย่างเดียว) → ไม่แตะเอกสาร ไม่ bump updatedAt (D-5)
+  if (!applyAction && !applyCashback) {
+    return respondWithCardChain(res, await getUserCreditData(userId), cardId, month);
+  }
+  const cashbackAmount = applyCashback ? round2(toAmount(rawCashback)) : null;
 
   let failure = null;
 
@@ -266,6 +293,9 @@ async function handlePatch(req, res, userId) {
           cardId,
           month,
           newSpend: 0,
+          // ทุกแถวที่ PATCH สร้างเริ่มด้วย cashbackAmount (0 เมื่อไม่ได้ส่งมา)
+          cashbackAmount: applyCashback ? cashbackAmount : 0,
+          // paymentAction เป็น null เสมอเมื่อ !applyAction (กำหนดไว้ด้านบน)
           paymentAction,
           paidAt: paymentAction ? now : null,
           paidSource: paymentAction ? 'credit_card' : null,
@@ -275,12 +305,18 @@ async function handlePatch(req, res, userId) {
       };
     }
 
+    // merge: เขียนเฉพาะฟิลด์ที่คำขอนี้เกี่ยวข้อง ที่เหลือคงค่าเดิมผ่าน spread
     const cycles = [...data.cycles];
     cycles[index] = {
       ...cycles[index],
-      paymentAction,
-      paidAt: paymentAction ? now : null,
-      paidSource: paymentAction ? 'credit_card' : null,
+      ...(applyAction
+        ? {
+          paymentAction,
+          paidAt: paymentAction ? now : null,
+          paidSource: paymentAction ? 'credit_card' : null
+        }
+        : {}),
+      ...(applyCashback ? { cashbackAmount } : {}),
       updatedAt: now
     };
     return { ...data, cycles };
