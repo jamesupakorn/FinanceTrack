@@ -28,6 +28,7 @@ import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { fitFontSizeCss } from '../../shared/utils/frontend/ringTextFit';
 import { Icons } from './Icons';
 import BankIssuerMark from './BankIssuerMark';
+import { BANK_ISSUERS, BANK_ISSUER_KEYS, getBankIssuer } from '../../shared/utils/creditCardBankCatalog';
 
 const UPCOMING_WINDOW_DAYS = 7;
 const UPCOMING_MAX_ITEMS = 5;
@@ -113,6 +114,18 @@ function CardMenu({ card, onEdit, onAddPlan, onDelete }) {
   );
 }
 
+/**
+ * จัดกลุ่มบัตรตามผู้ออกบัตร เรียงกลุ่มตามลำดับใน BANK_ISSUERS (credit-card-group-by-bank)
+ * - กลุ่มที่ไม่มีบัตรจะไม่ถูกส่งกลับ
+ * - ภายในกลุ่มคงลำดับเดิมของ array (ไม่ sort)
+ * - บัตรที่ bankIssuer ว่าง/ไม่รู้จัก → ไปอยู่กลุ่มอื่นๆ ผ่าน getBankIssuer (อ่านอย่างเดียว ไม่เขียนกลับ, BR-CC-020)
+ */
+function groupCardsByIssuer(cards) {
+  return BANK_ISSUER_KEYS
+    .map(key => ({ key, cards: cards.filter(card => getBankIssuer(card) === key) }))
+    .filter(group => group.cards.length > 0);
+}
+
 export default function CreditCardDashboard({
   cards = [],
   totals = null,
@@ -160,6 +173,8 @@ export default function CreditCardDashboard({
     events.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     return events;
   }, [plans, cardById]);
+
+  const cardGroups = useMemo(() => groupCardsByIssuer(cards), [cards]);
 
   const hasPlans = plans.length > 0;
 
@@ -316,79 +331,93 @@ export default function CreditCardDashboard({
           <h2 className={SECTION_TITLE}>บัตรทั้งหมด</h2>
         </div>
 
-        <div className="grid grid-cols-1 gap-space-4 md:grid-cols-2 lg:grid-cols-3">
-          {cards.map(card => {
-            const creditLimit = Number(card.creditLimit) || 0;
-            const utilisation = creditLimit > 0
-              ? Math.min(100, round2((Number(card.remainingPrincipal) || 0) / creditLimit * 100))
-              : 0;
-            const highUtilisation = creditLimit > 0 && utilisation >= HIGH_UTILISATION_PERCENT;
-            const nextDueDiff = diffDaysFromToday(card.nextDueDate);
-            // UX_SPEC §9: chip --warn เมื่อวันสรุปยอด/ครบกำหนดของบัตรอยู่ภายใน 7 วัน — nextDueDate
-            // มาจาก resolveCardNextDueDate() ที่ backend คำนวณรวมทั้งงวดผ่อนและ cycle หมุนเวียนแล้ว
-            const dueSoon = nextDueDiff !== null && nextDueDiff <= UPCOMING_WINDOW_DAYS;
+        <div className="flex flex-col gap-space-5">
+          {cardGroups.map(group => {
+            const issuer = BANK_ISSUERS[group.key];
+            const headingId = `cc-issuer-group-${group.key}`;
             return (
-              <div key={card.id} className={`${CARD} flex flex-col gap-space-2 min-w-0 [container-type:inline-size]`} style={{ borderLeft: `4px solid ${card.color || 'var(--color-accent, #D4A857)'}` }}>
-                <div className="flex items-start justify-between gap-space-2">
-                  <span className="inline-flex min-w-0 items-center gap-space-2 text-base font-semibold text-primary">
-                    <BankIssuerMark card={card} size={24} />
-                    {card.name}
-                  </span>
-                  <CardMenu
-                    card={card}
-                    onEdit={onEditCard}
-                    onAddPlan={onAddPlanForCard}
-                    onDelete={onDeleteCard}
-                  />
-                </div>
-                <span className="text-xs text-tertiary">
-                  {[card.bankName, card.last4 ? `····${card.last4}` : ''].filter(Boolean).join(' · ') || 'ไม่ระบุธนาคาร'}
-                </span>
+              <div key={group.key} role="group" aria-labelledby={headingId} className="flex flex-col gap-space-3">
+                <h3 id={headingId} className="m-0 inline-flex items-center gap-space-2 text-sm font-semibold text-secondary">
+                  <BankIssuerMark card={{ bankIssuer: group.key, color: issuer.color }} size={24} decorative />
+                  {issuer.label}
+                </h3>
+                <div className="grid grid-cols-1 gap-space-4 md:grid-cols-2 lg:grid-cols-3">
+                  {group.cards.map(card => {
+                    const creditLimit = Number(card.creditLimit) || 0;
+                    const utilisation = creditLimit > 0
+                      ? Math.min(100, round2((Number(card.remainingPrincipal) || 0) / creditLimit * 100))
+                      : 0;
+                    const highUtilisation = creditLimit > 0 && utilisation >= HIGH_UTILISATION_PERCENT;
+                    const nextDueDiff = diffDaysFromToday(card.nextDueDate);
+                    // UX_SPEC §9: chip --warn เมื่อวันสรุปยอด/ครบกำหนดของบัตรอยู่ภายใน 7 วัน — nextDueDate
+                    // มาจาก resolveCardNextDueDate() ที่ backend คำนวณรวมทั้งงวดผ่อนและ cycle หมุนเวียนแล้ว
+                    const dueSoon = nextDueDiff !== null && nextDueDiff <= UPCOMING_WINDOW_DAYS;
+                    return (
+                      <div key={card.id} className={`${CARD} flex flex-col gap-space-2 min-w-0 [container-type:inline-size]`} style={{ borderLeft: `4px solid ${card.color || 'var(--color-accent, #D4A857)'}` }}>
+                        <div className="flex items-start justify-between gap-space-2">
+                          <span className="inline-flex min-w-0 items-center gap-space-2 text-base font-semibold text-primary">
+                            <BankIssuerMark card={card} size={24} />
+                            {card.name}
+                          </span>
+                          <CardMenu
+                            card={card}
+                            onEdit={onEditCard}
+                            onAddPlan={onAddPlanForCard}
+                            onDelete={onDeleteCard}
+                          />
+                        </div>
+                        <span className="text-xs text-tertiary">
+                          {[card.bankName, card.last4 ? `····${card.last4}` : ''].filter(Boolean).join(' · ') || 'ไม่ระบุธนาคาร'}
+                        </span>
 
-                <span className="mt-space-1 text-xs text-tertiary">ยอดครบกำหนดรอบนี้</span>
-                <span
-                  className="font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary"
-                  style={{ fontSize: fitFontSizeCss(formatCurrency(card.revolvingTotalDue || 0)), lineHeight: TILE_AMOUNT_LINE_HEIGHT }}
-                >
-                  <span className="whitespace-nowrap">{formatCurrency(card.revolvingTotalDue || 0)}</span>{' บาท'}
-                </span>
-                <span className="text-xs text-secondary">{`หนี้คงเหลือรวม ${formatCurrency(card.remainingPayable)} บาท`}</span>
+                        <span className="mt-space-1 text-xs text-tertiary">ยอดครบกำหนดรอบนี้</span>
+                        <span
+                          className="font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary"
+                          style={{ fontSize: fitFontSizeCss(formatCurrency(card.revolvingTotalDue || 0)), lineHeight: TILE_AMOUNT_LINE_HEIGHT }}
+                        >
+                          <span className="whitespace-nowrap">{formatCurrency(card.revolvingTotalDue || 0)}</span>{' บาท'}
+                        </span>
+                        <span className="text-xs text-secondary">{`หนี้คงเหลือรวม ${formatCurrency(card.remainingPayable)} บาท`}</span>
 
-                {dueSoon && (
-                  <span className={WARN_CHIP}>
-                    <Icons.AlertTriangle size={12} />
-                    {nextDueDiff < 0 ? `เลยกำหนด ${Math.abs(nextDueDiff)} วัน` : `ครบกำหนดใน ${nextDueDiff} วัน`}
-                  </span>
-                )}
+                        {dueSoon && (
+                          <span className={WARN_CHIP}>
+                            <Icons.AlertTriangle size={12} />
+                            {nextDueDiff < 0 ? `เลยกำหนด ${Math.abs(nextDueDiff)} วัน` : `ครบกำหนดใน ${nextDueDiff} วัน`}
+                          </span>
+                        )}
 
-                {creditLimit > 0 && (
-                  <>
-                    <div className="mt-space-1 h-2 overflow-hidden rounded-full bg-surface-3">
-                      <div
-                        className={`h-full rounded-full transition-[width] duration-slow ease-graphite ${highUtilisation ? 'bg-neg' : 'bg-accent'}`}
-                        style={{ width: `${utilisation}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-secondary">
-                      {`ใช้ไป ${utilisation.toFixed(1)}% · วงเงิน ${formatCurrency(creditLimit)} · เหลือ ${formatCurrency(card.availableCredit)}`}
-                    </span>
-                    {highUtilisation && (
-                      <span className={WARN_CHIP}>
-                        <Icons.AlertTriangle size={12} /> ใช้วงเงินเกิน {HIGH_UTILISATION_PERCENT}%
-                      </span>
-                    )}
-                  </>
-                )}
+                        {creditLimit > 0 && (
+                          <>
+                            <div className="mt-space-1 h-2 overflow-hidden rounded-full bg-surface-3">
+                              <div
+                                className={`h-full rounded-full transition-[width] duration-slow ease-graphite ${highUtilisation ? 'bg-neg' : 'bg-accent'}`}
+                                style={{ width: `${utilisation}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-secondary">
+                              {`ใช้ไป ${utilisation.toFixed(1)}% · วงเงิน ${formatCurrency(creditLimit)} · เหลือ ${formatCurrency(card.availableCredit)}`}
+                            </span>
+                            {highUtilisation && (
+                              <span className={WARN_CHIP}>
+                                <Icons.AlertTriangle size={12} /> ใช้วงเงินเกิน {HIGH_UTILISATION_PERCENT}%
+                              </span>
+                            )}
+                          </>
+                        )}
 
-                <span className="text-xs text-tertiary">
-                  {`สรุปยอด ${formatDayLabel(card.statementDay)} · ครบกำหนด ${formatDayLabel(card.dueDay)}`}
-                </span>
-                <span className="text-xs text-tertiary">{`${card.ongoingPlanCount} แผนกำลังผ่อน`}</span>
+                        <span className="text-xs text-tertiary">
+                          {`สรุปยอด ${formatDayLabel(card.statementDay)} · ครบกำหนด ${formatDayLabel(card.dueDay)}`}
+                        </span>
+                        <span className="text-xs text-tertiary">{`${card.ongoingPlanCount} แผนกำลังผ่อน`}</span>
 
-                <div className="mt-space-2">
-                  <button type="button" className={`${BTN_GHOST} w-full`} onClick={() => onOpenCard?.(card.id)}>
-                    ดูรายละเอียด
-                  </button>
+                        <div className="mt-space-2">
+                          <button type="button" className={`${BTN_GHOST} w-full`} onClick={() => onOpenCard?.(card.id)}>
+                            ดูรายละเอียด
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
