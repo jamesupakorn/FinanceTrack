@@ -32,6 +32,8 @@ export {
   getCurrentMonthKey,
   getDaysInMonthKey,
   resolveInstallmentDueDate,
+  isValidPurchaseDate,
+  computeStartMonthFromPurchase,
   formatIsoDateTH,
   diffDaysFromToday,
   describeDueDistance,
@@ -58,6 +60,7 @@ export {
 export {
   normaliseCardDefaults,
   isValidPaymentAction,
+  isValidCashbackAmount,
   buildRevolvingCycles,
   isRevolvingChainTruncated,
   summariseRevolving,

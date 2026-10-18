@@ -29,6 +29,7 @@ import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { BP } from '../../shared/utils/frontend/breakpoints';
 import { Icons } from './Icons';
 import RevolvingBalanceSection from './RevolvingBalanceSection';
+import BankIssuerMark from './BankIssuerMark';
 
 const COLLAPSED_UNPAID_PREVIEW = 6;
 const LONG_PLAN_THRESHOLD = 12;
@@ -368,7 +369,7 @@ export default function CreditCardDetail({
           <div className="h-[10px]" style={{ background: card.color || 'var(--color-accent, #D4A857)' }} />
           <div className="flex flex-col gap-space-2 p-space-4">
             <span className="inline-flex items-center gap-space-2 text-base font-bold text-primary">
-              <span className="h-3 w-3 shrink-0 rounded-xs" style={{ background: card.color }} aria-hidden="true" />
+              <BankIssuerMark card={card} size={32} />
               {card.name}
             </span>
             <span className="text-xs text-tertiary">
@@ -392,19 +393,27 @@ export default function CreditCardDetail({
               </>
             )}
 
+            {/* เครดิตแคชแบคแสดงแยก ไม่หักจากหนี้คงเหลือ/วงเงิน (N-1, BR-CC-031) */}
+            {Number(card.revolvingCredit) > 0 && (
+              <div className="flex items-center justify-between gap-space-3 py-[2px] text-sm">
+                <span className="text-tertiary">เครดิตแคชแบค</span>
+                <span className="font-semibold text-pos">{formatCurrency(card.revolvingCredit)}</span>
+              </div>
+            )}
+
             {creditLimit > 0 && (
               <>
                 <div className="flex items-center justify-between gap-space-3 py-[2px] text-sm">
-                  <span className="text-tertiary">วงเงิน</span>
-                  <span className="font-semibold text-primary">{formatCurrency(creditLimit)}</span>
+                  <span className="min-w-0 text-tertiary">วงเงิน</span>
+                  <span className="whitespace-nowrap font-semibold text-primary">{formatCurrency(creditLimit)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-space-3 py-[2px] text-sm">
-                  <span className="text-tertiary">ใช้ไป</span>
-                  <span className="font-semibold text-primary">{formatCurrency(card.remainingPrincipal)}</span>
+                  <span className="min-w-0 text-tertiary">ใช้ไป</span>
+                  <span className="whitespace-nowrap font-semibold text-primary">{formatCurrency(card.remainingPrincipal)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-space-3 py-[2px] text-sm">
-                  <span className="text-tertiary">คงเหลือ</span>
-                  <span className="font-semibold text-primary">{formatCurrency(card.availableCredit)}</span>
+                  <span className="min-w-0 text-tertiary">คงเหลือ</span>
+                  <span className="whitespace-nowrap font-semibold text-primary">{formatCurrency(card.availableCredit)}</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-surface-3">
                   <div

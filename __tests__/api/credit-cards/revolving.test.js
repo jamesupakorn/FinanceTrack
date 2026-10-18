@@ -736,6 +736,311 @@ describe('/api/credit-cards/revolving (Mongo mode, real DB)', () => {
   });
 });
 
+// --- Cashback (credit-card-cashback, AC-CB-40…52) ----------------------------------------------
+// Same real-DB setup as above (top-level beforeAll/beforeEach). Every write assertion reads the
+// STORED document, not only the response (spec §Acceptance Criteria). No pre-existing test above
+// was edited — in particular test 1's exact `summary` shape and test 15's POST stored-key set.
+describe('/api/credit-cards/revolving cashback PATCH (Mongo mode, real DB)', () => {
+  const CASHBACK_ERROR = 'แคชแบคต้องเป็นตัวเลขไม่ติดลบ';
+  const PAID_AT = '2099-01-15T00:00:00.000Z';
+
+  /** Stored credit_cards document for a user, as-is (including _id and top-level updatedAt). */
+  const readDoc = (userId = USER_A) => db.collection('credit_cards').findOne({ userId });
+
+  const patch = async (body, userId = USER_A) => {
+    const { req, res } = makeReqRes({ method: 'PATCH', userId, body });
+    await handler(req, res);
+    return res;
+  };
+
+  const paidFullRow = (overrides = {}) => ({
+    id: 'rc_000000000001', cardId: 'cc_a', month: '2099-01', newSpend: 1000,
+    paymentAction: 'full', paidAt: PAID_AT, paidSource: 'credit_card', ...overrides
+  });
+
+  it('AC-CB-40 cashback-only PATCH on a month marked full keeps paymentAction/paidAt/paidSource/newSpend', async () => {
+    await seedCreditDoc(USER_A, { cards: [makeCard({ id: 'cc_a' })], cycles: [paidFullRow()] });
+
+    const res = await patch({ cardId: 'cc_a', month: '2099-01', cashbackAmount: 100 });
+
+    expect(res._getStatusCode()).toBe(200);
+    const doc = await readDoc();
+    expect(doc.cycles).toHaveLength(1);
+    const stored = doc.cycles[0];
+    expect(stored.newSpend).toBe(1000);
+    expect(stored.paymentAction).toBe('full');
+    expect(stored.paidAt).toBe(PAID_AT);
+    expect(stored.paidSource).toBe('credit_card');
+    expect(stored.cashbackAmount).toBe(100);
+
+    const cycle = JSON.parse(res._getData()).cycles.find(c => c.month === '2099-01');
+    expect(cycle.totalDue).toBe(900);
+    expect(cycle.paidAmount).toBe(900);
+  });
+
+  it('AC-CB-41 cashback-only PATCH on a never-stored month creates a row with newSpend 0 and no payment', async () => {
+    await seedCreditDoc(USER_A, { cards: [makeCard({ id: 'cc_a' })] });
+
+    const res = await patch({ cardId: 'cc_a', month: '2099-01', cashbackAmount: '1,250.50' });
+
+    expect(res._getStatusCode()).toBe(200);
+    const doc = await readDoc();
+    expect(doc.cycles).toHaveLength(1);
+    const stored = doc.cycles[0];
+    expect(stored.cashbackAmount).toBe(1250.5);
+    expect(stored.newSpend).toBe(0);
+    expect(stored.paymentAction).toBeNull();
+    expect(stored.paidAt).toBeNull();
+    expect(stored.paidSource).toBeNull();
+    expect(stored.id).toMatch(/^rc_[0-9a-f]{12}$/);
+  });
+
+  it.each([
+    ['-1', -1],
+    ["'abc'", 'abc'],
+    ['true', true],
+    ['{}', {}],
+    ['[]', []],
+    ["'-0.01'", '-0.01']
+  ])('AC-CB-42 invalid cashbackAmount %s returns 400 with the cashback error and writes nothing', async (_label, value) => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ id: 'cc_a' })],
+      cycles: [paidFullRow({ cashbackAmount: 100 })]
+    });
+    const seed = await readDoc();
+
+    const res = await patch({ cardId: 'cc_a', month: '2099-01', cashbackAmount: value });
+
+    expect(res._getStatusCode()).toBe(400);
+    expect(JSON.parse(res._getData())).toEqual({
+      error: CASHBACK_ERROR,
+      errors: { cashbackAmount: CASHBACK_ERROR }
+    });
+    expect(await readDoc()).toEqual(seed);
+  });
+
+  it("AC-CB-42 (edge 21) cashbackAmount '-0' is valid and stored as 0", async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ id: 'cc_a' })],
+      cycles: [paidFullRow({ cashbackAmount: 100 })]
+    });
+
+    const res = await patch({ cardId: 'cc_a', month: '2099-01', cashbackAmount: '-0' });
+
+    expect(res._getStatusCode()).toBe(200);
+    const stored = (await readDoc()).cycles[0];
+    expect(stored.cashbackAmount).toBe(0);
+    expect(Object.is(stored.cashbackAmount, -0)).toBe(false);
+    expect(stored.paymentAction).toBe('full');
+  });
+
+  it('AC-CB-43 action-only PATCH preserves a stored cashbackAmount', async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ id: 'cc_a' })],
+      cycles: [{ cardId: 'cc_a', month: '2099-01', newSpend: 1000, cashbackAmount: 100, paymentAction: null, paidAt: null, paidSource: null }]
+    });
+
+    const res = await patch({ cardId: 'cc_a', month: '2099-01', paymentAction: 'minimum' });
+
+    expect(res._getStatusCode()).toBe(200);
+    const stored = (await readDoc()).cycles[0];
+    expect(stored.cashbackAmount).toBe(100);
+    expect(stored.paymentAction).toBe('minimum');
+    expect(stored.paidSource).toBe('credit_card');
+  });
+
+  it('AC-CB-44 POST newSpend on a row with cashbackAmount preserves the cashback', async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ id: 'cc_a' })],
+      cycles: [{ cardId: 'cc_a', month: '2099-01', newSpend: 1000, cashbackAmount: 100, paymentAction: null }]
+    });
+    const { req, res } = makeReqRes({
+      method: 'POST',
+      body: { cycle: { cardId: 'cc_a', month: '2099-01', newSpend: 2000 } }
+    });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const doc = await readDoc();
+    expect(doc.cycles).toHaveLength(1);
+    expect(doc.cycles[0].newSpend).toBe(2000);
+    expect(doc.cycles[0].cashbackAmount).toBe(100);
+  });
+
+  // C-12: the ONLY test of the legacy neither-key PATCH on a valid row. No pre-existing test covers
+  // it (test 17 is the 400 malformed-cardId case; test 22 sends paymentAction: null explicitly).
+  // Legacy behaviour is kept exactly: a body with neither key means "undo" (paymentAction → null).
+  it('AC-CB-45 legacy PATCH with neither paymentAction nor cashbackAmount clears a full row (unchanged undo)', async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ id: 'cc_a' })],
+      cycles: [paidFullRow({ cashbackAmount: 100 })]
+    });
+
+    const res = await patch({ cardId: 'cc_a', month: '2099-01' });
+
+    expect(res._getStatusCode()).toBe(200);
+    const doc = await readDoc();
+    expect(doc.cycles).toHaveLength(1);
+    const stored = doc.cycles[0];
+    expect(stored.paymentAction).toBeNull();
+    expect(stored.paidAt).toBeNull();
+    expect(stored.paidSource).toBeNull();
+    // Everything else on the row is untouched by the legacy undo.
+    expect(stored.newSpend).toBe(1000);
+    expect(stored.cashbackAmount).toBe(100);
+  });
+
+  it.each([
+    ["''", ''],
+    ['null', null]
+  ])('AC-CB-46 cashbackAmount %s alone is a 200 no-op: stored document (incl. updatedAt) is unchanged', async (_label, value) => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ id: 'cc_a' })],
+      cycles: [paidFullRow({ cashbackAmount: 100 })]
+    });
+    const seed = await readDoc();
+    await new Promise(resolve => setTimeout(resolve, 5));
+
+    const res = await patch({ cardId: 'cc_a', month: '2099-01', cashbackAmount: value });
+
+    expect(res._getStatusCode()).toBe(200);
+    const body = JSON.parse(res._getData());
+    expect(body.success).toBe(true);
+    expect(body.cycles.find(c => c.month === '2099-01').cashbackAmount).toBe(100);
+    expect(await readDoc()).toEqual(seed);
+  });
+
+  it.each([
+    ["''", ''],
+    ['null', null]
+  ])('AC-CB-46 cashbackAmount %s alone on a never-stored month creates no row', async (_label, value) => {
+    await seedCreditDoc(USER_A, { cards: [makeCard({ id: 'cc_a' })] });
+    const seed = await readDoc();
+
+    const res = await patch({ cardId: 'cc_a', month: '2099-01', cashbackAmount: value });
+
+    expect(res._getStatusCode()).toBe(200);
+    const doc = await readDoc();
+    expect(doc.cycles).toEqual([]);
+    expect(doc).toEqual(seed);
+  });
+
+  it("AC-CB-47 paymentAction with cashbackAmount '' writes the action and leaves the stored cashback", async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ id: 'cc_a' })],
+      cycles: [{ cardId: 'cc_a', month: '2099-01', newSpend: 1000, cashbackAmount: 100, paymentAction: null, paidAt: null, paidSource: null }]
+    });
+
+    const res = await patch({ cardId: 'cc_a', month: '2099-01', paymentAction: 'full', cashbackAmount: '' });
+
+    expect(res._getStatusCode()).toBe(200);
+    const stored = (await readDoc()).cycles[0];
+    expect(stored.paymentAction).toBe('full');
+    expect(stored.cashbackAmount).toBe(100);
+    expect(typeof stored.paidAt).toBe('string');
+    expect(stored.paidSource).toBe('credit_card');
+  });
+
+  it('AC-CB-48 paymentAction and a valid cashbackAmount are both written in one call', async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ id: 'cc_a' })],
+      cycles: [{ cardId: 'cc_a', month: '2099-01', newSpend: 1000, paymentAction: null, paidAt: null, paidSource: null }]
+    });
+
+    const res = await patch({ cardId: 'cc_a', month: '2099-01', paymentAction: 'full', cashbackAmount: 50 });
+
+    expect(res._getStatusCode()).toBe(200);
+    const doc = await readDoc();
+    expect(doc.cycles).toHaveLength(1);
+    const stored = doc.cycles[0];
+    expect(stored.paymentAction).toBe('full');
+    expect(typeof stored.paidAt).toBe('string');
+    expect(stored.paidSource).toBe('credit_card');
+    expect(stored.cashbackAmount).toBe(50);
+    expect(stored.newSpend).toBe(1000);
+
+    const cycle = JSON.parse(res._getData()).cycles.find(c => c.month === '2099-01');
+    expect(cycle.totalDue).toBe(950);
+    expect(cycle.paidAmount).toBe(950);
+  });
+
+  it('AC-CB-49 invalid paymentAction with a valid cashbackAmount returns the paymentAction 400 and writes nothing', async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ id: 'cc_a' })],
+      cycles: [paidFullRow({ cashbackAmount: 100 })]
+    });
+    const seed = await readDoc();
+
+    const res = await patch({ cardId: 'cc_a', month: '2099-01', paymentAction: 'partial', cashbackAmount: 50 });
+
+    expect(res._getStatusCode()).toBe(400);
+    expect(JSON.parse(res._getData())).toEqual({ error: 'paymentAction ต้องเป็น full, minimum หรือ null' });
+    expect(await readDoc()).toEqual(seed);
+  });
+
+  it('AC-CB-50 cashback PATCH on a 61st month hits the cycle cap: 409, stored cycle count unchanged', async () => {
+    const cycles = Array.from({ length: MAX_REVOLVING_CYCLES_PER_CARD }, (_, i) => ({
+      cardId: 'cc_a',
+      month: `${2001 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`,
+      newSpend: 10,
+      paymentAction: null
+    }));
+    await seedCreditDoc(USER_A, { cards: [makeCard({ id: 'cc_a' })], cycles });
+
+    const res = await patch({ cardId: 'cc_a', month: '2006-01', cashbackAmount: 100 });
+
+    expect(res._getStatusCode()).toBe(409);
+    expect(JSON.parse(res._getData())).toEqual({
+      error: `บันทึกยอดหมุนเวียนได้สูงสุด ${MAX_REVOLVING_CYCLES_PER_CARD} เดือนต่อบัตร`
+    });
+    const doc = await readDoc();
+    expect(doc.cycles).toHaveLength(MAX_REVOLVING_CYCLES_PER_CARD);
+    expect(doc.cycles.some(cycle => cycle.month === '2006-01')).toBe(false);
+  });
+
+  it("AC-CB-51 cashback PATCH on another user's cardId returns 404 and touches neither document", async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ id: 'cc_a' })],
+      cycles: [paidFullRow()]
+    });
+    await seedCreditDoc(USER_B, { cards: [makeCard({ id: 'cc_b' })] });
+    const seedA = await readDoc(USER_A);
+    const seedB = await readDoc(USER_B);
+
+    const res = await patch({ cardId: 'cc_a', month: '2099-01', cashbackAmount: 100 }, USER_B);
+
+    expect(res._getStatusCode()).toBe(404);
+    expect(JSON.parse(res._getData())).toEqual({ error: 'card not found' });
+    expect(await readDoc(USER_A)).toEqual(seedA);
+    expect(await readDoc(USER_B)).toEqual(seedB);
+  });
+
+  it('AC-CB-52 GET summary does not net one card\'s credit against another card\'s debt, and keeps its exact key set', async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ id: 'cc_a' }), makeCard({ id: 'cc_b', name: 'บัตร B' })],
+      cycles: [
+        { cardId: 'cc_a', month: '2099-01', newSpend: 300, cashbackAmount: 500, paymentAction: null },
+        { cardId: 'cc_b', month: '2099-01', newSpend: 1000, paymentAction: null }
+      ]
+    });
+    const { req, res } = makeReqRes({ query: { month: '2099-01' } });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const body = JSON.parse(res._getData());
+    expect(body.summary.outstanding).toBe(1000);
+    expect(body.summary.due).toBe(1000);
+    expect(Object.keys(body.summary)).toEqual(['outstanding', 'due', 'minDue', 'carryForward']);
+    // The raw cycle row still carries the signed credit (the intended raw exposure).
+    const rowA = body.cycles.find(c => c.cardId === 'cc_a');
+    expect(rowA.totalDue).toBe(-200);
+    expect(rowA.creditBalance).toBe(200);
+    expect(rowA.amountDue).toBe(0);
+  });
+});
+
 describe('/api/credit-cards/revolving (isolated mocked-collaborator test — the one sanctioned exception)', () => {
   // This is the only test in this file that mocks a collaborator module. It is scoped to its own
   // describe block via jest.isolateModules so the mock never leaks into the real-DB tests above.

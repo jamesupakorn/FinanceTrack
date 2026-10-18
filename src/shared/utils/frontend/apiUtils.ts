@@ -312,9 +312,11 @@ export const savingsGoalsAPI = {
 };
 
 export const dailyExpenseAPI = {
-	// raw:true skips the fixed-only carry-forward the endpoint applies for the normal editing
-	// view when a month has no saved doc yet — used by MonthManager's "copy from previous
-	// month" so it copies what was actually saved, not a synthesized preview.
+	// raw:true skips the fixed-only carry-forward (BR-014) the endpoint applies for the normal
+	// editing view when a month has no saved doc yet, and returns only what was actually
+	// persisted (or nothing). No frontend caller currently passes raw:true — MonthManager's
+	// "copy from previous month" used to, but that was removed because it made the copy
+	// silently skip BR-014's carried-forward items, wiping out data the user had seen.
 	getByMonth: async (month: string, { raw }: { raw?: boolean } = {}): Promise<any> => jsonFetch(buildUrl('/api/daily_expenses', { month, raw: raw ? '1' : undefined })),
 	save: async (month: string, items: unknown): Promise<any> => jsonFetch('/api/daily_expenses', {
 		method: 'PUT',
@@ -389,7 +391,7 @@ export const creditCardAPI = {
 		headers: JSON_HEADERS,
 		body: withUserPayload({ planId, mode: 'delete' })
 	}),
-	// ยอดใช้จ่ายหมุนเวียน — ตัวเลขทั้งหมด server คำนวณให้ client ส่งได้แค่ newSpend / paymentAction
+	// ยอดใช้จ่ายหมุนเวียน — ตัวเลขทั้งหมด server คำนวณให้ client ส่งได้แค่ newSpend / paymentAction / cashbackAmount
 	getRevolving: async (filters: Record<string, string | number | undefined | null> = {}): Promise<any> => jsonFetch(buildUrl(CREDIT_CARD_REVOLVING_URL, filters)),
 	saveRevolvingSpend: async (cardId: string, month: string, newSpend: number | string): Promise<any> => jsonFetch(CREDIT_CARD_REVOLVING_URL, {
 		method: 'POST',
@@ -400,6 +402,13 @@ export const creditCardAPI = {
 		method: 'PATCH',
 		headers: JSON_HEADERS,
 		body: withUserPayload({ cardId, month, paymentAction })
+	}),
+	// แคชแบคของรอบ — ห้ามมี key paymentAction ใน body (ไม่งั้น server จะแตะสถานะการชำระ)
+	// `?? null` กัน JSON.stringify ทิ้ง key ที่เป็น undefined: body ที่ไม่มีทั้งสอง key = undo การชำระแบบเดิม
+	saveRevolvingCashback: async (cardId: string, month: string, cashbackAmount: number | string | null | undefined): Promise<any> => jsonFetch(CREDIT_CARD_REVOLVING_URL, {
+		method: 'PATCH',
+		headers: JSON_HEADERS,
+		body: withUserPayload({ cardId, month, cashbackAmount: cashbackAmount ?? null })
 	}),
 	deleteRevolvingCycle: async (cardId: string, month: string): Promise<any> => jsonFetch(CREDIT_CARD_REVOLVING_URL, {
 		method: 'DELETE',

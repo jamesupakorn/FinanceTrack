@@ -30,6 +30,7 @@ const FINANCIAL_PATCH_FIELDS = [
   'totalPrice',
   'months',
   'startMonth',
+  'purchaseDate',
   'interestMode',
   'manualFeePerMonth',
   'annualRate',
@@ -60,6 +61,8 @@ function composePlan(base, value) {
     totalPrice: value.totalPrice,
     months: value.months,
     startMonth: value.startMonth,
+    // purchaseDate ไม่บังคับย้อนหลังกับแผนเก่า — ใส่ key นี้เฉพาะตอนมีค่าจริง (ห้ามเขียน '' ทับ, F-5/AC-PD-23)
+    ...(value.purchaseDate ? { purchaseDate: value.purchaseDate } : {}),
     interestMode: value.interestMode,
     manualFeePerMonth: value.manualFeePerMonth,
     annualRate: value.annualRate,
@@ -149,7 +152,8 @@ async function handlePost(req, res, userId) {
     return res.status(400).json({ error: 'plan payload required' });
   }
 
-  const { valid, errors, value } = validatePlanInput(input);
+  // แผนใหม่ต้องมีวันที่ซื้อเสมอ (BR-CC-024) — แผนเก่าที่ไม่มีค่านี้แก้ไขได้โดยไม่บังคับ (ดู handlePut)
+  const { valid, errors, value } = validatePlanInput(input, { requirePurchaseDate: true });
   if (!valid) {
     return res.status(400).json({ error: 'ข้อมูลแผนผ่อนไม่ถูกต้อง', errors });
   }
@@ -219,7 +223,10 @@ async function handlePut(req, res, userId) {
     }
 
     const merged = { ...existing, ...patch };
-    const { valid, errors, value } = validatePlanInput(merged);
+    // บังคับ purchaseDate เฉพาะแผนที่มีค่านี้อยู่แล้ว — แผนเก่า (legacy, ไม่มี purchaseDate) แก้ไขได้โดยไม่ต้องกรอกย้อนหลัง (D-1, AC-PD-13/23)
+    const { valid, errors, value } = validatePlanInput(merged, {
+      requirePurchaseDate: Boolean(existing?.purchaseDate)
+    });
     if (!valid) {
       failure = { status: 400, body: { error: 'ข้อมูลแผนผ่อนไม่ถูกต้อง', errors } };
       return data;

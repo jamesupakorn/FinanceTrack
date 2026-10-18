@@ -8,8 +8,7 @@
  * มุมมองภายใน 2 แบบ ควบคุมด้วย query string เพื่อให้ deep link และปุ่ม back ทำงาน:
  *   /credit-cards                 → ภาพรวม
  *   /credit-cards?card=<cardId>   → รายละเอียดบัตร (ปลายทางของลิงก์จาก ExpenseTable)
- * ปฏิทินย้ายออกจากหน้านี้เป็นโมดัลรวม (ADR-012 · Feature 2) เปิดจากปุ่ม "ปฏิทิน" ในหัวข้อ
- * `/credit-cards?view=calendar` ยังคงรองรับเป็น legacy deep link ที่เปิดโมดัลนี้อัตโนมัติ (AC-69)
+ * ปฏิทินไม่อยู่ในหน้านี้ (ADR-025) — เข้าถึงได้จากเมนู "ปฏิทิน" ของ Layout เท่านั้น
  *
  * Graphite redesign (credit-cards-graphite pass) — เต็มหน้าเปลี่ยนเป็น Tailwind แล้ว ไม่ import
  * CreditCard.module.css / CreditCardForm.module.css อีกต่อไป (ทั้งสองไฟล์ยังอยู่บน disk เพราะ
@@ -161,19 +160,8 @@ export default function CreditCardsPage() {
   const [editingPlan, setEditingPlan] = useState(null);
   const [lockedCardId, setLockedCardId] = useState(null);
   const [confirmState, setConfirmState] = useState(null);
-  // calendarTrigger: นับขึ้นเพื่อสั่งให้ Layout เปิดโมดัลปฏิทินรวม (แพทเทิร์นเดียวกับ triggerSave — ADR-003)
-  // แทน calendarOpen เดิม เพราะโมดัลย้ายไปรวมอยู่ที่ Layout หนึ่งเดียวทั้งแอปแล้ว (AC-SH-13)
-  const [calendarTrigger, setCalendarTrigger] = useState(0);
 
   const selectedCardId = typeof router.query.card === 'string' ? router.query.card : null;
-
-  // legacy deep link (ลิงก์ footer ข้อความ LINE เดิม / bookmark เก่า) — เปิดโมดัลปฏิทินอัตโนมัติ (AC-69)
-  useEffect(() => {
-    if (router.query.view === 'calendar') {
-      setCalendarTrigger(prev => prev + 1);
-      router.replace({ pathname: '/credit-cards', query: {} }, undefined, { shallow: true });
-    }
-  }, [router.query.view, router]);
 
   const loadData = useCallback(async ({ silent = false } = {}) => {
     if (!currentUser?.id) return;
@@ -418,24 +406,14 @@ export default function CreditCardsPage() {
       activeNav="credit-cards"
       title="บัตรเครดิต & แผนผ่อนชำระ"
       headerActions={(
-        <>
-          <button
-            type="button"
-            className={`inline-flex min-h-11 items-center justify-center gap-space-2 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent transition-colors duration-fast ease-graphite hover:opacity-90 ${FOCUS_RING}`}
-            onClick={handleOpenAddCard}
-          >
-            <Icons.Plus size={16} /> <span>เพิ่มบัตร</span>
-          </button>
-          <button
-            type="button"
-            className={`inline-flex min-h-11 items-center justify-center gap-space-2 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING}`}
-            onClick={() => setCalendarTrigger(prev => prev + 1)}
-          >
-            <Icons.Calendar size={16} /> <span>ปฏิทิน</span>
-          </button>
-        </>
+        <button
+          type="button"
+          className={`inline-flex min-h-11 items-center justify-center gap-space-2 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent transition-colors duration-fast ease-graphite hover:opacity-90 ${FOCUS_RING}`}
+          onClick={handleOpenAddCard}
+        >
+          <Icons.Plus size={16} /> <span>เพิ่มบัตร</span>
+        </button>
       )}
-      calendarTrigger={calendarTrigger}
       onCalendarClose={({ changed } = {}) => { if (changed) loadData({ silent: true }); }}
     >
       <div className="flex flex-col gap-space-5">
@@ -472,7 +450,6 @@ export default function CreditCardsPage() {
             onAddPlan={() => handleOpenAddPlan(null)}
             onAddPlanForCard={handleOpenAddPlan}
             onOpenCard={(cardId) => goTo({ card: cardId })}
-            onOpenCalendar={() => setCalendarTrigger(prev => prev + 1)}
             onToggleInstallment={handleToggleInstallment}
           />
         )}
