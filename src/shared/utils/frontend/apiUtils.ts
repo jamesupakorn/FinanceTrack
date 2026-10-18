@@ -312,9 +312,11 @@ export const savingsGoalsAPI = {
 };
 
 export const dailyExpenseAPI = {
-	// raw:true skips the fixed-only carry-forward the endpoint applies for the normal editing
-	// view when a month has no saved doc yet — used by MonthManager's "copy from previous
-	// month" so it copies what was actually saved, not a synthesized preview.
+	// raw:true skips the fixed-only carry-forward (BR-014) the endpoint applies for the normal
+	// editing view when a month has no saved doc yet, and returns only what was actually
+	// persisted (or nothing). No frontend caller currently passes raw:true — MonthManager's
+	// "copy from previous month" used to, but that was removed because it made the copy
+	// silently skip BR-014's carried-forward items, wiping out data the user had seen.
 	getByMonth: async (month: string, { raw }: { raw?: boolean } = {}): Promise<any> => jsonFetch(buildUrl('/api/daily_expenses', { month, raw: raw ? '1' : undefined })),
 	save: async (month: string, items: unknown): Promise<any> => jsonFetch('/api/daily_expenses', {
 		method: 'PUT',

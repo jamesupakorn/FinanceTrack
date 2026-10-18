@@ -64,9 +64,9 @@ function handleJsonGet(req, res, userId) {
   const bucket = getUserData(JSON_FILENAME, userId);
   let doc = bucket[month];
 
-  // raw=1 skips the fixed-only carry-forward below — used by "copy from previous month"
-  // (MonthManager.js), which wants the previous month's actually-saved items (or none),
-  // not a synthesized, never-persisted preview meant for the normal editing view.
+  // raw=1 skips the fixed-only carry-forward below and returns only what was actually
+  // persisted for this month (or nothing) — for callers that need to distinguish
+  // "never saved" from "saved as empty", as opposed to the normal editing view's preview.
   if (!doc && raw !== '1') {
     const prevMonth = getPreviousMonth(month);
     const prevDoc = bucket[prevMonth];
@@ -122,7 +122,7 @@ export default async function handler(req, res) {
 
       let doc = await collection.findOne({ month, ...userFilter });
 
-      // raw=1 skips the fixed-only carry-forward below — see handleJsonGet's comment.
+      // raw=1 skips the fixed-only carry-forward below — see handleJsonGet's comment above.
       if (!doc && raw !== '1') {
         const prevMonth = getPreviousMonth(month);
         const prevDoc = await collection.findOne({ month: prevMonth, ...userFilter });

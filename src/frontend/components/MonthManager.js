@@ -350,7 +350,7 @@ const MonthManager = ({ selectedMonth, onMonthSelected, onDataRefresh, months, o
         salaryAPI.getByMonth(prevMonth),
         savingsAPI.getAll ? savingsAPI.getAll() : Promise.resolve({}),
         investmentAPI.getAll ? investmentAPI.getAll() : Promise.resolve({}),
-        dailyExpenseAPI.getByMonth(prevMonth, { raw: true })
+        dailyExpenseAPI.getByMonth(prevMonth)
       ]);
       // ดึงข้อมูลเดือนก่อนหน้า
       const expensePrevRaw = getMonthData(expenseAll, prevMonth);
