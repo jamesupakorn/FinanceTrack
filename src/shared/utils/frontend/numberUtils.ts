@@ -150,7 +150,7 @@ export const parseAndFormat = (value: number | string): string => {
 /**
  * แปลงตัวเลขสำหรับบันทึกลงฐานข้อมูล (ตัด comma ออก)
  */
-export const parseToNumber = (value: number | string): number => {
+export const parseToNumber = (value: unknown): number => {
   // ลบ comma และแปลงเป็นตัวเลข
   if (typeof value === 'string') {
     // หากเป็น string ให้ลบ comma ก่อน
