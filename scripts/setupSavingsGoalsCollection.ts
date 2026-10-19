@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 /**
  * MongoDB Setup Script: Savings Goals Collection
- * File: scripts/setupSavingsGoalsCollection.js
+ * File: scripts/setupSavingsGoalsCollection.ts
  * 
  * Creates the savingsGoals collection with schema validation and indexes
- * Usage: node scripts/setupSavingsGoalsCollection.js
+ * Usage: npx tsx scripts/setupSavingsGoalsCollection.ts
  */
 
 const { getDbPromise } = require('../lib/mongodb');
 const { ObjectId } = require('mongodb');
 
 const COLLECTION_NAME = 'savingsGoals';
+
+export {};
 
 /**
  * Schema validator for savings goals
@@ -242,7 +244,7 @@ async function setupSavingsGoalsCollection() {
 
     // Check if collection exists
     const collections = await db.listCollections().toArray();
-    const collectionNames = collections.map(c => c.name);
+    const collectionNames = collections.map((collection: { name: string }) => collection.name);
 
     if (collectionNames.includes(COLLECTION_NAME)) {
       console.log(`⚠️  Collection "${COLLECTION_NAME}" already exists.`);
@@ -280,7 +282,8 @@ async function setupSavingsGoalsCollection() {
         await collection.createIndex(key, { name });
         console.log(`  ✓ ${name} (${keyStr}) - ${description}`);
       } catch (err) {
-        console.error(`  ✗ Failed to create ${name}: ${err.message}`);
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`  ✗ Failed to create ${name}: ${message}`);
       }
     }
     console.log('');
@@ -322,15 +325,15 @@ async function setupSavingsGoalsCollection() {
 /**
  * Helper to ask questions on command line
  */
-function askQuestion(question) {
-  return new Promise((resolve) => {
+function askQuestion(question: string): Promise<string> {
+  return new Promise<string>((resolve) => {
     const readline = require('readline');
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout
     });
 
-    rl.question(question, (answer) => {
+    rl.question(question, (answer: string) => {
       rl.close();
       resolve(answer);
     });

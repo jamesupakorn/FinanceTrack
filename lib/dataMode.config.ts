@@ -1,6 +1,8 @@
+export type DataMode = 'mongo' | 'json';
+
 const envMode = (process.env.DATA_MODE || '').toLowerCase();
 
-const dataModeConfig = {
+const dataModeConfig: { mode: DataMode } = {
   // ปรับค่าเป็น 'mongo' เมื่อต้องการให้ backend ไปอ่านจาก MongoDB
   // ปรับค่าเป็น 'json' เมื่อต้องการให้ backend ไปอ่านจาก JSON files
   mode: envMode === 'mongo' ? 'mongo' : 'json'

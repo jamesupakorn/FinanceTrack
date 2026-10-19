@@ -11,6 +11,13 @@ const COLLECTION_CONFIGS = [
   { name: 'tax_accumulated', keyField: 'year', sampleSize: 3 }
 ];
 
+type CollectionConfig = {
+  name: string;
+  keyField: string;
+  sampleSize: number;
+  sortDirection?: 1 | -1;
+};
+
 const verbose = process.argv.includes('--verbose');
 
 if (!process.env.MONGODB_URI) {
@@ -18,7 +25,7 @@ if (!process.env.MONGODB_URI) {
   process.exit(1);
 }
 
-async function summarizeCollection(db, config) {
+async function summarizeCollection(db: import('mongodb').Db, config: CollectionConfig) {
   const collection = db.collection(config.name);
   const count = await collection.countDocuments();
   const projection = { userId: 1, [config.keyField]: 1 };
@@ -63,3 +70,5 @@ async function run() {
 }
 
 run();
+
+export {};

@@ -1,13 +1,34 @@
-import fs from 'fs/promises';
 import path from 'path';
 import bcrypt from 'bcryptjs';
+import type { Document } from 'mongodb';
 import { getDbPromise } from './mongodb';
+import { dataDir, jsonRead, jsonWrite, runJsonBookkeeping } from './auditJsonStore';
+import { wrapCollection } from './auditContext';
 import dataModeConfig from './dataMode.config';
 import { normaliseBudgetThresholds } from '../src/shared/utils/frontend/monthlySummary';
 import { assertScopedUserId } from '../src/shared/utils/backend/userRequest';
 
 const DATA_MODE = (dataModeConfig?.mode || 'json').toLowerCase();
-const USERS_FILE = path.resolve(process.cwd(), 'src/backend/data/users.json');
+const usersFile = (): string => path.join(dataDir(), 'users.json');
+type BudgetThresholds = ReturnType<typeof normaliseBudgetThresholds>;
+
+interface UserRecord extends Document {
+  id: string;
+  displayName: string;
+  passwordHash: string;
+  avatar?: string | null;
+  bankAccounts?: unknown[];
+  budgetThresholds?: unknown;
+  monthlySummaryEnabled?: boolean;
+  lastMonthlySummarySent?: string;
+  LineId?: string;
+}
+
+interface PublicUser {
+  id: string;
+  displayName: string;
+  avatar?: string | null;
+}
 
 /**
  * ปฏิเสธ userId ที่ไม่ใช่ string/ว่างเปล่า ก่อนถูกนำไปสร้าง Mongo filter หรือใช้ค้นหาใน JSON
@@ -22,56 +43,56 @@ const USERS_FILE = path.resolve(process.cwd(), 'src/backend/data/users.json');
  * — this file only supplies its own error-message label so existing tests keep asserting the
  * literal string 'userStore: userId is required'.)
  */
-function assertUserScope(userId) {
+function assertUserScope(userId: unknown): string {
   return assertScopedUserId(userId, 'userStore');
 }
 
-async function readUsersJson() {
+async function readUsersJson(): Promise<UserRecord[]> {
   try {
-    const raw = await fs.readFile(USERS_FILE, 'utf-8');
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (err) {
+    const raw = jsonRead(usersFile());
+    if (raw === null) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed as UserRecord[] : [];
+  } catch (err: any) {
     if (err.code === 'ENOENT') return [];
     throw err;
   }
 }
 
-async function writeUsersJson(users) {
-  await fs.mkdir(path.dirname(USERS_FILE), { recursive: true });
-  await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
+async function writeUsersJson(users: UserRecord[]): Promise<void> {
+  jsonWrite(usersFile(), JSON.stringify(users, null, 2));
 }
 
-export async function loadUsers() {
+export async function loadUsers(): Promise<UserRecord[]> {
   if (DATA_MODE === 'mongo') {
     const db = await getDbPromise();
-    return db.collection('users').find({}).toArray();
+    return wrapCollection(db.collection<UserRecord>('users'), 'users').find({}).toArray();
   }
   return readUsersJson();
 }
 
-export async function getUserById(userId) {
+export async function getUserById(userId: string): Promise<UserRecord | null> {
   assertUserScope(userId);
   if (DATA_MODE === 'mongo') {
     const db = await getDbPromise();
-    return db.collection('users').findOne({ id: userId });
+    return wrapCollection(db.collection<UserRecord>('users'), 'users').findOne({ id: userId });
   }
   const users = await readUsersJson();
   return users.find(u => u.id === userId) || null;
 }
 
-export async function checkUserPassword(userId, password) {
+export async function checkUserPassword(userId: string, password: string): Promise<boolean> {
   const user = await getUserById(userId);
   if (!user) return false;
   return bcrypt.compare(password, user.passwordHash);
 }
 
-export async function updateUserPassword(userId, newPassword) {
+export async function updateUserPassword(userId: string, newPassword: string): Promise<PublicUser> {
   assertUserScope(userId);
   const passwordHash = await bcrypt.hash(newPassword, 10);
   if (DATA_MODE === 'mongo') {
     const db = await getDbPromise();
-    const user = await db.collection('users').findOneAndUpdate(
+    const user = await wrapCollection(db.collection<UserRecord>('users'), 'users').findOneAndUpdate(
       { id: userId },
       { $set: { passwordHash } },
       { returnDocument: 'after' }
@@ -88,18 +109,18 @@ export async function updateUserPassword(userId, newPassword) {
   return { id: users[idx].id, displayName: users[idx].displayName, avatar: users[idx].avatar };
 }
 
-export async function getUserBankAccounts(userId) {
+export async function getUserBankAccounts(userId: string): Promise<unknown[]> {
   assertUserScope(userId);
   const user = await getUserById(userId);
   if (!user) throw new Error('User not found');
   return user.bankAccounts || [];
 }
 
-export async function updateUserBankAccounts(userId, bankAccounts) {
+export async function updateUserBankAccounts(userId: string, bankAccounts: unknown[]): Promise<PublicUser & { bankAccounts?: unknown[] }> {
   assertUserScope(userId);
   if (DATA_MODE === 'mongo') {
     const db = await getDbPromise();
-    const user = await db.collection('users').findOneAndUpdate(
+    const user = await wrapCollection(db.collection<UserRecord>('users'), 'users').findOneAndUpdate(
       { id: userId },
       { $set: { bankAccounts } },
       { returnDocument: 'after' }
@@ -119,7 +140,7 @@ export async function updateUserBankAccounts(userId, bankAccounts) {
  * อ่านเกณฑ์สุขภาพงบประมาณของผู้ใช้ — defaulted-on-read เสมอ ไม่มีการเขียนตอนอ่าน (BR-DASH-009/E1)
  * normaliseBudgetThresholds เติมคีย์ที่ขาด/clamp ให้ปลอดภัยเสมอ มาจาก monthlySummary.js (M-3)
  */
-export async function getUserBudgetThresholds(userId) {
+export async function getUserBudgetThresholds(userId: string): Promise<BudgetThresholds> {
   assertUserScope(userId);
   const user = await getUserById(userId);
   if (!user) throw new Error('User not found');
@@ -132,11 +153,11 @@ export async function getUserBudgetThresholds(userId) {
  * ชั้น route (pages/api/user-bank-accounts.js) — ฟังก์ชันนี้แค่บันทึกสิ่งที่ได้รับมาตรง ๆ ไม่ normalise/
  * กรองซ้ำ (M-1/M-2)
  */
-export async function updateUserBudgetThresholds(userId, thresholds) {
+export async function updateUserBudgetThresholds(userId: string, thresholds: BudgetThresholds): Promise<PublicUser & { budgetThresholds?: unknown }> {
   assertUserScope(userId);
   if (DATA_MODE === 'mongo') {
     const db = await getDbPromise();
-    const user = await db.collection('users').findOneAndUpdate(
+    const user = await wrapCollection(db.collection<UserRecord>('users'), 'users').findOneAndUpdate(
       { id: userId },
       { $set: { budgetThresholds: thresholds } },
       { returnDocument: 'after' }
@@ -152,19 +173,19 @@ export async function updateUserBudgetThresholds(userId, thresholds) {
   return { id: users[idx].id, displayName: users[idx].displayName, avatar: users[idx].avatar, budgetThresholds: users[idx].budgetThresholds };
 }
 
-export async function getUserMonthlySummaryEnabled(userId) {
+export async function getUserMonthlySummaryEnabled(userId: string): Promise<boolean> {
   assertUserScope(userId);
   const user = await getUserById(userId);
   if (!user) throw new Error('User not found');
   return user.monthlySummaryEnabled !== false;
 }
 
-export async function updateUserMonthlySummaryEnabled(userId, enabled) {
+export async function updateUserMonthlySummaryEnabled(userId: string, enabled: boolean): Promise<Pick<PublicUser, 'id'> & { monthlySummaryEnabled?: boolean }> {
   assertUserScope(userId);
   if (typeof enabled !== 'boolean') throw new Error('monthlySummaryEnabled must be boolean');
   if (DATA_MODE === 'mongo') {
     const db = await getDbPromise();
-    const user = await db.collection('users').findOneAndUpdate(
+    const user = await wrapCollection(db.collection<UserRecord>('users'), 'users').findOneAndUpdate(
       { id: userId },
       { $set: { monthlySummaryEnabled: enabled } },
       { returnDocument: 'after' }
@@ -180,21 +201,21 @@ export async function updateUserMonthlySummaryEnabled(userId, enabled) {
   return { id: users[idx].id, monthlySummaryEnabled: users[idx].monthlySummaryEnabled };
 }
 
-export async function getUserLastMonthlySummarySent(userId) {
+export async function getUserLastMonthlySummarySent(userId: string): Promise<string | null> {
   assertUserScope(userId);
   const user = await getUserById(userId);
   if (!user) throw new Error('User not found');
   return user.lastMonthlySummarySent || null;
 }
 
-export async function markUserMonthlySummarySent(userId, monthKey) {
+export async function markUserMonthlySummarySent(userId: string, monthKey: string): Promise<string | undefined> {
   assertUserScope(userId);
   if (typeof monthKey !== 'string' || !/^\d{4}-\d{2}$/.test(monthKey)) {
     throw new Error('invalid monthly summary month');
   }
   if (DATA_MODE === 'mongo') {
     const db = await getDbPromise();
-    const user = await db.collection('users').findOneAndUpdate(
+    const user = await wrapCollection(db.collection<UserRecord>('users'), 'users').findOneAndUpdate(
       { id: userId },
       { $set: { lastMonthlySummarySent: monthKey } },
       { returnDocument: 'after' }
@@ -202,19 +223,21 @@ export async function markUserMonthlySummarySent(userId, monthKey) {
     if (!user) throw new Error('User not found');
     return user.lastMonthlySummarySent;
   }
-  const users = await readUsersJson();
-  const idx = users.findIndex(u => u.id === userId);
-  if (idx === -1) throw new Error('User not found');
-  users[idx] = { ...users[idx], lastMonthlySummarySent: monthKey };
-  await writeUsersJson(users);
-  return users[idx].lastMonthlySummarySent;
+  return runJsonBookkeeping(async () => {
+    const users = await readUsersJson();
+    const idx = users.findIndex(u => u.id === userId);
+    if (idx === -1) throw new Error('User not found');
+    users[idx] = { ...users[idx], lastMonthlySummarySent: monthKey };
+    await writeUsersJson(users);
+    return users[idx].lastMonthlySummarySent;
+  });
 }
 
-export async function updateUserLineId(userId, lineUserId) {
+export async function updateUserLineId(userId: string, lineUserId: string): Promise<PublicUser & { LineId?: string } | null> {
   assertUserScope(userId);
   if (DATA_MODE === 'mongo') {
     const db = await getDbPromise();
-    const user = await db.collection('users').findOneAndUpdate(
+    const user = await wrapCollection(db.collection<UserRecord>('users'), 'users').findOneAndUpdate(
       { id: userId },
       { $set: { LineId: lineUserId } },
       { returnDocument: 'after' }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // One-off: append daily_expenses items from one month onto another month's existing items,
 // for one user only. Existing items in the target month are kept, not overwritten.
-// Usage: node scripts/appendDailyExpenseItems.js --userId u001 --from 2026-06 --to 2026-08 [--apply]
+// Usage: npx tsx scripts/appendDailyExpenseItems.ts --userId u001 --from 2026-06 --to 2026-08 [--apply]
 // Without --apply it only prints what would change (dry run).
 const { MongoClient } = require('mongodb');
 
@@ -9,8 +9,16 @@ const DATABASE_NAME = process.env.MONGODB_DB || 'financetrack';
 
 const BOOLEAN_FLAGS = new Set(['apply']);
 
-function parseArgs(argv) {
-  const args = {};
+type ScriptArgs = {
+  userId?: string;
+  from?: string;
+  to?: string;
+  apply?: boolean;
+  [key: string]: string | boolean | undefined;
+};
+
+function parseArgs(argv: string[]): ScriptArgs {
+  const args: ScriptArgs = {};
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i].startsWith('--')) {
       const key = argv[i].slice(2);
@@ -33,7 +41,7 @@ function genId() {
 async function run() {
   const { userId, from, to, apply } = parseArgs(process.argv.slice(2));
   if (!userId || !from || !to) {
-    console.error('Usage: node scripts/appendDailyExpenseItems.js --userId <id> --from <YYYY-MM> --to <YYYY-MM> [--apply]');
+    console.error('Usage: npx tsx scripts/appendDailyExpenseItems.ts --userId <id> --from <YYYY-MM> --to <YYYY-MM> [--apply]');
     process.exit(1);
   }
   if (!process.env.MONGODB_URI) {
@@ -56,7 +64,7 @@ async function run() {
     const targetDoc = await collection.findOne({ userId, month: to });
     const existingItems = (targetDoc && Array.isArray(targetDoc.items)) ? targetDoc.items : [];
 
-    const newItems = sourceDoc.items.map((item) => ({
+    const newItems = sourceDoc.items.map((item: Record<string, unknown>) => ({
       ...item,
       id: genId()
     }));
@@ -86,3 +94,5 @@ run().catch((error) => {
   console.error('Failed:', error);
   process.exit(1);
 });
+
+export {};

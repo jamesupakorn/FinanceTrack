@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * MongoDB Setup Script: loginAttempts Collection (TD-H10, login rate limiting)
- * File: scripts/setupLoginAttemptsCollection.js
+ * File: scripts/setupLoginAttemptsCollection.ts
  *
  * Creates the `loginAttempts` collection with a TTL index on `expiresAt` so idle counter
  * documents self-clean (no separate cron/cleanup job needed). One document per composite
@@ -12,12 +12,14 @@
  * client and doesn't need the same integrity guarantees as financial records; keeping it
  * lightweight since it's purely an internal throttling counter.
  *
- * Usage: node scripts/setupLoginAttemptsCollection.js
+ * Usage: npx tsx scripts/setupLoginAttemptsCollection.ts
  */
 
 const { getDbPromise } = require('../lib/mongodb');
 
 const COLLECTION_NAME = 'loginAttempts';
+
+export {};
 
 async function setupLoginAttemptsCollection() {
   const db = await getDbPromise();

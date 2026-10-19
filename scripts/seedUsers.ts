@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 /**
- * seedUsers.js
+ * seedUsers.ts
  * อัปเซิร์ต user records จาก hardcoded snapshot เข้า MongoDB users collection
  * ใช้ครั้งเดียวหลังจาก users.json ถูกลบในการ migrate ไป MongoDB
  *
  * Usage:
- *   node scripts/seedUsers.js            (dry-run — prints what would be inserted)
- *   node scripts/seedUsers.js --apply    (writes to MongoDB)
+ *   npx tsx scripts/seedUsers.ts          (dry-run — prints what would be inserted)
+ *   npx tsx scripts/seedUsers.ts --apply  (writes to MongoDB)
  */
 
 const { MongoClient } = require('mongodb');
+
+export {};
 
 const DATABASE_NAME = process.env.MONGODB_DB || 'financetrack';
 const apply = process.argv.includes('--apply');
@@ -36,7 +38,7 @@ const USERS_SNAPSHOT = [
     // TD-H09: real server-side demo user — restores "ทดลองใช้" login through the normal
     // /api/auth/profile-login path (see .pipeline/spec-demo-profile-login-fix.md §1).
     // `isDemo: true` is the only new field this task adds; passwordHash is never read for
-    // this user (profile-login.js gates the passwordless branch strictly on `user.isDemo`).
+    // this user (profile-login.ts gates the passwordless branch strictly on `user.isDemo`).
     id: 'demo',
     displayName: 'บัญชีสาธิต (Demo)',
     avatar: '',

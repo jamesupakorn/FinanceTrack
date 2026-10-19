@@ -2,7 +2,7 @@
 /*
  * Quick utility script for appending a new profile to src/backend/data/users.json.
  * Usage:
- *   node scripts/createUser.mjs "Display Name" "plainPassword" [/avatars/u003.jpg] [customUserId]
+ *   npx tsx scripts/createUser.mts "Display Name" "plainPassword" [/avatars/u003.jpg] [customUserId]
  */
 
 import fs from 'fs';
@@ -16,7 +16,7 @@ import {
 const args = process.argv.slice(2);
 
 function printUsage() {
-  console.log('Usage: node scripts/createUser.mjs "Display Name" "plainPassword" [/avatars/u003.jpg] [customUserId]');
+  console.log('Usage: npx tsx scripts/createUser.mts "Display Name" "plainPassword" [/avatars/u003.jpg] [customUserId]');
 }
 
 if (args.length < 2) {
@@ -37,7 +37,7 @@ if (!displayName) {
 
 const users = loadUsers();
 const normalizedName = displayName.toLowerCase();
-const nameExists = users.some(user => user.displayName.toLowerCase() === normalizedName);
+const nameExists = users.some(user => (user.displayName as string).toLowerCase() === normalizedName);
 if (nameExists) {
   console.error(`Error: Display name "${displayName}" already exists.`);
   process.exit(1);
