@@ -29,25 +29,25 @@ guessing from the filename alone.
   old inverted `--dry-run` flag convention (everything else in this directory defaults to dry-run,
   requires `--apply` to write) — a separately-tracked, still-open TECH_DEBT follow-up, not fixed
   here. **DELETED 2026-09-19** — user chose to delete; bridge/dev tooling no longer needed.
-- **`appendDailyExpenseItems.js`** — parameterized single-user/single-month-pair data-copy tool
+- **`appendDailyExpenseItems.ts`** — parameterized single-user/single-month-pair data-copy tool
   (`--userId --from --to`). By nature a reusable manual-repair tool, not a run-once migration — no
   specific invocation record, and none expected.
 
 ## Repeatable setup/seed scripts — keep, not migrations
 
-- **`setupLoginAttemptsCollection.js`** — idempotent (checks `listCollections` first) collection/TTL
+- **`setupLoginAttemptsCollection.ts`** — idempotent (checks `listCollections` first) collection/TTL
   setup for TD-H10's rate limiter. Needed on any fresh environment.
-- **`setupSavingsGoalsCollection.js`** — idempotent-ish collection+validator+indexes setup for
+- **`setupSavingsGoalsCollection.ts`** — idempotent-ish collection+validator+indexes setup for
   `savingsGoals`. Note: also inserts hardcoded sample data for `u001` on every run — worth knowing
   before ever re-running this against production.
-- **`seedUsers.js`** — one-time upsert of a hardcoded user snapshot into Mongo. Per TD-H09
+- **`seedUsers.ts`** — one-time upsert of a hardcoded user snapshot into Mongo. Per TD-H09
   (`.pipeline/TECH_DEBT.md`), it has an **explicitly open** question: whether a pre-existing
   production `demo` doc has actually picked up `isDemo: true` yet. Do not touch without resolving
   that first.
-- **`createUser.mjs`** — general-purpose "add a user" CLI, reusable, has its own usage instructions.
+- **`createUser.mts`** — general-purpose "add a user" CLI, reusable, has its own usage instructions.
   Same as `migrateBankAccounts.mjs`: JSON-file-only, inert against current Mongo-based production
   data, but a working local-dev tool.
-- **`printMongoCollections.js`** — read-only diagnostic (counts + samples per collection). No writes.
+- **`printMongoCollections.ts`** — read-only diagnostic (counts + samples per collection). No writes.
   Clear keep.
 
 ## Deciding whether to delete a script later

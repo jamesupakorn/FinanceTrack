@@ -1,17 +1,17 @@
 /**
- * tailwind.config.js
+ * tailwind.config.ts
  * Single source of truth for design tokens — "Graphite" redesign (ADR-019 rule 1).
  * Implements UX_SPEC-full-redesign-2026-08.md §3 (tokens) and §4 (breakpoints) exactly.
  *
  * Do not add a value here that is not in UX_SPEC §3 — "no ad-hoc values" is Goal 1 of spec.md.
- * CommonJS on purpose: this project has no "type": "module" in package.json, and this file lives
- * beside next.config.js, which already uses module.exports (project convention).
+ * CommonJS on purpose: this project has no "type": "module" in package.json, and the Next config
+ * also uses module.exports (project convention).
  */
 
 module.exports = {
   content: [
-    './pages/**/*.{js,jsx,ts,tsx}',
-    './src/**/*.{js,jsx,ts,tsx}'
+    './pages/**/*.{ts,tsx}',
+    './src/**/*.{ts,tsx}'
   ],
   theme: {
     // ── §4 Breakpoints — exactly 3 named tiers, mobile-first (min-width). ──
