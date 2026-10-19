@@ -77,3 +77,39 @@ test('clear restrictions keeps order, reset restores default, only toolbar event
   fireEvent.click(screen.getByRole('button', { name: 'คืนค่าเริ่มต้น' }));
   expect(changes).toHaveBeenLastCalledWith(emptyListCriteria());
 });
+
+test('filter dropdown shows a styled listbox and updates the selected filter', () => {
+  const changes = jest.fn();
+  render(<ListToolbar label="รายการ" criteria={{ query: '', order: '', filters: { account: '' } }}
+    onChange={changes} filters={[{ key: 'account', label: 'บัญชี', options: [{ value: 'ttb', label: 'ttb' }] }]}
+    search={false} visible={2} total={2} />);
+
+  fireEvent.click(screen.getByRole('button', { name: 'ตัวกรอง' }));
+  const filter = screen.getByRole('combobox', { name: 'บัญชี' });
+  fireEvent.click(filter);
+  expect(screen.getByRole('listbox', { name: 'บัญชี' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('option', { name: 'ttb' }));
+
+  expect(changes).toHaveBeenCalledWith({ query: '', order: '', filters: { account: 'ttb' } });
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+});
+
+test('filter dropdown supports keyboard selection and restores focus on escape', () => {
+  const changes = jest.fn();
+  render(<ListToolbar label="รายการ" criteria={{ query: '', order: '', filters: { account: '' } }}
+    onChange={changes} filters={[{ key: 'account', label: 'บัญชี', options: [{ value: 'ttb', label: 'ttb' }] }]}
+    search={false} visible={2} total={2} />);
+
+  fireEvent.click(screen.getByRole('button', { name: 'ตัวกรอง' }));
+  const filter = screen.getByRole('combobox', { name: 'บัญชี' });
+  fireEvent.keyDown(filter, { key: 'ArrowDown' });
+  expect(screen.getByRole('listbox', { name: 'บัญชี' })).toHaveFocus();
+  fireEvent.keyDown(screen.getByRole('listbox'), { key: 'ArrowDown' });
+  fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Enter' });
+  expect(changes).toHaveBeenCalledWith({ query: '', order: '', filters: { account: 'ttb' } });
+
+  fireEvent.keyDown(filter, { key: 'ArrowDown' });
+  fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' });
+  expect(filter).toHaveFocus();
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+});

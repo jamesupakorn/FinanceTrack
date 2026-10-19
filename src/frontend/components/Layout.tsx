@@ -84,6 +84,11 @@ export default function Layout({
   const router = useRouter();
   const { currentUser, isReady, logout } = useSession();
   const isLocked = !isReady || !currentUser;
+  const mainRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (mainRef.current) mainRef.current.scrollTop = 0;
+  }, [router.asPath]);
 
   const sessionKey = useMemo(
     () => (currentUser ? `${SESSION_KEY}_${currentUser.id}` : SESSION_KEY),
@@ -270,12 +275,12 @@ export default function Layout({
   const sheetNavItems = NAV_ITEMS.filter(item => MOBILE_SHEET_NAV_IDS.includes(item.id));
 
   return (
-    <div className="flex min-h-screen w-full">
+    <div className="flex h-dvh w-full">
       <a href="#main" className={`fixed left-space-3 top-[-60px] z-[200] rounded-md bg-accent px-space-5 py-space-3 text-sm font-semibold text-on-accent no-underline transition-[top] duration-base ease-graphite focus-visible:top-space-3 focus:top-space-3 ${FOCUS_RING}`}>
         ข้ามไปยังเนื้อหา
       </a>
 
-      <nav className="sticky top-0 hidden h-screen w-[var(--nav-sidebar-width,240px)] shrink-0 flex-col border-r border-border-default bg-surface-1 px-space-4 py-space-5 lg:flex" aria-label="เมนูหลัก">
+      <nav className="sticky top-0 hidden h-dvh w-[var(--nav-sidebar-width,240px)] shrink-0 flex-col border-r border-border-default bg-surface-1 px-space-4 py-space-5 lg:flex" aria-label="เมนูหลัก">
         <div className="px-space-3 pb-space-5 text-lg font-bold text-primary">FinanceTrack</div>
         <div className="flex flex-1 flex-col gap-space-1">
           {NAV_ITEMS.map(item => {
@@ -294,7 +299,7 @@ export default function Layout({
         </div>
       </nav>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 border-b border-border-subtle bg-surface-1 px-space-4 py-space-3 lg:px-space-6">
           <div className="flex min-h-9 items-center justify-between gap-space-4">
             <h1 className="truncate text-2xl font-semibold text-primary">{title}</h1>
@@ -320,9 +325,9 @@ export default function Layout({
           {headerActions && <div className="mt-space-3 flex items-center gap-space-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">{headerActions}</div>}
         </header>
 
-        <main id="main" className={`mx-auto w-full max-w-[1280px] flex-1 p-[var(--gutter,clamp(1rem,0.5rem+2vw,2rem))] pb-[calc(var(--nav-safe-bottom,56px)+24px)] lg:pb-[var(--gutter,clamp(1rem,0.5rem+2vw,2rem))] ${contentClassName || ''}`}>
+        <main ref={mainRef} id="main" className={`mx-auto min-h-0 w-full max-w-[1280px] flex-1 overflow-y-auto overscroll-y-contain p-[var(--gutter,clamp(1rem,0.5rem+2vw,2rem))] pb-[calc(var(--nav-safe-bottom,56px)+24px)] lg:pb-[var(--gutter,clamp(1rem,0.5rem+2vw,2rem))] ${contentClassName || ''}`}>
           {isLocked ? (
-            <div className="flex min-h-screen flex-col items-center justify-center gap-space-4 text-secondary"><Icons.Lock size={48} color="var(--accent)" /><p>กำลังตรวจสอบสิทธิ์ผู้ใช้...</p></div>
+            <div className="flex min-h-full flex-col items-center justify-center gap-space-4 text-secondary"><Icons.Lock size={48} color="var(--accent)" /><p>กำลังตรวจสอบสิทธิ์ผู้ใช้...</p></div>
           ) : children}
         </main>
       </div>
