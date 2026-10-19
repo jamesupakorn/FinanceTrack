@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ListCriteria } from '../../shared/utils/frontend/listView';
 import { emptyListCriteria } from '../../shared/utils/frontend/listView';
 
@@ -29,6 +29,127 @@ interface ListToolbarProps {
 }
 
 const CONTROL = 'min-h-11 min-w-0 rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-base text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
+
+function FilterSelect({
+  labelledBy,
+  value,
+  options,
+  onChange
+}: {
+  labelledBy: string;
+  value: string;
+  options: ListOption[];
+  onChange: (value: string) => void;
+}) {
+  const id = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listboxRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const selectedIndex = Math.max(0, options.findIndex(option => option.value === value));
+
+  useEffect(() => {
+    if (!open) return undefined;
+    listboxRef.current?.focus();
+    const handlePointerDown = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [open]);
+
+  const close = (restoreFocus = false) => {
+    setOpen(false);
+    if (restoreFocus) triggerRef.current?.focus();
+  };
+  const select = (option: ListOption) => {
+    onChange(option.value);
+    close(true);
+  };
+
+  return (
+    <div ref={rootRef} className="relative min-w-0">
+      <button
+        ref={triggerRef}
+        type="button"
+        role="combobox"
+        aria-labelledby={labelledBy}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={`${id}-listbox`}
+        className={`${CONTROL} flex w-full items-center justify-between gap-space-2 text-left text-sm`}
+        onClick={() => {
+          if (open) close();
+          else {
+            setActiveIndex(selectedIndex);
+            setOpen(true);
+          }
+        }}
+        onKeyDown={event => {
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            setActiveIndex(selectedIndex);
+            setOpen(true);
+          }
+        }}
+      >
+        <span className="truncate">{options[selectedIndex]?.label ?? value}</span>
+        <svg aria-hidden="true" className={`h-4 w-4 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          ref={listboxRef}
+          id={`${id}-listbox`}
+          role="listbox"
+          aria-labelledby={labelledBy}
+          aria-activedescendant={`${id}-option-${activeIndex}`}
+          tabIndex={0}
+          className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 max-h-60 overflow-y-auto rounded-sm border border-border-interactive bg-surface-3 p-space-1 text-sm text-primary shadow-elev-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
+          onKeyDown={event => {
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              setActiveIndex(index => Math.min(index + 1, options.length - 1));
+            } else if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              setActiveIndex(index => Math.max(index - 1, 0));
+            } else if (event.key === 'Home') {
+              event.preventDefault();
+              setActiveIndex(0);
+            } else if (event.key === 'End') {
+              event.preventDefault();
+              setActiveIndex(options.length - 1);
+            } else if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              if (options[activeIndex]) select(options[activeIndex]);
+            } else if (event.key === 'Escape') {
+              event.preventDefault();
+              close(true);
+            } else if (event.key === 'Tab') {
+              close();
+            }
+          }}
+        >
+          {options.map((option, index) => (
+            <div
+              key={option.value}
+              id={`${id}-option-${index}`}
+              role="option"
+              aria-selected={option.value === value}
+              className={`flex min-h-11 cursor-pointer items-center rounded-sm px-space-3 py-space-2 ${index === activeIndex ? 'bg-surface-2' : ''} ${option.value === value ? 'font-semibold text-primary' : 'text-secondary'}`}
+              onMouseMove={() => setActiveIndex(index)}
+              onClick={() => select(option)}
+            >
+              <span className="min-w-0 break-words">{option.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ListToolbar({
   label, criteria, onChange, orders = [], filters = [], search = true,
@@ -78,21 +199,32 @@ export default function ListToolbar({
         </label>}
       </div>
       {expanded && filters.length > 0 && <div id={`${id}-filters`} className="flex flex-wrap gap-space-3 rounded-sm bg-surface-2 p-space-3">
-        {filters.map(filter => <label key={filter.key} className="flex min-w-0 basis-full flex-col gap-space-1 sm:flex-1">
-          <span className="text-sm text-secondary">{filter.label}</span>
-          {filter.type === 'month'
-            ? <input type="month" className={CONTROL} value={criteria.filters[filter.key] ?? ''}
-              min={filter.min} max={filter.max} aria-invalid={Boolean(error)}
-              aria-describedby={error ? `${id}-error` : undefined}
-              onChange={event => updateFilter(filter.key, event.target.value)} />
-            : <select className={CONTROL} value={criteria.filters[filter.key] ?? ''}
-              onChange={event => updateFilter(filter.key, event.target.value)}>
-              <option value="">ทั้งหมด</option>
-              {criteria.filters[filter.key] && !filter.options?.some(option => option.value === criteria.filters[filter.key]) &&
-                <option value={criteria.filters[filter.key]}>{criteria.filters[filter.key]}</option>}
-              {filter.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>}
-        </label>)}
+        {filters.map(filter => {
+          const filterLabelId = `${id}-${filter.key}-label`;
+          return (
+            <div key={filter.key} className="flex min-w-0 basis-full flex-col gap-space-1 sm:flex-1">
+              <span id={filterLabelId} className="text-sm text-secondary">{filter.label}</span>
+              {filter.type === 'month'
+                ? <input type="month" className={CONTROL} value={criteria.filters[filter.key] ?? ''}
+                  min={filter.min} max={filter.max} aria-invalid={Boolean(error)}
+                  aria-labelledby={filterLabelId}
+                  aria-describedby={error ? `${id}-error` : undefined}
+                  onChange={event => updateFilter(filter.key, event.target.value)} />
+                : <FilterSelect
+                  labelledBy={filterLabelId}
+                  value={criteria.filters[filter.key] ?? ''}
+                  options={[
+                    { value: '', label: 'ทั้งหมด' },
+                    ...(criteria.filters[filter.key] && !filter.options?.some(option => option.value === criteria.filters[filter.key])
+                      ? [{ value: criteria.filters[filter.key], label: criteria.filters[filter.key] }]
+                      : []),
+                    ...(filter.options || [])
+                  ]}
+                  onChange={value => updateFilter(filter.key, value)}
+                />}
+            </div>
+          );
+        })}
       </div>}
       {activeFilters.length > 0 && <p className="break-words text-sm text-secondary">
         {activeFilters.map(filter => `${filter.label}: ${filter.options?.find(option => option.value === criteria.filters[filter.key])?.label ?? criteria.filters[filter.key]}`).join(' · ')}
