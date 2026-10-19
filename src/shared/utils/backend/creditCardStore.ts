@@ -20,19 +20,22 @@
  */
 
 import { isJsonMode, getMongoCollection } from '../../../../lib/dataSource';
-import { getUserData, updateUserData } from '../../../backend/data/userUtils.js';
+import { getUserData, updateUserData } from '../../../backend/data/userUtils';
 import { assertScopedUserId } from './userRequest';
+import type { CardLike, PlanLike, StoredRevolvingCycle } from '../creditCardRevolving';
 
 const COLLECTION_NAME = 'credit_cards';
 const JSON_FILENAME = 'credit_cards.json';
 
-/** Module-private shape for this file's own return/parameter needs (no second real .ts consumer yet). */
-interface CreditData {
-  cards: unknown[];
-  plans: unknown[];
-  cycles: unknown[];
+export interface CreditData {
+  cards: CardLike[];
+  plans: PlanLike[];
+  cycles: StoredRevolvingCycle[];
   updatedAt: string | null;
 }
+
+export type CreditCard = CardLike;
+export type CreditPlan = PlanLike;
 
 /** โครงสร้างว่างมาตรฐาน — ผู้ใช้ใหม่เริ่มจากค่าว่างจริง ไม่มี default injection (BR-CC-012 / AC-04) */
 function emptyCreditData(): CreditData {

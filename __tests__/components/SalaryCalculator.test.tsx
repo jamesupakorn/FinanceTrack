@@ -1,0 +1,453 @@
+import { render, screen, within, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import SalaryCalculator from '../../src/frontend/components/SalaryCalculator';
+import {
+  salaryAPI as salaryApi,
+  incomeAPI as incomeApi,
+  taxAPI as taxApi
+} from '../../src/shared/utils/frontend/apiUtils';
+import { formatCurrency } from '../../src/shared/utils/frontend/numberUtils';
+
+// The only collaborator this file mocks — apiUtils' salaryAPI/incomeAPI/taxAPI exports (3 modules, 4
+// methods total). Every other collaborator (showToast, formatCurrency/parseAndFormat/parseToNumber) is
+// real, per spec §Scope item 2 / AC-3 ("exactly one jest.mock() call, no accidental extra mock").
+jest.mock('../../src/shared/utils/frontend/apiUtils', () => ({
+  salaryAPI: { getByMonth: jest.fn(), save: jest.fn() },
+  incomeAPI: { save: jest.fn() },
+  taxAPI: { updateMonthlyDeductionFields: jest.fn() },
+}));
+
+const salaryAPI = jest.mocked(salaryApi);
+const incomeAPI = jest.mocked(incomeApi);
+const taxAPI = jest.mocked(taxApi);
+
+// jsdom does not implement scrollIntoView; the pendingScrollItem effect (fired on every "+
+// เพิ่มรายการ" click) calls it. Test-file-local stub only — not added to jest.setup.js (AC-8).
+beforeAll(() => {
+  Element.prototype.scrollIntoView = jest.fn();
+});
+
+afterEach(() => {
+  jest.clearAllMocks();
+});
+
+// The "เงินได้สุทธิ" hero figure has no dedicated test id — its value lives in the <p> immediately
+// after the <p> holding the "เงินได้สุทธิ" label text.
+function getNetIncomeText(): string | null {
+  return screen.getByText('เงินได้สุทธิ').nextElementSibling!.textContent;
+}
+
+// Captures every `app:toast` CustomEvent dispatched during a test, in order.
+interface ToastDetail {
+  message: string;
+  type: 'success' | 'error' | 'info';
+  id: number;
+}
+
+function captureToasts(): { toasts: ToastDetail[]; cleanup: () => void } {
+  const toasts: ToastDetail[] = [];
+  const handler = (event: Event) => toasts.push((event as CustomEvent<ToastDetail>).detail);
+  window.addEventListener('app:toast', handler);
+  return { toasts, cleanup: () => window.removeEventListener('app:toast', handler) };
+}
+
+describe('SalaryCalculator', () => {
+  it('1. initial render with no selectedMonth shows the full 3/3-item preset lists (salary row locked, no flat OT presets), all values empty, and does not call getByMonth', () => {
+    render(<SalaryCalculator />);
+
+    // 3 income presets (salary/bonus/other_income) but only 2 name inputs: the locked เงินเดือน row
+    // renders its label as static text (AC-OT-10). The five flat overtime_* presets are gone (AC-OT-17).
+    expect(screen.getAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(2);
+    expect(screen.getAllByLabelText('แก้ไขชื่อรายการค่าใช้จ่ายหักออก')).toHaveLength(3);
+    expect(document.querySelectorAll('[data-salary-type="income"]')).toHaveLength(3);
+    expect(screen.getByText('เงินเดือน')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('เงินเดือน')).not.toBeInTheDocument(); // static label, not an input
+    expect(screen.getByLabelText('จำนวนเงินเงินเดือน')).toBeInTheDocument();
+    expect(screen.queryByText('ค่าล่วงเวลา 1.5 เท่า')).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue('หักภาษี')).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue('')).toHaveLength(6); // 3 income + 3 deduction amount inputs
+
+    expect(screen.getByText('คำนวณเงินเดือน - กรุณาเลือกเดือน')).toBeInTheDocument();
+    expect(salaryAPI.getByMonth).not.toHaveBeenCalled();
+  });
+
+  it('2. inModal suppresses the heading entirely (not just restyled)', () => {
+    render(<SalaryCalculator inModal />);
+
+    expect(screen.queryByText(/คำนวณเงินเดือน/)).not.toBeInTheDocument();
+  });
+
+  it('3. populated load renders only nonzero presets + custom items with __labels, not the full preset set', async () => {
+    salaryAPI.getByMonth.mockResolvedValue({
+      income: {
+        salary: 30000,
+        bonus: 5000,
+        custom_side_gig: 2000,
+        __labels: { custom_side_gig: 'งานเสริม' },
+      },
+      deduct: { tax: 1500, provident_fund: 750 },
+    });
+    render(<SalaryCalculator selectedMonth="2026-01" />);
+
+    await screen.findByDisplayValue('30,000.00');
+
+    // Income: exactly 3 rows — เงินเดือน/โบนัส/งานเสริม — not the full preset list. Only 2 of them
+    // have a name input; เงินเดือน is locked and renders as static text (AC-OT-10).
+    expect(document.querySelectorAll('[data-salary-type="income"]')).toHaveLength(3);
+    expect(screen.getAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(2);
+    expect(screen.getByText('เงินเดือน')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('เงินเดือน')).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue('30,000.00')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('โบนัส')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('5,000.00')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('งานเสริม')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('2,000.00')).toBeInTheDocument();
+
+    // Deduction: exactly 2 rows — หักภาษี/หักกองทุนสำรองเลี้ยงชีพ — social_security absent (0/missing).
+    expect(screen.getAllByLabelText('แก้ไขชื่อรายการค่าใช้จ่ายหักออก')).toHaveLength(2);
+    expect(screen.getByDisplayValue('หักภาษี')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('1,500.00')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('หักกองทุนสำรองเลี้ยงชีพ')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('750.00')).toBeInTheDocument();
+  });
+
+  it('4. income with salary: 0 renders the force-injected locked เงินเดือน row (not a blank custom row); an all-zero deduction section still falls back to one blank row', async () => {
+    salaryAPI.getByMonth.mockResolvedValue({ income: { salary: 0 }, deduct: {} });
+    render(<SalaryCalculator selectedMonth="2026-01" />);
+
+    await screen.findByDisplayValue('รายการหักใหม่');
+
+    // AC-OT-04 / V-4: buildItemsFromSource drops presets whose value is 0, so without the forced
+    // injection this month would have no salary row at all — and the OT formula would have no divisor.
+    expect(document.querySelectorAll('[data-salary-type="income"]')).toHaveLength(1);
+    expect(screen.getByText('เงินเดือน')).toBeInTheDocument();
+    expect(screen.getByLabelText('จำนวนเงินเงินเดือน')).toHaveValue('');
+    expect(screen.queryAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(0);
+    expect(screen.queryByDisplayValue('รายได้ใหม่')).not.toBeInTheDocument();
+
+    const deductionLabels = screen.getAllByLabelText('แก้ไขชื่อรายการค่าใช้จ่ายหักออก');
+    expect(deductionLabels).toHaveLength(1);
+    expect(deductionLabels[0]).toHaveValue('รายการหักใหม่');
+  });
+
+  it('5. getByMonth rejection resets to the full preset list and logs via console.error (distinct from test 4)', async () => {
+    salaryAPI.getByMonth.mockRejectedValue(new Error('network down'));
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(<SalaryCalculator selectedMonth="2026-01" />);
+
+    await waitFor(() => expect(consoleErrorSpy).toHaveBeenCalled());
+
+    expect(screen.getAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(2);
+    expect(screen.getAllByLabelText('แก้ไขชื่อรายการค่าใช้จ่ายหักออก')).toHaveLength(3);
+    expect(document.querySelectorAll('[data-salary-type="income"]')).toHaveLength(3);
+    expect(screen.getByText('เงินเดือน')).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue('')).toHaveLength(6);
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('6. switching selectedMonth from a value to falsy resets to the full preset list, not stale data', async () => {
+    salaryAPI.getByMonth.mockResolvedValue({ income: { salary: 5000 }, deduct: {} });
+    const { rerender } = render(<SalaryCalculator selectedMonth="2026-01" />);
+    await screen.findByDisplayValue('5,000.00');
+
+    rerender(<SalaryCalculator selectedMonth={null} />);
+
+    expect(screen.getAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-salary-type="income"]')).toHaveLength(3);
+    expect(screen.getByText('เงินเดือน')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('5,000.00')).not.toBeInTheDocument();
+    expect(screen.getAllByDisplayValue('')).toHaveLength(6);
+  });
+
+  it('7. K16: เงินได้สุทธิ recalculates live from typed input, no blur required', async () => {
+    const user = userEvent.setup();
+    render(<SalaryCalculator />);
+
+    expect(getNetIncomeText()).toBe(formatCurrency(0));
+
+    // The locked salary row is located by its static label text, and its amount input carries the
+    // row-specific aria-label `จำนวนเงินเงินเดือน` (UX spec §3), not the generic รายการรายได้ one.
+    const salaryRow = screen.getByText('เงินเดือน').closest('[data-salary-type="income"]') as HTMLElement;
+    const amountInput = within(salaryRow).getByLabelText('จำนวนเงินเงินเดือน') as HTMLInputElement;
+
+    await user.type(amountInput, '5');
+    expect(getNetIncomeText()).toBe(formatCurrency(5));
+
+    await user.type(amountInput, '0');
+    expect(getNetIncomeText()).toBe(formatCurrency(50));
+  });
+
+  it('8. K14: raw onChange value, comma-formatted only on blur', async () => {
+    const user = userEvent.setup();
+    render(<SalaryCalculator />);
+
+    const salaryRow = screen.getByText('เงินเดือน').closest('[data-salary-type="income"]') as HTMLElement;
+    const amountInput = within(salaryRow).getByLabelText('จำนวนเงินเงินเดือน') as HTMLInputElement;
+
+    await user.type(amountInput, '5000');
+    expect(amountInput.value).toBe('5000'); // raw, uncommaed, while still focused
+
+    await user.tab();
+    expect(amountInput.value).toBe('5,000.00'); // formatted only after blur
+  });
+
+  it('9. K12: add-row default labels are non-empty; the new row is scrolled and focused', async () => {
+    const user = userEvent.setup();
+    render(<SalaryCalculator />);
+
+    // First "+ เพิ่มรายการ" is the income section's (rendered before the deduction section in the DOM).
+    const addButtons = screen.getAllByRole('button', { name: '+ เพิ่มรายการ' });
+
+    await user.click(addButtons[0]);
+    const newIncomeLabelInputs = screen.getAllByDisplayValue('รายได้ใหม่');
+    expect(newIncomeLabelInputs).toHaveLength(1);
+    expect(newIncomeLabelInputs[0]).toHaveFocus();
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+
+    await user.click(addButtons[1]);
+    const newDeductionLabelInputs = screen.getAllByDisplayValue('รายการหักใหม่');
+    expect(newDeductionLabelInputs).toHaveLength(1);
+    expect(newDeductionLabelInputs[0]).toHaveFocus();
+  });
+
+  it('10. K13 (delete-by-id selection, not "React key reconciliation"): deleting the middle item removes it by identity, not position', async () => {
+    salaryAPI.getByMonth.mockResolvedValue({
+      income: {
+        item_a: 10,
+        item_b: 20,
+        item_c: 30,
+        __labels: { item_a: 'A', item_b: 'B', item_c: 'C' },
+      },
+      deduct: {},
+    });
+    const user = userEvent.setup();
+    render(<SalaryCalculator selectedMonth="2026-01" />);
+    await screen.findByDisplayValue('B');
+
+    // Scope the click to B's own row container (found via B's own display value, not a positional
+    // index into a flat list) — this proves handleRemoveItem's id-based .filter() selection logic;
+    // every input here is fully controlled, so it does not independently prove key={item.id} vs.
+    // key={index} on the row wrapper.
+    const rowB = screen.getByDisplayValue('B').closest('[data-salary-type="income"]') as HTMLElement;
+    const deleteButtonB = within(rowB).getByRole('button', { name: /ลบ/ });
+    await user.click(deleteButtonB);
+
+    expect(screen.queryByDisplayValue('B')).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue('A')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('C')).toBeInTheDocument();
+  });
+
+  it('11. removing the only custom income row leaves the locked เงินเดือน row (not a fresh blank one); the deduction section still falls back to one fresh blank row', async () => {
+    salaryAPI.getByMonth.mockResolvedValue({
+      income: { item_x: 100, __labels: { item_x: 'X' } },
+      deduct: { tax: 1500 },
+    });
+    const user = userEvent.setup();
+    render(<SalaryCalculator selectedMonth="2026-01" />);
+    await screen.findByDisplayValue('X');
+
+    await user.click(screen.getByLabelText('ลบรายการรายได้นี้'));
+
+    // The locked salary row is always present, so the income list can never empty out — the
+    // createNewItem fallback is unreachable here (AC-OT-04), and no blank row must be invented.
+    expect(document.querySelectorAll('[data-salary-type="income"]')).toHaveLength(1);
+    expect(screen.getByText('เงินเดือน')).toBeInTheDocument();
+    expect(screen.queryAllByLabelText('แก้ไขชื่อรายการรายได้')).toHaveLength(0);
+    expect(screen.queryByDisplayValue('รายได้ใหม่')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('X')).not.toBeInTheDocument();
+
+    // The fallback itself is unchanged — it is still reachable from the deduction section, which has
+    // no locked row. (Kept here so removing it from handleRemoveItem still fails a test.)
+    await user.click(screen.getByLabelText('ลบรายการค่าใช้จ่ายหักออกนี้'));
+
+    const remainingDeductionLabels = screen.getAllByLabelText('แก้ไขชื่อรายการค่าใช้จ่ายหักออก');
+    expect(remainingDeductionLabels).toHaveLength(1);
+    expect(remainingDeductionLabels[0]).toHaveValue('รายการหักใหม่');
+  });
+
+  it('12. clearAll clears every value input without calling any save API', async () => {
+    salaryAPI.getByMonth.mockResolvedValue({ income: { salary: 30000 }, deduct: { tax: 1500 } });
+    const user = userEvent.setup();
+    render(<SalaryCalculator selectedMonth="2026-01" />);
+    await screen.findByDisplayValue('30,000.00');
+
+    await user.click(screen.getByRole('button', { name: 'ล้างข้อมูล' }));
+
+    expect(screen.getByText('เงินเดือน')).toBeInTheDocument(); // locked row survives clearAll
+    expect(screen.getByLabelText('จำนวนเงินเงินเดือน')).toHaveValue(''); // only its value is blanked
+    expect(screen.getByDisplayValue('หักภาษี')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('30,000.00')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('1,500.00')).not.toBeInTheDocument();
+    expect(getNetIncomeText()).toBe(formatCurrency(0));
+
+    expect(salaryAPI.save).not.toHaveBeenCalled();
+    expect(incomeAPI.save).not.toHaveBeenCalled();
+    expect(taxAPI.updateMonthlyDeductionFields).not.toHaveBeenCalled();
+  });
+
+  it('13. save with no selectedMonth shows an info toast and never calls salaryAPI.save', async () => {
+    const { toasts, cleanup } = captureToasts();
+    const user = userEvent.setup();
+    render(<SalaryCalculator />);
+
+    await user.click(screen.getByRole('button', { name: 'บันทึกเงินเดือน' }));
+
+    expect(toasts.length).toBeGreaterThan(0);
+    const last = toasts[toasts.length - 1];
+    expect(last.message).toBe('กรุณาเลือกเดือนที่ต้องการก่อน');
+    expect(last.type).toBe('info');
+    expect(salaryAPI.save).not.toHaveBeenCalled();
+
+    cleanup();
+  });
+
+  it('14. save success orchestrates salaryAPI.save -> taxAPI.updateMonthlyDeductionFields -> incomeAPI.save -> onSalaryUpdate -> success toast, with exact payloads', async () => {
+    salaryAPI.getByMonth.mockResolvedValue({
+      income: { salary: 30000 },
+      deduct: { tax: 1500, provident_fund: 750 },
+    });
+    salaryAPI.save.mockResolvedValue({ success: true });
+    taxAPI.updateMonthlyDeductionFields.mockResolvedValue(undefined);
+    incomeAPI.save.mockResolvedValue(undefined);
+    const onSalaryUpdate = jest.fn();
+    const { toasts, cleanup } = captureToasts();
+
+    const user = userEvent.setup();
+    render(<SalaryCalculator selectedMonth="2026-01" onSalaryUpdate={onSalaryUpdate} />);
+    await screen.findByDisplayValue('30,000.00');
+
+    await user.click(screen.getByRole('button', { name: 'บันทึกเงินเดือน' }));
+    await waitFor(() => expect(onSalaryUpdate).toHaveBeenCalledTimes(1));
+
+    expect(salaryAPI.save).toHaveBeenCalledWith(
+      '2026-01',
+      { salary: 30000, __labels: { salary: 'เงินเดือน' } },
+      { tax: 1500, provident_fund: 750, __labels: { tax: 'หักภาษี', provident_fund: 'หักกองทุนสำรองเลี้ยงชีพ' } },
+      // A-6: note stays 4th and is still wiped to '' on every save; overtime is the 5th argument.
+      // Swapping the two would land the OT row array in `note` with no error and no visible symptom.
+      '',
+      []
+    );
+    expect(taxAPI.updateMonthlyDeductionFields).toHaveBeenCalledWith('2026', '01', {
+      tax: 1500,
+      provident: 750,
+      income: 30000,
+    });
+    expect(incomeAPI.save).toHaveBeenCalledWith('2026-01', { salary: 27750 }); // 30000 - 1500 - 750
+
+    const last = toasts[toasts.length - 1];
+    expect(last.message).toBe('บันทึกข้อมูลเงินเดือนเรียบร้อย');
+
+    cleanup();
+  });
+
+  it('15. asymmetry #1: taxAPI.updateMonthlyDeductionFields rejecting is silently swallowed — no error surfaced, flow still completes', async () => {
+    salaryAPI.getByMonth.mockResolvedValue({
+      income: { salary: 30000 },
+      deduct: { tax: 1500, provident_fund: 750 },
+    });
+    salaryAPI.save.mockResolvedValue({ success: true });
+    taxAPI.updateMonthlyDeductionFields.mockRejectedValue(new Error('tax sync down'));
+    incomeAPI.save.mockResolvedValue(undefined);
+    const onSalaryUpdate = jest.fn();
+    const { toasts, cleanup } = captureToasts();
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const user = userEvent.setup();
+    render(<SalaryCalculator selectedMonth="2026-01" onSalaryUpdate={onSalaryUpdate} />);
+    await screen.findByDisplayValue('30,000.00');
+
+    await user.click(screen.getByRole('button', { name: 'บันทึกเงินเดือน' }));
+    await waitFor(() => expect(onSalaryUpdate).toHaveBeenCalledTimes(1));
+
+    expect(incomeAPI.save).toHaveBeenCalledWith('2026-01', { salary: 27750 });
+    const last = toasts[toasts.length - 1];
+    expect(last.message).toBe('บันทึกข้อมูลเงินเดือนเรียบร้อย');
+    expect(last.type).toBe('success');
+    expect(consoleErrorSpy).not.toHaveBeenCalled(); // "ไม่ต้องแจ้ง error ให้ user" — genuinely silent
+
+    cleanup();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('16. asymmetry #2: incomeAPI.save rejecting logs via console.error but still does not block success', async () => {
+    salaryAPI.getByMonth.mockResolvedValue({
+      income: { salary: 30000 },
+      deduct: { tax: 1500, provident_fund: 750 },
+    });
+    salaryAPI.save.mockResolvedValue({ success: true });
+    taxAPI.updateMonthlyDeductionFields.mockResolvedValue(undefined);
+    incomeAPI.save.mockRejectedValue(new Error('income sync down'));
+    const onSalaryUpdate = jest.fn();
+    const { toasts, cleanup } = captureToasts();
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const user = userEvent.setup();
+    render(<SalaryCalculator selectedMonth="2026-01" onSalaryUpdate={onSalaryUpdate} />);
+    await screen.findByDisplayValue('30,000.00');
+
+    await user.click(screen.getByRole('button', { name: 'บันทึกเงินเดือน' }));
+    await waitFor(() => expect(onSalaryUpdate).toHaveBeenCalledTimes(1));
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Failed to sync monthly income salary value:',
+      expect.any(Error)
+    );
+    const last = toasts[toasts.length - 1];
+    expect(last.message).toBe('บันทึกข้อมูลเงินเดือนเรียบร้อย');
+
+    cleanup();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('17. save returns { success: false, error } — exact error toast, post-save orchestration entirely skipped', async () => {
+    salaryAPI.getByMonth.mockResolvedValue({ income: { salary: 30000 }, deduct: { tax: 1500 } });
+    salaryAPI.save.mockResolvedValue({ success: false, error: 'เดือนนี้ถูกล็อก' });
+    const onSalaryUpdate = jest.fn();
+    const { toasts, cleanup } = captureToasts();
+
+    const user = userEvent.setup();
+    render(<SalaryCalculator selectedMonth="2026-01" onSalaryUpdate={onSalaryUpdate} />);
+    await screen.findByDisplayValue('30,000.00');
+
+    await user.click(screen.getByRole('button', { name: 'บันทึกเงินเดือน' }));
+    await waitFor(() => expect(toasts.length).toBeGreaterThan(0));
+
+    const last = toasts[toasts.length - 1];
+    expect(last.message).toBe('เกิดข้อผิดพลาด: เดือนนี้ถูกล็อก');
+    expect(last.type).toBe('error');
+    expect(taxAPI.updateMonthlyDeductionFields).not.toHaveBeenCalled();
+    expect(incomeAPI.save).not.toHaveBeenCalled();
+    expect(onSalaryUpdate).not.toHaveBeenCalled();
+
+    cleanup();
+  });
+
+  it('18. salaryAPI.save itself rejecting shows a generic error toast, logs, and re-enables the save button', async () => {
+    salaryAPI.getByMonth.mockResolvedValue({ income: { salary: 30000 }, deduct: {} });
+    salaryAPI.save.mockRejectedValue(new Error('network down'));
+    const { toasts, cleanup } = captureToasts();
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const user = userEvent.setup();
+    render(<SalaryCalculator selectedMonth="2026-01" />);
+    await screen.findByDisplayValue('30,000.00');
+
+    const saveButton = screen.getByRole('button', { name: 'บันทึกเงินเดือน' });
+    await user.click(saveButton);
+    await waitFor(() => expect(toasts.length).toBeGreaterThan(0));
+
+    const last = toasts[toasts.length - 1];
+    expect(last.message).toBe('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+    expect(last.type).toBe('error');
+    expect(consoleErrorSpy).toHaveBeenCalled();
+
+    expect(saveButton).not.toBeDisabled();
+    expect(saveButton).toHaveTextContent('บันทึกเงินเดือน');
+
+    cleanup();
+    consoleErrorSpy.mockRestore();
+  });
+});

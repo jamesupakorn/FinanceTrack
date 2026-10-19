@@ -44,6 +44,17 @@ interface LockStatus {
   failCount: number;
 }
 
+// Mongo document shape for `loginAttempts` — `_id` is the composite `${clientIp}|${userId}` key
+// (a plain string, never an ObjectId), so the collection needs this explicit generic rather than
+// the driver's default `Document` (_id: ObjectId).
+interface LoginAttemptDoc {
+  _id: string;
+  failCount: number;
+  lockedUntil?: Date | null;
+  expiresAt?: Date;
+  firstFailAt?: Date;
+}
+
 // In-memory fallback accumulator shape (DATA_MODE !== 'mongo'). lockedUntil/expiresAt are
 // Date.now()-based timestamps (numbers) — distinct from LockStatus's Date, converted at the
 // memory-path functions' boundary (see checkLockStatusMemory/checkAndRecordFailureMemory).
@@ -103,10 +114,10 @@ export async function checkLockStatus(clientIp: string, userId: string): Promise
 async function checkLockStatusMongo(key: string): Promise<LockStatus> {
   try {
     const db = await getDbPromise();
-    const doc = await db.collection(COLLECTION_NAME).findOne({ _id: key });
+    const doc = await db.collection<LoginAttemptDoc>(COLLECTION_NAME).findOne({ _id: key });
     const now = new Date();
     const locked = !!(doc?.lockedUntil && doc.lockedUntil > now);
-    return { locked, lockedUntil: locked ? doc.lockedUntil : null, failCount: doc?.failCount || 0 };
+    return { locked, lockedUntil: locked ? (doc.lockedUntil ?? null) : null, failCount: doc?.failCount || 0 };
   } catch (err: any) {
     // fail-open: ปัญหาโครงสร้างพื้นฐานของ limiter เอง ไม่ควรทำให้ login ทั้งระบบใช้งานไม่ได้
     console.error('[loginRateLimit] Mongo lock-status check failed (failing open):', err?.message || err);
@@ -121,7 +132,7 @@ async function checkAndRecordFailureMongo(key: string): Promise<LockStatus> {
     const expiresAt = new Date(now.getTime() + WINDOW_MS);
 
     // atomic increment — single findOneAndUpdate เลี่ยง race ระหว่าง 2 คำขอที่ fail พร้อมกันบน key เดียวกัน
-    const result = await db.collection(COLLECTION_NAME).findOneAndUpdate(
+    const result = await db.collection<LoginAttemptDoc>(COLLECTION_NAME).findOneAndUpdate(
       { _id: key },
       {
         $inc: { failCount: 1 },
@@ -131,12 +142,13 @@ async function checkAndRecordFailureMongo(key: string): Promise<LockStatus> {
       { upsert: true, returnDocument: 'after' }
     );
 
-    const doc = result?.value || result; // driver version differences: some return the doc directly
+    // driver version differences: some return { value: doc }, some return the doc directly
+    const doc = ((result as unknown as { value?: LoginAttemptDoc })?.value || result) as LoginAttemptDoc;
     let lockedUntil = doc?.lockedUntil || null;
 
     if (doc.failCount >= FAILURE_THRESHOLD && !lockedUntil) {
       lockedUntil = expiresAt;
-      await db.collection(COLLECTION_NAME).updateOne({ _id: key }, { $set: { lockedUntil } });
+      await db.collection<LoginAttemptDoc>(COLLECTION_NAME).updateOne({ _id: key }, { $set: { lockedUntil } });
     }
 
     return {
@@ -153,7 +165,7 @@ async function checkAndRecordFailureMongo(key: string): Promise<LockStatus> {
 async function resetCounterMongo(key: string): Promise<void> {
   try {
     const db = await getDbPromise();
-    await db.collection(COLLECTION_NAME).deleteOne({ _id: key });
+    await db.collection<LoginAttemptDoc>(COLLECTION_NAME).deleteOne({ _id: key });
   } catch (err: any) {
     // non-fatal: ถ้าล้างไม่สำเร็จ counter เก่าจะยังอยู่ (อาจทำให้ threshold ถึงเร็วกว่าที่ควรใน edge case
     // นี้) แต่ต้องไม่ block การ login ที่สำเร็จแล้ว

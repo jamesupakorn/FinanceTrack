@@ -39,7 +39,7 @@ import { isBankIssuerKey, type BankIssuerKey } from './creditCardBankCatalog';
 type PaymentAction = 'full' | 'minimum' | null;
 
 /** บัตร — เฉพาะฟิลด์ที่ฟังก์ชันในไฟล์นี้อ่านจริง */
-type CardLike = {
+export type CardLike = {
   id?: string;
   annualRate?: number | string;
   minPaymentPercent?: number | string;
@@ -49,7 +49,7 @@ type CardLike = {
 };
 
 /** cycle ยอดหมุนเวียนที่เก็บจริง (input ของ buildRevolvingCycles) */
-type StoredRevolvingCycle = {
+export type StoredRevolvingCycle = {
   id?: string;
   cardId?: string;
   month?: string;
@@ -59,6 +59,8 @@ type StoredRevolvingCycle = {
   paymentAction?: string | null;
   paidAt?: string | null;
   paidSource?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 /** cycle ที่ derive แล้ว — ผลลัพธ์ของ buildRevolvingCycles ใช้ต่อโดย summariseRevolving/resolveCardNextDueDate/summariseCard */
@@ -113,10 +115,12 @@ type PlanScheduleRowLike = {
   payment?: number | string;
   principal?: number | string;
   paid?: boolean;
+  paidAt?: string | null;
+  paidSource?: string | null;
 };
 
 /** แผนผ่อน — เฉพาะฟิลด์ที่ section 6 อ่านจริง */
-type PlanLike = {
+export type PlanLike = {
   id?: string;
   cardId?: string;
   status?: string;
