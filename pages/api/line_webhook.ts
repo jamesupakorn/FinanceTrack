@@ -1,6 +1,9 @@
 import crypto from 'crypto';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import { getMongoCollection, isJsonMode } from '../../lib/dataSource';
-import { updateUserLineId } from '../../src/backend/data/userUtils.js';
+import { updateUserLineId } from '../../src/backend/data/userUtils';
+import { withAudit } from '../../lib/auditedMutation';
 
 export const config = {
   api: {
@@ -8,37 +11,43 @@ export const config = {
   }
 };
 
-function getRawBody(req) {
+interface LineWebhookEvent {
+  type?: unknown;
+  message?: { type?: unknown; text?: unknown };
+  source?: { userId?: unknown };
+}
+
+function getRawBody(req: NextApiRequest): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
     req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', (error) => reject(error));
+    req.on('error', (error: Error) => reject(error));
   });
 }
 
-function verifySignature(rawBody, signature, secret) {
+function verifySignature(rawBody: Buffer, signature: unknown, secret: string): boolean {
   if (!signature || !secret) return false;
   const expectedSignature = crypto.createHmac('sha256', secret).update(rawBody).digest();
   const providedSignature = Buffer.from(String(signature), 'base64');
   return safeEqual(expectedSignature, providedSignature);
 }
 
-function safeEqual(a, b) {
+function safeEqual(a: Buffer, b: Buffer): boolean {
   if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b) || a.length !== b.length) {
     return false;
   }
   return crypto.timingSafeEqual(a, b);
 }
 
-function parseLinkCommand(text = '') {
+function parseLinkCommand(text: unknown = ''): string | null {
   const normalized = String(text || '').trim();
   if (!normalized) return null;
   const match = normalized.match(/^(?:link|bind|connect)\s+(u\d+)$/i);
   return match ? match[1].toLowerCase() : null;
 }
 
-async function updateUserLineIdMongo(userId, lineUserId) {
+async function updateUserLineIdMongo(userId: string, lineUserId: string) {
   const collection = await getMongoCollection('users');
   const now = new Date().toISOString();
   const result = await collection.findOneAndUpdate(
@@ -52,12 +61,12 @@ async function updateUserLineIdMongo(userId, lineUserId) {
   return result?.value || null;
 }
 
-export default async function handler(req, res) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  let rawBody;
+  let rawBody: Buffer;
   try {
     rawBody = await getRawBody(req);
   } catch (error) {
@@ -75,21 +84,23 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Invalid signature' });
   }
 
-  let payload = {};
+  let payload: { events?: unknown };
   try {
     payload = JSON.parse(rawBody.toString('utf-8'));
   } catch (error) {
     return res.status(400).json({ error: 'JSON ไม่ถูกต้อง' });
   }
+  req.body = payload;
+  if (!validateApiRequest(req, res, 'line_webhook')) return;
 
-  const events = Array.isArray(payload.events) ? payload.events : [];
+  const events: LineWebhookEvent[] = Array.isArray(payload.events) ? payload.events as LineWebhookEvent[] : [];
   const linked = [];
   for (const event of events) {
     if (event?.type !== 'message') continue;
     if (event?.message?.type !== 'text') continue;
     const lineUserId = event?.source?.userId;
     const targetUserId = parseLinkCommand(event?.message?.text);
-    if (!lineUserId || !targetUserId) continue;
+    if (typeof lineUserId !== 'string' || !targetUserId) continue;
     let updated = null;
     if (isJsonMode()) {
       updated = updateUserLineId(targetUserId, lineUserId);
@@ -111,3 +122,5 @@ export default async function handler(req, res) {
 
   return res.status(200).json({ ok: true });
 }
+
+export default withAudit(handler, { source: 'line_webhook' });

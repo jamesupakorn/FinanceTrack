@@ -29,6 +29,7 @@ import {
   PLAN_STATUS
 } from '../creditCardUtils';
 import { getUserCreditData, updateUserCreditData } from './creditCardStore';
+import type { PlanLike, StoredRevolvingCycle } from '../creditCardRevolving';
 
 export { INSTALLMENT_KEY_RE, INSTALLMENT_KEY_PREFIX, REVOLVING_KEY_PREFIX };
 
@@ -306,8 +307,8 @@ function generateCycleId(): string {
 function applyInstallmentUpdates(
   data: { plans: unknown[] },
   updates: InstallmentUpdate[]
-): { plans: unknown[]; applied: number } {
-  if (!updates.length) return { plans: data.plans, applied: 0 };
+): { plans: PlanLike[]; applied: number } {
+  if (!updates.length) return { plans: data.plans as PlanLike[], applied: 0 };
 
   // Cast immediately after arriving from an `unknown[]`-typed store boundary (§Design A.4).
   const planList = data.plans as SyncPlan[];
@@ -356,9 +357,9 @@ function applyRevolvingUpdates(
   data: { cards: unknown[]; cycles: unknown[] },
   updates: RevolvingUpdate[],
   month: string
-): { cycles: unknown[]; applied: number } {
+): { cycles: StoredRevolvingCycle[]; applied: number } {
   if (!updates.length || typeof month !== 'string' || !/^\d{4}-\d{2}$/.test(month)) {
-    return { cycles: data.cycles, applied: 0 };
+    return { cycles: data.cycles as StoredRevolvingCycle[], applied: 0 };
   }
 
   // Cast immediately after arriving from an `unknown[]`-typed store boundary (§Design A.4).
@@ -468,6 +469,123 @@ export async function applyCreditCardPaidFromExpensePayload(
   });
 
   return appliedCount;
+}
+
+interface CreditCardPaidKeyResult {
+  status: 'ok' | 'not_found' | 'cancelled' | 'limit_reached';
+  paid: boolean;
+}
+
+/**
+ * ตั้งค่า paid ของแถวบัตรเครดิตเดียว (cci_/ccr_) แบบ strict ทีละแถว — ใช้โดย PATCH /api/monthly_expense
+ * (ADR-028) เพื่อให้รู้ผลลัพธ์ที่แม่นยำกว่า applyCreditCardPaidFromExpensePayload (ซึ่งคืนแค่จำนวนรวม):
+ *   - 'not_found'     ไม่พบแผนผ่อน/แถว หรือบัตรไม่ใช่ของ userId นี้
+ *   - 'cancelled'      แผนผ่อนถูกยกเลิกแล้ว ห้ามแก้สถานะการชำระอีก (BR-CC-009)
+ *   - 'limit_reached'  ยอดหมุนเวียนยังไม่มี cycle ของเดือนนี้ และสร้างใหม่ไม่ได้ (ครบ MAX_REVOLVING_CYCLES_PER_CARD)
+ *   - 'ok'             เขียนสำเร็จ (หรือ idempotent no-op ที่ state ตรงกับที่ขอแล้ว) — `paid` คือสถานะสุดท้ายจริง
+ */
+export async function applyCreditCardPaidForKey(
+  userId: unknown,
+  key: string,
+  paid: boolean,
+  month: string
+): Promise<CreditCardPaidKeyResult> {
+  const installment = parseInstallmentRowKey(key);
+  if (installment) {
+    let result: CreditCardPaidKeyResult = { status: 'not_found', paid };
+    await updateUserCreditData(userId, (data) => {
+      const planList = data.plans as SyncPlan[];
+      const planIndex = planList.findIndex(plan => plan?.id === installment.planId);
+      if (planIndex === -1) {
+        result = { status: 'not_found', paid };
+        return data;
+      }
+      const plan = planList[planIndex];
+      if (plan.status === PLAN_STATUS.CANCELLED) {
+        result = { status: 'cancelled', paid: false };
+        return data;
+      }
+      const schedule: SyncScheduleRow[] = Array.isArray(plan.schedule) ? [...plan.schedule] : [];
+      const rowIndex = schedule.findIndex(row => row?.no === installment.installmentNo && row?.dueMonth === month);
+      if (rowIndex === -1) {
+        result = { status: 'not_found', paid };
+        return data;
+      }
+      if (schedule[rowIndex].paid === paid) {
+        result = { status: 'ok', paid };
+        return data;
+      }
+      schedule[rowIndex] = {
+        ...schedule[rowIndex],
+        paid,
+        paidAt: paid ? new Date().toISOString() : null,
+        paidSource: paid ? 'expense_table' : null
+      };
+      const nextPlan = { ...plan, schedule, updatedAt: new Date().toISOString() };
+      const finalPlan = { ...nextPlan, status: resolvePlanStatus(nextPlan) };
+      const plans = [...planList];
+      plans[planIndex] = finalPlan;
+      result = { status: 'ok', paid };
+      return { ...data, plans };
+    });
+    return result;
+  }
+
+  const revolving = parseRevolvingRowKey(key);
+  if (revolving) {
+    let result: CreditCardPaidKeyResult = { status: 'not_found', paid };
+    await updateUserCreditData(userId, (data) => {
+      const cardList = data.cards as SyncCard[];
+      if (!cardList.some(card => card?.id === revolving.cardId)) {
+        result = { status: 'not_found', paid };
+        return data;
+      }
+      const cycleList = data.cycles as SyncCycle[];
+      const cycles = [...cycleList];
+      const index = cycles.findIndex(cycle => cycle?.cardId === revolving.cardId && cycle?.month === month);
+      const now = new Date().toISOString();
+
+      if (index === -1) {
+        if (!paid) {
+          result = { status: 'ok', paid: false };
+          return data;
+        }
+        const existingForCard = cycles.filter(cycle => cycle?.cardId === revolving.cardId).length;
+        if (existingForCard >= MAX_REVOLVING_CYCLES_PER_CARD) {
+          result = { status: 'limit_reached', paid };
+          return data;
+        }
+        cycles.push({
+          id: generateCycleId(),
+          cardId: revolving.cardId,
+          month,
+          newSpend: 0,
+          paymentAction: 'full',
+          paidAt: now,
+          paidSource: 'expense_table',
+          createdAt: now,
+          updatedAt: now
+        });
+        result = { status: 'ok', paid: true };
+        return { ...data, cycles };
+      }
+
+      const current = cycles[index];
+      const currentlyPaid = current.paymentAction !== null && current.paymentAction !== undefined;
+      if (paid === currentlyPaid) {
+        result = { status: 'ok', paid: currentlyPaid };
+        return data;
+      }
+      cycles[index] = paid
+        ? { ...current, paymentAction: 'full', paidAt: now, paidSource: 'expense_table', updatedAt: now }
+        : { ...current, paymentAction: null, paidAt: null, paidSource: null, updatedAt: now };
+      result = { status: 'ok', paid };
+      return { ...data, cycles };
+    });
+    return result;
+  }
+
+  return { status: 'not_found', paid };
 }
 
 /**

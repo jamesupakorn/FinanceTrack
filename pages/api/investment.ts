@@ -1,5 +1,8 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import type { Collection, Document } from 'mongodb';
 import { mapInvestmentDoc } from '../../src/shared/utils/backend/apiUtils';
 import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import {
   isJsonMode,
   withGeneratedId,
@@ -12,19 +15,23 @@ import {
 import {
   getUserData,
   updateUserData,
-} from '../../src/backend/data/userUtils.js';
+} from '../../src/backend/data/userUtils';
+import { withAudit } from '../../lib/auditedMutation';
 
 const COLLECTION_NAME = 'investment';
 const JSON_FILENAME = 'investment.json';
 
-function handleJsonInvestmentGet(req, res, userId) {
-  const bucket = getUserData(JSON_FILENAME, userId);
-  const { month } = req.query;
+type InvestmentDoc = { month?: string; investments?: unknown[]; [key: string]: unknown };
+type InvestmentBucket = Record<string, InvestmentDoc>;
+
+function handleJsonInvestmentGet(req: NextApiRequest, res: NextApiResponse, userId: string) {
+  const bucket = getUserData(JSON_FILENAME, userId) as InvestmentBucket;
+  const month = Array.isArray(req.query.month) ? req.query.month[0] : req.query.month;
   if (month) {
     const doc = bucket[month];
-    return res.status(200).json(mapInvestmentDoc(doc));
+    return res.status(200).json(mapInvestmentDoc(doc ? { investments: doc.investments as unknown[] } : null));
   }
-  const data = {};
+  const data: Record<string, unknown[]> = {};
   Object.entries(bucket).forEach(([monthKey, doc]) => {
     if (!doc || !doc.month) return;
     data[monthKey] = mapInvestmentDoc(doc);
@@ -32,13 +39,14 @@ function handleJsonInvestmentGet(req, res, userId) {
   return res.status(200).json(data);
 }
 
-function handleJsonInvestmentPost(req, res, userId) {
-  const { month, investments } = req.body;
-  if (!month || !Array.isArray(investments)) {
+function handleJsonInvestmentPost(req: NextApiRequest, res: NextApiResponse, userId: string) {
+  const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
+  const { month, investments } = body;
+  if (typeof month !== 'string' || !month || !Array.isArray(investments)) {
     return res.status(400).json({ error: 'month and investments required' });
   }
-  updateUserData(JSON_FILENAME, userId, (bucket) => {
-    const nextBucket = { ...bucket };
+  updateUserData(JSON_FILENAME, userId, (bucket: InvestmentBucket) => {
+    const nextBucket: InvestmentBucket = { ...bucket };
     const existing = nextBucket[month] || {};
     const payload = withGeneratedId({ ...existing, month, investments });
     nextBucket[month] = payload;
@@ -49,9 +57,10 @@ function handleJsonInvestmentPost(req, res, userId) {
   return res.status(200).json({ success: true });
 }
 
-export default async function handler(req, res) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   const userId = assertUserId(req, res);
   if (!userId) return;
+  if (!validateApiRequest(req, res, 'investment')) return;
 
   if (isJsonMode()) {
     if (req.method === 'GET') {
@@ -63,27 +72,28 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const collection = await getMongoCollection(COLLECTION_NAME);
+  const collection: Collection<Document> = await getMongoCollection(COLLECTION_NAME);
   const userFilter = { userId };
 
   if (req.method === 'GET') {
-    const { month } = req.query;
+    const month = Array.isArray(req.query.month) ? req.query.month[0] : req.query.month;
     if (month) {
       const doc = await collection.findOne({ month, ...userFilter });
-      return res.status(200).json(mapInvestmentDoc(doc));
+      return res.status(200).json(mapInvestmentDoc(doc ? { investments: doc.investments as unknown[] } : null));
     } else {
       // ดึงข้อมูลทุกเดือน
       const allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
-      const data = {};
+      const data: Record<string, unknown[]> = {};
       allDocs.forEach(doc => {
-        data[doc.month] = mapInvestmentDoc(doc);
+        if (typeof doc.month === 'string') data[doc.month] = mapInvestmentDoc({ investments: doc.investments as unknown[] });
       });
       return res.status(200).json(data);
     }
   }
   if (req.method === 'POST') {
-    const { month, investments } = req.body;
-    if (!month || !Array.isArray(investments)) {
+    const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
+    const { month, investments } = body;
+    if (typeof month !== 'string' || !month || !Array.isArray(investments)) {
       return res.status(400).json({ error: 'month and investments required' });
     }
     await collection.updateOne(
@@ -97,3 +107,5 @@ export default async function handler(req, res) {
   }
   res.status(405).json({ error: 'Method not allowed' });
 }
+
+export default withAudit(handler, { source: 'investment' });

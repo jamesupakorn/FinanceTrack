@@ -1,18 +1,21 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
 import { buildSessionCookie, buildCsrfCookie, createSessionId } from '../../../src/shared/utils/backend/sessionCookie';
 import { getUserById, checkUserPassword } from '../../../lib/userStore';
 import { getClientIp } from '../../../src/shared/utils/backend/clientIp';
 import { checkLockStatus, checkAndRecordFailure, resetCounter } from '../../../src/shared/utils/backend/loginRateLimit';
+import { validateApiRequest } from '../../../src/shared/utils/backend/apiRequestValidation';
 
 /**
  * endpoint ล็อกอิน — ตั้งใจเปิดสาธารณะโดยนิยาม: ยังไม่มี session ตอนที่ถูกเรียก
  * (TD-C02 follow-up: static Bearer token ที่เคยกั้นไว้ถูกถอดออก มันเป็นแค่ speed bump กัน bot
  *  และถูก bake ลง client bundle อยู่แล้ว ด่านจริงคือรหัสผ่านที่ checkUserPassword ตรวจ)
  */
-export default async function handler(req, res) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'Method not allowed' });
   }
+  if (!validateApiRequest(req, res, 'auth/profile-login')) return;
 
   const { userId, password } = req.body || {};
   if (!userId || !password) {
@@ -39,7 +42,7 @@ export default async function handler(req, res) {
 
       const { locked, lockedUntil } = await checkLockStatus(clientIp, userId);
       if (locked) {
-        const retryAfterSeconds = Math.max(1, Math.ceil((lockedUntil.getTime() - Date.now()) / 1000));
+        const retryAfterSeconds = Math.max(1, Math.ceil(((lockedUntil?.getTime() ?? Date.now()) - Date.now()) / 1000));
         res.setHeader('Retry-After', String(retryAfterSeconds));
         // ข้อความไม่บอกว่า userId มีจริงหรือไม่ และไม่บอกจำนวนครั้งที่เหลือ — เลี่ยงเปิดช่อง
         // enumeration/timing side-channel ใหม่ซ้อนทับกับสิ่งที่งานนี้กำลังปิดอยู่

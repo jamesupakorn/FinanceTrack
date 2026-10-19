@@ -14,8 +14,10 @@
  */
 
 import crypto from 'crypto';
+import type { NextApiRequest, NextApiResponse } from 'next';
 import { assertUserId } from '../../../src/shared/utils/backend/userRequest';
-import { getUserCreditData, updateUserCreditData } from '../../../src/shared/utils/backend/creditCardStore';
+import { validateApiRequest } from '../../../src/shared/utils/backend/apiRequestValidation';
+import { getUserCreditData, updateUserCreditData, type CreditData, type CreditPlan } from '../../../src/shared/utils/backend/creditCardStore';
 import {
   validatePlanInput,
   buildSchedule,
@@ -25,6 +27,7 @@ import {
   MAX_ACTIVE_PLANS_PER_USER,
   PLAN_STATUS
 } from '../../../src/shared/utils/creditCardUtils';
+import { withAudit } from '../../../lib/auditedMutation';
 
 const FINANCIAL_PATCH_FIELDS = [
   'totalPrice',
@@ -41,18 +44,18 @@ function generatePlanId() {
   return `ip_${crypto.randomBytes(6).toString('hex')}`;
 }
 
-function countPaidInstallments(plan) {
+function countPaidInstallments(plan: CreditPlan) {
   const schedule = Array.isArray(plan?.schedule) ? plan.schedule : [];
   return schedule.filter(row => row?.paid === true).length;
 }
 
-function countActivePlans(plans) {
+function countActivePlans(plans: CreditData['plans']) {
   return plans.filter(plan => plan?.status !== PLAN_STATUS.COMPLETED).length;
 }
 
 /** สร้างเอกสารแผนจากค่าที่ผ่าน validation แล้ว — ตารางผ่อนคำนวณที่ server เท่านั้น */
-function composePlan(base, value) {
-  const computed = buildSchedule(value);
+function composePlan(base: CreditPlan | null, value: ReturnType<typeof validatePlanInput>['value']): CreditPlan {
+  const computed = buildSchedule({ ...value, calcMethod: value.calcMethod ?? undefined });
   const now = new Date().toISOString();
   return {
     id: base?.id || generatePlanId(),
@@ -79,9 +82,9 @@ function composePlan(base, value) {
 }
 
 /** metadata ที่ ExpenseTable ใช้ตกแต่งแถว cci_ ของเดือนนั้น */
-function buildMonthInstallmentItems(data, month) {
+function buildMonthInstallmentItems(data: CreditData, month: string) {
   const cardById = new Map(data.cards.map(card => [card?.id, card]));
-  const items = [];
+  const items: Array<Record<string, unknown>> = [];
   data.plans.forEach(plan => {
     const card = cardById.get(plan?.cardId);
     if (!card) return;
@@ -90,7 +93,7 @@ function buildMonthInstallmentItems(data, month) {
       // แผนที่ยกเลิกแล้วเหลือเฉพาะงวดที่ชำระไปแล้ว (BR-CC-010)
       if (plan.status === PLAN_STATUS.CANCELLED && row.paid !== true) return;
       items.push({
-        key: buildInstallmentRowKey(plan.id, row.no),
+        key: buildInstallmentRowKey(plan.id ?? '', row.no as number),
         planId: plan.id,
         cardId: card.id,
         cardName: card.name,
@@ -106,7 +109,7 @@ function buildMonthInstallmentItems(data, month) {
   return items;
 }
 
-async function handleGet(req, res, userId) {
+async function handleGet(req: NextApiRequest, res: NextApiResponse, userId: string) {
   const data = await getUserCreditData(userId);
   const cardId = typeof req.query.cardId === 'string' ? req.query.cardId.trim() : '';
   const month = typeof req.query.month === 'string' ? req.query.month.trim() : '';
@@ -134,7 +137,7 @@ async function handleGet(req, res, userId) {
           }
         };
       })
-      .filter(Boolean);
+      .filter((plan): plan is NonNullable<typeof plan> => plan !== null);
 
     // shape เดียวกับ creditCardAPI.getMonthInstallments() ที่ ExpenseTable ใช้
     return res.status(200).json({
@@ -146,7 +149,7 @@ async function handleGet(req, res, userId) {
   return res.status(200).json({ plans: summarised });
 }
 
-async function handlePost(req, res, userId) {
+async function handlePost(req: NextApiRequest, res: NextApiResponse, userId: string) {
   const input = req.body?.plan;
   if (!input || typeof input !== 'object') {
     return res.status(400).json({ error: 'plan payload required' });
@@ -158,8 +161,8 @@ async function handlePost(req, res, userId) {
     return res.status(400).json({ error: 'ข้อมูลแผนผ่อนไม่ถูกต้อง', errors });
   }
 
-  let savedPlan = null;
-  let failure = null;
+  let savedPlan: CreditPlan | null = null;
+  let failure: { status: number; body: Record<string, unknown> } | null = null;
 
   await updateUserCreditData(userId, (data) => {
     const card = data.cards.find(item => item?.id === value.cardId);
@@ -179,11 +182,13 @@ async function handlePost(req, res, userId) {
     return { ...data, plans: [...data.plans, savedPlan] };
   });
 
-  if (failure) return res.status(failure.status).json(failure.body);
+  const failureResponse = failure as { status: number; body: Record<string, unknown> } | null;
+  if (failureResponse) return res.status(failureResponse.status).json(failureResponse.body);
+  if (!savedPlan) throw new Error('Plan update completed without a saved plan');
   return res.status(200).json({ success: true, plan: summarisePlan(savedPlan) });
 }
 
-async function handlePut(req, res, userId) {
+async function handlePut(req: NextApiRequest, res: NextApiResponse, userId: string) {
   const planId = typeof req.body?.planId === 'string' ? req.body.planId.trim() : '';
   const patch = req.body?.patch;
   if (!planId || !patch || typeof patch !== 'object') {
@@ -191,8 +196,8 @@ async function handlePut(req, res, userId) {
   }
 
   const touchesFinancials = FINANCIAL_PATCH_FIELDS.some(field => patch[field] !== undefined);
-  let savedPlan = null;
-  let failure = null;
+  let savedPlan: CreditPlan | null = null;
+  let failure: { status: number; body: Record<string, unknown> } | null = null;
 
   await updateUserCreditData(userId, (data) => {
     const index = data.plans.findIndex(plan => plan?.id === planId);
@@ -243,11 +248,13 @@ async function handlePut(req, res, userId) {
     return { ...data, plans };
   });
 
-  if (failure) return res.status(failure.status).json(failure.body);
+  const failureResponse = failure as { status: number; body: Record<string, unknown> } | null;
+  if (failureResponse) return res.status(failureResponse.status).json(failureResponse.body);
+  if (!savedPlan) throw new Error('Plan update completed without a saved plan');
   return res.status(200).json({ success: true, plan: summarisePlan(savedPlan) });
 }
 
-async function handlePatch(req, res, userId) {
+async function handlePatch(req: NextApiRequest, res: NextApiResponse, userId: string) {
   const planId = typeof req.body?.planId === 'string' ? req.body.planId.trim() : '';
   const installmentNo = Number(req.body?.installmentNo);
   const paid = req.body?.paid === true || req.body?.paid === 'true';
@@ -255,8 +262,8 @@ async function handlePatch(req, res, userId) {
     return res.status(400).json({ error: 'planId and installmentNo required' });
   }
 
-  let savedPlan = null;
-  let failure = null;
+  let savedPlan: CreditPlan | null = null;
+  let failure: { status: number; body: Record<string, unknown> } | null = null;
 
   await updateUserCreditData(userId, (data) => {
     const index = data.plans.findIndex(plan => plan?.id === planId);
@@ -291,18 +298,20 @@ async function handlePatch(req, res, userId) {
     return { ...data, plans };
   });
 
-  if (failure) return res.status(failure.status).json(failure.body);
+  const failureResponse = failure as { status: number; body: Record<string, unknown> } | null;
+  if (failureResponse) return res.status(failureResponse.status).json(failureResponse.body);
+  if (!savedPlan) throw new Error('Plan update completed without a saved plan');
   return res.status(200).json({ success: true, plan: summarisePlan(savedPlan) });
 }
 
-async function handleDelete(req, res, userId) {
+async function handleDelete(req: NextApiRequest, res: NextApiResponse, userId: string) {
   const planId = typeof req.body?.planId === 'string' ? req.body.planId.trim() : '';
   const mode = req.body?.mode === 'delete' ? 'delete' : 'cancel';
   if (!planId) {
     return res.status(400).json({ error: 'planId required' });
   }
 
-  let failure = null;
+  let failure: { status: number; body: Record<string, unknown> } | null = null;
 
   await updateUserCreditData(userId, (data) => {
     const index = data.plans.findIndex(plan => plan?.id === planId);
@@ -334,13 +343,15 @@ async function handleDelete(req, res, userId) {
     return { ...data, plans };
   });
 
-  if (failure) return res.status(failure.status).json(failure.body);
+  const failureResponse = failure as { status: number; body: Record<string, unknown> } | null;
+  if (failureResponse) return res.status(failureResponse.status).json(failureResponse.body);
   return res.status(200).json({ success: true });
 }
 
-export default async function handler(req, res) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   const userId = assertUserId(req, res);
   if (!userId) return;
+  if (!validateApiRequest(req, res, 'credit-cards/plans')) return;
 
   try {
     if (req.method === 'GET') return await handleGet(req, res, userId);
@@ -356,3 +367,5 @@ export default async function handler(req, res) {
   res.setHeader('Allow', ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
   return res.status(405).json({ error: 'Method not allowed' });
 }
+
+export default withAudit(handler, { source: 'credit_card_plans' });

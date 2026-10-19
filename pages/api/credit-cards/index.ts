@@ -11,8 +11,10 @@
  */
 
 import crypto from 'crypto';
+import type { NextApiRequest, NextApiResponse } from 'next';
 import { assertUserId } from '../../../src/shared/utils/backend/userRequest';
-import { getUserCreditData, updateUserCreditData } from '../../../src/shared/utils/backend/creditCardStore';
+import { validateApiRequest } from '../../../src/shared/utils/backend/apiRequestValidation';
+import { getUserCreditData, updateUserCreditData, type CreditData, type CreditCard } from '../../../src/shared/utils/backend/creditCardStore';
 import {
   validateCardInput,
   summariseCard,
@@ -20,13 +22,14 @@ import {
   MAX_CARDS_PER_USER,
   PLAN_STATUS
 } from '../../../src/shared/utils/creditCardUtils';
+import { withAudit } from '../../../lib/auditedMutation';
 
 function generateCardId() {
   return `cc_${crypto.randomBytes(6).toString('hex')}`;
 }
 
 /** แผนที่ยังผ่อนไม่จบและยังมีงวดค้าง — ใช้บล็อกการลบบัตร (BR-CC-010) */
-function countBlockingPlans(plans, cardId) {
+function countBlockingPlans(plans: CreditData['plans'], cardId: string) {
   return plans.filter(plan => {
     if (plan?.cardId !== cardId) return false;
     if (plan.status !== PLAN_STATUS.ONGOING) return false;
@@ -35,14 +38,14 @@ function countBlockingPlans(plans, cardId) {
   }).length;
 }
 
-async function handleGet(req, res, userId) {
+async function handleGet(req: NextApiRequest, res: NextApiResponse, userId: string) {
   const data = await getUserCreditData(userId);
   // ยอดหมุนเวียนถูก derive จาก data.cycles ทุกครั้งที่ GET ไม่มีการเก็บตัวเลขการเงินไว้ (BR-CC-013)
   const cards = data.cards.map(card => summariseCard(card, data.plans, data.cycles));
   return res.status(200).json({ cards, totals: summariseTotals(cards) });
 }
 
-async function handlePost(req, res, userId) {
+async function handlePost(req: NextApiRequest, res: NextApiResponse, userId: string) {
   const input = req.body?.card;
   if (!input || typeof input !== 'object') {
     return res.status(400).json({ error: 'card payload required' });
@@ -55,8 +58,8 @@ async function handlePost(req, res, userId) {
 
   const cardId = typeof input.id === 'string' && input.id.trim() ? input.id.trim() : null;
   const now = new Date().toISOString();
-  let savedCard = null;
-  let failure = null;
+  let savedCard: CreditCard | null = null;
+  let failure: { status: number; body: Record<string, unknown> } | null = null;
 
   const data = await updateUserCreditData(userId, (data) => {
     if (cardId) {
@@ -83,18 +86,20 @@ async function handlePost(req, res, userId) {
     return { ...data, cards: [...data.cards, savedCard] };
   });
 
-  if (failure) return res.status(failure.status).json(failure.body);
+  const failureResponse = failure as { status: number; body: Record<string, unknown> } | null;
+  if (failureResponse) return res.status(failureResponse.status).json(failureResponse.body);
+  if (!savedCard) throw new Error('Card update completed without a saved card');
 
   return res.status(200).json({ success: true, card: summariseCard(savedCard, data.plans, data.cycles) });
 }
 
-async function handleDelete(req, res, userId) {
+async function handleDelete(req: NextApiRequest, res: NextApiResponse, userId: string) {
   const cardId = typeof req.body?.cardId === 'string' ? req.body.cardId.trim() : '';
   if (!cardId) {
     return res.status(400).json({ error: 'cardId required' });
   }
 
-  let failure = null;
+  let failure: { status: number; body: Record<string, unknown> } | null = null;
 
   await updateUserCreditData(userId, (data) => {
     const card = data.cards.find(item => item?.id === cardId);
@@ -131,13 +136,15 @@ async function handleDelete(req, res, userId) {
     };
   });
 
-  if (failure) return res.status(failure.status).json(failure.body);
+  const failureResponse = failure as { status: number; body: Record<string, unknown> } | null;
+  if (failureResponse) return res.status(failureResponse.status).json(failureResponse.body);
   return res.status(200).json({ success: true });
 }
 
-export default async function handler(req, res) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   const userId = assertUserId(req, res);
   if (!userId) return;
+  if (!validateApiRequest(req, res, 'credit-cards')) return;
 
   try {
     if (req.method === 'GET') return await handleGet(req, res, userId);
@@ -151,3 +158,5 @@ export default async function handler(req, res) {
   res.setHeader('Allow', ['GET', 'POST', 'DELETE']);
   return res.status(405).json({ error: 'Method not allowed' });
 }
+
+export default withAudit(handler, { source: 'credit_cards' });

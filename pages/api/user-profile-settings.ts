@@ -1,6 +1,8 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
 // TD-L05: canonical renamed location of the old /api/user-bank-accounts endpoint —
 // serves both bankAccounts and budgetThresholds, so the old name was misleading.
 import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import {
   getUserBankAccounts,
   updateUserBankAccounts,
@@ -13,6 +15,7 @@ import {
   BUDGET_THRESHOLD_KEYS,
   normaliseBudgetThresholds
 } from '../../src/shared/utils/frontend/monthlySummary';
+import { withAudit } from '../../lib/auditedMutation';
 
 /**
  * ตรวจสอบค่า budgetThresholds ดิบจาก request body ก่อน normalise/clamp ใด ๆ (M-2 — validate ก่อน
@@ -21,15 +24,22 @@ import {
  * อย่างชัดเจน เพราะ Number() coerce ค่าพวกนี้ได้โดยไม่ error (Number(true)===1, Number([])===0) (M-6)
  * @returns {string|null} ข้อความ error หรือ null ถ้าผ่านทั้ง 5 คีย์
  */
-function validateBudgetThresholdsRaw(payload) {
+type BudgetThresholds = ReturnType<typeof normaliseBudgetThresholds>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function validateBudgetThresholdsRaw(payload: unknown) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return 'budgetThresholds must be an object';
   }
+  const values = payload as Record<string, unknown>;
   for (const key of BUDGET_THRESHOLD_KEYS) {
-    if (!Object.prototype.hasOwnProperty.call(payload, key)) {
+    if (!Object.prototype.hasOwnProperty.call(values, key)) {
       return `budgetThresholds.${key} is required`;
     }
-    const value = payload[key];
+    const value = values[key];
     if (typeof value === 'boolean' || Array.isArray(value) || (value !== null && typeof value === 'object')) {
       return `budgetThresholds.${key} must be a number`;
     }
@@ -45,17 +55,23 @@ function validateBudgetThresholdsRaw(payload) {
 }
 
 /** whitelist: เอาเฉพาะ 5 คีย์ BUDGET_THRESHOLD_KEYS ออกมาเก็บ — คีย์แปลกปลอมอื่นถูกทิ้งเสมอ (AC-RS-28) */
-function pickBudgetThresholds(payload) {
-  const picked = {};
+function pickBudgetThresholds(payload: Record<string, unknown>): BudgetThresholds {
+  const picked: BudgetThresholds = {
+    generalExpense: 0,
+    dailyExpense: 0,
+    creditCard: 0,
+    savings: 0
+  };
   BUDGET_THRESHOLD_KEYS.forEach((key) => {
     picked[key] = Number(payload[key]);
   });
   return picked;
 }
 
-export default async function handler(req, res) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   const userId = assertUserId(req, res);
   if (!userId) return;
+  if (!validateApiRequest(req, res, 'user-profile-settings')) return;
 
   if (req.method === 'GET') {
     try {
@@ -66,10 +82,10 @@ export default async function handler(req, res) {
       ]);
       return res.status(200).json({ bankAccounts, budgetThresholds, monthlySummaryEnabled });
     } catch (error) {
-      if (error?.message === 'User not found') {
+      if (isRecord(error) && error.message === 'User not found') {
         return res.status(200).json({
           bankAccounts: [],
-          budgetThresholds: normaliseBudgetThresholds(),
+          budgetThresholds: normaliseBudgetThresholds(undefined),
           monthlySummaryEnabled: true
         });
       }
@@ -92,11 +108,14 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'bankAccounts must be an array' });
       }
 
-      let pickedThresholds;
+      let pickedThresholds: BudgetThresholds | undefined;
       if (budgetThresholds !== undefined) {
         const validationError = validateBudgetThresholdsRaw(budgetThresholds);
         if (validationError) {
           return res.status(400).json({ error: validationError });
+        }
+        if (!isRecord(budgetThresholds)) {
+          return res.status(400).json({ error: 'budgetThresholds must be an object' });
         }
         pickedThresholds = pickBudgetThresholds(budgetThresholds);
       }
@@ -106,7 +125,12 @@ export default async function handler(req, res) {
 
       // เขียนเฉพาะคีย์ระดับบนที่ส่งมาจริง ๆ เท่านั้น (AC-RS-2/3) — bankAccounts-only body ต้อง
       // byte-identical กับพฤติกรรมเดิมก่อนเฟสนี้ทุกประการ ทั้ง request ที่ยอมรับและ response ที่ตอบกลับ
-      const responsePayload = { success: true };
+      const responsePayload: {
+        success: true;
+        bankAccounts?: unknown[];
+        budgetThresholds?: BudgetThresholds;
+        monthlySummaryEnabled?: boolean;
+      } = { success: true };
 
       if (bankAccounts !== undefined) {
         await updateUserBankAccounts(userId, bankAccounts);
@@ -125,7 +149,7 @@ export default async function handler(req, res) {
 
       return res.status(200).json(responsePayload);
     } catch (error) {
-      if (error?.message === 'User not found') {
+      if (isRecord(error) && error.message === 'User not found') {
         return res.status(404).json({ error: 'user not found' });
       }
       console.error('Failed to update user bank accounts:', error);
@@ -136,3 +160,5 @@ export default async function handler(req, res) {
   res.setHeader('Allow', ['GET', 'POST']);
   return res.status(405).json({ error: 'Method not allowed' });
 }
+
+export default withAudit(handler, { source: 'user_profile_settings' });

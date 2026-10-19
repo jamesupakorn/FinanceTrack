@@ -1,6 +1,8 @@
 import crypto from 'crypto';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import { getMongoCollection, isJsonMode } from '../../lib/dataSource';
-import { loadUsers } from '../../src/backend/data/userUtils.js';
+import { loadUsers } from '../../src/backend/data/userUtils';
 import {
   getUserMonthlySummaryEnabled,
   getUserLastMonthlySummarySent,
@@ -16,7 +18,20 @@ import {
   formatMonthlySummaryText
 } from '../../src/shared/utils/backend/monthlyLineSummary';
 
-async function getRecipients(rawTargetUserId) {
+interface LineUser {
+  id: string;
+  LineId: string;
+}
+
+function isLineUser<T>(value: T): value is T & LineUser {
+  if (!value || typeof value !== 'object') return false;
+  const user = value as Record<string, unknown>;
+  return typeof user.id === 'string'
+    && typeof user.LineId === 'string'
+    && user.LineId.length > 0;
+}
+
+async function getRecipients(rawTargetUserId: unknown): Promise<LineUser[]> {
   // undefined/null/'' = ไม่กรอง (ส่งทุกคน) — ค่าอื่นต้องผ่าน assertScopedUserId ที่ใช้ร่วมกัน (arch C-4)
   // ไม่ผ่าน (ไม่ใช่ string เช่น { $ne: null } หรือว่างหลัง trim) = ไม่ตรงกับใครเลย ไม่ปล่อยเข้า Mongo filter
   let targetUserId = null;
@@ -28,15 +43,18 @@ async function getRecipients(rawTargetUserId) {
     }
   }
   if (isJsonMode()) {
-    return loadUsers().filter(user => user.LineId && (!targetUserId || user.id === targetUserId));
+    return loadUsers()
+      .filter(isLineUser)
+      .filter(user => !targetUserId || user.id === targetUserId);
   }
   const collection = await getMongoCollection('users');
   const filter = targetUserId ? { id: targetUserId } : {};
-  return (await collection.find(filter).toArray()).filter(user => user.LineId);
+  const docs = await collection.find(filter).toArray();
+  return docs.filter(isLineUser);
 }
 
 /** เทียบสตริงแบบ constant-time เพื่อไม่ให้เวลาตอบกลับบอกใบ้ว่าตรงกันกี่ตัวอักษร */
-function secretsMatch(provided, expected) {
+function secretsMatch(provided: unknown, expected: unknown): boolean {
   if (typeof provided !== 'string' || typeof expected !== 'string') return false;
   const providedBuf = Buffer.from(provided, 'utf-8');
   const expectedBuf = Buffer.from(expected, 'utf-8');
@@ -52,7 +70,7 @@ function secretsMatch(provided, expected) {
  * - header x-cron-secret
  * - query.cronSecret (GET) / body.cronSecret (POST) สำหรับเรียกเองด้วย curl
  */
-function extractCronSecret(req) {
+function extractCronSecret(req: NextApiRequest): string {
   const authHeader = req?.headers?.authorization;
   if (typeof authHeader === 'string') {
     const match = authHeader.match(/^Bearer\s+(.+)$/i);
@@ -70,12 +88,13 @@ function extractCronSecret(req) {
   return '';
 }
 
-export default async function handler(req, res) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // CRON_SECRET เป็นด่านเดียวและบังคับ (fail closed) — เหมือน line_due_notify
   const expectedSecret = typeof process.env.CRON_SECRET === 'string' ? process.env.CRON_SECRET.trim() : '';
   if (!expectedSecret) return res.status(500).json({ error: 'CRON_SECRET is not configured' });
   if (!secretsMatch(extractCronSecret(req), expectedSecret)) return res.status(401).json({ error: 'unauthorized' });
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!validateApiRequest(req, res, 'line_monthly_summary')) return;
 
   const source = req.method === 'GET' ? req.query || {} : req.body || {};
   const force = source.force === true || source.force === 'true';
@@ -121,7 +140,7 @@ export default async function handler(req, res) {
       if (!force) await markUserMonthlySummarySent(user.id, target.monthKey);
       results.push({ userId: user.id, sent: true, month: target.monthKey, format, forced: force });
     } catch (error) {
-      results.push({ userId: user.id, sent: false, reason: error.message });
+      results.push({ userId: user.id, sent: false, reason: error instanceof Error ? error.message : String(error) });
     }
   }
   return res.status(200).json({ success: true, month: target.monthKey, results });

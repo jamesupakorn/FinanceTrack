@@ -15,10 +15,13 @@
  */
 
 import { sendLineMessage, sendLineFlexMessage } from '../../src/shared/utils/sendLineMessage';
+import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
 import { isPaidFlag } from '../../src/shared/utils/commonUtils';
 import crypto from 'crypto';
+import type { NextApiRequest, NextApiResponse } from 'next';
 import { getUserCreditData } from '../../src/shared/utils/backend/creditCardStore';
+import type { CreditData, CreditPlan } from '../../src/shared/utils/backend/creditCardStore';
 import {
   PLAN_STATUS,
   buildRevolvingCycles,
@@ -36,7 +39,7 @@ import {
   formatThaiDate,
   buildDueDateString
 } from '../../src/shared/utils/dateUtils';
-import { loadUsers, getUserData } from '../../src/backend/data/userUtils.js';
+import { loadUsers, getUserData } from '../../src/backend/data/userUtils';
 import {
   LINE_THEME,
   textComponent,
@@ -48,12 +51,59 @@ import {
 const JSON_EXPENSE_FILE = 'monthly_expense.json';
 const DUE_SOON_DAYS = 3;
 
+type TargetDate = NonNullable<ReturnType<typeof getCurrentDateInfo>>;
+type NotifyMode = 'due' | 'unpaid' | 'both';
+type DueStatus = 'invalid' | 'due' | 'overdue' | 'dueSoon' | 'upcoming';
+type ExpenseItem = {
+  [key: string]: unknown;
+  name?: string;
+  actual?: number | string;
+  account?: string;
+  paid?: unknown;
+  dueDay?: number | string;
+  dueDate?: string;
+  _fromMonth?: string;
+};
+type GroupedItems = {
+  due: ExpenseItem[];
+  dueSoon: ExpenseItem[];
+  overdue: ExpenseItem[];
+  otherUnpaid: ExpenseItem[];
+};
+type AccountGroup = { account: string; items: ExpenseItem[] };
+type FlexComponent = Record<string, unknown>;
+type LineUser = { id: string; LineId: string };
+type CardInstallmentEvent = {
+  plan: CreditPlan;
+  row: NonNullable<CreditPlan['schedule']>[number];
+  remaining: number;
+};
+type CardDueEvent = {
+  card: CreditData['cards'][number];
+  status: 'due' | 'overdue' | 'dueSoon';
+  resolvedDueDay: number;
+  dueDateText: string;
+  isEndOfMonth: boolean;
+  diffDays: number;
+  items: CardInstallmentEvent[];
+  revolving: { amountDue: number; minPaymentDue: number; paymentAction: string | null } | null;
+  total: number;
+};
+
+function isLineUser<T>(value: T): value is T & LineUser {
+  if (!value || typeof value !== 'object') return false;
+  const user = value as Record<string, unknown>;
+  return typeof user.id === 'string'
+    && typeof user.LineId === 'string'
+    && user.LineId.length > 0;
+}
+
 /**
  * ดึงรายการค่าใช้จ่ายจากเอกสาร โดยตัด field ระบบออก
  * @param {object} doc - เอกสารค่าใช้จ่ายของเดือน
  * @returns {array} รายการค่าใช้จ่ายที่ใช้งานจริง
  */
-function extractExpenseItems(doc = {}) {
+function extractExpenseItems(doc: Record<string, unknown> = {}): ExpenseItem[] {
   const ignoreKeys = new Set([
     '_id',
     'month',
@@ -64,7 +114,7 @@ function extractExpenseItems(doc = {}) {
   ]);
   return Object.entries(doc)
     .filter(([key, value]) => !ignoreKeys.has(key) && value && typeof value === 'object')
-    .map(([, value]) => value);
+    .map(([, value]) => value as ExpenseItem);
 }
 
 /**
@@ -73,7 +123,7 @@ function extractExpenseItems(doc = {}) {
  * @param {object} target - ข้อมูลวันเป้าหมาย (day, daysInMonth)
  * @returns {object} {status, dueDay}
  */
-function getDueStatus(item, target) {
+function getDueStatus(item: ExpenseItem, target: TargetDate): { status: DueStatus; dueDay: number | string | null } {
   if (!item || !target) return { status: 'invalid', dueDay: null };
   const dueDay = getDueDayNumber(item);
   const resolvedDueDay = resolveDueDayForMonth(dueDay, target.daysInMonth);
@@ -88,7 +138,7 @@ function getDueStatus(item, target) {
   return { status: 'upcoming', dueDay };
 }
 
-function formatAmount(value) {
+function formatAmount(value: unknown): string {
   const numeric = Number(value || 0);
   if (Number.isNaN(numeric)) return String(value || '0');
   return numeric.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -101,7 +151,7 @@ function formatAmount(value) {
  * @param {string} notifyMode - โหมดแจ้งเตือน
  * @returns {string} ข้อความสำหรับส่ง LINE
  */
-function buildMessage(target, groupedItems, notifyMode) {
+function buildMessage(target: TargetDate, groupedItems: GroupedItems, notifyMode: NotifyMode): string {
   const hasDue = groupedItems.due.length > 0;
   const hasOverdue = groupedItems.overdue.length > 0;
   const hasDueSoon = groupedItems.dueSoon.length > 0;
@@ -134,7 +184,8 @@ function buildMessage(target, groupedItems, notifyMode) {
   const unpaidSection = notifyMode === 'unpaid' && groupedItems.otherUnpaid.length
     ? buildSection('🗂️ รายการยังไม่ถึงกำหนด', groupedItems.otherUnpaid, target, { hideDate: true })
     : null;
-  const sections = [dueSection, dueSoonSection, overdueSection, unpaidSection].filter(Boolean);
+  const sections = [dueSection, dueSoonSection, overdueSection, unpaidSection]
+    .filter((section): section is string => section !== null);
   const todayItems = [...groupedItems.due, ...groupedItems.overdue];
   const upcomingItems = [...groupedItems.dueSoon, ...groupedItems.otherUnpaid];
   const todayTotal = sumItemAmounts(todayItems);
@@ -154,7 +205,7 @@ function buildMessage(target, groupedItems, notifyMode) {
  * (ที่ต้องคำนวณก่อนเรียก buildDueNotifyFlex) ใช้ค่าเดียวกันได้โดยไม่ต้อง copy-paste ผิดที่ผิดทาง
  * buildMessage() เองไม่ถูกแตะ ยังคง byte-identical (AC-22)
  */
-function deriveDueHeaderTitle(groupedItems, notifyMode) {
+function deriveDueHeaderTitle(groupedItems: GroupedItems, notifyMode: NotifyMode): string {
   const hasDue = groupedItems.due.length > 0;
   const hasOverdue = groupedItems.overdue.length > 0;
   const hasDueSoon = groupedItems.dueSoon.length > 0;
@@ -170,7 +221,7 @@ function deriveDueHeaderTitle(groupedItems, notifyMode) {
 }
 
 /** หนึ่งแถวรายการในสไตล์ Flex — ชื่อ+จำนวนเงินเป็นคอลัมน์ในแนวนอน แล้วตามด้วยบรรทัดวันที่ (ถ้ามี) */
-function buildFlexItemRow(item, target, opts = {}) {
+function buildFlexItemRow(item: ExpenseItem, target: TargetDate, opts: { hideDate?: boolean } = {}): FlexComponent[] {
   const name = item.name || 'รายการไม่มีชื่อ';
   const fromMonth = item._fromMonth ? ` (ค้างจาก ${formatMonthKeyTH(item._fromMonth)})` : '';
   const row = {
@@ -186,7 +237,7 @@ function buildFlexItemRow(item, target, opts = {}) {
 }
 
 /** หนึ่ง section ในสไตล์ Flex — หัวข้อ section แล้วตามด้วยกลุ่มบัญชี (เรียก groupItemsByAccount() เดิม ไม่แก้) */
-function buildFlexSection(title, items, target, opts, titleColor) {
+function buildFlexSection(title: string, items: ExpenseItem[], target: TargetDate, opts: { hideDate?: boolean }, titleColor: string): FlexComponent[] {
   const groups = groupItemsByAccount(items);
   const showHeadings = !(groups.length === 1 && groups[0].account === OTHER_ACCOUNT_LABEL);
   const groupContents = groups.flatMap(group => [
@@ -204,7 +255,7 @@ function buildFlexSection(title, items, target, opts, titleColor) {
  * @param {string} notifyMode - โหมดแจ้งเตือน
  * @returns {object} Flex bubble
  */
-function buildDueNotifyFlex(target, groupedItems, notifyMode) {
+function buildDueNotifyFlex(target: TargetDate, groupedItems: GroupedItems, notifyMode: NotifyMode): FlexComponent {
   const hasDue = groupedItems.due.length > 0;
   const hasOverdue = groupedItems.overdue.length > 0;
   const headerTitle = deriveDueHeaderTitle(groupedItems, notifyMode);
@@ -223,7 +274,8 @@ function buildDueNotifyFlex(target, groupedItems, notifyMode) {
   const unpaidSection = notifyMode === 'unpaid' && groupedItems.otherUnpaid.length
     ? buildFlexSection('🗂️ รายการยังไม่ถึงกำหนด', groupedItems.otherUnpaid, target, { hideDate: true }, LINE_THEME.textSecondary)
     : null;
-  const sections = [dueSection, dueSoonSection, overdueSection, unpaidSection].filter(Boolean);
+  const sections = [dueSection, dueSoonSection, overdueSection, unpaidSection]
+    .filter((section): section is FlexComponent[] => section !== null);
   const sectionContents = sections.flatMap((section, index) => [
     ...section,
     ...(index < sections.length - 1 ? [separator('lg')] : [])
@@ -274,20 +326,21 @@ const OTHER_ACCOUNT_LABEL = 'อื่นๆ';
  * @param {array} items - รายการค่าใช้จ่าย
  * @returns {array} กลุ่มรายการ [{ account, items }]
  */
-function groupItemsByAccount(items) {
-  const named = new Map(); // Map คง insertion order ตามลำดับปรากฏครั้งแรก
-  const unnamed = [];
+function groupItemsByAccount(items: ExpenseItem[]): AccountGroup[] {
+  const named = new Map<string, ExpenseItem[]>(); // Map คง insertion order ตามลำดับปรากฏครั้งแรก
+  const unnamed: ExpenseItem[] = [];
   for (const item of items) {
     if (!item.account) { unnamed.push(item); continue; }
-    if (!named.has(item.account)) named.set(item.account, []);
-    named.get(item.account).push(item);
+    const group = named.get(item.account);
+    if (group) group.push(item);
+    else named.set(item.account, [item]);
   }
   const groups = [...named.entries()].map(([account, groupItems]) => ({ account, items: groupItems }));
   if (unnamed.length) groups.push({ account: OTHER_ACCOUNT_LABEL, items: unnamed });
   return groups;
 }
 
-function buildSection(title, items, target, opts = {}) {
+function buildSection(title: string, items: ExpenseItem[], target: TargetDate, opts: { hideDate?: boolean } = {}): string {
   const groups = groupItemsByAccount(items);
   // ถ้ามีกลุ่มเดียวและเป็นกลุ่ม "อื่นๆ" (ไม่มีรายการไหนมีบัญชีเลย) ให้ตัด heading ทิ้ง เพราะไม่ได้ช่วยจัดกลุ่มอะไร
   const showHeadings = !(groups.length === 1 && groups[0].account === OTHER_ACCOUNT_LABEL);
@@ -298,7 +351,7 @@ function buildSection(title, items, target, opts = {}) {
   return [title, ...lines].join('\n');
 }
 
-function formatLineItem(item, target, opts = {}) {
+function formatLineItem(item: ExpenseItem, target: TargetDate, opts: { hideDate?: boolean } = {}): string {
   const name = item.name || 'รายการไม่มีชื่อ';
   const amount = formatAmount(item.actual || 0);
   const fromMonth = item._fromMonth ? ` (ค้างจาก ${formatMonthKeyTH(item._fromMonth)})` : '';
@@ -315,10 +368,10 @@ function formatLineItem(item, target, opts = {}) {
  * @param {object} item - รายการค่าใช้จ่าย
  * @returns {number|null} วันครบกำหนด (1-31) หรือ null
  */
-function getDueDayNumber(item = {}) {
+function getDueDayNumber(item: Partial<ExpenseItem> = {}): number | string | null {
   // รองรับ 'EOM' (วันสิ้นเดือน) โดยคืนค่า raw ให้ resolveDueDayForMonth จัดการต่อ
-  if (isEndOfMonthDueDay(item.dueDay)) return item.dueDay;
-  const rawDay = normalizeDueDayValue(item.dueDay);
+  if (item.dueDay !== undefined && isEndOfMonthDueDay(item.dueDay)) return item.dueDay;
+  const rawDay = item.dueDay === undefined ? null : normalizeDueDayValue(item.dueDay);
   if (rawDay) return rawDay;
   if (typeof item.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.dueDate)) {
     const dayPart = item.dueDate.slice(-2);
@@ -332,7 +385,7 @@ function getDueDayNumber(item = {}) {
  * @param {array} items - รายการค่าใช้จ่าย
  * @returns {number} ยอดรวมทั้งหมด
  */
-function sumItemAmounts(items = []) {
+function sumItemAmounts(items: ExpenseItem[] = []): number {
   return items.reduce((sum, item) => {
     const raw = Number(item.actual || 0);
     if (!Number.isNaN(raw) && Number.isFinite(raw)) {
@@ -347,28 +400,30 @@ function sumItemAmounts(items = []) {
  * @param {string|null} targetUserId - ส่งเฉพาะผู้ใช้ หากไม่ระบุจะส่งทุกคน
  * @returns {array} รายชื่อผู้ใช้ที่มี LineId
  */
-async function getUsersForNotify(targetUserId) {
+async function getUsersForNotify(targetUserId: unknown): Promise<LineUser[]> {
   // Reject non-string userId before it can shape a Mongo filter.
   if (targetUserId !== undefined && targetUserId !== null && typeof targetUserId !== 'string') {
     return [];
   }
   if (isJsonMode()) {
     const users = loadUsers();
-    return users.filter(user => user.LineId && (!targetUserId || user.id === targetUserId));
+    return users.filter((user): user is LineUser =>
+      isLineUser(user) && (!targetUserId || user.id === targetUserId)
+    );
   }
   const collection = await getMongoCollection('users');
   const filter = targetUserId ? { id: targetUserId } : {};
   const docs = await collection.find(filter).toArray();
-  return docs.filter(user => user.LineId);
+  return docs.filter((doc): doc is typeof doc & LineUser => isLineUser(doc));
 }
 
-function getPrevMonthKey(monthKey) {
+function getPrevMonthKey(monthKey: string): string {
   const [y, m] = monthKey.split('-').map(Number);
   if (m === 1) return `${y - 1}-12`;
   return `${y}-${String(m - 1).padStart(2, '0')}`;
 }
 
-async function getExpenseDocForMonth(userId, monthKey) {
+async function getExpenseDocForMonth(userId: string, monthKey: string): Promise<Record<string, unknown> | null> {
   if (isJsonMode()) {
     const bucket = getUserData(JSON_EXPENSE_FILE, userId);
     return bucket?.[monthKey] || null;
@@ -392,7 +447,7 @@ async function getExpenseDocForMonth(userId, monthKey) {
  * @param {object} target - ข้อมูลวันเป้าหมาย
  * @returns {array} รายการเหตุการณ์ต่อบัตร
  */
-function collectCardDueEvents(creditData, target) {
+function collectCardDueEvents(creditData: CreditData, target: TargetDate): CardDueEvent[] {
   const cards = Array.isArray(creditData?.cards) ? creditData.cards : [];
   const plans = Array.isArray(creditData?.plans) ? creditData.plans : [];
   const cycles = Array.isArray(creditData?.cycles) ? creditData.cycles : [];
@@ -404,13 +459,13 @@ function collectCardDueEvents(creditData, target) {
     const resolvedDueDay = resolveDueDayForMonth(card.dueDay, target.daysInMonth);
     if (!resolvedDueDay) return null;
 
-    let status = null;
+    let status: CardDueEvent['status'] | null = null;
     if (resolvedDueDay === target.day) status = 'due';
     else if (resolvedDueDay < target.day) status = 'overdue';
     else if ((resolvedDueDay - target.day) <= DUE_SOON_DAYS) status = 'dueSoon';
     if (!status) return null;
 
-    const items = [];
+    const items: CardInstallmentEvent[] = [];
     plans.forEach(plan => {
       if (plan?.cardId !== card.id) return;
       if (plan.status !== PLAN_STATUS.ONGOING) return;
@@ -427,7 +482,7 @@ function collectCardDueEvents(creditData, target) {
     const chain = buildRevolvingCycles(card, cycles, { throughMonth: target.monthKey });
     const summary = summariseRevolving(chain, { asOfMonth: target.monthKey });
     const cycle = summary.cycle;
-    const revolving = cycle && cycle.amountDue > 0 && cycle.paymentAction === null
+    const revolving: CardDueEvent['revolving'] = cycle && cycle.amountDue > 0 && cycle.paymentAction === null
       ? { amountDue: cycle.amountDue, minPaymentDue: cycle.minPaymentDue, paymentAction: cycle.paymentAction }
       : null;
 
@@ -437,7 +492,7 @@ function collectCardDueEvents(creditData, target) {
       card,
       status,
       resolvedDueDay,
-      dueDateText: buildDueDateString(target, card.dueDay),
+      dueDateText: buildDueDateString(target, card.dueDay ?? resolvedDueDay),
       isEndOfMonth: isEndOfMonthDueDay(card.dueDay),
       diffDays: resolvedDueDay - target.day,
       items,
@@ -445,10 +500,10 @@ function collectCardDueEvents(creditData, target) {
       total: items.reduce((sum, item) => sum + (Number(item.row.payment) || 0), 0)
         + (revolving?.amountDue ?? 0)
     };
-  }).filter(Boolean);
+  }).filter((event): event is CardDueEvent => event !== null);
 }
 
-function describeCardTiming(event) {
+function describeCardTiming(event: CardDueEvent): string {
   if (event.isEndOfMonth) return 'สิ้นเดือน';
   if (event.status === 'due') return 'ครบกำหนดวันนี้';
   if (event.status === 'overdue') return `เลยกำหนด ${Math.abs(event.diffDays)} วัน`;
@@ -456,7 +511,7 @@ function describeCardTiming(event) {
 }
 
 /** บรรทัดยอดหมุนเวียน — ภาระหลักของบัตร จึงอยู่เหนือรายการงวดผ่อนเสมอ */
-function buildRevolvingLine(revolving) {
+function buildRevolvingLine(revolving: CardDueEvent['revolving']): string | null {
   if (!revolving) return null;
   if (revolving.paymentAction === 'minimum') {
     return `   • ยอดใช้จ่ายหมุนเวียน (ขั้นต่ำ) — ${formatAmount(revolving.amountDue)} บาท`;
@@ -464,7 +519,7 @@ function buildRevolvingLine(revolving) {
   return `   • ยอดใช้จ่ายหมุนเวียน — ${formatAmount(revolving.amountDue)} บาท (ขั้นต่ำ ${formatAmount(revolving.minPaymentDue)})`;
 }
 
-function buildCardSection(title, events, startIndex) {
+function buildCardSection(title: string, events: CardDueEvent[], startIndex: number): string {
   const lines = events.map((event, index) => {
     const last4 = event.card.last4 ? ` (····${event.card.last4})` : '';
     const head = `${startIndex + index + 1}. ${event.card.name}${last4} — ${formatAmount(event.total)} บาท`;
@@ -484,7 +539,7 @@ function buildCardSection(title, events, startIndex) {
  * @param {array} cardEvents - ผลจาก collectCardDueEvents
  * @returns {string|null} null เมื่อไม่มีอะไรต้องแจ้ง (ต้องไม่ส่งข้อความเปล่า)
  */
-function buildCreditCardMessage(target, cardEvents) {
+function buildCreditCardMessage(target: TargetDate, cardEvents: CardDueEvent[]): string | null {
   if (!Array.isArray(cardEvents) || !cardEvents.length) return null;
 
   const overdue = cardEvents.filter(event => event.status === 'overdue');
@@ -525,7 +580,7 @@ function buildCreditCardMessage(target, cardEvents) {
 }
 
 /** headerTitle เดียวกับ buildCreditCardMessage() — แยกไว้ให้ altText ของ Flex ใช้ค่าเดียวกัน ไม่ต้อง copy สูตรผิด */
-function deriveCardHeaderTitle(overdueCount, upcomingCount) {
+function deriveCardHeaderTitle(overdueCount: number, upcomingCount: number): string {
   return overdueCount && upcomingCount
     ? 'ครบกำหนดชำระ + เลยกำหนด'
     : overdueCount
@@ -534,7 +589,7 @@ function deriveCardHeaderTitle(overdueCount, upcomingCount) {
 }
 
 /** หนึ่ง block ต่อบัตรในสไตล์ Flex — ชื่อบัตร+ยอดรวมเป็นแถวแนวนอน แล้วตามด้วยเวลา/ยอดหมุนเวียน/รายการงวด */
-function buildFlexCardEventBlock(event) {
+function buildFlexCardEventBlock(event: CardDueEvent): FlexComponent[] {
   const last4 = event.card.last4 ? ` (····${event.card.last4})` : '';
   const headRow = {
     type: 'box', layout: 'horizontal', spacing: 'sm', contents: [
@@ -562,7 +617,7 @@ function buildFlexCardEventBlock(event) {
  * @param {array} cardEvents - ผลจาก collectCardDueEvents
  * @returns {object|null} Flex bubble หรือ null
  */
-function buildCreditCardFlex(target, cardEvents) {
+function buildCreditCardFlex(target: TargetDate, cardEvents: CardDueEvent[]): FlexComponent | null {
   if (!Array.isArray(cardEvents) || !cardEvents.length) return null;
 
   const overdue = cardEvents.filter(event => event.status === 'overdue');
@@ -576,7 +631,8 @@ function buildCreditCardFlex(target, cardEvents) {
   const upcomingSection = upcoming.length
     ? [textComponent('📌 ครบกำหนดชำระ', 'md', LINE_THEME.warning, '700'), ...upcoming.flatMap(buildFlexCardEventBlock)]
     : null;
-  const sections = [overdueSection, upcomingSection].filter(Boolean);
+  const sections = [overdueSection, upcomingSection]
+    .filter((section): section is FlexComponent[] => section !== null);
   const sectionContents = sections.flatMap((section, index) => [
     ...section,
     ...(index < sections.length - 1 ? [separator('lg')] : [])
@@ -620,7 +676,7 @@ function buildCreditCardFlex(target, cardEvents) {
 }
 
 /** เทียบสตริงแบบ constant-time เพื่อไม่ให้เวลาตอบกลับบอกใบ้ว่าตรงกันกี่ตัวอักษร */
-function secretsMatch(provided, expected) {
+function secretsMatch(provided: unknown, expected: unknown): boolean {
   if (typeof provided !== 'string' || typeof expected !== 'string') return false;
   const providedBuf = Buffer.from(provided, 'utf-8');
   const expectedBuf = Buffer.from(expected, 'utf-8');
@@ -636,7 +692,7 @@ function secretsMatch(provided, expected) {
  * - header x-cron-secret
  * - query.cronSecret (GET) / body.cronSecret (POST) สำหรับเรียกเองด้วย curl
  */
-function extractCronSecret(req) {
+function extractCronSecret(req: NextApiRequest): string {
   const authHeader = req?.headers?.authorization;
   if (typeof authHeader === 'string') {
     const match = authHeader.match(/^Bearer\s+(.+)$/i);
@@ -658,7 +714,7 @@ function extractCronSecret(req) {
  * ประมวลผลและส่งข้อความแจ้งเตือนค่าใช้จ่ายของผู้ใช้ 1 คน
  * คืน result object เสมอ (ไม่ push เอง) เพื่อให้ผู้เรียกครอบ try/catch รายผู้ใช้ได้ที่จุดเดียว
  */
-async function notifyExpenseForUser(user, target, notifyMode) {
+async function notifyExpenseForUser(user: LineUser, target: TargetDate, notifyMode: NotifyMode) {
   const expenseDoc = await getExpenseDocForMonth(user.id, target.monthKey);
   const prevMonthKey = getPrevMonthKey(target.monthKey);
   const prevExpenseDoc = await getExpenseDocForMonth(user.id, prevMonthKey);
@@ -667,7 +723,7 @@ async function notifyExpenseForUser(user, target, notifyMode) {
     return { userId: user.id, sent: false, reason: 'no expense data' };
   }
 
-  const groupedItems = { due: [], dueSoon: [], overdue: [], otherUnpaid: [] };
+  const groupedItems: GroupedItems = { due: [], dueSoon: [], overdue: [], otherUnpaid: [] };
 
   // classify current month items
   if (expenseDoc) {
@@ -732,7 +788,7 @@ async function notifyExpenseForUser(user, target, notifyMode) {
       otherUnpaid: groupedItems.otherUnpaid.length
     } };
   } catch (error) {
-    return { userId: user.id, sent: false, reason: error.message };
+  return { userId: user.id, sent: false, reason: error instanceof Error ? error.message : String(error) };
   }
 }
 
@@ -742,7 +798,7 @@ async function notifyExpenseForUser(user, target, notifyMode) {
  * @param {object} req - Express request (GET/POST)
  * @param {object} res - Express response
  */
-export default async function handler(req, res) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // TD-C02 follow-up: CRON_SECRET เป็นด่านเดียวและบังคับ — เดิมมันเป็นแค่ "ทางเลือก" คู่กับ
   // static Bearer token ถ้าไม่ได้ตั้ง env นี้ไว้ endpoint ต้องปิดตาย ไม่ใช่เปิดให้ทุกคน
   const expectedSecret = typeof process.env.CRON_SECRET === 'string' ? process.env.CRON_SECRET.trim() : '';
@@ -756,6 +812,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+  if (!validateApiRequest(req, res, 'line_due_notify')) return;
 
   const source = req.method === 'GET' ? (req.query || {}) : (req.body || {});
   const { date, userId, mode } = source;
@@ -774,7 +831,7 @@ export default async function handler(req, res) {
     try {
       results.push(await notifyExpenseForUser(user, target, notifyMode));
     } catch (error) {
-      console.error('due notify failed for one user:', error?.message);
+      console.error('due notify failed for one user:', error instanceof Error ? error.message : String(error));
       results.push({ userId: user.id, sent: false, reason: 'user processing failed' });
     }
   }
@@ -808,7 +865,8 @@ export default async function handler(req, res) {
         const altText = `💳 FinanceTrack ${headerTitle} · ${formatThaiDate(target)}`;
         await sendLineFlexMessage(altText, flexPayload, user.LineId);
       } catch (flexError) {
-        await sendLineMessage(buildCreditCardMessage(target, cardEvents), user.LineId);
+        const textPayload = buildCreditCardMessage(target, cardEvents);
+        if (textPayload) await sendLineMessage(textPayload, user.LineId);
         format = 'text-fallback';
       }
       creditCardResults.push({
@@ -820,7 +878,7 @@ export default async function handler(req, res) {
         format
       });
     } catch (error) {
-      creditCardResults.push({ userId: user.id, sent: false, reason: error.message });
+      creditCardResults.push({ userId: user.id, sent: false, reason: error instanceof Error ? error.message : String(error) });
     }
   }
 

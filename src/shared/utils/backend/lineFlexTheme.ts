@@ -1,4 +1,4 @@
-// src/shared/utils/backend/lineFlexTheme.js
+// src/shared/utils/backend/lineFlexTheme.ts
 // ธีมสีและ Flex primitive ที่ใช้ร่วมกันทั้ง 3 ข้อความ LINE (monthly summary / due notify / credit card)
 // เป็นโมดูล pure — ไม่อ่าน config/env/DB/request state ใดๆ (สเปก AC-1)
 //
@@ -27,7 +27,7 @@ export const LINE_THEME = {
  * คงรูปแบบเดิมจาก monthlyLineSummary.js (flex:1, wrap:true, empty-guard, weight mapping)
  * เปลี่ยนแค่สี default เป็น LINE_THEME.textPrimary
  */
-export function textComponent(text, size = 'sm', color = LINE_THEME.textPrimary, weight = '400') {
+export function textComponent(text: unknown, size = 'sm', color = LINE_THEME.textPrimary, weight = '400') {
   return { type: 'text', text: String(text || ' '), size, color, weight: weight === '700' ? 'bold' : 'regular', flex: 1, wrap: true };
 }
 
@@ -35,7 +35,7 @@ export function textComponent(text, size = 'sm', color = LINE_THEME.textPrimary,
  * แถวไอคอน + label + ค่า (แนวนอน) — รับค่าที่ format เป็น string แล้วเท่านั้น
  * ห้ามรับตัวเลขดิบ เพื่อไม่ให้ต้อง unify amount()/formatAmount() ของแต่ละไฟล์ (AC-3)
  */
-export function valueRow(icon, label, valueText, color = LINE_THEME.textSecondary) {
+export function valueRow(icon: string, label: string, valueText: string, color = LINE_THEME.textSecondary) {
   return {
     type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'md', alignItems: 'center',
     contents: [
@@ -47,7 +47,7 @@ export function valueRow(icon, label, valueText, color = LINE_THEME.textSecondar
 }
 
 /** บรรทัดข้อความรองขนาด xs สี textSecondary — ใช้แทน tier สีที่ 3 เดิม (ดู UX spec §2.3) */
-export function mutedLine(text) {
+export function mutedLine(text: unknown) {
   return textComponent(text, 'xs', LINE_THEME.textSecondary);
 }
 
@@ -57,11 +57,11 @@ export function separator(margin = 'xl') {
 }
 
 /** กล่อง highlight (totals box) — พื้นหลังเป็น tint บางๆ ครอบ contents ที่ส่งเข้ามา */
-export function tintBox(tint, contents) {
+export function tintBox<T extends Record<string, unknown>>(tint: string, contents: T[]) {
   return { type: 'box', layout: 'vertical', margin: 'xl', paddingAll: 'lg', backgroundColor: tint, cornerRadius: 'md', contents };
 }
 
 /** ปุ่ม CTA เดียวใน footer ของทุกการ์ด */
-export function ctaButton(label, uri) {
+export function ctaButton(label: string, uri: string) {
   return { type: 'button', style: 'primary', color: LINE_THEME.brand, action: { type: 'uri', label, uri } };
 }

@@ -1,13 +1,17 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
 import { assertUserId } from '../../src/shared/utils/backend/userRequest';
 import { checkUserPassword, updateUserPassword } from '../../lib/userStore';
+import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
+import { withAudit } from '../../lib/auditedMutation';
 
-export default async function handler(req, res) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const userId = assertUserId(req, res);
   if (!userId) return;
+  if (!validateApiRequest(req, res, 'change_password')) return;
 
   const { currentPassword, newPassword } = req.body || {};
 
@@ -27,3 +31,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'ไม่สามารถเปลี่ยนรหัสได้' });
   }
 }
+
+export default withAudit(handler, { source: 'change_password' });

@@ -22,8 +22,10 @@
  */
 
 import crypto from 'crypto';
+import type { NextApiRequest, NextApiResponse } from 'next';
 import { assertUserId } from '../../../src/shared/utils/backend/userRequest';
-import { getUserCreditData, updateUserCreditData } from '../../../src/shared/utils/backend/creditCardStore';
+import { validateApiRequest } from '../../../src/shared/utils/backend/apiRequestValidation';
+import { getUserCreditData, updateUserCreditData, type CreditData } from '../../../src/shared/utils/backend/creditCardStore';
 import {
   buildRevolvingCycles,
   buildRevolvingRowKey,
@@ -37,23 +39,24 @@ import {
   toAmount,
   MAX_REVOLVING_CYCLES_PER_CARD
 } from '../../../src/shared/utils/creditCardUtils';
+import { withAudit } from '../../../lib/auditedMutation';
 
 const MONTH_KEY_RE = /^\d{4}-\d{2}$/;
 
-const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+const hasOwn = (object: object, key: PropertyKey) => Object.prototype.hasOwnProperty.call(object, key);
 
 function generateCycleId() {
   return `rc_${crypto.randomBytes(6).toString('hex')}`;
 }
 
 /** จำนวน cycle ที่เก็บจริงของบัตรใบหนึ่ง — ใช้บังคับเพดาน (BR-CC-018) */
-function countStoredCycles(cycles, cardId) {
+function countStoredCycles(cycles: CreditData['cycles'], cardId: string) {
   return cycles.filter(cycle => cycle?.cardId === cardId).length;
 }
 
 /** normalise ค่าเดือนเป้าหมาย — ใช้ก่อน buildCardChains() เสมอ (เดิมทำอยู่ใน materialise()) */
-function resolveTargetMonth(throughMonth) {
-  return MONTH_KEY_RE.test(throughMonth || '') ? throughMonth : getCurrentMonthKey();
+function resolveTargetMonth(throughMonth: string | undefined): string {
+  return throughMonth && MONTH_KEY_RE.test(throughMonth) ? throughMonth : getCurrentMonthKey();
 }
 
 /**
@@ -62,10 +65,10 @@ function resolveTargetMonth(throughMonth) {
  * แทนที่จะต่างคนต่างเรียกซ้ำด้วย asOfMonth เดียวกัน
  * @returns {Map<string, array>} cardId → chain
  */
-function buildCardChains(data, asOfMonth) {
-  const map = new Map();
+function buildCardChains(data: CreditData, asOfMonth: string) {
+  const map = new Map<string, ReturnType<typeof buildRevolvingCycles>>();
   data.cards.forEach(card => {
-    map.set(card.id, buildRevolvingCycles(card, data.cycles, { throughMonth: asOfMonth }));
+    map.set(card.id ?? '', buildRevolvingCycles(card, data.cycles, { throughMonth: asOfMonth }));
   });
   return map;
 }
@@ -77,21 +80,30 @@ function buildCardChains(data, asOfMonth) {
  * @param {Map<string, array>} cardChains - จาก buildCardChains(data, asOfMonth)
  * @returns {{cycles: array, truncated: boolean}}
  */
-function materialise(data, cardChains, { cardId = '', month = '' } = {}) {
+function materialise(
+  data: CreditData,
+  cardChains: ReturnType<typeof buildCardChains>,
+  { cardId = '', month = '' }: { cardId?: string; month?: string } = {}
+) {
   const cards = cardId ? data.cards.filter(card => card?.id === cardId) : data.cards;
 
   let truncated = false;
-  const cycles = [];
+  const cycles: Array<ReturnType<typeof buildRevolvingCycles>[number] & {
+    key: string;
+    cardName: string;
+    cardColor: string;
+    cardDueDay: number | string | undefined;
+  }> = [];
   cards.forEach(card => {
-    const chain = cardChains.get(card.id) || [];
+    const chain = cardChains.get(card.id ?? '') || [];
     if (isRevolvingChainTruncated(chain)) truncated = true;
     chain.forEach(cycle => {
       if (month && cycle.month !== month) return;
       cycles.push({
         ...cycle,
-        key: buildRevolvingRowKey(card.id),
-        cardName: card.name,
-        cardColor: card.color,
+        key: buildRevolvingRowKey(card.id ?? ''),
+        cardName: String(card.name ?? ''),
+        cardColor: String(card.color ?? ''),
         cardDueDay: card.dueDay
       });
     });
@@ -105,9 +117,9 @@ function materialise(data, cardChains, { cardId = '', month = '' } = {}) {
  * @param {Map<string, array>} cardChains - จาก buildCardChains(data, asOfMonth), ครอบทุกบัตรเสมอ
  *   (ไม่กรอง cardId — summariseAll ต้องรวมทุกบัตรเสมอ แม้ materialise() จะถูกกรองด้วย cardId ก็ตาม)
  */
-function summariseAll(data, asOfMonth, cardChains) {
-  const totals = data.cards.reduce((acc, card) => {
-    const chain = cardChains.get(card.id) || [];
+function summariseAll(data: CreditData, asOfMonth: string, cardChains: ReturnType<typeof buildCardChains>) {
+  const totals = data.cards.reduce<{ outstanding: number; due: number; minDue: number; carryForward: number }>((acc, card) => {
+    const chain = cardChains.get(card.id ?? '') || [];
     const summary = summariseRevolving(chain, { asOfMonth });
     acc.outstanding += summary.outstanding;
     acc.due += summary.due;
@@ -131,13 +143,13 @@ function summariseAll(data, asOfMonth, cardChains) {
  * การเช็คสิทธิ์ก่อนจึงทำให้ cardId ของผู้ใช้อื่นได้ 404 โดยไม่แตะเอกสารของใครเลย (AC-36)
  * ตัว updater ยังเช็คซ้ำภายใน transaction อยู่ดี ความถูกต้องจึงไม่ได้พึ่งการเช็คนี้เพียงลำพัง
  */
-async function ownsCard(userId, cardId) {
+async function ownsCard(userId: string, cardId: string) {
   const data = await getUserCreditData(userId);
   return data.cards.some(card => card?.id === cardId);
 }
 
 /** สายของบัตรใบเดียวหลังการเขียน — ใช้เป็น response ของ POST/PATCH/DELETE */
-async function respondWithCardChain(res, data, cardId, asOfMonth) {
+async function respondWithCardChain(res: NextApiResponse, data: CreditData, cardId: string, asOfMonth: string) {
   const targetMonth = resolveTargetMonth(asOfMonth);
   const cardChains = buildCardChains(data, targetMonth);
   const { cycles, truncated } = materialise(data, cardChains, { cardId });
@@ -149,7 +161,7 @@ async function respondWithCardChain(res, data, cardId, asOfMonth) {
   });
 }
 
-async function handleGet(req, res, userId) {
+async function handleGet(req: NextApiRequest, res: NextApiResponse, userId: string) {
   const data = await getUserCreditData(userId);
   const cardId = typeof req.query.cardId === 'string' ? req.query.cardId.trim() : '';
   const month = typeof req.query.month === 'string' ? req.query.month.trim() : '';
@@ -170,7 +182,7 @@ async function handleGet(req, res, userId) {
   });
 }
 
-async function handlePost(req, res, userId) {
+async function handlePost(req: NextApiRequest, res: NextApiResponse, userId: string) {
   const input = req.body?.cycle;
   if (!input || typeof input !== 'object') {
     return res.status(400).json({ error: 'cycle payload required' });
@@ -185,7 +197,7 @@ async function handlePost(req, res, userId) {
     return res.status(404).json({ error: 'card not found' });
   }
 
-  let failure = null;
+  let failure: { status: number; body: Record<string, unknown> } | null = null;
 
   const data = await updateUserCreditData(userId, (data) => {
     const card = data.cards.find(item => item?.id === value.cardId);
@@ -228,11 +240,12 @@ async function handlePost(req, res, userId) {
     return { ...data, cycles };
   });
 
-  if (failure) return res.status(failure.status).json(failure.body);
+  const failureResponse = failure as { status: number; body: Record<string, unknown> } | null;
+  if (failureResponse) return res.status(failureResponse.status).json(failureResponse.body);
   return respondWithCardChain(res, data, value.cardId, value.month);
 }
 
-async function handlePatch(req, res, userId) {
+async function handlePatch(req: NextApiRequest, res: NextApiResponse, userId: string) {
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const cardId = typeof body.cardId === 'string' ? body.cardId.trim() : '';
   const month = typeof body.month === 'string' ? body.month.trim() : '';
@@ -263,9 +276,9 @@ async function handlePatch(req, res, userId) {
   if (!applyAction && !applyCashback) {
     return respondWithCardChain(res, await getUserCreditData(userId), cardId, month);
   }
-  const cashbackAmount = applyCashback ? round2(toAmount(rawCashback)) : null;
+  const cashbackAmount = applyCashback ? round2(toAmount(rawCashback)) : undefined;
 
-  let failure = null;
+  let failure: { status: number; body: Record<string, unknown> } | null = null;
 
   const data = await updateUserCreditData(userId, (data) => {
     const card = data.cards.find(item => item?.id === cardId);
@@ -294,7 +307,7 @@ async function handlePatch(req, res, userId) {
           month,
           newSpend: 0,
           // ทุกแถวที่ PATCH สร้างเริ่มด้วย cashbackAmount (0 เมื่อไม่ได้ส่งมา)
-          cashbackAmount: applyCashback ? cashbackAmount : 0,
+          cashbackAmount: cashbackAmount ?? 0,
           // paymentAction เป็น null เสมอเมื่อ !applyAction (กำหนดไว้ด้านบน)
           paymentAction,
           paidAt: paymentAction ? now : null,
@@ -322,11 +335,12 @@ async function handlePatch(req, res, userId) {
     return { ...data, cycles };
   });
 
-  if (failure) return res.status(failure.status).json(failure.body);
+  const failureResponse = failure as { status: number; body: Record<string, unknown> } | null;
+  if (failureResponse) return res.status(failureResponse.status).json(failureResponse.body);
   return respondWithCardChain(res, data, cardId, month);
 }
 
-async function handleDelete(req, res, userId) {
+async function handleDelete(req: NextApiRequest, res: NextApiResponse, userId: string) {
   const cardId = typeof req.body?.cardId === 'string' ? req.body.cardId.trim() : '';
   const month = typeof req.body?.month === 'string' ? req.body.month.trim() : '';
 
@@ -337,7 +351,7 @@ async function handleDelete(req, res, userId) {
     return res.status(404).json({ error: 'card not found' });
   }
 
-  let failure = null;
+  let failure: { status: number; body: Record<string, unknown> } | null = null;
 
   const data = await updateUserCreditData(userId, (data) => {
     const card = data.cards.find(item => item?.id === cardId);
@@ -351,13 +365,15 @@ async function handleDelete(req, res, userId) {
     };
   });
 
-  if (failure) return res.status(failure.status).json(failure.body);
+  const failureResponse = failure as { status: number; body: Record<string, unknown> } | null;
+  if (failureResponse) return res.status(failureResponse.status).json(failureResponse.body);
   return respondWithCardChain(res, data, cardId, month);
 }
 
-export default async function handler(req, res) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   const userId = assertUserId(req, res);
   if (!userId) return;
+  if (!validateApiRequest(req, res, 'credit-cards/revolving')) return;
 
   try {
     if (req.method === 'GET') return await handleGet(req, res, userId);
@@ -372,3 +388,5 @@ export default async function handler(req, res) {
   res.setHeader('Allow', ['GET', 'POST', 'PATCH', 'DELETE']);
   return res.status(405).json({ error: 'Method not allowed' });
 }
+
+export default withAudit(handler, { source: 'credit_card_revolving' });

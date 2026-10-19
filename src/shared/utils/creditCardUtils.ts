@@ -1,5 +1,5 @@
 /**
- * creditCardUtils.js
+ * creditCardUtils.ts
  * Pure re-export barrel — โมดูลนี้ไม่มี function/constant/type ของตัวเองแล้ว (TD-H02, split
  * เสร็จสมบูรณ์ทั้ง 3 sub-slice) ตรรกะทั้งหมดย้ายไปอยู่ที่ 3 ไฟล์ต่อไปนี้:
  *   - ./creditCardBasics.ts       — ค่าคงที่ / ตัวช่วยตัวเลข-วันที่พื้นฐาน / คีย์แถวใน ExpenseTable
@@ -73,3 +73,5 @@ export {
   validateRevolvingCycleInput,
   validatePlanInput
 } from './creditCardRevolving';
+
+export type { CardLike, PlanLike, StoredRevolvingCycle } from './creditCardRevolving';

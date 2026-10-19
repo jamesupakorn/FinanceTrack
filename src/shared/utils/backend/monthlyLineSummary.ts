@@ -1,7 +1,9 @@
+import type { Document } from 'mongodb';
 import { getMongoCollection, isJsonMode } from '../../../../lib/dataSource';
-import { getUserData } from '../../../backend/data/userUtils.js';
+import { getUserData } from '../../../backend/data/userUtils';
 import { getMonthlySummaryModel } from '../frontend/monthlySummary';
 import { getUserCreditData } from './creditCardStore';
+import type { CreditData } from './creditCardStore';
 import { buildInstallmentExpenseRows, buildRevolvingExpenseRows } from './creditCardSync';
 import {
   computeDelta,
@@ -12,8 +14,48 @@ import {
   getNextMonthKey
 } from './monthlySummaryContent';
 import { LINE_THEME, textComponent, valueRow as sharedValueRow } from './lineFlexTheme';
+import type { MetricDelta, UpcomingDues } from './monthlySummaryContent';
 
-function amount(value) {
+type MonthlyModel = ReturnType<typeof getMonthlySummaryModel>;
+type MonthlyModelInput = NonNullable<Parameters<typeof getMonthlySummaryModel>[0]>;
+type SummaryGoal = {
+  name: string;
+  current: number;
+  target: number;
+  remaining: number;
+  progress?: number;
+};
+type SummaryComparison = { income?: MetricDelta; expense?: MetricDelta; savings?: MetricDelta };
+type SummaryPayload = {
+  model: Pick<MonthlyModel, 'netCashFlow' | 'totalIncome' | 'generalExpense' | 'dailyExpense' | 'savings' | 'creditCard'>;
+  taxAccumulated: number;
+  goals: SummaryGoal[];
+  comparison?: SummaryComparison;
+  upcoming?: UpcomingDues | null;
+};
+type StoredGoal = Document & { goalName?: string; targetAmount?: number | string; status?: string };
+type TaxDocument = Document & { year?: string; accumulated_tax?: number | string };
+type SavingsDocument = {
+  savings_list?: Array<{
+    savings_type?: string;
+    รายการ?: string;
+    savings_amount?: number | string;
+    จำนวนเงิน?: number | string;
+  }>;
+  [key: string]: unknown;
+};
+type MonthlyData = {
+  income: Record<string, unknown>;
+  expense: Record<string, unknown>;
+  savings: SavingsDocument;
+  salary: Record<string, unknown>;
+  dailyExpense: NonNullable<MonthlyModelInput['dailyExpenseData']>;
+  tax: { year?: string; accumulated_tax?: number | string };
+  goals: StoredGoal[];
+  savingsDocs: SavingsDocument[];
+};
+
+function amount(value: unknown): string {
   const numeric = Number(value || 0);
   return (Number.isFinite(numeric) ? numeric : 0).toLocaleString('th-TH', {
     minimumFractionDigits: 2,
@@ -21,7 +63,7 @@ function amount(value) {
   });
 }
 
-function getGoalSummary(goals = [], savingsDocs = []) {
+function getGoalSummary(goals: StoredGoal[] = [], savingsDocs: SavingsDocument[] = []): SummaryGoal[] {
   const activeGoals = goals.filter(goal => goal?.status !== 'abandoned' && goal?.status !== 'completed');
   return activeGoals.map(goal => {
     const name = String(goal.goalName || '').trim().toLowerCase();
@@ -41,7 +83,7 @@ function getGoalSummary(goals = [], savingsDocs = []) {
   });
 }
 
-async function readMonthlyData(userId, monthKey) {
+async function readMonthlyData(userId: string, monthKey: string): Promise<MonthlyData> {
   const year = monthKey.slice(0, 4);
   if (isJsonMode()) {
     const income = getUserData('monthly_income.json', userId)?.[monthKey] || {};
@@ -51,7 +93,7 @@ async function readMonthlyData(userId, monthKey) {
     const dailyExpense = getUserData('daily_expenses.json', userId)?.[monthKey] || {};
     const tax = getUserData('tax_accumulated.json', userId)?.[year] || {};
     const goals = getUserData('savings-goals.json', userId)?.goals || [];
-    const savingsDocs = Object.values(getUserData('savings.json', userId) || {});
+    const savingsDocs = Object.values(getUserData('savings.json', userId) || {}) as SavingsDocument[];
     return { income, expense, savings, salary, dailyExpense, tax, goals, savingsDocs };
   }
 
@@ -61,17 +103,17 @@ async function readMonthlyData(userId, monthKey) {
     getMongoCollection('savings').then(collection => collection.findOne({ userId, month: monthKey })).catch(() => null),
     getMongoCollection('salary').then(collection => collection.findOne({ userId, month: monthKey })).catch(() => null),
     getMongoCollection('daily_expenses').then(collection => collection.findOne({ userId, month: monthKey })).catch(() => null),
-    getMongoCollection('tax_accumulated').then(collection => collection.findOne({ userId, year })).catch(() => null),
+    getMongoCollection<TaxDocument>('tax_accumulated').then(collection => collection.findOne({ userId, year })).catch(() => null),
     getMongoCollection('savings').then(collection => collection.find({ userId, month: { $exists: true } }).toArray()).catch(() => []),
-    getMongoCollection('savingsGoals').then(collection => collection.find({ userId }).toArray()).catch(() => [])
+    getMongoCollection<StoredGoal>('savingsGoals').then(collection => collection.find({ userId }).toArray()).catch(() => [])
   ]);
-  return { income: income || {}, expense: expense || {}, savings: savings || {}, salary: salary || {}, dailyExpense: dailyExpense || {}, tax: tax || {}, goals, savingsDocs };
+  return { income: income || {}, expense: expense || {}, savings: savings || {}, salary: salary || {}, dailyExpense: dailyExpense || {}, tax: (tax || {}) as MonthlyData['tax'], goals, savingsDocs };
 }
 
-const hasMonthData = (data) => ['income', 'expense', 'savings', 'dailyExpense']
+const hasMonthData = (data: MonthlyData): boolean => (['income', 'expense', 'savings', 'dailyExpense'] as const)
   .some(key => data[key] && Object.keys(data[key]).length > 0);
 
-async function buildMonthModel(userId, monthKey, creditData) {
+async function buildMonthModel(userId: string, monthKey: string, creditData: Pick<CreditData, 'cards' | 'plans' | 'cycles'>) {
   const data = await readMonthlyData(userId, monthKey);
   const expenseData = {
     ...data.expense,
@@ -91,9 +133,9 @@ async function buildMonthModel(userId, monthKey, creditData) {
 }
 
 // รายจ่ายรวม = รายจ่ายทั่วไป + รายวัน + บัตรเครดิต (ไม่รวมเงินออม ซึ่งเทียบแยกอีกแถว)
-const totalExpenseOf = (model) => Math.round((model.generalExpense + model.dailyExpense + model.creditCard) * 100) / 100;
+const totalExpenseOf = (model: MonthlyModel): number => Math.round((model.generalExpense + model.dailyExpense + model.creditCard) * 100) / 100;
 
-export async function buildMonthlySummaryPayload(userId, monthKey) {
+export async function buildMonthlySummaryPayload(userId: string, monthKey: string) {
   const creditData = await getUserCreditData(userId).catch(() => ({ cards: [], plans: [], cycles: [] }));
   const { data, model } = await buildMonthModel(userId, monthKey, creditData);
   const prev = await buildMonthModel(userId, getPrevMonthKey(monthKey), creditData);
@@ -116,21 +158,21 @@ export async function buildMonthlySummaryPayload(userId, monthKey) {
 
 // textComponent/valueRow มาจากโมดูลกลาง (AC-1) — valueRow รับค่าที่ format เป็น string แล้วเท่านั้น
 // (AC-3: ห้าม unify amount() กับ formatAmount() ของ line_due_notify.js) จึงต้องห่อ amount(value) ที่ call site
-function valueRow(icon, label, value, color = LINE_THEME.textSecondary) {
+function valueRow(icon: string, label: string, value: unknown, color = LINE_THEME.textSecondary) {
   return sharedValueRow(icon, label, `${amount(value)} บาท`, color);
 }
 
-function deltaRow(delta, prefix = '') {
+function deltaRow(delta: MetricDelta | undefined, prefix = '') {
   if (!delta) return [];
   return [textComponent(`${prefix}${formatDeltaLabel(delta)}`, 'xs', LINE_THEME.textSecondary)];
 }
 
-function expenseDeltaRow(comparison) {
+function expenseDeltaRow(comparison: SummaryComparison | undefined) {
   if (!comparison?.expense) return [];
   return deltaRow(comparison.expense, `รายจ่ายรวม ${amount(comparison.expense.current)} บาท · `);
 }
 
-function upcomingSection(upcoming) {
+function upcomingSection(upcoming: UpcomingDues | null | undefined) {
   if (!upcoming) return [];
   return [
     textComponent('📅 ต้องจ่ายเดือนหน้า', 'md', LINE_THEME.textPrimary, '700'),
@@ -139,7 +181,7 @@ function upcomingSection(upcoming) {
   ];
 }
 
-export function buildMonthlySummaryFlex(monthLabel, payload) {
+export function buildMonthlySummaryFlex(monthLabel: string, payload: SummaryPayload) {
   const { model, taxAccumulated, goals, comparison, upcoming } = payload;
   const isPositiveNet = model.netCashFlow >= 0;
   const netColor = isPositiveNet ? LINE_THEME.success : LINE_THEME.danger;
@@ -188,12 +230,12 @@ export function buildMonthlySummaryFlex(monthLabel, payload) {
   };
 }
 
-export function formatMonthlySummaryText(monthLabel, payload) {
+export function formatMonthlySummaryText(monthLabel: string, payload: SummaryPayload): string {
   const { model, taxAccumulated, goals, comparison, upcoming } = payload;
   const goalText = goals.length
     ? goals.map(goal => `${goal.name}: คงเหลือ ${amount(goal.remaining)} บาท${goal.progress === undefined ? '' : ` (ถึงเป้าแล้ว ${goal.progress}%)`}`).join('\n')
     : 'ยังไม่มีเป้าหมายเงินออม';
-  const withDelta = (line, delta) => (delta ? `${line} · ${formatDeltaLabel(delta)}` : line);
+  const withDelta = (line: string, delta: MetricDelta | undefined) => (delta ? `${line} · ${formatDeltaLabel(delta)}` : line);
   const lines = [
     `📊 สรุปการเงินประจำเดือน ${monthLabel}`,
     `กระแสเงินสดสุทธิ: ${model.netCashFlow >= 0 ? '+' : '-'}${amount(Math.abs(model.netCashFlow))} บาท`,

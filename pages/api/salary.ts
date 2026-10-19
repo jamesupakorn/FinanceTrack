@@ -1,5 +1,8 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import type { Collection, Document } from 'mongodb';
 import { calculateSalarySummary } from '../../src/shared/utils/backend/apiUtils';
 import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import {
 	isJsonMode,
 	withGeneratedId,
@@ -12,17 +15,32 @@ import {
 import {
 	getUserData,
 	updateUserData,
-} from '../../src/backend/data/userUtils.js';
+} from '../../src/backend/data/userUtils';
 import {
 	normaliseOvertimeRows,
 	extractLegacyOvertimeRows,
 	stripLegacyOvertimeKeys
 } from '../../src/shared/utils/overtimeUtils';
+import { withAudit } from '../../lib/auditedMutation';
 
 const COLLECTION_NAME = 'salary';
 const JSON_FILENAME = 'salary.json';
 
-function createDefaultSalaryStructure() {
+type SalaryDoc = {
+	month?: string;
+	income?: Record<string, unknown>;
+	deduct?: Record<string, unknown>;
+	overtime?: unknown;
+	summary?: ReturnType<typeof calculateSalarySummary>;
+	note?: unknown;
+	saved_at?: string;
+	_id?: unknown;
+	userId?: unknown;
+	[key: string]: unknown;
+};
+type SalaryBucket = Record<string, SalaryDoc>;
+
+function createDefaultSalaryStructure(): SalaryDoc {
 	return {
 		income: {
 			// คีย์ overtime_* แบบยอดคงที่ถูกถอดออกจาก default แล้ว — OT คำนวณจาก overtime[] แทน
@@ -53,7 +71,7 @@ function createDefaultSalaryStructure() {
  * 2. derive overtimeLegacy จาก income — เป็นการแปลงตอนแสดงผลล้วน ๆ **ไม่แตะ income** (D-1)
  * summary ของเอกสารที่บันทึกแล้วคืนตามที่เก็บไว้ ส่วน carry-forward คำนวณใหม่ที่ call site
  */
-function decorateSalaryDocForGet(doc) {
+function decorateSalaryDocForGet(doc: SalaryDoc): SalaryDoc & { overtime: ReturnType<typeof normaliseOvertimeRows>; overtimeLegacy: ReturnType<typeof extractLegacyOvertimeRows> } {
 	const income = doc.income || {};
 	return {
 		...doc,
@@ -65,7 +83,7 @@ function decorateSalaryDocForGet(doc) {
 // เช็คว่า doc เงินเดือนนี้มีข้อมูลจริง (income/deduct มีค่ามากกว่า 0 อย่างน้อย 1 รายการ)
 // ใช้แยกแยะ "record ที่มีอยู่จริงแต่ว่างเปล่า" (เช่นจากปุ่มเพิ่มเดือนใหม่) ออกจาก
 // "record ที่มีข้อมูลเงินเดือนจริง" — เพื่อไม่ให้ record ว่างมาบัง carry-forward ย้อนหลัง
-function hasMeaningfulSalaryData(doc) {
+function hasMeaningfulSalaryData(doc: SalaryDoc | null | undefined): boolean {
 	if (!doc || typeof doc !== 'object') return false;
 	const income = doc.income || {};
 	const deduct = doc.deduct || {};
@@ -74,7 +92,7 @@ function hasMeaningfulSalaryData(doc) {
 	return hasIncome || hasDeduct;
 }
 
-function findPrevMonthDoc(bucket, month) {
+function findPrevMonthDoc(bucket: SalaryBucket, month: string): SalaryDoc | null {
 	const prevMonths = Object.keys(bucket)
 		.filter((m) => m < month)
 		.sort()
@@ -84,9 +102,9 @@ function findPrevMonthDoc(bucket, month) {
 	return found ? bucket[found] : null;
 }
 
-function handleJsonSalaryGet(req, res, userId) {
-	const bucket = getUserData(JSON_FILENAME, userId);
-	const { month } = req.query;
+function handleJsonSalaryGet(req: NextApiRequest, res: NextApiResponse, userId: string) {
+	const bucket = getUserData(JSON_FILENAME, userId) as SalaryBucket;
+	const month = Array.isArray(req.query.month) ? req.query.month[0] : req.query.month;
 	if (month) {
 		let doc = bucket[month];
 		if (!doc) {
@@ -108,8 +126,8 @@ function handleJsonSalaryGet(req, res, userId) {
 		const summary = doc.summary || calculateSalarySummary({ ...doc, month });
 		return res.json(decorateSalaryDocForGet({ ...doc, summary }));
 	}
-	const allData = {};
-	Object.entries(bucket).forEach(([monthKey, doc]) => {
+	const allData: Record<string, SalaryDoc> = {};
+	Object.entries(bucket).forEach(([monthKey, doc]: [string, SalaryDoc]) => {
 		if (!doc || !doc.month) return;
 		const summary = doc.summary || calculateSalarySummary({ ...doc, month: doc.month });
 		allData[monthKey] = decorateSalaryDocForGet({ ...doc, summary });
@@ -117,14 +135,15 @@ function handleJsonSalaryGet(req, res, userId) {
 	return res.json(allData);
 }
 
-function handleJsonSalaryPost(req, res, userId) {
-	const { month, income, deduct, note, overtime } = req.body;
-	if (!month) {
+function handleJsonSalaryPost(req: NextApiRequest, res: NextApiResponse, userId: string) {
+	const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
+	const { month, income, deduct, note, overtime } = body;
+	if (typeof month !== 'string' || !month) {
 		return res.status(400).json({ error: 'กรุณาระบุเดือน' });
 	}
-	const salaryData = {
-		income: income || {},
-		deduct: deduct || {},
+	const salaryData: SalaryDoc = {
+		income: income && typeof income === 'object' ? income as Record<string, unknown> : {},
+		deduct: deduct && typeof deduct === 'object' ? deduct as Record<string, unknown> : {},
 		// เขียนทุกครั้งแม้เป็น [] — การเขียนเป็นแบบ merge ระดับบนสุด ถ้าไม่ส่งจะเหลือแถวเดิมค้างไว้
 		// (DATA_MODEL inv. 3) และ normalise ทิ้ง property อื่น เช่น amount ที่ client ส่งมา (inv. 4)
 		overtime: normaliseOvertimeRows(overtime),
@@ -133,8 +152,8 @@ function handleJsonSalaryPost(req, res, userId) {
 	};
 	// ต้องส่ง month เข้าไปด้วย ไม่งั้น OT จะคิดเป็น 0 ใน summary ที่บันทึกจริง ขณะที่ UI แสดงเลขถูก (V-1)
 	salaryData.summary = calculateSalarySummary({ ...salaryData, month });
-	updateUserData(JSON_FILENAME, userId, (bucket) => {
-		const nextBucket = { ...bucket };
+	updateUserData(JSON_FILENAME, userId, (bucket: SalaryBucket) => {
+		const nextBucket: SalaryBucket = { ...bucket };
 		const existing = nextBucket[month] || {};
 		nextBucket[month] = withGeneratedId({ ...existing, ...salaryData, month });
 		return nextBucket;
@@ -144,26 +163,27 @@ function handleJsonSalaryPost(req, res, userId) {
 	return res.status(201).json({ success: true });
 }
 
-function handleJsonSalaryDelete(req, res, userId) {
-	const { month } = req.query;
+function handleJsonSalaryDelete(req: NextApiRequest, res: NextApiResponse, userId: string) {
+	const month = Array.isArray(req.query.month) ? req.query.month[0] : req.query.month;
 	if (!month) {
 		return res.status(400).json({ error: 'กรุณาระบุเดือนที่ต้องการลบ' });
 	}
-	const bucket = getUserData(JSON_FILENAME, userId);
+	const bucket = getUserData(JSON_FILENAME, userId) as SalaryBucket;
 	if (!bucket[month]) {
 		return res.status(404).json({ error: 'ไม่พบข้อมูลเดือนที่ระบุ' });
 	}
-	updateUserData(JSON_FILENAME, userId, (existing) => {
-		const nextBucket = { ...existing };
+	updateUserData(JSON_FILENAME, userId, (existing: SalaryBucket) => {
+		const nextBucket: SalaryBucket = { ...existing };
 		delete nextBucket[month];
 		return nextBucket;
 	});
 	return res.json({ success: true, message: 'ลบข้อมูลเงินเดือนเรียบร้อย' });
 }
 
-export default async function handler(req, res) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
 	const userId = assertUserId(req, res);
 	if (!userId) return;
+	if (!validateApiRequest(req, res, 'salary')) return;
 
 	if (isJsonMode()) {
 		if (req.method === 'GET') {
@@ -179,14 +199,14 @@ export default async function handler(req, res) {
 		return res.status(405).json({ error: 'Method not allowed' });
 	}
 
-	const collection = await getMongoCollection(COLLECTION_NAME);
+	const collection: Collection<Document> = await getMongoCollection(COLLECTION_NAME);
 	const userFilter = { userId };
 
 	try {
 		if (req.method === 'GET') {
-			const { month } = req.query;
+			const month = Array.isArray(req.query.month) ? req.query.month[0] : req.query.month;
 			if (month) {
-				let doc = await collection.findOne({ month, ...userFilter });
+				let doc = await collection.findOne({ month, ...userFilter }) as SalaryDoc | null;
 				if (!doc) {
 					// เดินย้อนกลับจนเจอเดือนที่มีข้อมูลจริง ข้ามเดือนว่าง (blank record) ไป
 					// จำนวน doc ถูกจำกัดด้วยเพดาน 15 เดือนต่อ user (BR-002) จึงดึงมาทั้งหมดแล้วกรองใน JS ได้อย่างปลอดภัย
@@ -194,7 +214,7 @@ export default async function handler(req, res) {
 						.find({ ...userFilter, month: { $lt: month } })
 						.sort({ month: -1 })
 						.toArray();
-					const prevDoc = priorDocs.find((d) => hasMeaningfulSalaryData(d)) || null;
+					const prevDoc = priorDocs.find((d) => hasMeaningfulSalaryData(d as SalaryDoc)) as SalaryDoc | undefined;
 					doc = { ...createDefaultSalaryStructure(), month };
 					if (prevDoc) {
 						// ตัดคีย์ OT เดิมออก *ก่อน* คำนวณ summary ไม่งั้นยอดที่ตัดทิ้งจะถูกนับต่อ (V-3 / A-1)
@@ -213,7 +233,7 @@ export default async function handler(req, res) {
 					if (!doc.deduct) doc.deduct = defaults.deduct;
 				}
 				// Ensure summary is present
-				const sanitizedDoc = { ...doc };
+				const sanitizedDoc: SalaryDoc = { ...doc };
 				delete sanitizedDoc._id;
 				delete sanitizedDoc.userId;
 				let summary = doc && doc.summary ? doc.summary : calculateSalarySummary({ ...doc, month });
@@ -224,13 +244,14 @@ export default async function handler(req, res) {
 			} else {
 			// return all
 			const allDocs = await collection.find({ ...userFilter, month: { $exists: true } }).toArray();
-			const allData = {};
+			const allData: Record<string, SalaryDoc> = {};
 			allDocs.forEach(doc => {
 				// Ensure summary is present
 				let summary = doc && doc.summary ? doc.summary : calculateSalarySummary({ ...doc, month: doc.month });
-				const sanitizedDoc = { ...doc };
+				const sanitizedDoc: SalaryDoc = { ...doc };
 				delete sanitizedDoc._id;
 				delete sanitizedDoc.userId;
+				if (typeof doc.month !== 'string') return;
 				allData[doc.month] = decorateSalaryDocForGet({
 					...sanitizedDoc,
 					summary
@@ -239,13 +260,14 @@ export default async function handler(req, res) {
 			return res.json(allData);
 			}
 		} else if (req.method === 'POST') {
-			const { month, income, deduct, note, overtime } = req.body;
-			if (!month) {
+			const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
+			const { month, income, deduct, note, overtime } = body;
+			if (typeof month !== 'string' || !month) {
 				return res.status(400).json({ error: 'กรุณาระบุเดือน' });
 			}
-			const salaryData = {
-				income: income || {},
-				deduct: deduct || {},
+			const salaryData: SalaryDoc = {
+				income: income && typeof income === 'object' ? income as Record<string, unknown> : {},
+				deduct: deduct && typeof deduct === 'object' ? deduct as Record<string, unknown> : {},
 				// $set แบบ merge ระดับบนสุด — ต้องเขียน overtime ทุกครั้งแม้เป็น [] (DATA_MODEL inv. 3)
 				overtime: normaliseOvertimeRows(overtime),
 				note: note || "",
@@ -262,7 +284,7 @@ export default async function handler(req, res) {
 			await enforceSharedMonthWindowMongo(userId, { extraMonth: month });
 			return res.status(201).json({ success: true });
 		} else if (req.method === 'DELETE') {
-			const { month } = req.query;
+			const month = Array.isArray(req.query.month) ? req.query.month[0] : req.query.month;
 			if (!month) {
 				return res.status(400).json({ error: 'กรุณาระบุเดือนที่ต้องการลบ' });
 			}
@@ -278,6 +300,8 @@ export default async function handler(req, res) {
 		}
 	} catch (error) {
 		console.error('Salary API Error:', error);
-		return res.status(500).json({ error: 'เกิดข้อผิดพลาดในระบบ', details: error.message });
+		return res.status(500).json({ error: 'เกิดข้อผิดพลาดในระบบ', details: error instanceof Error ? error.message : String(error) });
 	}
 }
+
+export default withAudit(handler, { source: 'salary' });

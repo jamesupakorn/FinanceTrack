@@ -8,17 +8,52 @@
  */
 
 import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import type { Document, ObjectId } from 'mongodb';
 import crypto from 'crypto';
 import {
   getUserData,
   updateUserData,
-} from '../../src/backend/data/userUtils.js';
+} from '../../src/backend/data/userUtils';
+import { withAudit } from '../../lib/auditedMutation';
 
 const GOALS_JSON_FILE = 'savings-goals.json';
 const SAVINGS_JSON_FILE = 'savings.json';
 
-function toAllocationPercent(value) {
+interface SavingsGoal {
+  _id: string;
+  goalName: string;
+  targetAmount: number;
+  status: string;
+  allocationPercent?: number | null;
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+interface MongoSavingsGoal extends Document {
+  _id: string | ObjectId;
+  goalName: string;
+  targetAmount: number;
+  status: string;
+  allocationPercent?: number | null;
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface SavingsEntry {
+  savings_type?: string;
+  รายการ?: string;
+  savings_amount?: number | string;
+  จำนวนเงิน?: number | string;
+}
+
+interface SavingsDocument {
+  savings_list?: SavingsEntry[];
+  [key: string]: unknown;
+}
+
+function toAllocationPercent(value: unknown): number | null {
   if (value == null || value === '') return null;
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
@@ -31,7 +66,7 @@ function toAllocationPercent(value) {
  * @param {Array} goals - goals array
  * @param {Array} savingsDocs - savings docs array (all months for this user)
  */
-function computeCurrentAmounts(goals, savingsDocs) {
+function computeCurrentAmounts(goals: SavingsGoal[], savingsDocs: SavingsDocument[]) {
   return goals.map(goal => {
     const goalName = (goal.goalName || '').trim().toLowerCase();
     let currentAmount = 0;
@@ -70,22 +105,22 @@ function computeCurrentAmounts(goals, savingsDocs) {
 
 // ---- JSON mode helpers ----
 
-function getJsonGoals(userId) {
+function getJsonGoals(userId: string): SavingsGoal[] {
   const bucket = getUserData(GOALS_JSON_FILE, userId);
   return Array.isArray(bucket?.goals) ? bucket.goals : [];
 }
 
-function setJsonGoals(userId, goals) {
+function setJsonGoals(userId: string, goals: SavingsGoal[]) {
   updateUserData(GOALS_JSON_FILE, userId, () => ({ goals }));
 }
 
-function computeCurrentAmountsFromJson(goals, userId) {
+function computeCurrentAmountsFromJson(goals: SavingsGoal[], userId: string) {
   const savingsBucket = getUserData(SAVINGS_JSON_FILE, userId);
-  const savingsDocs = Object.values(savingsBucket || {});
+  const savingsDocs = Object.values(savingsBucket || {}) as SavingsDocument[];
   return computeCurrentAmounts(goals, savingsDocs);
 }
 
-function handleJsonMode(req, res, userId) {
+function handleJsonMode(req: NextApiRequest, res: NextApiResponse, userId: string) {
   if (req.method === 'GET') {
     const goals = getJsonGoals(userId).filter(g => g.status !== 'abandoned');
     const goalsWithProgress = computeCurrentAmountsFromJson(goals, userId);
@@ -124,15 +159,15 @@ function handleJsonMode(req, res, userId) {
     const allocations = Array.isArray(req.body?.allocations) ? req.body.allocations : null;
     if (allocations) {
       const goals = getJsonGoals(userId);
-      const updatesById = new Map();
-      allocations.forEach((item) => {
+      const updatesById = new Map<unknown, number | null>();
+      allocations.forEach((item: Record<string, unknown>) => {
         const goalId = item?.goalId || item?.id;
         if (!goalId) return;
         updatesById.set(goalId, toAllocationPercent(item?.allocationPercent));
       });
 
       const now = new Date().toISOString();
-      const nextGoals = goals.map((goal) => {
+      const nextGoals = goals.map((goal: SavingsGoal) => {
         if (!updatesById.has(goal._id)) return goal;
         return {
           ...goal,
@@ -155,7 +190,7 @@ function handleJsonMode(req, res, userId) {
     if (idx === -1) {
       return res.status(404).json({ error: 'Goal not found' });
     }
-    const updates = { updatedAt: new Date().toISOString() };
+    const updates: Record<string, unknown> = { updatedAt: new Date().toISOString() };
     if (goalName !== undefined) updates.goalName = String(goalName).trim();
     if (description !== undefined) updates.description = description;
     if (targetAmount !== undefined) updates.targetAmount = Number(targetAmount);
@@ -190,32 +225,33 @@ function handleJsonMode(req, res, userId) {
 
 // ---- main handler ----
 
-export default async function handler(req, res) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   const userId = assertUserId(req, res);
   if (!userId) return;
+  if (!validateApiRequest(req, res, 'savings-goals')) return;
 
   if (isJsonMode()) {
     return handleJsonMode(req, res, userId);
   }
 
-  const goalsCol = await getMongoCollection('savingsGoals');
+  const goalsCol = await getMongoCollection<MongoSavingsGoal>('savingsGoals');
   const savingsCol = await getMongoCollection('savings');
 
   // ดึง savings ทุกเดือนของ user มาใช้คำนวณ currentAmount
   async function getAllSavings() {
-    return savingsCol.find({ userId, month: { $exists: true } }).toArray();
+    return savingsCol.find({ userId, month: { $exists: true } }).toArray() as Promise<SavingsDocument[]>;
   }
 
   // ------- GET -------
   if (req.method === 'GET') {
     const goals = await goalsCol
-      .find({ userId, status: { $ne: 'abandoned' } })
+      .find<MongoSavingsGoal>({ userId, status: { $ne: 'abandoned' } })
       .sort({ createdAt: -1 })
       .toArray();
 
     const savingsDocs = await getAllSavings();
     const goalsWithProgress = computeCurrentAmounts(
-      goals.map(g => ({ ...g, _id: g._id?.toString() })),
+      goals.map(g => ({ ...g, _id: g._id.toString() })),
       savingsDocs
     );
 
@@ -261,7 +297,9 @@ export default async function handler(req, res) {
 
   // ------- PUT (update) -------
   if (req.method === 'PUT') {
-    const allocations = Array.isArray(req.body?.allocations) ? req.body.allocations : null;
+    const allocations = Array.isArray(req.body?.allocations)
+      ? req.body.allocations as Array<Record<string, unknown>>
+      : null;
     if (allocations) {
       const now = new Date();
       const operations = allocations
@@ -280,7 +318,7 @@ export default async function handler(req, res) {
             }
           };
         })
-        .filter(Boolean);
+        .filter((operation): operation is NonNullable<typeof operation> => operation !== null);
 
       if (operations.length === 0) {
         return res.status(400).json({ error: 'allocations payload is empty' });
@@ -301,7 +339,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'goalId required' });
     }
 
-    const updates = { updatedAt: new Date() };
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (goalName !== undefined) updates.goalName = String(goalName).trim();
     if (description !== undefined) updates.description = description;
     if (targetAmount !== undefined) updates.targetAmount = Number(targetAmount);
@@ -342,3 +380,5 @@ export default async function handler(req, res) {
 
   return res.status(405).end();
 }
+
+export default withAudit(handler, { source: 'savings_goals' });
