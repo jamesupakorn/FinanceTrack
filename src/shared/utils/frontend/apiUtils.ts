@@ -1,5 +1,45 @@
 import { requireActiveUserId } from './sessionClient';
 
+/** zod issue shape ที่ API ฝั่ง zod-validated (ADR-027) ส่งกลับมาใน 400 response */
+interface ApiValidationIssue {
+	path: Array<string | number>;
+	code: string;
+	message: string;
+}
+
+const MAX_SHOWN_ISSUES = 3;
+
+function formatIssuePath(path: Array<string | number>): string {
+	let out = '';
+	for (const segment of path) {
+		if (typeof segment === 'number') {
+			out += `[${segment + 1}]`;
+		} else if (out) {
+			out += `.${segment}`;
+		} else {
+			out = String(segment);
+		}
+	}
+	return out;
+}
+
+function formatIssuesMessage(issues: ApiValidationIssue[]): string {
+	const lines = issues.slice(0, MAX_SHOWN_ISSUES).map(issue => `${formatIssuePath(issue.path)}: ${issue.message}`);
+	const remaining = issues.length - MAX_SHOWN_ISSUES;
+	if (remaining > 0) lines.push(`และอีก ${remaining} รายการ`);
+	return lines.join('\n');
+}
+
+/** โยนจาก jsonFetch เมื่อ 400 response มี { error, issues } ตามสัญญา ADR-027 (zod validation) */
+export class ApiValidationError extends Error {
+	issues: ApiValidationIssue[];
+	constructor(issues: ApiValidationIssue[]) {
+		super(formatIssuesMessage(issues));
+		this.name = 'ApiValidationError';
+		this.issues = issues;
+	}
+}
+
 const API_URLS: Record<string, string> = {
 	INCOME: '/api/monthly_income',
 	EXPENSE: '/api/monthly_expense',
@@ -127,6 +167,9 @@ async function jsonFetch(url: string, options: RequestInit = {}): Promise<any> {
 		if (response.status === 401 || response.status === 403) {
 			notifySessionInvalid();
 		}
+		if (response.status === 400 && Array.isArray(data?.issues) && data.issues.length > 0) {
+			throw new ApiValidationError(data.issues);
+		}
 		const message = data?.error || 'ไม่สามารถเชื่อมต่อ API ได้';
 		throw new Error(message);
 	}
@@ -156,6 +199,17 @@ export const expenseAPI = {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: withUserPayload({ month, expense_data: values })
+	}),
+	/** ตั้งค่า paid ของแถวเดียวแบบ optimistic (ADR-028) — `row` ส่งเฉพาะตอนแถวยังไม่เคยถูกบันทึก */
+	setPaid: async (
+		month: string,
+		key: string,
+		paid: boolean,
+		row?: { name: string; actual: string; account: string; dueDay: unknown }
+	): Promise<any> => jsonFetch(API_URLS.EXPENSE, {
+		method: 'PATCH',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ month, key, paid, ...(row ? { row } : {}) })
 	})
 };
 
@@ -398,7 +452,7 @@ export const creditCardAPI = {
 		headers: JSON_HEADERS,
 		body: withUserPayload({ cycle: { cardId, month, newSpend } })
 	}),
-	setRevolvingAction: async (cardId: string, month: string, paymentAction: string): Promise<any> => jsonFetch(CREDIT_CARD_REVOLVING_URL, {
+	setRevolvingAction: async (cardId: string, month: string, paymentAction: string | null): Promise<any> => jsonFetch(CREDIT_CARD_REVOLVING_URL, {
 		method: 'PATCH',
 		headers: JSON_HEADERS,
 		body: withUserPayload({ cardId, month, paymentAction })
@@ -426,4 +480,20 @@ export const creditCardAPI = {
 			return [];
 		}
 	}
+};
+
+export interface AuditLogItem {
+	eventId: string;
+	actorType: string;
+	source: string;
+	resource: string;
+	action: string;
+	resourceKey?: string;
+	changedFields: string[];
+	occurredAt: string;
+}
+
+export const auditLogAPI = {
+	list: async (cursor: string | null): Promise<{ items: AuditLogItem[]; nextCursor: string | null }> =>
+		jsonFetch(buildUrl('/api/audit-logs', cursor ? { cursor } : {}))
 };

@@ -1,6 +1,6 @@
 {
   "name": "financetrack",
-  "version": "2.20.0",
+  "version": "2.20.1",
   "description": "บัญชีรับจ่ายย้อนหลัง 12 เดือน",
   "main": "index.js",
   "engines": {
@@ -14,6 +14,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "type-check": "tsc --noEmit",
+    "check:no-js": "tsx scripts/checkNoFirstPartyJavaScript.ts",
     "release:patch": "npm version patch -m \"chore(release): v%s\"",
     "release:minor": "npm version minor -m \"chore(release): v%s\"",
     "release:major": "npm version major -m \"chore(release): v%s\"",
@@ -22,6 +23,12 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "postcss": {
+    "plugins": {
+      "tailwindcss": {},
+      "autoprefixer": {}
+    }
+  },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "jspdf": "^4.2.0",
@@ -29,12 +36,14 @@
     "mongodb": "^6.20.0",
     "next": "^16.1.6",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.20.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -45,6 +54,8 @@
     "node-mocks-http": "^1.18.1",
     "postcss": "^8.5.26",
     "tailwindcss": "^3.4.19",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.2"
   }
 }

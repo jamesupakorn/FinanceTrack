@@ -1,5 +1,6 @@
 import type { ExpenseItem } from '../../types/domain';
 import { calculateOvertimeTotal, normaliseOvertimeRows } from '../overtimeUtils';
+import { withRetention } from '../../../../lib/auditContext';
 
 /** Module-private shape for calculateSalarySummary's single caller (pages/api/salary.js). */
 interface SalaryBreakdown {
@@ -97,7 +98,10 @@ export async function enforceMonthLimit(
 
   if (monthsToDelete.length > 0) {
     const deleteFilter = { ...filter, month: { $in: monthsToDelete } };
-    await collection.deleteMany(deleteFilter);
+    // withRetention marks this delete as automatic 15-month-window pruning (not a user action) so
+    // the audit layer (ADR-029) records it as `retention_pruned`/system instead of `deleted`/user —
+    // a no-op outside an active audited-mutation transaction.
+    await withRetention(() => collection.deleteMany(deleteFilter));
   }
 
   return { retainedMonths };

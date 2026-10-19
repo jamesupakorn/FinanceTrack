@@ -14,7 +14,7 @@
 
 import { enforceMonthLimit } from './apiUtils';
 import { getMongoCollection } from '../../../../lib/dataSource';
-import { getUserData, setUserData } from '../../../backend/data/userUtils.js';
+import { getUserData, setUserData } from '../../../backend/data/userUtils';
 
 const SHARED_WINDOW_LIMIT = 15;
 const JSON_FILES = ['monthly_expense.json', 'monthly_income.json', 'salary.json', 'investment.json'];
