@@ -21,6 +21,7 @@ import {
   isCreditCardRowKey,
   getCurrentMonthKey
 } from '../../src/shared/utils/creditCardUtils';
+import { deriveLegacyBankAccountId } from '../../src/shared/utils/backend/bankAccountIds';
 
 declare const jest: typeof import('@jest/globals').jest;
 
@@ -201,7 +202,7 @@ describe('/api/monthly_expense (Mongo mode)', () => {
     expect(body[key]).toEqual({
       name: 'ของใช้ (งวด 1/3)',
       actual: 300,
-      account: 'บัตร A', // no bankAccounts match -> falls back to card name
+      account: 'อื่นๆ/ไม่ระบุบัญชี',
       paid: false,
       dueDay: 20
     });
@@ -224,7 +225,7 @@ describe('/api/monthly_expense (Mongo mode)', () => {
     expect(body[key]).toEqual({
       name: 'ยอดใช้จ่ายบัตร บัตร A',
       actual: 1000,
-      account: 'บัตร A',
+      account: 'อื่นๆ/ไม่ระบุบัญชี',
       paid: false, // paymentAction still null -> not yet paid
       dueDay: 20
     });
@@ -400,7 +401,7 @@ describe('/api/monthly_expense (Mongo mode)', () => {
   // Credit-card-sync-specific (5 cases)
   // ---------------------------------------------------------------------
 
-  it('13. Installment row shape/key/fields correctness, account falls back to the card\'s own name (no users doc seeded)', async () => {
+  it('13. Installment row shape/key/fields correctness, unmatched account uses the unassigned bucket', async () => {
     await seedCreditDoc(USER_A, {
       cards: [makeCard({ bankName: 'กรุงศรี' })], // bankName set but no matching user bank account -> fallback
       plans: [makePlan()]
@@ -415,7 +416,7 @@ describe('/api/monthly_expense (Mongo mode)', () => {
     expect(body[key]).toEqual({
       name: 'ของใช้ (งวด 1/3)',
       actual: 300,
-      account: 'บัตร A', // getUserBankAccounts throws (no users doc) -> [] -> falls back to card name
+      account: 'อื่นๆ/ไม่ระบุบัญชี',
       paid: false,
       dueDay: 20
     });
@@ -464,7 +465,7 @@ describe('/api/monthly_expense (Mongo mode)', () => {
     expect(body[key]).toEqual({
       name: 'ยอดใช้จ่ายบัตร บัตร A',
       actual: 500,
-      account: 'บัตร A',
+      account: 'อื่นๆ/ไม่ระบุบัญชี',
       paid: true, // paymentAction 'full' !== null
       dueDay: 20
     });
@@ -503,6 +504,46 @@ describe('/api/monthly_expense (Mongo mode)', () => {
     expect(res._getStatusCode()).toBe(200);
     const body = JSON.parse(res._getData());
     expect(body[key].account).toBe('กรุงศรี'); // matched bank name, not the card's own 'บัตร A'
+  });
+
+  it('AC-BA-41: an explicit account id routes installment dues to the linked account', async () => {
+    await db.collection('users').insertOne({
+      id: USER_A,
+      bankAccounts: [{ id: 'ba_aaaaaaaaaaaa', name: 'กสิกร' }]
+    });
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ bankAccountId: 'ba_aaaaaaaaaaaa', bankName: '' })],
+      plans: [makePlan()]
+    });
+    const key = buildInstallmentRowKey('ip_abc123abc123', 1);
+
+    const { req, res } = makeReqRes({ query: { month: '2026-08' } });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const body = JSON.parse(res._getData());
+    expect(body[key].account).toBe('กสิกร');
+    expect(body.accountSummary['กสิกร']).toBe(300);
+  });
+
+  it('AC-BA-42: a deterministic legacy account id continues to resolve before accounts are saved', async () => {
+    await db.collection('users').insertOne({
+      id: USER_A,
+      bankAccounts: ['กรุงศรี']
+    });
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ bankAccountId: deriveLegacyBankAccountId('กรุงศรี'), bankName: '' })],
+      plans: [makePlan()]
+    });
+    const key = buildInstallmentRowKey('ip_abc123abc123', 1);
+
+    const { req, res } = makeReqRes({ query: { month: '2026-08' } });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    expect(JSON.parse(res._getData())[key].account).toBe('กรุงศรี');
+    const stored = await db.collection('users').findOne({ id: USER_A });
+    expect(stored!.bankAccounts).toEqual(['กรุงศรี']);
   });
 
   // ---------------------------------------------------------------------

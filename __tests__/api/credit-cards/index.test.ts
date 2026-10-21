@@ -441,6 +441,26 @@ describe('/api/credit-cards (Mongo mode, real DB)', () => {
     expect(getBody.cards[0].creditLimit).toBe(2000);
   });
 
+  it('AC-BA-21: card account links can be explicitly cleared on edit', async () => {
+    const { req: createReq, res: createRes } = makeReqRes({
+      method: 'POST',
+      body: { card: { name: 'บัตรผูกบัญชี', bankAccountId: 'ba_0123456789ab' } }
+    });
+    await handler(createReq, createRes);
+    expect(createRes._getStatusCode()).toBe(200);
+    const cardId = JSON.parse(createRes._getData()).card.id as string;
+
+    const { req: editReq, res: editRes } = makeReqRes({
+      method: 'POST',
+      body: { card: { id: cardId, name: 'บัตรผูกบัญชี', bankAccountId: '' } }
+    });
+    await handler(editReq, editRes);
+
+    expect(editRes._getStatusCode()).toBe(200);
+    expect(JSON.parse(editRes._getData()).card.bankAccountId).toBe('');
+    expect((await readCreditDoc(USER_A)).cards[0].bankAccountId).toBe('');
+  });
+
   it('13. POST edit path with a nonexistent card.id returns 404 and adds no card', async () => {
     const { req, res } = makeReqRes({
       method: 'POST',
