@@ -11,6 +11,7 @@ import { createMocks } from 'node-mocks-http';
 import type { RequestMethod } from 'node-mocks-http';
 import type { NextApiHandler } from 'next';
 import type { Db } from 'mongodb';
+import { deriveLegacyBankAccountId } from '../../src/shared/utils/backend/bankAccountIds';
 
 const TEST_SECRET = 'test-secret-do-not-use-in-prod';
 const TEST_USER_ID = 'test-user-1';
@@ -142,7 +143,69 @@ describe('/api/user-bank-accounts (Mongo mode)', () => {
     const victim = await db.collection('users').findOne({ id: 'someone-else' });
     expect(victim).toBeNull();
     const owner = await db.collection('users').findOne({ id: TEST_USER_ID });
-    expect(owner!.bankAccounts).toEqual(accounts);
+    expect(owner!.bankAccounts).toEqual([
+      { id: expect.stringMatching(/^ba_[0-9a-f]{12}$/), name: 'กรุงไทย' }
+    ]);
+    expect(owner!.bankAccounts).not.toEqual(accounts);
+  });
+
+  it('GET wraps legacy string accounts deterministically without writing them back', async () => {
+    const legacy = ['กสิกร', ' ttb '];
+    await db.collection('users').insertOne({ id: TEST_USER_ID, displayName: 'Test User', bankAccounts: legacy });
+
+    const { req: firstReq, res: firstRes } = makeReqRes();
+    await handler(firstReq, firstRes);
+    const first = JSON.parse(firstRes._getData());
+
+    const { req: secondReq, res: secondRes } = makeReqRes();
+    await handler(secondReq, secondRes);
+    const second = JSON.parse(secondRes._getData());
+
+    expect(first.bankAccounts).toEqual([
+      { id: deriveLegacyBankAccountId('กสิกร'), name: 'กสิกร' },
+      { id: deriveLegacyBankAccountId('ttb'), name: 'ttb' }
+    ]);
+    expect(second.bankAccounts).toEqual(first.bankAccounts);
+    const stored = await db.collection('users').findOne({ id: TEST_USER_ID });
+    expect(stored!.bankAccounts).toEqual(legacy);
+  });
+
+  it('POST preserves existing ids by name when an older client sends strings', async () => {
+    await db.collection('users').insertOne({
+      id: TEST_USER_ID,
+      displayName: 'Test User',
+      bankAccounts: [{ id: 'ba_aaaaaaaaaaaa', name: 'A' }]
+    });
+
+    const { req, res } = makeReqRes({ method: 'POST', body: { bankAccounts: ['A', 'B'] } });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const body = JSON.parse(res._getData());
+    expect(body.bankAccounts[0]).toEqual({ id: 'ba_aaaaaaaaaaaa', name: 'A' });
+    expect(body.bankAccounts[1]).toMatchObject({ id: expect.stringMatching(/^ba_[0-9a-f]{12}$/), name: 'B' });
+    expect(body.bankAccounts[1].id).not.toBe('ba_aaaaaaaaaaaa');
+  });
+
+  it('POST rejects invalid or duplicate accounts without writing', async () => {
+    await db.collection('users').insertOne({
+      id: TEST_USER_ID,
+      displayName: 'Test User',
+      bankAccounts: ['A']
+    });
+
+    const invalidCases = [
+      { value: ['A', '  '], error: 'bankAccounts[1] must be a non-empty string or an object with a non-empty name' },
+      { value: ['A', ' A '], error: 'bankAccounts contains duplicate names' }
+    ];
+    for (const item of invalidCases) {
+      const { req, res } = makeReqRes({ method: 'POST', body: { bankAccounts: item.value } });
+      await handler(req, res);
+      expect(res._getStatusCode()).toBe(400);
+      expect(JSON.parse(res._getData())).toEqual({ error: item.error });
+      const stored = await db.collection('users').findOne({ id: TEST_USER_ID });
+      expect(stored!.bankAccounts).toEqual(['A']);
+    }
   });
 
   it('GET for a user with no document yet returns 200 with documented defaults', async () => {
@@ -208,7 +271,15 @@ describe('/api/user-bank-accounts (Mongo mode)', () => {
 
     expect(postRes._getStatusCode()).toBe(200);
     const postData = JSON.parse(postRes._getData());
-    expect(postData).toEqual({ success: true, bankAccounts: newAccounts });
+    expect(postData.success).toBe(true);
+    expect(postData.bankAccounts).toHaveLength(1);
+    expect(postData.bankAccounts[0]).toMatchObject({
+      id: expect.stringMatching(/^ba_[0-9a-f]{12}$/),
+      name: 'กสิกรไทย'
+    });
+    expect(postData.bankAccounts[0]).not.toHaveProperty('balance');
+    const storedAfterPost = await db.collection('users').findOne({ id: TEST_USER_ID });
+    expect(storedAfterPost!.bankAccounts).toEqual(postData.bankAccounts);
 
     // Real read-after-write against the actual in-memory Mongo instance — not a stubbed value.
     const { req: getReq, res: getRes } = makeReqRes();
@@ -216,7 +287,7 @@ describe('/api/user-bank-accounts (Mongo mode)', () => {
 
     expect(getRes._getStatusCode()).toBe(200);
     const getData = JSON.parse(getRes._getData());
-    expect(getData.bankAccounts).toEqual(newAccounts);
+    expect(getData.bankAccounts).toEqual(postData.bankAccounts);
   });
 
   it('POST with an out-of-range budgetThresholds value returns 400 and does not write to the DB', async () => {

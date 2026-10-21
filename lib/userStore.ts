@@ -7,6 +7,8 @@ import { wrapCollection } from './auditContext';
 import dataModeConfig from './dataMode.config';
 import { normaliseBudgetThresholds } from '../src/shared/utils/frontend/monthlySummary';
 import { assertScopedUserId } from '../src/shared/utils/backend/userRequest';
+import { normaliseBankAccounts } from '../src/shared/utils/backend/bankAccountIds';
+import { toBankAccountNames, type BankAccount } from '../src/shared/utils/bankAccountShape';
 
 const DATA_MODE = (dataModeConfig?.mode || 'json').toLowerCase();
 const usersFile = (): string => path.join(dataDir(), 'users.json');
@@ -109,14 +111,18 @@ export async function updateUserPassword(userId: string, newPassword: string): P
   return { id: users[idx].id, displayName: users[idx].displayName, avatar: users[idx].avatar };
 }
 
-export async function getUserBankAccounts(userId: string): Promise<unknown[]> {
+export async function getUserBankAccounts(userId: string): Promise<BankAccount[]> {
   assertUserScope(userId);
   const user = await getUserById(userId);
   if (!user) throw new Error('User not found');
-  return user.bankAccounts || [];
+  return normaliseBankAccounts(user.bankAccounts);
 }
 
-export async function updateUserBankAccounts(userId: string, bankAccounts: unknown[]): Promise<PublicUser & { bankAccounts?: unknown[] }> {
+export async function getUserBankAccountNames(userId: string): Promise<string[]> {
+  return toBankAccountNames(await getUserBankAccounts(userId));
+}
+
+export async function updateUserBankAccounts(userId: string, bankAccounts: BankAccount[]): Promise<PublicUser & { bankAccounts?: BankAccount[] }> {
   assertUserScope(userId);
   if (DATA_MODE === 'mongo') {
     const db = await getDbPromise();
@@ -126,14 +132,14 @@ export async function updateUserBankAccounts(userId: string, bankAccounts: unkno
       { returnDocument: 'after' }
     );
     if (!user) throw new Error('User not found');
-    return { id: user.id, displayName: user.displayName, avatar: user.avatar, bankAccounts: user.bankAccounts };
+    return { id: user.id, displayName: user.displayName, avatar: user.avatar, bankAccounts };
   }
   const users = await readUsersJson();
   const idx = users.findIndex(u => u.id === userId);
   if (idx === -1) throw new Error('User not found');
   users[idx] = { ...users[idx], bankAccounts };
   await writeUsersJson(users);
-  return { id: users[idx].id, displayName: users[idx].displayName, avatar: users[idx].avatar, bankAccounts: users[idx].bankAccounts };
+  return { id: users[idx].id, displayName: users[idx].displayName, avatar: users[idx].avatar, bankAccounts };
 }
 
 /**

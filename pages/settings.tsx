@@ -19,43 +19,59 @@ import { useCallback, useEffect, useState, type ChangeEvent } from 'react';
 import Layout from '../src/frontend/components/Layout';
 import ActivityHistory from '../src/frontend/components/ActivityHistory';
 import BudgetThresholdForm from '../src/frontend/components/BudgetThresholdForm';
+import BankAccountManager from '../src/frontend/components/BankAccountManager';
 import { useSession } from '../src/frontend/contexts/SessionContext';
 import { userSettingsAPI } from '../src/shared/utils/frontend/apiUtils';
 import { DEFAULT_BUDGET_THRESHOLDS } from '../src/shared/utils/frontend/monthlySummary';
 import { showToast } from '../src/shared/utils/frontend/toast';
+import type { BankAccount } from '../src/shared/utils/bankAccountShape';
 
 const CARD = 'rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5';
 type BudgetThresholds = typeof DEFAULT_BUDGET_THRESHOLDS;
 
 export default function SettingsPage() {
-  const { currentUser } = useSession();
+  const { currentUser, selectUser } = useSession();
   const [thresholds, setThresholds] = useState(DEFAULT_BUDGET_THRESHOLDS);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [bankLoadFailed, setBankLoadFailed] = useState(false);
+  const [bankSaving, setBankSaving] = useState(false);
+  const [bankDirty, setBankDirty] = useState(false);
   const [monthlySummaryEnabled, setMonthlySummaryEnabled] = useState(true);
   const [savingNotification, setSavingNotification] = useState(false);
 
   // ยังไม่ได้บันทึกแล้วกดออกจากหน้า — เตือนด้วย native confirm (ฟอร์มเดียว ค่าเดียว ไม่คุ้มสร้างโมดัล
   // เต็มรูปแบบแบบ UnsavedChangesDialog ของ /workspace ที่ออกแบบมาสำหรับ 7 section พร้อมกัน)
   const handleBeforeNavigate = useCallback(() => {
-    if (!isDirty) return true;
-    return window.confirm('เกณฑ์ที่แก้ไว้ยังไม่ได้บันทึก ถ้าออกตอนนี้การแก้ไขจะหายไป ต้องการออกหรือไม่?');
-  }, [isDirty]);
+    if (!isDirty && !bankDirty) return true;
+    const message = bankDirty
+      ? 'บัญชีธนาคารที่แก้ไว้ยังไม่ได้บันทึก ถ้าออกตอนนี้การแก้ไขจะหายไป ต้องการออกหรือไม่?'
+      : 'เกณฑ์ที่แก้ไว้ยังไม่ได้บันทึก ถ้าออกตอนนี้การแก้ไขจะหายไป ต้องการออกหรือไม่?';
+    return window.confirm(message);
+  }, [bankDirty, isDirty]);
 
   const loadThresholds = useCallback(async () => {
     if (!currentUser) return;
     setLoading(true);
     setLoadFailed(false);
+    setBankLoadFailed(false);
+    setBankAccounts([]);
+    setBankDirty(false);
     try {
       const data = await userSettingsAPI.get();
+      if (!Array.isArray(data?.bankAccounts)) throw new Error('Invalid bank account response');
       setThresholds(data?.budgetThresholds || DEFAULT_BUDGET_THRESHOLDS);
       setMonthlySummaryEnabled(data?.monthlySummaryEnabled !== false);
+      setBankAccounts(data.bankAccounts);
     } catch (error) {
       console.error('Failed to load budget thresholds:', error);
       setThresholds(DEFAULT_BUDGET_THRESHOLDS);
+      setBankAccounts([]);
       setLoadFailed(true);
+      setBankLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -82,6 +98,26 @@ export default function SettingsPage() {
       return false;
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveBankAccounts = async (next: Array<{ id?: string; name: string }>): Promise<boolean> => {
+    setBankSaving(true);
+    try {
+      const response = await userSettingsAPI.saveBankAccounts(next);
+      const saved = response.bankAccounts;
+      if (!Array.isArray(saved)) throw new Error('Invalid bank account response');
+      setBankAccounts(saved);
+      if (currentUser) selectUser({ ...currentUser, bankAccounts: saved });
+      showToast('บันทึกบัญชีธนาคารแล้ว');
+      return true;
+    } catch (error) {
+      console.error('Failed to save bank accounts:', error);
+      const isValidationError = (error as { name?: string } | null)?.name === 'ApiValidationError';
+      showToast(isValidationError ? (error as Error).message : 'บันทึกบัญชีธนาคารไม่สำเร็จ', 'error');
+      return false;
+    } finally {
+      setBankSaving(false);
     }
   };
 
@@ -116,6 +152,22 @@ export default function SettingsPage() {
             onSave={handleSave}
             onRetryLoad={loadThresholds}
             onDirtyChange={setIsDirty}
+          />
+        </section>
+
+        <section id="bank-accounts" className={`${CARD} scroll-mt-[calc(var(--topbar-safe-top,90px)+8px)]`}>
+          <h2 className="m-0 text-xl font-semibold text-primary">จัดการบัญชีธนาคาร</h2>
+          <p className="m-0 mt-space-2 text-sm text-secondary">บัญชีที่ใช้จ่ายค่าใช้จ่ายและบัตรเครดิต</p>
+          <p className="m-0 mt-space-1 text-sm text-secondary">เปลี่ยนชื่อได้โดยบัตรที่ผูกไว้ไม่หลุด</p>
+
+          <BankAccountManager
+            accounts={bankAccounts}
+            loading={loading}
+            loadFailed={bankLoadFailed}
+            saving={bankSaving}
+            onSave={handleSaveBankAccounts}
+            onRetryLoad={loadThresholds}
+            onDirtyChange={setBankDirty}
           />
         </section>
 

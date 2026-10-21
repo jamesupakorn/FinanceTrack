@@ -30,6 +30,8 @@ import {
 } from '../creditCardUtils';
 import { getUserCreditData, updateUserCreditData } from './creditCardStore';
 import type { PlanLike, StoredRevolvingCycle } from '../creditCardRevolving';
+import { toBankAccountNames, UNASSIGNED_ACCOUNT_LABEL } from '../bankAccountShape';
+import { normaliseBankAccountEntry } from './bankAccountIds';
 
 export { INSTALLMENT_KEY_RE, INSTALLMENT_KEY_PREFIX, REVOLVING_KEY_PREFIX };
 
@@ -43,6 +45,7 @@ interface SyncCard {
   id?: string;
   name?: string;
   bankName?: string;
+  bankAccountId?: string;
   dueDay?: number | string;
   [key: string]: unknown;
 }
@@ -119,25 +122,20 @@ interface PayloadRow {
   paid?: unknown;
 }
 
-/**
- * เลือกชื่อบัญชีสำหรับแถวผ่อนชำระ
- *
- * ⚠ ห้าม inject ค่าว่าง (Stage 4 MAJOR-3):
- *   server getAccountSummary() แปลงค่าว่างเป็น 'ไม่ระบุบัญชี'
- *   แต่ client formatExpenseData() แปลงเป็น storedBankAccounts[0] คือบัญชีแรกของผู้ใช้
- *   ตัวเลขบนหน้าจอเดียวกันจะไม่ตรงกัน และแสดงบัญชีผิดความจริง
- *
- * จึงใช้ bankName ของบัตรเมื่อตรงกับบัญชีของผู้ใช้พอดี มิฉะนั้นใช้ชื่อบัตร (ไม่ว่างเสมอ)
- * @returns {string}
- */
+/** Resolve card dues by stable account id, then the legacy name, then the fixed unassigned bucket. */
 function resolveRowAccount(card: SyncCard, bankAccounts: unknown[] = []): string {
+  const list = Array.isArray(bankAccounts) ? bankAccounts : [];
+  const linkedId = typeof card?.bankAccountId === 'string' ? card.bankAccountId.trim() : '';
+  if (linkedId) {
+    for (const entry of list) {
+      if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) continue;
+      const account = normaliseBankAccountEntry(entry);
+      if (account?.id === linkedId) return account.name;
+    }
+  }
   const bankName = String(card?.bankName || '').trim();
-  const accounts = Array.isArray(bankAccounts)
-    ? bankAccounts.map(item => String(item || '').trim()).filter(Boolean)
-    : [];
-  if (bankName && accounts.includes(bankName)) return bankName;
-  const cardName = String(card?.name || '').trim();
-  return cardName || bankName || 'บัตรเครดิต';
+  if (bankName && toBankAccountNames(list).includes(bankName)) return bankName;
+  return UNASSIGNED_ACCOUNT_LABEL;
 }
 
 /**

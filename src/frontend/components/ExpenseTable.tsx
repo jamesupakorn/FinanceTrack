@@ -27,12 +27,13 @@ import {
   formatMonthKeyTH
 } from '../../shared/utils/dateUtils';
 import { isCreditCardRowKey, isRevolvingRowKey } from '../../shared/utils/creditCardUtils';
+import { toBankAccountNames } from '../../shared/utils/bankAccountShape';
 import { compareListValues, matchesListQuery } from '../../shared/utils/frontend/listView';
 import { useListProjection } from '../../shared/utils/frontend/useListProjection';
 import BankAccountTable from './BankAccountTable';
 import LoadingNotice from './LoadingNotice';
 import ListToolbar from './ListToolbar';
-import { expenseAPI, creditCardAPI, withCsrfHeaders } from '../../shared/utils/frontend/apiUtils';
+import { expenseAPI, creditCardAPI } from '../../shared/utils/frontend/apiUtils';
 import { useSession } from '../contexts/SessionContext';
 import { useListCriteria } from '../contexts/ListViewContext';
 import { showToast } from '../../shared/utils/frontend/toast';
@@ -204,7 +205,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
         const formatted = formatExpenseData(data || {}, selectedMonth);
         setEditExpense(formatted.values as ExpenseValues || {});
         const monthAccounts = formatted.bankAccounts || [];
-        const mergedAccounts = Array.from(new Set([...monthAccounts, ...(currentUser?.bankAccounts || [])])).filter(Boolean) as string[];
+        const mergedAccounts = toBankAccountNames([...monthAccounts, ...(currentUser?.bankAccounts || [])]);
         setBankAccounts(mergedAccounts);
         setPersistedKeys(formatted.persistedKeys || []);
       })
@@ -212,7 +213,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
         console.error('Error loading expense data:', error);
         const formatted = formatExpenseData({}, selectedMonth);
         setEditExpense(formatted.values as ExpenseValues || {});
-        setBankAccounts((currentUser?.bankAccounts || []) as string[]);
+        setBankAccounts(toBankAccountNames(currentUser?.bankAccounts));
         setPersistedKeys(formatted.persistedKeys || []);
       })
       .finally(() => {
@@ -339,23 +340,6 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
     });
   };
 
-  const handleBankAccountsChange = (nextAccounts: string[]) => {
-    const rawAccounts = Array.isArray(nextAccounts) ? nextAccounts.map(item => String(item ?? '')) : [];
-    const validAccounts = Array.from(new Set(rawAccounts.map(item => item.trim()).filter(Boolean)));
-    setBankAccounts(rawAccounts);
-    setEditExpense(previous => {
-      const next = { ...previous };
-      Object.keys(next).forEach(key => {
-        const row = next[key];
-        if (!row || typeof row !== 'object') return;
-        const currentAccount = typeof row.account === 'string' ? row.account.trim() : '';
-        if (!currentAccount || validAccounts.includes(currentAccount)) return;
-        next[key] = { ...row, account: validAccounts[0] || 'ไม่ระบุบัญชี' };
-      });
-      return next;
-    });
-  };
-
   const setPendingPaid = (item: string, pending: boolean) => {
     if (pending) pendingPaidRef.current.add(item); else pendingPaidRef.current.delete(item);
     setPendingPaidKeys(Array.from(pendingPaidRef.current));
@@ -403,30 +387,18 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
     if (!selectedMonth) return;
     try {
       const prepared: Record<string, unknown> = formatExpenseForSave(editExpense, parseToNumber);
-      const normalizedAccounts = Array.from(new Set((bankAccounts || []).map(item => String(item || '').trim()).filter(Boolean)));
+      const normalizedAccounts = toBankAccountNames(bankAccounts);
       prepared.bankAccounts = normalizedAccounts;
       const preparedKeys = Object.keys(prepared || {});
       const removedKeys = persistedKeys.filter(key => key !== 'bankAccounts' && !preparedKeys.includes(key));
       if (removedKeys.length > 0) prepared.__removeKeys = removedKeys;
       await expenseAPI.save(selectedMonth, prepared);
 
-      if (currentUser?.id) {
-        try {
-          await fetch('/api/user-bank-accounts', {
-            method: 'POST',
-            headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ bankAccounts: normalizedAccounts })
-          });
-        } catch (error) {
-          console.warn('Warning: Could not update user bank accounts:', error);
-        }
-      }
-
       const data = await expenseAPI.getByMonth(selectedMonth);
       const formatted = formatExpenseData(data || {}, selectedMonth);
       setEditExpense(formatted.values as ExpenseValues || {});
       const monthAccounts = formatted.bankAccounts || [];
-      const mergedAccounts = Array.from(new Set([...monthAccounts, ...(currentUser?.bankAccounts || [])])).filter(Boolean) as string[];
+      const mergedAccounts = toBankAccountNames([...monthAccounts, ...(currentUser?.bankAccounts || [])]);
       setBankAccounts(mergedAccounts);
       setPersistedKeys(formatted.persistedKeys || []);
       expenseProjection.refresh();
@@ -716,7 +688,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
           </div>
           </>}
 
-          {shouldShowAccountTable && <div className="mt-space-5"><BankAccountTable accountSummary={accountSummary} prevAccountSummary={prevAccountSummary} accounts={bankAccounts} onChangeAccounts={handleBankAccountsChange} markDirty={markDirty} /></div>}
+          {shouldShowAccountTable && <div className="mt-space-5"><BankAccountTable accountSummary={accountSummary} prevAccountSummary={prevAccountSummary} accounts={bankAccounts} /></div>}
         </>
       )}
       {!isLoading && !hasExpenseRows && <div className="rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">ยังไม่มีรายการค่าใช้จ่ายในเดือนนี้ กด &quot;เพิ่มรายการ&quot; เพื่อเริ่มต้น</div>}

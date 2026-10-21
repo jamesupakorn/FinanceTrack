@@ -13,6 +13,7 @@ import { BANK_ISSUERS, BANK_ISSUER_KEYS, isBankIssuerKey } from '../../shared/ut
 import { END_OF_MONTH_DUE_DAY } from '../../shared/utils/dateUtils';
 import { parseAndFormat } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
+import type { BankAccount } from '../../shared/utils/bankAccountShape';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
 import { Icons } from './Icons';
 import BankIssuerMark from './BankIssuerMark';
@@ -22,6 +23,7 @@ interface CreditCardFormRecord {
   name?: string;
   bankIssuer?: unknown;
   bankName?: string;
+  bankAccountId?: string;
   last4?: string;
   color?: string;
   creditLimit?: number | string | null;
@@ -40,6 +42,7 @@ interface CreditCardFormState {
   name: string;
   bankIssuer: string;
   bankName: string;
+  bankAccountId: string;
   last4: string;
   color: string;
   creditLimit: string;
@@ -53,6 +56,7 @@ interface CreditCardFormProps {
   open: boolean;
   card?: CreditCardFormRecord | null;
   existingCards?: ExistingCardColor[];
+  bankAccounts?: BankAccount[];
   submitting?: boolean;
   onClose?: () => void;
   onSubmit?: (payload: Record<string, unknown>) => void | Promise<void>;
@@ -71,6 +75,7 @@ const emptyForm: CreditCardFormState = {
   name: '',
   bankIssuer: '',
   bankName: '',
+  bankAccountId: '',
   last4: '',
   color: CARD_COLORS[0],
   creditLimit: '',
@@ -84,6 +89,7 @@ export default function CreditCardForm({
   open,
   card = null,
   existingCards = [],
+  bankAccounts = [],
   submitting = false,
   onClose,
   onSubmit
@@ -108,6 +114,7 @@ export default function CreditCardForm({
         // Unknown issuers load as empty; never persist a read-time fallback that the user did not select.
         bankIssuer: isBankIssuerKey(card.bankIssuer) ? card.bankIssuer : '',
         bankName: card.bankName || '',
+        bankAccountId: typeof card.bankAccountId === 'string' ? card.bankAccountId : '',
         last4: card.last4 || '',
         color: CARD_COLORS.includes(card.color || '') ? card.color || '' : CARD_COLORS[0],
         creditLimit: card.creditLimit === undefined || card.creditLimit === null ? '' : parseAndFormat(card.creditLimit),
@@ -242,9 +249,35 @@ export default function CreditCardForm({
             </div>
 
             <div className="flex flex-col gap-space-1">
+              <label className={LABEL} htmlFor="cc-account">จ่ายผ่านบัญชี</label>
+              <select
+                id="cc-account"
+                name="bankAccountId"
+                className={INPUT}
+                value={form.bankAccountId}
+                onChange={event => setField('bankAccountId', event.target.value)}
+                aria-invalid={errors.bankAccountId ? 'true' : undefined}
+                aria-describedby={`cc-account-help-1 cc-account-help-2${errors.bankAccountId ? ' card-bankAccountId-error' : ''}`}
+              >
+                <option value="">ไม่ระบุ (ใช้ชื่อบัญชีด้านล่าง)</option>
+                {form.bankAccountId && !bankAccounts.some(account => account.id === form.bankAccountId) && (
+                  <option value={form.bankAccountId}>บัญชีเดิม (ไม่พบในรายการ)</option>
+                )}
+                {bankAccounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
+              </select>
+              <span id="cc-account-help-1" className={HELPER}>บัญชีของคุณที่ใช้จ่ายบัตรใบนี้ (ไม่ใช่ธนาคารผู้ออกบัตร)</span>
+              <span id="cc-account-help-2" className={HELPER}>
+                {bankAccounts.length > 0
+                  ? 'ยอดผ่อนและยอดบัตรจะรวมเข้าบัญชีนี้ในหน้าค่าใช้จ่าย'
+                  : 'ยังไม่มีบัญชีธนาคาร — เพิ่มได้ที่หน้า ตั้งค่า'}
+              </span>
+              {errors.bankAccountId && <span id="card-bankAccountId-error" className={ERROR_TEXT}>{errors.bankAccountId}</span>}
+            </div>
+
+            <div className="flex flex-col gap-space-1">
               <label className={LABEL} htmlFor="cc-bank">ชื่อบัญชีที่ใช้รวมยอด / ชื่อผลิตภัณฑ์ (ไม่บังคับ)</label>
               <input id="cc-bank" name="bankName" type="text" className={INPUT} maxLength={40} value={form.bankName} onChange={(event) => setField('bankName', event.target.value)} placeholder="เช่น KTC หรือ SPayLater" aria-describedby="cc-bank-help-1 cc-bank-help-2" />
-              <span id="cc-bank-help-1" className={HELPER}>ถ้าตรงกับชื่อบัญชีธนาคารที่ใช้อยู่ ระบบจะรวมยอดผ่อนเข้าบัญชีนั้น</span>
+              <span id="cc-bank-help-1" className={HELPER}>ใช้รวมยอดเมื่อไม่ได้เลือก “จ่ายผ่านบัญชี” และชื่อตรงกับบัญชีธนาคารที่มีอยู่</span>
               <span id="cc-bank-help-2" className={HELPER}>ใส่ชื่อผลิตภัณฑ์เพิ่มได้ เช่น SPayLater</span>
             </div>
 

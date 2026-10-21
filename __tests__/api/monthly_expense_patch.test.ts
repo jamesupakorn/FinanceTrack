@@ -32,6 +32,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await db.collection('monthly_expense').deleteMany({});
   await db.collection('credit_cards').deleteMany({});
+  await db.collection('users').deleteMany({});
 });
 
 async function patch(body: unknown, { userId = USER_A, omitCsrf = false } = {}) {
@@ -91,6 +92,25 @@ describe('PATCH /api/monthly_expense — ordinary rows', () => {
     expect(doc.house.paid).toBe(true);
     expect(doc.water.paid).toBe(false);
     expect(doc.internet).toBeTruthy();
+  });
+
+  it('seeds default rows with account names when the user document stores id-bearing accounts', async () => {
+    await db.collection('users').insertOne({
+      id: USER_A,
+      bankAccounts: [{ id: 'ba_aaaaaaaaaaaa', name: 'ttb' }]
+    });
+
+    const result = await patch({ month: MONTH, key: 'house', paid: true });
+
+    expect(result.status).toBe(200);
+    const doc = await getDoc();
+    const rows = Object.entries(doc)
+      .filter(([key, value]) => !['_id', 'userId', 'month'].includes(key) && value && typeof value === 'object')
+      .map(([, value]) => value as { account?: unknown });
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every(item => typeof item.account === 'string')).toBe(true);
+    expect(rows.every(item => item.account !== '[object Object]')).toBe(true);
+    expect(doc.house.account).toBe('ttb');
   });
 
   it('returns 404 for a missing key with paid=true and no row, writing nothing', async () => {

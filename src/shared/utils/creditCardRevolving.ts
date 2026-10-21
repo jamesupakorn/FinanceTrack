@@ -41,6 +41,7 @@ type PaymentAction = 'full' | 'minimum' | null;
 /** บัตร — เฉพาะฟิลด์ที่ฟังก์ชันในไฟล์นี้อ่านจริง */
 export type CardLike = {
   id?: string;
+  bankAccountId?: string;
   annualRate?: number | string;
   minPaymentPercent?: number | string;
   dueDay?: number | string;
@@ -608,6 +609,7 @@ export function summariseTotals(summarisedCards: Array<Record<string, unknown>> 
 type CardInputLike = {
   name?: unknown;
   bankName?: unknown;
+  bankAccountId?: unknown;
   last4?: unknown;
   creditLimit?: number | string | null;
   annualRate?: number | string | null;
@@ -628,6 +630,7 @@ export function validateCardInput(input: CardInputLike = {}): {
   value: {
     name: string;
     bankName: string;
+    bankAccountId: string;
     last4: string;
     color: string;
     bankIssuer?: BankIssuerKey;
@@ -646,6 +649,9 @@ export function validateCardInput(input: CardInputLike = {}): {
 
   const bankName = String(input.bankName ?? '').trim();
   if (bankName.length > 40) errors.bankName = 'ชื่อธนาคารยาวได้ไม่เกิน 40 ตัวอักษร';
+
+  const bankAccountId = typeof input.bankAccountId === 'string' ? input.bankAccountId.trim() : '';
+  if (bankAccountId.length > 80) errors.bankAccountId = 'บัญชีที่เลือกไม่ถูกต้อง';
 
   const last4 = String(input.last4 ?? '').trim();
   if (last4 && !/^\d{4}$/.test(last4)) errors.last4 = 'ต้องเป็นตัวเลข 4 หลัก';
@@ -685,6 +691,7 @@ export function validateCardInput(input: CardInputLike = {}): {
     value: {
       name,
       bankName,
+      bankAccountId,
       last4,
       color,
       ...(isBankIssuerKey(input.bankIssuer) ? { bankIssuer: input.bankIssuer } : {}),

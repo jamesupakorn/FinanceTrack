@@ -1,4 +1,16 @@
 import { requireActiveUserId } from './sessionClient';
+import type { BankAccount } from '../bankAccountShape';
+
+interface UserSettingsResponse {
+	bankAccounts: BankAccount[];
+	budgetThresholds?: {
+		generalExpense: number;
+		dailyExpense: number;
+		creditCard: number;
+		savings: number;
+	};
+	monthlySummaryEnabled?: boolean;
+}
 
 /** zod issue shape ที่ API ฝั่ง zod-validated (ADR-027) ส่งกลับมาใน 400 response */
 interface ApiValidationIssue {
@@ -385,7 +397,12 @@ export const dailyExpenseAPI = {
  * เป็น bare fetch() ไม่แนบ token (F-1) จึงไม่ได้รับผลจากบั๊กนั้น
  */
 export const userSettingsAPI = {
-	get: async (): Promise<any> => jsonFetch(buildUrl('/api/user-profile-settings')),
+	get: async (): Promise<UserSettingsResponse> => jsonFetch(buildUrl('/api/user-profile-settings')),
+	saveBankAccounts: async (bankAccounts: Array<{ id?: string; name: string }>): Promise<{ success: true; bankAccounts: BankAccount[] }> => jsonFetch('/api/user-profile-settings', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ bankAccounts })
+	}),
 	saveMonthlySummaryEnabled: async (enabled: boolean): Promise<any> => jsonFetch('/api/user-profile-settings', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
