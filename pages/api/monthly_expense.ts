@@ -27,7 +27,7 @@ import {
 } from '../../src/shared/utils/backend/creditCardSync';
 import { isCreditCardRowKey } from '../../src/shared/utils/creditCardBasics';
 import { buildDefaultExpenseRows, DEFAULT_EXPENSE_ITEMS } from '../../src/shared/utils/expenseDefaults';
-import { getUserBankAccounts } from '../../lib/userStore';
+import { getUserBankAccountNames, getUserBankAccounts } from '../../lib/userStore';
 import {
   isJsonMode,
   withGeneratedId,
@@ -324,7 +324,7 @@ async function handleExpensePaidPatch(
 
   let bankAccounts: string[] = [];
   try {
-    bankAccounts = (await getUserBankAccounts(userId)) as string[];
+    bankAccounts = await getUserBankAccountNames(userId);
   } catch (err) {
     bankAccounts = [];
   }

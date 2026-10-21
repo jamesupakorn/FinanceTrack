@@ -74,6 +74,20 @@ describe('validateCardInput — bankIssuer (AC-BI-07..10)', () => {
   });
 });
 
+describe('validateCardInput — bankAccountId (AC-BA-20)', () => {
+  it('always returns a trimmed soft-reference id or an empty string when unset/invalid', () => {
+    expect(validateCardInput({ name: 'x' }).value.bankAccountId).toBe('');
+    expect(validateCardInput({ name: 'x', bankAccountId: '  ba_0123456789ab  ' }).value.bankAccountId)
+      .toBe('ba_0123456789ab');
+    expect(validateCardInput({ name: 'x', bankAccountId: 5 }).value.bankAccountId).toBe('');
+    expect(validateCardInput({ name: 'x', bankAccountId: 'x'.repeat(80) }).valid).toBe(true);
+    const tooLong = validateCardInput({ name: 'x', bankAccountId: 'x'.repeat(81) });
+    expect(tooLong.valid).toBe(false);
+    expect(tooLong.errors.bankAccountId).toBe('บัญชีที่เลือกไม่ถูกต้อง');
+    expect('bankAccountId' in validateCardInput({ name: 'x' }).value).toBe(true);
+  });
+});
+
 // TD-H02 creditCardUtils.js split (sub-slice 3): buildRevolvingCycles attaches a
 // non-enumerable `truncated` flag via Object.defineProperty. No existing test guards
 // enumerable:false directly — a mutation test during review confirmed the full

@@ -11,6 +11,8 @@ import {
   getUserMonthlySummaryEnabled,
   updateUserMonthlySummaryEnabled
 } from '../../lib/userStore';
+import { assignBankAccountIds, validateIncomingBankAccounts } from '../../src/shared/utils/backend/bankAccountIds';
+import type { BankAccount } from '../../src/shared/utils/bankAccountShape';
 import {
   BUDGET_THRESHOLD_KEYS,
   normaliseBudgetThresholds
@@ -107,6 +109,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       if (bankAccounts !== undefined && !Array.isArray(bankAccounts)) {
         return res.status(400).json({ error: 'bankAccounts must be an array' });
       }
+      if (bankAccounts !== undefined) {
+        const validationError = validateIncomingBankAccounts(bankAccounts);
+        if (validationError) return res.status(400).json({ error: validationError });
+      }
 
       let pickedThresholds: BudgetThresholds | undefined;
       if (budgetThresholds !== undefined) {
@@ -127,14 +133,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       // byte-identical กับพฤติกรรมเดิมก่อนเฟสนี้ทุกประการ ทั้ง request ที่ยอมรับและ response ที่ตอบกลับ
       const responsePayload: {
         success: true;
-        bankAccounts?: unknown[];
+        bankAccounts?: BankAccount[];
         budgetThresholds?: BudgetThresholds;
         monthlySummaryEnabled?: boolean;
       } = { success: true };
 
       if (bankAccounts !== undefined) {
-        await updateUserBankAccounts(userId, bankAccounts);
-        responsePayload.bankAccounts = bankAccounts;
+        const storedAccounts = await getUserBankAccounts(userId);
+        const resolvedAccounts = assignBankAccountIds(bankAccounts, storedAccounts);
+        await updateUserBankAccounts(userId, resolvedAccounts);
+        responsePayload.bankAccounts = resolvedAccounts;
       }
 
       if (pickedThresholds !== undefined) {

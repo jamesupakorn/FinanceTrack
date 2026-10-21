@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import IncomeTable from '../../src/frontend/components/IncomeTable';
 import BankAccountTable from '../../src/frontend/components/BankAccountTable';
+import BankAccountManager from '../../src/frontend/components/BankAccountManager';
+import { formatCurrency } from '../../src/shared/utils/frontend/numberUtils';
 import { incomeAPI, salaryAPI } from '../../src/shared/utils/frontend/apiUtils';
 
 jest.mock('../../src/shared/utils/frontend/apiUtils', () => ({
@@ -65,36 +67,85 @@ test('failed income save retains pins, edited values and financial error feedbac
   log.mockRestore();
 });
 
-function Accounts() {
-  const [accounts, setAccounts] = useState(['Zulu', 'Alpha', 'Middle']);
-  return <><BankAccountTable accounts={accounts} onChangeAccounts={setAccounts} /><output data-testid="canonical">{JSON.stringify(accounts)}</output></>;
+const initialAccounts = [
+  { id: 'ba_zzzzzzzzzzzz', name: 'Zulu' },
+  { id: 'ba_aaaaaaaaaaaa', name: 'Alpha' },
+  { id: 'ba_mmmmmmmmmmmm', name: 'Middle' }
+];
+
+function Accounts({ onSave }: { onSave: (next: Array<{ id?: string; name: string }>) => Promise<boolean> }) {
+  const [accounts] = useState(initialAccounts);
+  return <BankAccountManager
+    accounts={accounts}
+    loading={false}
+    loadFailed={false}
+    saving={false}
+    onSave={onSave}
+    onRetryLoad={() => {}}
+  />;
 }
 
-test('sorted bank rename/delete target canonical identity, not visible position', () => {
-  render(<Accounts />);
-  fireEvent.change(screen.getByRole('combobox', { name: 'เรียงตาม — บัญชีธนาคาร' }), { target: { value: 'name:asc' } });
-  const inputs = screen.getAllByPlaceholderText('ชื่อบัญชี');
-  expect(inputs.slice(0, 3).map(input => (input as HTMLInputElement).value)).toEqual(['Alpha', 'Middle', 'Zulu']);
-  const middle = inputs[1]!;
+test('bank manager edits, deletes and adds staged accounts while preserving input focus', async () => {
+  const onSave = jest.fn().mockResolvedValue(true);
+  render(<Accounts onSave={onSave} />);
+
+  const middle = await screen.findByRole('textbox', { name: 'ชื่อบัญชี 3' });
   middle.focus();
   fireEvent.change(middle, { target: { value: 'Beta' } });
-  expect(screen.getByTestId('canonical')).toHaveTextContent('["Zulu","Alpha","Beta"]');
-  expect(screen.getAllByPlaceholderText('ชื่อบัญชี')[1]).toBe(middle);
+  expect(screen.getByRole('textbox', { name: 'ชื่อบัญชี 3' })).toBe(middle);
   expect(middle).toHaveFocus();
-  fireEvent.click(screen.getAllByRole('button', { name: 'ลบบัญชี Beta' })[0]!);
-  expect(screen.getByTestId('canonical')).toHaveTextContent('["Zulu","Alpha"]');
-  expect(screen.getAllByDisplayValue('Zulu')).toHaveLength(2);
+  fireEvent.click(screen.getByRole('button', { name: 'ลบบัญชี Beta' }));
+  expect(screen.queryByDisplayValue('Beta')).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: '+ เพิ่มบัญชี' }));
+  const added = await screen.findByDisplayValue('บัญชีใหม่');
+  expect(added).toHaveFocus();
+  expect((added as HTMLInputElement).selectionStart).toBe(0);
+  expect((added as HTMLInputElement).selectionEnd).toBe('บัญชีใหม่'.length);
+
+  fireEvent.click(screen.getByRole('button', { name: 'บันทึกบัญชีธนาคาร' }));
+  await waitFor(() => expect(onSave).toHaveBeenCalledWith([
+    { id: 'ba_zzzzzzzzzzzz', name: 'Zulu' },
+    { id: 'ba_aaaaaaaaaaaa', name: 'Alpha' },
+    { name: 'บัญชีใหม่' }
+  ]));
 });
 
-test('bank hidden rows survive rename, and normalization preserves retained row keys', () => {
-  render(<Accounts />);
-  fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Middle' } });
-  const input = screen.getAllByDisplayValue('Middle')[0]!;
-  fireEvent.change(input, { target: { value: 'Middle updated' } });
-  fireEvent.blur(input);
-  expect(screen.getByTestId('canonical')).toHaveTextContent('["Zulu","Alpha","Middle updated"]');
-  expect(screen.getAllByDisplayValue('Middle updated')[0]).toBe(input);
-  fireEvent.click(screen.getByRole('button', { name: '+ เพิ่มบัญชี' }));
-  expect(screen.getAllByDisplayValue('บัญชีใหม่')).toHaveLength(2);
-  expect(screen.getByTestId('canonical')).toHaveTextContent('["Zulu","Alpha","Middle updated","บัญชีใหม่"]');
+test('bank manager restores an emptied name on blur and blocks duplicate names', async () => {
+  const onSave = jest.fn().mockResolvedValue(true);
+  render(<Accounts onSave={onSave} />);
+
+  const middle = await screen.findByRole('textbox', { name: 'ชื่อบัญชี 3' });
+  fireEvent.change(middle, { target: { value: '' } });
+  fireEvent.blur(middle);
+  expect(middle).toHaveValue('Middle');
+
+  fireEvent.change(screen.getByRole('textbox', { name: 'ชื่อบัญชี 2' }), { target: { value: 'Zulu' } });
+  fireEvent.click(screen.getByRole('button', { name: 'บันทึกบัญชีธนาคาร' }));
+  expect(onSave).not.toHaveBeenCalled();
+  expect(screen.getByText('ชื่อบัญชีซ้ำกับบัญชีอื่น')).toBeInTheDocument();
+});
+
+test('bank account summary is read-only, sorted, and links to settings', () => {
+  render(<BankAccountTable accounts={['Zulu', 'Alpha']} accountSummary={{ Zulu: 500, Alpha: 200 }} />);
+
+  expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '+ เพิ่มบัญชี' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /ลบบัญชี/ })).not.toBeInTheDocument();
+  expect(screen.getAllByRole('link').some(link => link.getAttribute('href') === '/settings#bank-accounts')).toBe(true);
+  fireEvent.change(screen.getByRole('combobox', { name: 'เรียงตาม — บัญชีธนาคาร' }), { target: { value: 'name:asc' } });
+  expect(screen.getAllByRole('row')
+    .filter(row => row.querySelector('td'))
+    .map(row => row.querySelector('td')?.textContent))
+    .toEqual(['Alpha', 'Zulu']);
+  expect(screen.getAllByText(formatCurrency(200)).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(formatCurrency(500)).length).toBeGreaterThan(0);
+});
+
+test('bank account summary empty state links to settings without rendering the toolbar', () => {
+  render(<BankAccountTable accounts={[]} />);
+
+  expect(screen.getByText('ยังไม่มีบัญชีธนาคาร')).toBeInTheDocument();
+  expect(screen.getByText('เพิ่มบัญชีได้ที่หน้าตั้งค่า')).toHaveAttribute('href', '/settings#bank-accounts');
+  expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
 });

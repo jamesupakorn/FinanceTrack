@@ -23,7 +23,8 @@ import CreditCardForm from '../src/frontend/components/CreditCardForm';
 import InstallmentPlanForm from '../src/frontend/components/InstallmentPlanForm';
 import { Icons } from '../src/frontend/components/Icons';
 import { useSession } from '../src/frontend/contexts/SessionContext';
-import { creditCardAPI } from '../src/shared/utils/frontend/apiUtils';
+import { creditCardAPI, userSettingsAPI } from '../src/shared/utils/frontend/apiUtils';
+import type { BankAccount } from '../src/shared/utils/bankAccountShape';
 import { showToast } from '../src/shared/utils/frontend/toast';
 import { formatCurrency } from '../src/shared/utils/frontend/numberUtils';
 import { formatMonthKeyTH } from '../src/shared/utils/dateUtils';
@@ -36,6 +37,7 @@ const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:
 interface CreditCardRecord {
   id: string;
   name: string;
+  bankAccountId?: string;
   color?: string;
   remainingPayable: number | string;
   availableCredit: number | string;
@@ -191,6 +193,7 @@ export default function CreditCardsPage() {
   const { currentUser } = useSession();
 
   const [cards, setCards] = useState<CreditCardRecord[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [totals, setTotals] = useState<Record<string, unknown> | null>(null);
   const [plans, setPlans] = useState<CreditPlanRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -231,17 +234,36 @@ export default function CreditCardsPage() {
     }
   }, [currentUser?.id]);
 
+  const loadBankAccounts = useCallback(async (): Promise<void> => {
+    if (!currentUser?.id) return;
+    try {
+      const data = await userSettingsAPI.get();
+      if (!Array.isArray(data?.bankAccounts)) throw new Error('Invalid bank account response');
+      setBankAccounts(data.bankAccounts);
+    } catch (loadError) {
+      console.warn('Could not load bank accounts for the card form:', loadError);
+    }
+  }, [currentUser?.id]);
+
   useEffect(() => {
     if (currentUser?.id) loadData();
   }, [currentUser?.id, loadData]);
 
+  useEffect(() => {
+    setBankAccounts([]);
+    if (currentUser?.id) loadBankAccounts();
+  }, [currentUser?.id, loadBankAccounts]);
+
   // ผู้ใช้อาจเพิ่งติ๊กชำระใน edit.js อีกแท็บ — โหลดใหม่เมื่อกลับมาที่หน้านี้
   useEffect(() => {
     if (!currentUser?.id) return undefined;
-    const handleFocus = () => loadData({ silent: true });
+    const handleFocus = () => {
+      loadData({ silent: true });
+      loadBankAccounts();
+    };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [currentUser?.id, loadData]);
+  }, [currentUser?.id, loadBankAccounts, loadData]);
 
   const goTo = useCallback((query: Record<string, string> = {}) => {
     router.push({ pathname: '/credit-cards', query }, undefined, { shallow: true });
@@ -518,6 +540,7 @@ export default function CreditCardsPage() {
           open={cardFormOpen}
           card={editingCard}
           existingCards={cards}
+          bankAccounts={bankAccounts}
           submitting={submitting}
           onClose={() => { setCardFormOpen(false); setEditingCard(null); }}
           onSubmit={handleSubmitCard}
