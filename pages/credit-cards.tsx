@@ -20,15 +20,21 @@ import CreditCardDashboard from '../src/frontend/components/CreditCardDashboard'
 import CreditCardDetail from '../src/frontend/components/CreditCardDetail';
 import Layout from '../src/frontend/components/Layout';
 import CreditCardForm from '../src/frontend/components/CreditCardForm';
-import InstallmentPlanForm from '../src/frontend/components/InstallmentPlanForm';
+import InstallmentPlanForm, {
+  type PlanSubmitOptions,
+  type PlanSubmitValues,
+  type ValidatedPlanValue
+} from '../src/frontend/components/InstallmentPlanForm';
+import { BackdatedPaidFailureDialog } from '../src/frontend/components/BackdatedInstallmentsDialog';
 import { Icons } from '../src/frontend/components/Icons';
 import { useSession } from '../src/frontend/contexts/SessionContext';
-import { creditCardAPI, userSettingsAPI } from '../src/shared/utils/frontend/apiUtils';
+import { creditCardAPI, expenseAPI, userSettingsAPI } from '../src/shared/utils/frontend/apiUtils';
 import type { BankAccount } from '../src/shared/utils/bankAccountShape';
+import { applyPaidSequentially } from '../src/shared/utils/installmentBackdate';
 import { showToast } from '../src/shared/utils/frontend/toast';
 import { formatCurrency } from '../src/shared/utils/frontend/numberUtils';
 import { formatMonthKeyTH } from '../src/shared/utils/dateUtils';
-import { addMonths, PLAN_STATUS } from '../src/shared/utils/creditCardUtils';
+import { addMonths, buildSchedule, PLAN_STATUS } from '../src/shared/utils/creditCardUtils';
 import { getTabbableElements } from '../src/shared/utils/frontend/focusTrap';
 import type { CurrentCycle } from '../src/frontend/components/RevolvingBalanceSection';
 
@@ -52,6 +58,14 @@ interface InstallmentScheduleEntry {
   paid?: boolean;
 }
 
+interface BackdateFailureState {
+  cardId: string;
+  itemName: string;
+  months: number;
+  requestedCount: number;
+  failed: Array<{ no: number; dueMonth: string }>;
+}
+
 interface CreditPlanRecord {
   id: string;
   cardId: string;
@@ -68,10 +82,7 @@ interface CreditPlanRecord {
   [key: string]: unknown;
 }
 
-interface PlanFormValues extends Record<string, unknown> {
-  startMonth: string;
-  months: number;
-}
+type PlanFormValues = ValidatedPlanValue;
 
 interface RevolvingPreview {
   remaining: number;
@@ -209,6 +220,7 @@ export default function CreditCardsPage() {
   const [editingPlan, setEditingPlan] = useState<CreditPlanRecord | null>(null);
   const [lockedCardId, setLockedCardId] = useState<string | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+  const [backdateFailure, setBackdateFailure] = useState<BackdateFailureState | null>(null);
 
   const selectedCardId = typeof router.query.card === 'string' ? router.query.card : null;
 
@@ -350,19 +362,87 @@ export default function CreditCardsPage() {
     setPlanFormOpen(true);
   };
 
-  const handleSubmitPlan = async (values: PlanFormValues): Promise<void> => {
+  const handleSubmitPlan = async (values: PlanSubmitValues, options?: PlanSubmitOptions): Promise<void> => {
     setSubmitting(true);
     try {
       if (editingPlan) {
         await creditCardAPI.updatePlan(editingPlan.id, values);
         showToast('แก้ไขแผนผ่อนแล้ว');
       } else {
-        await creditCardAPI.createPlan(values);
-        const lastMonth = addMonths(values.startMonth, values.months - 1);
+        if (!('startMonth' in values) || !('months' in values)) {
+          throw new Error('Invalid plan submission');
+        }
+        const planValues: PlanFormValues = values;
+        setBackdateFailure(null);
+        const created = await creditCardAPI.createPlan(planValues);
+        const paidNos = options?.paidInstallmentNos ?? [];
+        const serverSchedule: InstallmentScheduleEntry[] = Array.isArray(created?.plan?.schedule)
+          ? created.plan.schedule
+          : [];
+        const lastMonth = addMonths(planValues.startMonth, planValues.months - 1);
         setPlanCreatedNote(
-          `เพิ่มเข้ารายจ่ายเดือน ${formatMonthKeyTH(values.startMonth)} – ${formatMonthKeyTH(lastMonth)} แล้ว`
+          `เพิ่มเข้ารายจ่ายเดือน ${formatMonthKeyTH(planValues.startMonth)} – ${formatMonthKeyTH(lastMonth)} แล้ว`
         );
-        showToast('เพิ่มแผนผ่อนชำระแล้ว');
+        if (paidNos.length === 0) {
+          showToast('เพิ่มแผนผ่อนชำระแล้ว');
+        } else {
+          const selectedRows = paidNos.map(no => serverSchedule.find(row => row.no === no));
+          const missingNos = paidNos.filter((no, index) => !selectedRows[index]);
+          const rowsToMark = selectedRows
+            .filter((row): row is InstallmentScheduleEntry => Boolean(row))
+            .map(({ no, dueMonth }) => ({ no, dueMonth }));
+          const result = await applyPaidSequentially(
+            created?.plan?.id ?? '',
+            rowsToMark,
+            expenseAPI.setPaid
+          );
+          let failedNos = [...new Set([...result.failedNos, ...missingNos])].sort((a, b) => a - b);
+          let reconciledPlan: CreditPlanRecord | undefined;
+
+          if (failedNos.length > 0) {
+            try {
+              const response = await creditCardAPI.getPlans({ cardId: planValues.cardId });
+              reconciledPlan = Array.isArray(response?.plans)
+                ? response.plans.find((plan: CreditPlanRecord) => plan.id === created?.plan?.id)
+                : undefined;
+              if (reconciledPlan) {
+                const persistedSchedule = Array.isArray(reconciledPlan.schedule) ? reconciledPlan.schedule : [];
+                failedNos = failedNos.filter(no => persistedSchedule.find(row => row.no === no)?.paid !== true);
+              }
+            } catch (reconcileError) {
+              console.error('Failed to reconcile backdated installment payments:', reconcileError);
+            }
+          }
+
+          const fallbackSchedule = buildSchedule({
+            ...planValues,
+            calcMethod: planValues.calcMethod ?? undefined
+          }).schedule;
+          const failed = failedNos.map(no => ({
+            no,
+            dueMonth: serverSchedule.find(row => row.no === no)?.dueMonth
+              ?? fallbackSchedule.find(row => row.no === no)?.dueMonth
+              ?? ''
+          }));
+          const completed = reconciledPlan
+            ? reconciledPlan.status === PLAN_STATUS.COMPLETED
+            : failed.length === 0 && result.succeededNos.length === serverSchedule.length && serverSchedule.length > 0;
+
+          if (failed.length > 0) {
+            showToast(`เพิ่มแผนผ่อนชำระแล้ว แต่บันทึกชำระไม่สำเร็จ ${failed.length} งวด`, 'error');
+            setBackdateFailure({
+              cardId: planValues.cardId,
+              itemName: planValues.itemName,
+              months: planValues.months,
+              requestedCount: paidNos.length,
+              failed
+            });
+          } else if (completed) {
+            showToast('เพิ่มแผนผ่อนชำระแล้ว · ผ่อนครบแล้ว 🎉');
+          } else {
+            showToast(`เพิ่มแผนผ่อนชำระแล้ว · บันทึกชำระย้อนหลัง ${paidNos.length} งวด`);
+          }
+        }
       }
       setPlanFormOpen(false);
       setEditingPlan(null);
@@ -564,6 +644,19 @@ export default function CreditCardsPage() {
           onCancel={() => setConfirmState(null)}
           onConfirm={confirmState?.onConfirm || (() => undefined)}
           busy={false}
+        />
+        <BackdatedPaidFailureDialog
+          open={Boolean(backdateFailure)}
+          itemName={backdateFailure?.itemName ?? ''}
+          months={backdateFailure?.months ?? 0}
+          requestedCount={backdateFailure?.requestedCount ?? 0}
+          failed={backdateFailure?.failed ?? []}
+          onClose={() => setBackdateFailure(null)}
+          onGoToCard={() => {
+            const cardId = backdateFailure?.cardId;
+            setBackdateFailure(null);
+            if (cardId && selectedCardId !== cardId) goTo({ card: cardId });
+          }}
         />
       </div>
     </Layout>

@@ -24,6 +24,12 @@ import { BP } from '../../shared/utils/frontend/breakpoints';
 import { Icons } from './Icons';
 import RevolvingBalanceSection, { type CurrentCycle, type RevolvingCard } from './RevolvingBalanceSection';
 import BankIssuerMark from './BankIssuerMark';
+import {
+  PAID_PILL_CLASS,
+  PAID_PILL_ON_CLASS,
+  PAID_PILL_LABEL_PAID,
+  PAID_PILL_LABEL_UNPAID
+} from './installmentPaidPill';
 
 interface InstallmentScheduleRow {
   no: number;
@@ -119,8 +125,6 @@ const CARD = 'rounded-md border border-border-default bg-surface-1 p-space-4 sha
 const BTN_GHOST = `inline-flex min-h-11 items-center justify-center gap-space-2 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING}`;
 const ICON_BTN = `flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border border-border-default bg-surface-2 text-secondary transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING}`;
 const SECTION_TITLE = 'm-0 text-lg font-semibold text-primary';
-const PAID_PILL = `min-h-11 w-full rounded-sm border border-border-default bg-surface-2 text-center text-sm font-medium text-secondary transition-colors duration-fast ease-graphite disabled:opacity-60 ${FOCUS_RING}`;
-const PAID_PILL_ON = 'border-pos/40 bg-pos/14 text-pos';
 const BADGE = 'inline-flex w-fit items-center gap-space-1 rounded-full border border-border-default bg-surface-2 px-space-2 py-[2px] text-xs font-medium text-secondary';
 
 function PlanMenu({ plan, onRename, onEdit, onCancel, onDelete }: PlanMenuProps) {
@@ -265,11 +269,11 @@ function PlanCard({
     return (
       <button
         type="button"
-        className={`${PAID_PILL} ${row.paid ? PAID_PILL_ON : ''}`}
+        className={`${PAID_PILL_CLASS} ${row.paid ? PAID_PILL_ON_CLASS : ''}`}
         disabled={disabled}
         onClick={() => onToggleInstallment?.(plan.id, row.no, !row.paid, key)}
       >
-        {row.paid ? '✓ ชำระแล้ว' : 'ยังไม่ชำระ — แตะเพื่อยืนยัน'}
+        {row.paid ? PAID_PILL_LABEL_PAID : PAID_PILL_LABEL_UNPAID}
       </button>
     );
   };

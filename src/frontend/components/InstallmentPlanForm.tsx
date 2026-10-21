@@ -22,7 +22,23 @@ import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
 import { formatCurrency, parseAndFormat } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { findOverdueInstallments, type OverdueInstallment } from '../../shared/utils/installmentBackdate';
 import { Icons } from './Icons';
+import BackdatedInstallmentsDialog from './BackdatedInstallmentsDialog';
+
+export type ValidatedPlanValue = ReturnType<typeof validatePlanInput>['value'];
+
+export interface PlanSubmitOptions {
+  paidInstallmentNos: number[];
+}
+
+export type PlanSubmitValues = ValidatedPlanValue | Pick<ValidatedPlanValue, 'itemName'>;
+
+interface BackdateState {
+  values: ValidatedPlanValue;
+  rows: OverdueInstallment[];
+  currentMonthKey: string;
+}
 
 interface InstallmentCardOption {
   id: string;
@@ -71,7 +87,7 @@ interface InstallmentPlanFormProps {
   lockedCardId?: string | null;
   submitting?: boolean;
   onClose?: () => void;
-  onSubmit?: (values: any) => void;
+  onSubmit?: (values: PlanSubmitValues, options?: PlanSubmitOptions) => void | Promise<void>;
 }
 
 const MONTH_PRESETS = [3, 6, 10, 12, 18, 24, 36, 48, 60];
@@ -162,13 +178,18 @@ export default function InstallmentPlanForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [previewToken, setPreviewToken] = useState(0);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [backdate, setBackdate] = useState<BackdateState | null>(null);
   const dialogRef = useRef<HTMLFormElement | null>(null);
   const firstFieldRef = useRef<HTMLInputElement | null>(null);
+  const submitButtonRef = useRef<HTMLButtonElement | null>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
+  const backdateOpenRef = useRef(false);
+  const restoreSubmitFocusRef = useRef(false);
   const formRef = useRef(form);
   formRef.current = form;
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  backdateOpenRef.current = Boolean(backdate);
 
   const installmentsPaid = useMemo(
     () => (Array.isArray(plan?.schedule) ? plan.schedule.filter(row => row?.paid === true).length : 0),
@@ -184,6 +205,7 @@ export default function InstallmentPlanForm({
       : null;
     setErrors({});
     setScheduleOpen(false);
+    setBackdate(null);
     setForm(createInitialForm(plan, lockedCardId, cards));
     setPreviewToken(token => token + 1);
     const timer = setTimeout(() => firstFieldRef.current?.focus(), 40);
@@ -192,8 +214,15 @@ export default function InstallmentPlanForm({
   }, [open, plan, lockedCardId]);
 
   useEffect(() => {
+    if (backdate || !restoreSubmitFocusRef.current) return;
+    restoreSubmitFocusRef.current = false;
+    submitButtonRef.current?.focus();
+  }, [backdate]);
+
+  useEffect(() => {
     if (!open) return undefined;
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (backdateOpenRef.current) return;
       if (event.key === 'Escape') {
         event.stopPropagation();
         onCloseRef.current?.();
@@ -302,7 +331,33 @@ export default function InstallmentPlanForm({
       return;
     }
     setErrors({});
+    if (!plan) {
+      const currentMonthKey = getCurrentMonthKey();
+      const { schedule } = buildSchedule({
+        ...result.value,
+        calcMethod: result.value.calcMethod ?? undefined
+      });
+      const rows = findOverdueInstallments(schedule, currentMonthKey);
+      if (rows.length > 0) {
+        setBackdate({ values: result.value, rows, currentMonthKey });
+        return;
+      }
+    }
     onSubmit?.(result.value);
+  };
+
+  const handleBackdateCancel = () => {
+    restoreSubmitFocusRef.current = true;
+    setBackdate(null);
+  };
+
+  const handleBackdateConfirm = async (paidInstallmentNos: number[]) => {
+    if (!backdate) return;
+    try {
+      await Promise.resolve(onSubmit?.(backdate.values, { paidInstallmentNos }));
+    } finally {
+      setBackdate(null);
+    }
   };
 
   const describedBy = (field: string) => (errors[field] ? `plan-${field}-error` : undefined);
@@ -558,9 +613,18 @@ export default function InstallmentPlanForm({
 
         <div className="flex shrink-0 flex-col-reverse items-stretch gap-space-3 border-t border-border-subtle px-space-5 py-space-4 md:flex-row md:items-center md:justify-end">
           <button type="button" className={`min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary ${FOCUS_RING}`} onClick={onClose}>ยกเลิก</button>
-          <button type="submit" className={`min-h-11 rounded-sm bg-accent px-space-5 text-sm font-semibold text-on-accent disabled:opacity-60 ${FOCUS_RING}`} disabled={submitting}>{submitting ? 'กำลังบันทึก...' : 'บันทึกแผนผ่อน'}</button>
+          <button ref={submitButtonRef} type="submit" className={`min-h-11 rounded-sm bg-accent px-space-5 text-sm font-semibold text-on-accent disabled:opacity-60 ${FOCUS_RING}`} disabled={submitting}>{submitting ? 'กำลังบันทึก...' : 'บันทึกแผนผ่อน'}</button>
         </div>
       </form>
+      <BackdatedInstallmentsDialog
+        open={Boolean(backdate)}
+        months={backdate?.values.months ?? 0}
+        currentMonthKey={backdate?.currentMonthKey ?? ''}
+        rows={backdate?.rows ?? []}
+        busy={submitting}
+        onCancel={handleBackdateCancel}
+        onConfirm={handleBackdateConfirm}
+      />
     </div>
   );
 }
