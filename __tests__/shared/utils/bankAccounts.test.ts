@@ -117,6 +117,19 @@ describe('bank account ids and compatibility helpers', () => {
     expect(result[1].id).not.toBe('ba_aaaaaaaaaaaa');
   });
 
+  it('does not resurrect a deleted id from a stale client even if it is format-valid', () => {
+    // Simulates a stale browser tab that still holds a deleted account's id: `stored` (freshly
+    // read from the server) no longer has `ba_aaaaaaaaaaaa`, but the stale tab's `incoming`
+    // payload still carries it under a new name.
+    const result = assignBankAccountIds([
+      { id: 'ba_aaaaaaaaaaaa', name: 'ไทยพาณิชย์' }
+    ], []);
+
+    expect(result[0].name).toBe('ไทยพาณิชย์');
+    expect(result[0].id).toMatch(/^ba_[0-9a-f]{12}$/);
+    expect(result[0].id).not.toBe('ba_aaaaaaaaaaaa');
+  });
+
   it('adapts mixed account shapes to unique name strings', () => {
     expect(toBankAccountNames(['A', { id: 'ba_0123456789ab', name: ' B ' }, 'A', 5, { name: '' }]))
       .toEqual(['A', 'B']);

@@ -100,13 +100,19 @@ export default function BankAccountManager({
   };
 
   const handleSave = async () => {
-    const seen = new Set<string>();
-    const duplicateKeys = new Set<string>();
+    const keysByName = new Map<string, string[]>();
     drafts.forEach(draft => {
       const name = draft.name.trim();
-      if (seen.has(name)) duplicateKeys.add(draft.key);
-      seen.add(name);
+      const keys = keysByName.get(name) ?? [];
+      keys.push(draft.key);
+      keysByName.set(name, keys);
     });
+
+    const duplicateKeys = new Set<string>();
+    keysByName.forEach(keys => {
+      if (keys.length > 1) keys.forEach(key => duplicateKeys.add(key));
+    });
+
     if (duplicateKeys.size > 0) {
       setErrors(Object.fromEntries([...duplicateKeys].map(key => [key, 'ชื่อบัญชีซ้ำกับบัญชีอื่น'])));
       showToast('ชื่อบัญชีซ้ำกัน กรุณาแก้ไขก่อนบันทึก', 'error');

@@ -83,6 +83,7 @@ export function assignBankAccountIds(
   });
 
   const assignedIds = new Set<string>();
+  const storedIds = new Set(stored.map(account => account.id));
   const forbiddenMintIds = new Set([
     ...stored.map(account => account.id),
     ...requestedIds
@@ -94,7 +95,13 @@ export function assignBankAccountIds(
       ? (entry as { id?: unknown }).id
       : undefined;
 
-    let id: string | undefined = isBankAccountId(requestedId) ? requestedId : undefined;
+    // A client-supplied id is only kept when it's both format-valid AND still present in
+    // `stored` — otherwise it may be a stale/deleted id resurrected by a stale browser tab,
+    // which must not silently re-link a dangling credit card to a new account (see
+    // .pipeline/spec-findings-bank-account-manager-fix.md Fix 1).
+    let id: string | undefined = isBankAccountId(requestedId) && storedIds.has(requestedId)
+      ? requestedId
+      : undefined;
     if (!id) {
       const reusable = stored.find(account =>
         account.name === name &&

@@ -123,7 +123,41 @@ test('bank manager restores an emptied name on blur and blocks duplicate names',
   fireEvent.change(screen.getByRole('textbox', { name: 'ชื่อบัญชี 2' }), { target: { value: 'Zulu' } });
   fireEvent.click(screen.getByRole('button', { name: 'บันทึกบัญชีธนาคาร' }));
   expect(onSave).not.toHaveBeenCalled();
-  expect(screen.getByText('ชื่อบัญชีซ้ำกับบัญชีอื่น')).toBeInTheDocument();
+  // Both the original "Zulu" row (1) and the row renamed to "Zulu" (2) must be flagged, not
+  // just the later occurrence — regression guard for the group-by-name duplicate fix.
+  expect(screen.getAllByText('ชื่อบัญชีซ้ำกับบัญชีอื่น')).toHaveLength(2);
+  expect(screen.getByRole('textbox', { name: 'ชื่อบัญชี 1' })).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByRole('textbox', { name: 'ชื่อบัญชี 2' })).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByRole('textbox', { name: 'ชื่อบัญชี 3' })).not.toHaveAttribute('aria-invalid', 'true');
+});
+
+test('bank manager flags every row when three accounts share the same name', async () => {
+  const onSave = jest.fn().mockResolvedValue(true);
+  render(<Accounts onSave={onSave} />);
+
+  fireEvent.change(screen.getByRole('textbox', { name: 'ชื่อบัญชี 1' }), { target: { value: 'Middle' } });
+  fireEvent.change(screen.getByRole('textbox', { name: 'ชื่อบัญชี 2' }), { target: { value: 'Middle' } });
+  fireEvent.click(screen.getByRole('button', { name: 'บันทึกบัญชีธนาคาร' }));
+
+  expect(onSave).not.toHaveBeenCalled();
+  expect(screen.getAllByText('ชื่อบัญชีซ้ำกับบัญชีอื่น')).toHaveLength(3);
+  expect(screen.getByRole('textbox', { name: 'ชื่อบัญชี 1' })).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByRole('textbox', { name: 'ชื่อบัญชี 2' })).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByRole('textbox', { name: 'ชื่อบัญชี 3' })).toHaveAttribute('aria-invalid', 'true');
+});
+
+test('bank manager treats names differing only by surrounding whitespace as duplicates', async () => {
+  const onSave = jest.fn().mockResolvedValue(true);
+  render(<Accounts onSave={onSave} />);
+
+  fireEvent.change(screen.getByRole('textbox', { name: 'ชื่อบัญชี 2' }), { target: { value: 'Middle  ' } });
+  fireEvent.click(screen.getByRole('button', { name: 'บันทึกบัญชีธนาคาร' }));
+
+  expect(onSave).not.toHaveBeenCalled();
+  expect(screen.getAllByText('ชื่อบัญชีซ้ำกับบัญชีอื่น')).toHaveLength(2);
+  expect(screen.getByRole('textbox', { name: 'ชื่อบัญชี 1' })).not.toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByRole('textbox', { name: 'ชื่อบัญชี 2' })).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByRole('textbox', { name: 'ชื่อบัญชี 3' })).toHaveAttribute('aria-invalid', 'true');
 });
 
 test('bank account summary is read-only, sorted, and links to settings', () => {
