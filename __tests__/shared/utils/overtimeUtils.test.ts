@@ -20,14 +20,31 @@ describe('OT_MULTIPLIERS', () => {
 });
 
 describe('getSalaryHourlyRate', () => {
-  it('divides by the real calendar length of a 30-day month', () => {
+  it('divides by a fixed 30-day pay month', () => {
     expect(getSalaryHourlyRate(30000, '2026-09')).toBe(125);
   });
-  it('never rounds the rate (28-day February)', () => {
-    expect(getSalaryHourlyRate(30000, '2026-02')).toBeCloseTo(133.92857142857142, 10);
+  it('28-day February uses the same 30-day divisor', () => {
+    expect(getSalaryHourlyRate(30000, '2026-02')).toBe(125);
   });
-  it('uses 29 days in a leap February', () => {
-    expect(getSalaryHourlyRate(30000, '2028-02')).toBeCloseTo(129.31034482758622, 10);
+  it('leap February uses the same 30-day divisor', () => {
+    expect(getSalaryHourlyRate(30000, '2028-02')).toBe(125);
+  });
+  it('AC-3: 30,000 gives exactly 125 in every month', () => {
+    for (const m of ['2026-01', '2026-02', '2026-09', '2028-02']) {
+      expect(getSalaryHourlyRate(30000, m)).toBe(125);
+    }
+  });
+  it('AC-2: the rate is the same in every month and is never rounded', () => {
+    const oct = getSalaryHourlyRate(42994, '2026-10');
+    expect(oct).toBeCloseTo(42994 / 240, 10);
+    expect(getSalaryHourlyRate(42994, '2026-02')).toBe(oct);
+    expect(getSalaryHourlyRate(42994, '2028-02')).toBe(oct);
+    expect(getSalaryHourlyRate(42994, '2026-09')).toBe(oct);
+  });
+  it('AC-1: 42,994 / 2026-10 × 1.5 × 3.5h → 940 (payslip 28/10/2026)', () => {
+    const rate = getSalaryHourlyRate(42994, '2026-10');
+    expect(calculateOvertimeRowAmount(row(3.5, 1.5), rate)).toBe(940);
+    expect(calculateOvertimeTotal([row(3.5, 1.5)], 42994, '2026-10')).toBe(940);
   });
   it('reads a salary stored as a string, like calculateSalarySummary does (A-3)', () => {
     expect(getSalaryHourlyRate('30000', '2026-09')).toBe(125);
@@ -47,6 +64,7 @@ describe('getSalaryHourlyRate', () => {
     expect(getSalaryHourlyRate(30000, 'garbage')).toBe(0);
     expect(getSalaryHourlyRate(30000, null)).toBe(0);
     expect(getSalaryHourlyRate(30000, '2026-13')).toBe(0);
+    expect(getSalaryHourlyRate(30000, '2026-00')).toBe(0);
   });
 });
 
@@ -54,17 +72,17 @@ describe('calculateOvertimeRowAmount — spec worked examples E1–E7', () => {
   it('E1: 30,000 / 2026-09 (30d) × 1.5 × 10h → 1,875', () => {
     expect(calculateOvertimeRowAmount(row(10, 1.5), getSalaryHourlyRate(30000, '2026-09'))).toBe(1875);
   });
-  it('E2: 30,000 / 2026-02 (28d) × 1.5 × 10h → 2,009', () => {
-    expect(calculateOvertimeRowAmount(row(10, 1.5), getSalaryHourlyRate(30000, '2026-02'))).toBe(2009);
+  it('E2: 30,000 / 2026-02 (28d) × 1.5 × 10h → 1,875 (fixed 30-day divisor)', () => {
+    expect(calculateOvertimeRowAmount(row(10, 1.5), getSalaryHourlyRate(30000, '2026-02'))).toBe(1875);
   });
-  it('E3: 30,000 / 2028-02 (29d) × 1.5 × 10h → 1,940', () => {
-    expect(calculateOvertimeRowAmount(row(10, 1.5), getSalaryHourlyRate(30000, '2028-02'))).toBe(1940);
+  it('E3: 30,000 / 2028-02 (29d) × 1.5 × 10h → 1,875 (fixed 30-day divisor)', () => {
+    expect(calculateOvertimeRowAmount(row(10, 1.5), getSalaryHourlyRate(30000, '2028-02'))).toBe(1875);
   });
   it('E4: an exact .5 rounds half-up — 562.5 → 563, not 562 (D-3)', () => {
     expect(calculateOvertimeRowAmount(row(3, 1.5), getSalaryHourlyRate(30000, '2026-09'))).toBe(563);
   });
-  it('E5: 25,500 / 2027-02 (28d) × 3 × 7.5h → 2,561', () => {
-    expect(calculateOvertimeRowAmount(row(7.5, 3), getSalaryHourlyRate(25500, '2027-02'))).toBe(2561);
+  it('E5: 25,500 / 2027-02 × 3 × 7.5h → 2,391 (106.25 × 22.5 = 2,390.625)', () => {
+    expect(calculateOvertimeRowAmount(row(7.5, 3), getSalaryHourlyRate(25500, '2027-02'))).toBe(2391);
   });
   it('E6: salary 0/empty → 0 for any hours and multiplier', () => {
     expect(calculateOvertimeRowAmount(row(10, 3), getSalaryHourlyRate(0, '2026-09'))).toBe(0);
@@ -76,18 +94,25 @@ describe('calculateOvertimeRowAmount — spec worked examples E1–E7', () => {
 });
 
 describe('calculateOvertimeRowAmount — rounding discriminators (AC-OT-03)', () => {
-  const rate = getSalaryHourlyRate(30000, '2026-02');
+  // 32,150 / 240 = 133.9583… ; × 15 = 2,009.375
+  const rate = getSalaryHourlyRate(32150, '2026-09');
+  it('returns 2,009 for a non-terminating rate', () => {
+    expect(calculateOvertimeRowAmount(row(10, 1.5), rate)).toBe(2009);
+  });
   it('does not round the hourly rate up to 134 first (would give 2,010)', () => {
     expect(calculateOvertimeRowAmount(row(10, 1.5), rate)).not.toBe(2010);
   });
-  it('does not round the hourly rate to 133.5 first (would give 2,003)', () => {
-    expect(calculateOvertimeRowAmount(row(10, 1.5), rate)).not.toBe(2003);
+  it('does not truncate the hourly rate to 133 first (would give 1,995)', () => {
+    expect(calculateOvertimeRowAmount(row(10, 1.5), rate)).not.toBe(1995);
   });
-  it('produces four different amounts for 28/29/30/31-day months (AC-OT-02)', () => {
+  it('near-.5 stays down: 42,994 × 1.5 × 3.5h = 940.49 → 940, not 941', () => {
+    expect(calculateOvertimeRowAmount(row(3.5, 1.5), getSalaryHourlyRate(42994, '2026-10'))).toBe(940);
+  });
+  it('gives the same amount in 28/29/30/31-day months (fixed 30-day divisor; supersedes AC-OT-02)', () => {
     const amountFor = (monthKey: string) => calculateOvertimeRowAmount(row(10, 1.5), getSalaryHourlyRate(30000, monthKey));
     const amounts = [amountFor('2026-02'), amountFor('2028-02'), amountFor('2026-09'), amountFor('2026-01')];
-    expect(amounts).toEqual([2009, 1940, 1875, 1815]);
-    expect(new Set(amounts).size).toBe(4);
+    expect(amounts).toEqual([1875, 1875, 1875, 1875]);
+    expect(new Set(amounts).size).toBe(1);
   });
 });
 
@@ -124,7 +149,7 @@ describe('calculateOvertimeTotal', () => {
   });
   it('matches the E1 + E5 sum of the spec worked examples', () => {
     expect(calculateOvertimeTotal([row(10, 1.5, 'a')], 30000, '2026-09')).toBe(1875);
-    expect(calculateOvertimeTotal([row(7.5, 3, 'b')], 25500, '2027-02')).toBe(2561);
+    expect(calculateOvertimeTotal([row(7.5, 3, 'b')], 25500, '2027-02')).toBe(2391);
   });
   it('reproduces the DATA_MODEL document example (1,875 + 2,813)', () => {
     expect(calculateOvertimeTotal([row(10, 1.5, 'a'), row(7.5, 3, 'b')], 30000, '2026-09')).toBe(4688);
