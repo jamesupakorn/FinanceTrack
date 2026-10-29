@@ -16,7 +16,8 @@ import {
   describeDueDistance,
   formatDayLabel,
   round2,
-  PLAN_STATUS
+  PLAN_STATUS,
+  normaliseDayValue
 } from '../../shared/utils/creditCardUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { fitFontSizeCss } from '../../shared/utils/frontend/ringTextFit';
@@ -34,10 +35,12 @@ interface DashboardCard {
   creditLimit?: number | string;
   remainingPrincipal?: number | string;
   revolvingTotalDue?: number | string;
+  revolvingDue?: number | string;
+  revolvingDueMonth?: string | null;
   remainingPayable: number | string;
   availableCredit: number | string;
   statementDay?: number | string | null;
-  dueDay?: number | string | null;
+  dueDay?: number | string;
   nextDueDate?: string | null;
   ongoingPlanCount?: number;
 }
@@ -66,15 +69,20 @@ interface DashboardTotals {
   cardCount?: number;
 }
 
-interface UpcomingInstallment {
+interface UpcomingGroup {
   key: string;
-  planId: string;
-  installmentNo: number;
   card: DashboardCard;
-  plan: DashboardPlan;
-  payment: number | string;
   dueDate: string;
   diffDays: number;
+  installmentCount: number;
+  installmentSubtotal: number;
+  revolvingSubtotal: number;
+  total: number;
+}
+
+interface UpcomingProjection {
+  groups: UpcomingGroup[];
+  error: string | null;
 }
 
 type CardAction = (card: DashboardCard) => void;
@@ -85,7 +93,6 @@ interface CreditCardDashboardProps {
   plans?: DashboardPlan[];
   loading?: boolean;
   error?: string | null;
-  pendingKeys?: string[];
   onRetry?: () => void | Promise<void>;
   onAddCard?: () => void;
   onEditCard?: CardAction;
@@ -93,12 +100,12 @@ interface CreditCardDashboardProps {
   onAddPlan?: () => void;
   onAddPlanForCard?: (card: DashboardCard | null) => void;
   onOpenCard?: (cardId: string) => void;
-  onToggleInstallment?: (planId: string, installmentNo: number, paid: boolean, pendingKey: string) => void | Promise<void>;
   planCreatedNote?: string | null;
 }
 
 const UPCOMING_WINDOW_DAYS = 7;
-const UPCOMING_MAX_ITEMS = 5;
+const UPCOMING_MAX_GROUPS = 5;
+const VALID_MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/;
 const HIGH_UTILISATION_PERCENT = 80;
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
@@ -198,13 +205,13 @@ function groupCardsByIssuer(cards: DashboardCard[]): Array<{ key: BankIssuerKey;
     .filter(group => group.cards.length > 0);
 }
 
+
 export default function CreditCardDashboard({
   cards = [],
   totals = null,
   plans = [],
   loading = false,
   error = null,
-  pendingKeys = [],
   onRetry,
   onAddCard,
   onEditCard,
@@ -212,14 +219,37 @@ export default function CreditCardDashboard({
   onAddPlan,
   onAddPlanForCard,
   onOpenCard,
-  onToggleInstallment,
   planCreatedNote = null
 }: CreditCardDashboardProps) {
   const cardById = useMemo(() => new Map(cards.map(card => [card.id, card])), [cards]);
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
 
-  /** งวดที่ครบกำหนดภายใน 7 วัน หรือเลยกำหนดแล้ว เรียงตามวันที่ */
-  const upcoming = useMemo(() => {
-    const events: UpcomingInstallment[] = [];
+  /** รวมภาระที่ยังไม่ชำระตามบัตรและวันที่ครบกำหนด ก่อนจำกัดจำนวนกลุ่มที่แสดง */
+  const upcomingProjection = useMemo<UpcomingProjection>(() => {
+    const groupsByCard = new Map<string, Map<string, UpcomingGroup>>();
+    const getGroup = (card: DashboardCard, dueDate: string, diffDays: number): UpcomingGroup => {
+      let cardGroups = groupsByCard.get(card.id);
+      if (!cardGroups) {
+        cardGroups = new Map<string, UpcomingGroup>();
+        groupsByCard.set(card.id, cardGroups);
+      }
+      let group = cardGroups.get(dueDate);
+      if (!group) {
+        group = {
+          key: `${card.id}:${dueDate}`,
+          card,
+          dueDate,
+          diffDays,
+          installmentCount: 0,
+          installmentSubtotal: 0,
+          revolvingSubtotal: 0,
+          total: 0
+        };
+        cardGroups.set(dueDate, group);
+      }
+      return group;
+    };
+
     plans.forEach(plan => {
       if (plan?.status !== PLAN_STATUS.ONGOING) return;
       const card = cardById.get(plan.cardId);
@@ -231,21 +261,54 @@ export default function CreditCardDashboard({
         const diffDays = diffDaysFromToday(dueDate);
         if (diffDays === null) return;
         if (diffDays > UPCOMING_WINDOW_DAYS) return;
-        events.push({
-          key: `${plan.id}_${row.no}`,
-          planId: plan.id,
-          installmentNo: row.no,
-          card,
-          plan,
-          payment: row.payment,
-          dueDate,
-          diffDays
-        });
+        const group = getGroup(card, dueDate, diffDays);
+        group.installmentCount += 1;
+        group.installmentSubtotal += Number(row.payment) || 0;
       });
     });
-    events.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-    return events;
-  }, [plans, cardById]);
+
+    for (const card of cards) {
+      const revolvingDue = Number(card.revolvingDue);
+      if (!Number.isFinite(revolvingDue) || revolvingDue <= 0) continue;
+
+      const dueMonth = card.revolvingDueMonth;
+      const dueDay = normaliseDayValue(card.dueDay);
+      if (typeof dueMonth !== 'string' || !VALID_MONTH_KEY.test(dueMonth) || dueDay === null) {
+        return {
+          groups: [],
+          error: `ข้อมูลวันครบกำหนดของยอดหมุนเวียนบัตร ${card.name} ไม่ถูกต้อง กรุณาลองโหลดใหม่`
+        };
+      }
+
+      const dueDate = resolveInstallmentDueDate(dueDay, dueMonth);
+      const diffDays = dueDate ? diffDaysFromToday(dueDate) : null;
+      if (!dueDate || diffDays === null) {
+        return {
+          groups: [],
+          error: `ข้อมูลวันครบกำหนดของยอดหมุนเวียนบัตร ${card.name} ไม่ถูกต้อง กรุณาลองโหลดใหม่`
+        };
+      }
+      if (diffDays > UPCOMING_WINDOW_DAYS) continue;
+
+      getGroup(card, dueDate, diffDays).revolvingSubtotal += revolvingDue;
+    }
+
+    const groups = Array.from(groupsByCard.values())
+      .flatMap(cardGroups => Array.from(cardGroups.values()))
+      .map(group => {
+        const installmentSubtotal = round2(group.installmentSubtotal);
+        const revolvingSubtotal = round2(group.revolvingSubtotal);
+        return {
+          ...group,
+          installmentSubtotal,
+          revolvingSubtotal,
+          total: round2(installmentSubtotal + revolvingSubtotal)
+        };
+      })
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.card.id.localeCompare(b.card.id));
+
+    return { groups, error: null };
+  }, [cards, plans, cardById]);
 
   const cardGroups = useMemo(() => groupCardsByIssuer(cards), [cards]);
   const hasPlans = plans.length > 0;
@@ -270,10 +333,10 @@ export default function CreditCardDashboard({
     );
   }
 
-  if (error) {
+  if (error || upcomingProjection.error) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-space-3 rounded-md border border-neg/35 bg-neg/10 p-space-4 text-neg" role="alert">
-        <span>{error}</span>
+        <span>{error || upcomingProjection.error}</span>
         <button type="button" className={BTN_GHOST} onClick={onRetry}>ลองใหม่</button>
       </div>
     );
@@ -292,8 +355,10 @@ export default function CreditCardDashboard({
     );
   }
 
-  const monthlyDueTotal = round2(upcoming.reduce((sum, event) => sum + (Number(event.payment) || 0), 0));
-  const dueCardCount = new Set(upcoming.map(event => event.card.id)).size;
+  const upcoming = upcomingProjection.groups;
+  const monthlyDueTotal = round2(upcoming.reduce((sum, group) => sum + group.total, 0));
+  const dueCardCount = new Set(upcoming.map(group => group.card.id)).size;
+  const visibleUpcoming = showAllUpcoming ? upcoming : upcoming.slice(0, UPCOMING_MAX_GROUPS);
 
   return (
     <div className="flex flex-col gap-space-5">
@@ -343,7 +408,8 @@ export default function CreditCardDashboard({
           <span className="whitespace-nowrap">{formatCurrency(totals?.remainingPayable || 0)}</span>{' บาท'}
         </p>
         <p className="m-0 mt-space-1 text-xs text-tertiary">
-          {'ครบกำหนดเร็ว ๆ นี้ '}<span className="whitespace-nowrap">{formatCurrency(monthlyDueTotal)}</span>
+          {'ครบกำหนดเร็ว ๆ นี้ '}<span className="max-w-full break-all">{formatCurrency(monthlyDueTotal)}</span>
+          {` · ${dueCardCount} บัตร`}
           {' · เหลือวงเงิน '}<span className="whitespace-nowrap">{formatCurrency(totals?.availableCredit || 0)}</span>
           {` · ${totals?.ongoingPlanCount || 0} แผน`}
         </p>
@@ -359,41 +425,67 @@ export default function CreditCardDashboard({
         {upcoming.length === 0 ? (
           <p className="m-0 text-sm text-tertiary">{`ไม่มีรายการครบกำหนดใน ${UPCOMING_WINDOW_DAYS} วันนี้ 🎉`}</p>
         ) : (
-          <div className="flex flex-col gap-space-2">
-            {upcoming.slice(0, UPCOMING_MAX_ITEMS).map(event => {
-              const overdue = event.diffDays < 0;
-              const busy = pendingKeys.includes(event.key);
-              return (
-                <div
-                  key={event.key}
-                  className="flex min-h-14 flex-col gap-space-2 rounded-sm border border-border-default bg-surface-2 p-space-3"
-                  style={{ borderLeft: `4px solid ${overdue ? 'var(--color-neg, #F87171)' : (event.card.color || 'var(--color-accent, #D4A857)')}` }}
-                >
-                  <div className="flex flex-wrap items-baseline justify-between gap-space-3">
-                    <span className="inline-flex items-center gap-space-2 font-medium text-primary">
-                      {overdue && <Icons.AlertTriangle size={16} color="var(--color-neg, #F87171)" />}
-                      <span className="h-3 w-3 shrink-0 rounded-xs" style={{ background: event.card.color }} aria-hidden="true" />
-                      {`${event.card.name}${event.card.last4 ? ` ····${event.card.last4}` : ''}`}
-                    </span>
-                    <span className="whitespace-nowrap font-[family-name:var(--font-numeric)] text-base font-semibold tabular-nums text-primary">{`${formatCurrency(event.payment)} บาท`}</span>
-                  </div>
-                  <span className="text-xs text-secondary">
-                    {`${event.plan.itemName} · งวด ${event.installmentNo}/${event.plan.months}`}
-                  </span>
-                  <span className={`text-xs ${overdue ? 'text-neg' : 'text-secondary'}`}>
-                    {`${formatIsoDateTH(event.dueDate)} · ${describeDueDistance(event.diffDays)}`}
-                  </span>
-                  <button
-                    type="button"
-                    className={`min-h-11 w-full rounded-sm border border-border-default bg-surface-1 text-sm font-medium text-secondary transition-colors duration-fast ease-graphite disabled:opacity-60 ${FOCUS_RING}`}
-                    disabled={busy}
-                    onClick={() => onToggleInstallment?.(event.planId, event.installmentNo, true, event.key)}
-                  >
-                    ยังไม่ชำระ — แตะเพื่อยืนยัน
-                  </button>
-                </div>
-              );
-            })}
+          <div className="flex flex-col gap-space-3">
+            <ul
+              id="upcoming-groups"
+              aria-label="รายการบัตรเครดิตที่ครบกำหนดเร็ว ๆ นี้"
+              className="m-0 flex list-none flex-col gap-space-2 p-0"
+            >
+              {visibleUpcoming.map((group, index) => {
+                const overdue = group.diffDays < 0;
+                const headingId = `upcoming-card-${index}`;
+                return (
+                  <li key={group.key}>
+                    <article
+                      className="flex min-h-14 min-w-0 flex-col gap-space-2 rounded-sm border border-border-default bg-surface-2 p-space-3"
+                      style={{ borderLeft: `4px solid ${overdue ? 'var(--color-neg, #F87171)' : (group.card.color || 'var(--color-accent, #D4A857)')}` }}
+                      aria-labelledby={headingId}
+                    >
+                      <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-space-3">
+                        <h3 id={headingId} className="m-0 inline-flex min-w-0 items-center gap-space-2 break-words font-medium text-primary">
+                          {overdue && <Icons.AlertTriangle size={16} color="var(--color-neg, #F87171)" />}
+                          <span className="h-3 w-3 shrink-0 rounded-xs" style={{ background: group.card.color }} aria-hidden="true" />
+                          <span className="min-w-0 break-words">{`${group.card.name}${group.card.last4 ? ` ····${group.card.last4}` : ''}`}</span>
+                        </h3>
+                        <span className="max-w-full break-all text-right font-[family-name:var(--font-numeric)] text-base font-semibold tabular-nums text-primary">{`${formatCurrency(group.total)} บาท`}</span>
+                      </div>
+                      <span className={`text-xs ${overdue ? 'text-neg' : 'text-secondary'}`}>
+                        {`${formatIsoDateTH(group.dueDate)} · ${describeDueDistance(group.diffDays)}`}
+                      </span>
+                      {(group.installmentCount > 0 || group.revolvingSubtotal > 0) && (
+                        <div className="flex min-w-0 flex-wrap gap-x-space-4 gap-y-space-1 text-xs text-secondary">
+                          {group.installmentCount > 0 && (
+                            <span className="break-words">{`ผ่อนชำระ ${group.installmentCount} งวด · ${formatCurrency(group.installmentSubtotal)} บาท`}</span>
+                          )}
+                          {group.revolvingSubtotal > 0 && (
+                            <span className="break-words">{`ยอดหมุนเวียน · ${formatCurrency(group.revolvingSubtotal)} บาท`}</span>
+                          )}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className={`min-h-11 w-full rounded-sm border border-border-default bg-surface-1 px-space-3 text-sm font-medium text-secondary transition-colors duration-fast ease-graphite ${FOCUS_RING}`}
+                        onClick={() => onOpenCard?.(group.card.id)}
+                        aria-label={`ดูรายละเอียดบัตร ${group.card.name} (${group.card.id}) วันที่ ${formatIsoDateTH(group.dueDate)}`}
+                      >
+                        ดูรายละเอียดบัตร
+                      </button>
+                    </article>
+                  </li>
+                );
+              })}
+            </ul>
+            {upcoming.length > UPCOMING_MAX_GROUPS && (
+              <button
+                type="button"
+                className={BTN_GHOST}
+                aria-expanded={showAllUpcoming}
+                aria-controls="upcoming-groups"
+                onClick={() => setShowAllUpcoming(value => !value)}
+              >
+                {showAllUpcoming ? 'แสดงน้อยลง' : `แสดงทั้งหมด (${upcoming.length} รายการ)`}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -495,6 +587,8 @@ export default function CreditCardDashboard({
             );
           })}
         </div>
+      </div>
+
       </div>
 
       {!hasPlans && <p className="m-0 text-sm text-tertiary">ยังไม่มีแผนผ่อน — กด + เพิ่มแผนผ่อนชำระ</p>}

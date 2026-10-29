@@ -1,0 +1,275 @@
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import CreditCardDashboard from '../../src/frontend/components/CreditCardDashboard';
+import { END_OF_MONTH_DUE_DAY } from '../../src/shared/utils/dateUtils';
+
+type TestCard = {
+  id: string;
+  name: string;
+  dueDay: number | string;
+  remainingPayable: number;
+  availableCredit: number;
+  revolvingDue?: number;
+  revolvingTotalDue?: number;
+  revolvingDueMonth?: string | null;
+};
+
+type TestPlan = {
+  id: string;
+  cardId: string;
+  itemName: string;
+  months: number;
+  status: 'ongoing';
+  schedule: Array<{ no: number; dueMonth: string; payment: number; paid?: boolean }>;
+};
+
+const makeCard = (
+  id: string,
+  name = 'บัตรทดสอบ',
+  dueDay: number | string = 29,
+  fields: Partial<TestCard> = {}
+): TestCard => ({
+  id,
+  name,
+  dueDay,
+  remainingPayable: 0,
+  availableCredit: 10000,
+  ...fields
+});
+
+const makePlan = (
+  id: string,
+  cardId: string,
+  rows: Array<{ dueMonth: string; payment: number; paid?: boolean }>
+): TestPlan => ({
+  id,
+  cardId,
+  itemName: 'รายการทดสอบ',
+  months: rows.length,
+  status: 'ongoing',
+  schedule: rows.map((row, index) => ({ no: index + 1, ...row }))
+});
+
+const renderDashboard = (
+  cards: TestCard[],
+  plans: TestPlan[] = [],
+  props: Partial<React.ComponentProps<typeof CreditCardDashboard>> = {}
+) => render(
+  <CreditCardDashboard
+    cards={cards}
+    plans={plans}
+    totals={{ remainingPayable: 0, availableCredit: 10000, creditLimit: 10000, ongoingPlanCount: plans.length, cardCount: cards.length }}
+    {...props}
+  />
+);
+
+beforeEach(() => {
+  jest.useFakeTimers({ now: new Date(2026, 9, 29, 12, 0, 0) });
+});
+
+afterEach(() => {
+  jest.useRealTimers();
+});
+
+describe('CreditCardDashboard upcoming groups', () => {
+  it('aggregates all installment entries per card/date, preserves distinct card ids, and keeps the 1,504.33 subtotal', () => {
+    const firstCard = makeCard('cc_a', 'บัตรชื่อซ้ำ');
+    const secondCard = makeCard('cc_b', 'บัตรชื่อซ้ำ');
+    const firstFive = [143.2, 25.6, 236.33, 210.8, 888.4].map(payment => ({
+      dueMonth: '2026-10',
+      payment
+    }));
+    const onOpenCard = jest.fn();
+    renderDashboard(
+      [firstCard, secondCard],
+      [
+        makePlan('plan_a', firstCard.id, firstFive),
+        makePlan('plan_b', secondCard.id, [{ dueMonth: '2026-10', payment: 12.34 }])
+      ],
+      { onOpenCard }
+    );
+
+    const list = screen.getByRole('list', { name: 'รายการบัตรเครดิตที่ครบกำหนดเร็ว ๆ นี้' });
+    const groups = within(list).getAllByRole('listitem');
+    expect(groups).toHaveLength(2);
+    expect(within(groups[0]).getByText('ผ่อนชำระ 5 งวด · 1,504.33 บาท')).toBeInTheDocument();
+    expect(within(groups[0]).getByText('1,504.33 บาท')).toBeInTheDocument();
+    expect(within(groups[1]).getByText('ผ่อนชำระ 1 งวด · 12.34 บาท')).toBeInTheDocument();
+
+    const detailButtons = within(list).getAllByRole('button', { name: /ดูรายละเอียดบัตร บัตรชื่อซ้ำ/ });
+    expect(detailButtons[0]).toHaveAccessibleName(/cc_a/);
+    expect(detailButtons[1]).toHaveAccessibleName(/cc_b/);
+    fireEvent.click(within(groups[0]).getByRole('button', { name: /ดูรายละเอียดบัตร บัตรชื่อซ้ำ/ }));
+    expect(onOpenCard).toHaveBeenCalledWith(firstCard.id);
+    expect(within(groups[0]).queryByRole('button', { name: /ชำระ|ยืนยันการชำระ/ })).not.toBeInTheDocument();
+  });
+
+  it('combines same-card installments and the selected revolving due once while keeping another date separate', () => {
+    const card = makeCard('cc_mix', 'บัตรรวมยอด', 5, {
+      revolvingDue: 700,
+      revolvingDueMonth: '2026-11'
+    });
+    renderDashboard(
+      [card],
+      [makePlan('plan_mix', card.id, [
+        { dueMonth: '2026-10', payment: 100 },
+        { dueMonth: '2026-11', payment: 300 }
+      ])]
+    );
+
+    const list = screen.getByRole('list', { name: 'รายการบัตรเครดิตที่ครบกำหนดเร็ว ๆ นี้' });
+    const groups = within(list).getAllByRole('listitem');
+    expect(groups).toHaveLength(2);
+    expect(within(groups[0]).getByText('100.00 บาท')).toBeInTheDocument();
+    expect(within(groups[1]).getByText('ผ่อนชำระ 1 งวด · 300.00 บาท')).toBeInTheDocument();
+    expect(within(groups[1]).getByText('ยอดหมุนเวียน · 700.00 บาท')).toBeInTheDocument();
+    expect(within(groups[1]).getByText('1,000.00 บาท')).toBeInTheDocument();
+  });
+
+  it('excludes zero, credit, and confirmed revolving amounts without offsetting unpaid installments', () => {
+    const zeroCard = makeCard('cc_zero', 'บัตรจ่ายขั้นต่ำแล้ว', 29, {
+      revolvingDue: 0,
+      revolvingTotalDue: 700,
+      revolvingDueMonth: '2026-10'
+    });
+    const creditCard = makeCard('cc_credit', 'บัตรเครดิตคงเหลือ', 29, {
+      revolvingDue: -50,
+      revolvingDueMonth: '2026-10'
+    });
+    renderDashboard(
+      [zeroCard, creditCard],
+      [makePlan('plan_zero', zeroCard.id, [{ dueMonth: '2026-10', payment: 300 }])]
+    );
+
+    const list = screen.getByRole('list', { name: 'รายการบัตรเครดิตที่ครบกำหนดเร็ว ๆ นี้' });
+    const groups = within(list).getAllByRole('listitem');
+    expect(groups).toHaveLength(1);
+    expect(within(groups[0]).getByText('ผ่อนชำระ 1 งวด · 300.00 บาท')).toBeInTheDocument();
+    expect(within(groups[0]).getByText('300.00 บาท')).toBeInTheDocument();
+    expect(screen.queryByText(/ยอดหมุนเวียน/)).not.toBeInTheDocument();
+  });
+
+  it('includes overdue, today, and inclusive today-plus-seven obligations, but excludes plus-eight', () => {
+    const cases = [
+      { card: makeCard('cc_overdue', 'เกินกำหนด', 10), dueMonth: '2026-10', payment: 10 },
+      { card: makeCard('cc_today', 'ครบวันนี้', 29), dueMonth: '2026-10', payment: 29 },
+      { card: makeCard('cc_seven', 'อีกเจ็ดวัน', 5), dueMonth: '2026-11', payment: 5 },
+      { card: makeCard('cc_eight', 'อีกแปดวัน', 6), dueMonth: '2026-11', payment: 6 }
+    ];
+    renderDashboard(
+      cases.map(item => item.card),
+      cases.map((item, index) => makePlan(`plan_${index}`, item.card.id, [{
+        dueMonth: item.dueMonth,
+        payment: item.payment
+      }]))
+    );
+
+    const groups = within(screen.getByRole('list', { name: 'รายการบัตรเครดิตที่ครบกำหนดเร็ว ๆ นี้' })).getAllByRole('listitem');
+    expect(groups).toHaveLength(3);
+    expect(groups.map(group => group.textContent)).toEqual(expect.arrayContaining([
+      expect.stringContaining('เกินกำหนด'),
+      expect.stringContaining('ครบวันนี้'),
+      expect.stringContaining('อีกเจ็ดวัน')
+    ]));
+    expect(groups.every(group => !group.textContent?.includes('อีกแปดวัน'))).toBe(true);
+  });
+
+  it('limits disclosure to five groups while totals use all groups and distinct-card count', () => {
+    const cardA = makeCard('cc_a', 'บัตรเอ', 10);
+    const cardB = makeCard('cc_b', 'บัตรบี', 10);
+    const plans = [
+      makePlan('plan_jun', cardB.id, [{ dueMonth: '2026-06', payment: 600 }]),
+      makePlan('plan_jul', cardA.id, [{ dueMonth: '2026-07', payment: 400 }]),
+      makePlan('plan_aug', cardB.id, [{ dueMonth: '2026-08', payment: 300 }]),
+      makePlan('plan_sep', cardA.id, [{ dueMonth: '2026-09', payment: 200 }]),
+      makePlan('plan_oct_a', cardA.id, [{ dueMonth: '2026-10', payment: 100 }]),
+      makePlan('plan_oct_b', cardB.id, [{ dueMonth: '2026-10', payment: 500 }])
+    ];
+    renderDashboard([cardB, cardA], plans);
+
+    const list = screen.getByRole('list', { name: 'รายการบัตรเครดิตที่ครบกำหนดเร็ว ๆ นี้' });
+    const toggle = screen.getByRole('button', { name: 'แสดงทั้งหมด (6 รายการ)' });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(5);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getAllByText('2,100.00').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/2 บัตร/).length).toBeGreaterThanOrEqual(2);
+
+    fireEvent.click(toggle);
+    expect(within(list).getAllByRole('listitem')).toHaveLength(6);
+    expect(screen.getByRole('button', { name: 'แสดงน้อยลง' })).toHaveAttribute('aria-expanded', 'true');
+    const expanded = within(list).getAllByRole('listitem');
+    expect(expanded.map(group => group.textContent)).toEqual(expect.arrayContaining([
+      expect.stringContaining('บัตรเอ'),
+      expect.stringContaining('บัตรบี')
+    ]));
+    expect(expanded.map(group => group.textContent?.match(/([\d,]+\.\d{2}) บาท/)?.[1])).toEqual([
+      '600.00',
+      '400.00',
+      '300.00',
+      '200.00',
+      '100.00',
+      '500.00'
+    ]);
+    expect(within(expanded[4]).getByText('100.00 บาท')).toBeInTheDocument();
+    expect(within(expanded[5]).getByText('500.00 บาท')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'แสดงน้อยลง' }));
+    expect(within(list).getAllByRole('listitem')).toHaveLength(5);
+    expect(screen.getAllByText('2,100.00').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/2 บัตร/).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('resolves end-of-month and leap-year installment dates with the existing due-day behavior', () => {
+    jest.setSystemTime(new Date(2028, 2, 5, 12, 0, 0));
+    const thirtyOne = makeCard('cc_day31', 'วันที่ 31', 31);
+    const endOfMonth = makeCard('cc_eom', 'สิ้นเดือน', END_OF_MONTH_DUE_DAY);
+    renderDashboard(
+      [thirtyOne, endOfMonth],
+      [
+        makePlan('plan_31', thirtyOne.id, [{ dueMonth: '2028-02', payment: 31 }]),
+        makePlan('plan_eom', endOfMonth.id, [{ dueMonth: '2028-02', payment: 29 }])
+      ]
+    );
+
+    const groups = within(screen.getByRole('list', { name: 'รายการบัตรเครดิตที่ครบกำหนดเร็ว ๆ นี้' })).getAllByRole('listitem');
+    expect(groups).toHaveLength(2);
+    groups.forEach(group => expect(group.textContent).toContain('29 ก.พ. 2571'));
+  });
+
+  it.each([
+    ['invalid selected month', { revolvingDueMonth: '2026-13', dueDay: 10 }],
+    ['invalid due day', { revolvingDueMonth: '2026-10', dueDay: 99 }]
+  ])('surfaces retryable error for a positive revolving obligation with %s', (_label, fields) => {
+    const onRetry = jest.fn();
+    const card = makeCard('cc_invalid', 'บัตรข้อมูลผิด', fields.dueDay, {
+      revolvingDue: 500,
+      revolvingDueMonth: fields.revolvingDueMonth
+    });
+    renderDashboard([card], [], { onRetry });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('ข้อมูลวันครบกำหนดของยอดหมุนเวียนบัตร บัตรข้อมูลผิด ไม่ถูกต้อง');
+    fireEvent.click(screen.getByRole('button', { name: 'ลองใหม่' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('list', { name: 'รายการบัตรเครดิตที่ครบกำหนดเร็ว ๆ นี้' })).not.toBeInTheDocument();
+  });
+
+  it('renders loading, page error with retry, no-card, and no-upcoming states', () => {
+    const { rerender } = render(<CreditCardDashboard loading />);
+    expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByText('กำลังโหลดข้อมูลบัตรเครดิต')).toBeInTheDocument();
+
+    const onRetry = jest.fn();
+    rerender(<CreditCardDashboard error="โหลดข้อมูลไม่สำเร็จ" onRetry={onRetry} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('โหลดข้อมูลไม่สำเร็จ');
+    fireEvent.click(screen.getByRole('button', { name: 'ลองใหม่' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+
+    const onAddCard = jest.fn();
+    rerender(<CreditCardDashboard onAddCard={onAddCard} />);
+    expect(screen.getByText('ยังไม่มีบัตรเครดิต')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'เพิ่มบัตร' }));
+    expect(onAddCard).toHaveBeenCalledTimes(1);
+
+    rerender(<CreditCardDashboard cards={[makeCard('cc_no_due')]} />);
+    expect(screen.getByText('ไม่มีรายการครบกำหนดใน 7 วันนี้ 🎉')).toBeInTheDocument();
+  });
+});

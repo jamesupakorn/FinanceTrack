@@ -496,6 +496,7 @@ export function summariseCard(
   revolvingTotalDue: number;
   revolvingMinDue: number;
   revolvingDue: number;
+  revolvingDueMonth: string | null;
   revolvingOutstanding: number;
   revolvingCarryForward: number;
   revolvingAction: PaymentAction;
@@ -541,6 +542,7 @@ export function summariseCard(
     revolvingTotalDue: revolving.totalDue,
     revolvingMinDue: revolving.minDue,
     revolvingDue: revolving.due,
+    revolvingDueMonth: revolving.cycle?.month ?? null,
     revolvingOutstanding: revolving.outstanding,
     revolvingCarryForward: revolving.carryForward,
     revolvingAction: revolving.paymentAction,

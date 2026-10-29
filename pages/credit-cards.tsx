@@ -45,8 +45,11 @@ interface CreditCardRecord {
   name: string;
   bankAccountId?: string;
   color?: string;
+  dueDay?: number | string;
   remainingPayable: number | string;
   availableCredit: number | string;
+  revolvingDue?: number | string;
+  revolvingDueMonth?: string | null;
 }
 
 interface InstallmentScheduleEntry {
@@ -603,7 +606,6 @@ export default function CreditCardsPage() {
             plans={plans}
             loading={loading}
             error={error}
-            pendingKeys={pendingKeys}
             planCreatedNote={planCreatedNote}
             onRetry={() => loadData()}
             onAddCard={handleOpenAddCard}
@@ -612,7 +614,6 @@ export default function CreditCardsPage() {
             onAddPlan={() => handleOpenAddPlan(null)}
             onAddPlanForCard={handleOpenAddPlan}
             onOpenCard={(cardId: string) => goTo({ card: cardId })}
-            onToggleInstallment={handleToggleInstallment}
           />
         )}
 
