@@ -99,8 +99,24 @@ const buildMonthChangeCopy = (heading: string, monthLabel: string) => (
   `ข้อมูลใน "${heading}" ของเดือน ${monthLabel} ยังไม่ได้บันทึก ถ้าเปลี่ยนเดือนตอนนี้ข้อมูลที่แก้ไว้จะหายไป`
 );
 
+// เดือนที่ผู้ใช้เลือก/สร้างใน page session นี้ แยกตาม userId — อยู่ระดับ module เพื่อคงอยู่ข้ามการสลับ /workspace/* (แต่ละหน้า mount WorkspaceShell ใหม่)
+// หายเมื่อ reload เต็มหน้า และไม่ปนข้ามผู้ใช้ — ห้ามส่งเข้า monthsCache
+const sessionCreatedMonths = new Map<string, Set<string>>();
+
+const getSessionMonths = (userId: string | null): Set<string> => {
+  if (!userId) return new Set();
+  let set = sessionCreatedMonths.get(userId);
+  if (!set) {
+    set = new Set();
+    sessionCreatedMonths.set(userId, set);
+  }
+  return set;
+};
+
 const withSessionMonths = (list: string[], sessionMonths: Set<string>): string[] => {
-  const extra = Array.from(sessionMonths).filter(month => !list.includes(month));
+  // merge เฉพาะเดือน > เดือนถัดไป (เดือนเดียวที่ BR-b ซ่อน) — เดือนที่ server ลบทิ้งแล้วต้องไม่โผล่กลับมา
+  const nextMonth = getNextMonth(getCurrentMonth());
+  const extra = Array.from(sessionMonths).filter(month => month > nextMonth && !list.includes(month));
   return extra.length ? [...list, ...extra].sort((a, b) => b.localeCompare(a)) : list;
 };
 
@@ -108,8 +124,6 @@ export default function WorkspaceShell({ section, overlay, children }: Workspace
   const router = useRouter();
   const routerRef = useRef(router);
   const pendingMonthRef = useRef<string | null>(null);
-  // เดือนที่ผู้ใช้เลือก/สร้างใน session นี้ — คงอยู่ใน months หลัง fetchMonths (ไม่เขียนลง monthsCache; remount แล้วหายไป)
-  const sessionMonthsRef = useRef<Set<string>>(new Set());
   routerRef.current = router;
   const { currentUser } = useSession();
   const userId = currentUser?.id || null;
@@ -156,7 +170,7 @@ export default function WorkspaceShell({ section, overlay, children }: Workspace
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [months, setMonths] = useState<string[]>(() => (userId && monthsCache.has(userId) ? monthsCache.get(userId) || [] : []));
+  const [months, setMonths] = useState<string[]>(() => (userId && monthsCache.has(userId) ? withSessionMonths(monthsCache.get(userId) || [], getSessionMonths(userId)) : []));
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -185,11 +199,11 @@ export default function WorkspaceShell({ section, overlay, children }: Workspace
       const nextMonth = getNextMonth(currentMonth);
       // เดือน <= เดือนถัดไปที่มีเอกสารแสดงเสมอ (เดือนว่างที่เพิ่งสร้างยังอยู่หลัง refresh); เดือนไกลกว่านั้นต้องมีข้อมูลจริง
       const normalizedMonths = Array.from(new Set([currentMonth, ...allMonths.filter(month => month <= nextMonth || meaningful.has(month))])).sort((a, b) => b.localeCompare(a));
-      setMonths(withSessionMonths(normalizedMonths, sessionMonthsRef.current));
+      setMonths(withSessionMonths(normalizedMonths, getSessionMonths(userId)));
       if (userId) monthsCache.set(userId, normalizedMonths);
     } catch {
       const currentMonth = getCurrentMonth();
-      setMonths(withSessionMonths([currentMonth], sessionMonthsRef.current));
+      setMonths(withSessionMonths([currentMonth], getSessionMonths(userId)));
       if (userId) monthsCache.set(userId, [currentMonth]);
     }
   }, [userId]);
@@ -197,7 +211,7 @@ export default function WorkspaceShell({ section, overlay, children }: Workspace
   useEffect(() => {
     if (!currentUser) return;
     if (userId && monthsCache.has(userId)) {
-      setMonths(withSessionMonths(monthsCache.get(userId) || [], sessionMonthsRef.current));
+      setMonths(withSessionMonths(monthsCache.get(userId) || [], getSessionMonths(userId)));
       return;
     }
     fetchMonths();
@@ -205,7 +219,7 @@ export default function WorkspaceShell({ section, overlay, children }: Workspace
 
   const applyMonthChange = useCallback((month: string) => {
     // optimistic: เดือนที่เพิ่งสร้างต้องอยู่ใน months ทันที ไม่งั้น effect resolve เดือนจะดีดกลับ — ไม่เขียนลง monthsCache
-    sessionMonthsRef.current.add(month);
+    if (userId) getSessionMonths(userId).add(month);
     setMonths(prev => (prev.includes(month) ? prev : [...prev, month].sort((a, b) => b.localeCompare(a))));
     pendingMonthRef.current = month;
     setSelectedMonth(month);

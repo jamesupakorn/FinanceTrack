@@ -43,6 +43,7 @@ jest.mock('../../src/frontend/components/MonthManager', () => ({
     <div>
       <output data-testid="months">{months.join(',')}</output>
       <button type="button" onClick={() => onMonthSelected('2026-11')}>pick-2026-11</button>
+      <button type="button" onClick={() => onMonthSelected('2026-08')}>pick-2026-08</button>
       <button type="button" onClick={() => { onMonthSelected('2026-12'); onDataRefresh(); }}>create-2026-12</button>
     </div>
   )
@@ -138,7 +139,7 @@ describe('WorkspaceShell applyMonthChange', () => {
     expect(screen.getByTestId('months')).toHaveTextContent(/^2026-10,2026-09$/);
   });
 
-  it('F-1(b): a created current+2 month survives the post-create reload (selection/URL/localStorage), then is hidden again after remount', async () => {
+  it('F-1(b): a created current+2 month survives the post-create reload (selection/URL/localStorage)', async () => {
     mockReads({ expense: { '2026-09': { rent: { value: 100 } } } });
     const first = renderShell();
     await waitFor(() => expect(screen.getByTestId('selected')).toHaveTextContent(/^2026-10$/));
@@ -154,11 +155,83 @@ describe('WorkspaceShell applyMonthChange', () => {
     expect(localStorage.getItem(storageKey())).toBe('2026-12');
     expect(mockReplace).toHaveBeenLastCalledWith(expect.objectContaining({ query: expect.objectContaining({ month: '2026-12' }) }));
     first.unmount();
+  });
+});
 
-    // remount: no session state, server still has no data for 2026-12 -> hidden again, falls back to current
-    mockInitialQuery = {};
+describe('WorkspaceShell session-created months (F-6 / F-7)', () => {
+  async function createCurrentPlus2() {
+    mockReads({ expense: { '2026-09': { rent: { value: 100 } } } });
+    const first = renderShell();
+    await waitFor(() => expect(screen.getByTestId('selected')).toHaveTextContent(/^2026-10$/));
+    const fetchesBefore = jest.mocked(expenseAPI.getAll).mock.calls.length;
+    await userEvent.click(screen.getByRole('button', { name: 'create-2026-12' }));
+    await waitFor(() => expect(jest.mocked(expenseAPI.getAll).mock.calls.length).toBeGreaterThan(fetchesBefore));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(screen.getByTestId('months')).toHaveTextContent(/^2026-12,2026-10,2026-09$/);
+    first.unmount();
+  }
+
+  it('F-7: a month the server pruned (<= current+1) is not resurrected by the session merge', async () => {
+    mockReads({ expense: { '2026-10': { rent: { value: 1 } }, '2026-09': { rent: { value: 1 } }, '2026-08': { rent: { value: 1 } } } });
     renderShell();
+    await waitFor(() => expect(screen.getByTestId('months')).toHaveTextContent(/^2026-10,2026-09,2026-08$/));
+    await userEvent.click(screen.getByRole('button', { name: 'pick-2026-08' }));
+    await waitFor(() => expect(screen.getByTestId('selected')).toHaveTextContent(/^2026-08$/));
+
+    // create new month, prune confirmed: server dropped 2026-08 and keeps the empty far-future month hidden by BR-b
+    mockReads({ expense: { '2026-10': { rent: { value: 1 } }, '2026-09': { rent: { value: 1 } } } });
+    const fetchesBefore = jest.mocked(expenseAPI.getAll).mock.calls.length;
+    await userEvent.click(screen.getByRole('button', { name: 'create-2026-12' }));
+    await waitFor(() => expect(jest.mocked(expenseAPI.getAll).mock.calls.length).toBeGreaterThan(fetchesBefore));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+
+    expect(screen.getByTestId('months')).toHaveTextContent(/^2026-12,2026-10,2026-09$/);
+    expect(screen.getByTestId('months').textContent).not.toContain('2026-08');
+  });
+
+  it('F-6: switching section (new mount, same user) keeps the created month listed and selected', async () => {
+    await createCurrentPlus2();
+    mockInitialQuery = {};
+    renderShell('expense');
+    expect(screen.getByTestId('months').textContent).toContain('2026-12');
+    await waitFor(() => expect(screen.getByTestId('months')).toHaveTextContent(/^2026-12,2026-10,2026-09$/));
+    await waitFor(() => expect(screen.getByTestId('selected')).toHaveTextContent(/^2026-12$/));
+    expect(localStorage.getItem(storageKey())).toBe('2026-12');
+  });
+
+  it('F-6: a different user does not see the created month', async () => {
+    await createCurrentPlus2();
+    mockUser.id = `${mockUser.id}-other`;
+    mockInitialQuery = {};
+    renderShell('expense');
     await waitFor(() => expect(screen.getByTestId('months')).toHaveTextContent(/^2026-10,2026-09$/));
     await waitFor(() => expect(screen.getByTestId('selected')).toHaveTextContent(/^2026-10$/));
+  });
+
+  it('F-6: a full reload (module reset) hides the created month again', async () => {
+    await createCurrentPlus2();
+    const reloadedId = mockUser.id;
+    let fresh: { render: typeof render; screen: typeof screen; waitFor: typeof waitFor; Shell: typeof WorkspaceShell; api: typeof expenseAPI };
+    jest.resetModules();
+    {
+      /* eslint-disable @typescript-eslint/no-require-imports */
+      jest.doMock('next/router', () => ({ useRouter: () => ({ isReady: true, pathname: '/workspace/income', query: {}, replace: jest.fn(() => Promise.resolve()), push: jest.fn(), events: { on: jest.fn(), off: jest.fn() }, beforePopState: jest.fn() }) }));
+      const rtl = require('@testing-library/react/pure');
+      const shell = require('../../src/frontend/components/WorkspaceShell').default;
+      const apis = require('../../src/shared/utils/frontend/apiUtils');
+      /* eslint-enable @typescript-eslint/no-require-imports */
+      fresh = { render: rtl.render, screen: rtl.screen, waitFor: rtl.waitFor, Shell: shell, api: apis.expenseAPI };
+      apis.expenseAPI.getAll.mockResolvedValue({ months: { '2026-09': { rent: { value: 100 } } } });
+      apis.incomeAPI.getAll.mockResolvedValue({ months: {} });
+      apis.savingsAPI.getAll.mockResolvedValue({ months: {} });
+      apis.salaryAPI.getAll.mockResolvedValue({ months: {} });
+      apis.investmentAPI.getAll.mockResolvedValue({});
+    }
+    expect(mockUser.id).toBe(reloadedId);
+    mockInitialQuery = {};
+    const Shell = fresh!.Shell;
+    fresh!.render(<Shell section="income">{({ selectedMonth }: { selectedMonth: string | null }) => <p data-testid="selected">{selectedMonth}</p>}</Shell>);
+    await fresh!.waitFor(() => expect(fresh.screen.getByTestId('months')).toHaveTextContent(/^2026-10,2026-09$/));
+    await fresh!.waitFor(() => expect(fresh.screen.getByTestId('selected')).toHaveTextContent(/^2026-10$/));
   });
 });
