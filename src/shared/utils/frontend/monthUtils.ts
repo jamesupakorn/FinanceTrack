@@ -65,6 +65,61 @@ export function getMeaningfulSalaryMonths(data: { months?: Record<string, unknow
     .map(([month]) => month);
 }
 
+// ฟิลด์ metadata / ค่าที่ server คำนวณเพิ่มใน GET (ไม่ใช่ข้อมูลที่ผู้ใช้กรอก) — ไม่นับว่ามีข้อมูล
+const NON_DATA_KEYS = new Set([
+  '_id', 'userId', 'month', 'saved_at', 'createdAt', 'updatedAt',
+  'รวม', 'totalActualPaid', 'accountSummary', 'overtimeLegacy', 'totalSavings', 'รวมเงินเก็บ'
+]);
+// แถวบัตรเครดิตที่ server derive ใส่ใน expense GET (cci_ งวดผ่อน / ccr_ ยอดหมุนเวียน) ไม่มีเอกสารเดือนจริง
+// และไม่ถูกนับในหน้าต่าง 15 เดือนฝั่ง server — จึงไม่ทำให้เดือนอนาคตไกลโผล่ใน dropdown
+const DERIVED_ROW_PREFIXES = ['cci_', 'ccr_'];
+
+function hasMeaningfulValue(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (typeof value === 'number') return value !== 0 && !Number.isNaN(value);
+  if (typeof value === 'boolean') return value;
+  if (Array.isArray(value)) return value.some(hasMeaningfulValue);
+  if (typeof value === 'object') return Object.values(value as Record<string, unknown>).some(hasMeaningfulValue);
+  return true;
+}
+
+function isMeaningfulMonthDoc(doc: unknown): boolean {
+  if (Array.isArray(doc)) return doc.some(hasMeaningfulValue);
+  if (!doc || typeof doc !== 'object') return hasMeaningfulValue(doc);
+  return Object.entries(doc as Record<string, unknown>).some(([key, value]) => (
+    !NON_DATA_KEYS.has(key)
+    && !DERIVED_ROW_PREFIXES.some(prefix => key.startsWith(prefix))
+    && hasMeaningfulValue(value)
+  ));
+}
+
+/**
+ * เดือนที่ "มีข้อมูลจริง" จากผลลัพธ์ getAll() ของ collection ที่ WorkspaceShell รวมไว้.
+ * รูปแบบที่รองรับ: `{ months: { 'YYYY-MM': doc } }` (expense/income/savings/salary getAll) และ
+ * `{ 'YYYY-MM': doc }` (investment getAll คืน map เดือน -> array). เอกสาร `{}` / `[]` / ค่าศูนย์ / '' = ไม่มีข้อมูล
+ */
+export function getMeaningfulMonthKeys({ expense, income, savings, salary, investment }: {
+  expense?: unknown;
+  income?: unknown;
+  savings?: unknown;
+  salary?: unknown;
+  investment?: unknown;
+} = {}): Set<MonthKey> {
+  const result = new Set<MonthKey>();
+  [expense, income, savings, salary, investment].forEach(data => {
+    if (!data || typeof data !== 'object') return;
+    const record = data as Record<string, unknown>;
+    const source = 'months' in record && record.months && typeof record.months === 'object'
+      ? record.months as Record<string, unknown>
+      : record;
+    Object.entries(source).forEach(([month, doc]) => {
+      if (MONTH_KEY_RE.test(month) && isMeaningfulMonthDoc(doc)) result.add(month);
+    });
+  });
+  return result;
+}
+
 export function collectMonthKeys({ expense, income, savings, salary, investment }: {
   expense?: unknown;
   income?: unknown;
