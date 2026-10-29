@@ -266,28 +266,17 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     setPendingKeys(keys => (busy ? [...keys, key] : keys.filter(item => item !== key)));
   };
 
-  const updateRow = (key: string, patch: Record<string, unknown>) => {
-    setMonthsMap(prev => {
-      const monthRows = prev[monthKey] as Record<string, Record<string, unknown>> | undefined;
-      if (!monthRows || !monthRows[key]) return prev;
-      return {
-        ...prev,
-        [monthKey]: { ...monthRows, [key]: { ...monthRows[key], ...patch } }
-      };
-    });
-  };
-
   const handleToggleInstallment = async (event: CalendarEvent): Promise<void> => {
     if (!event.plan || event.installmentNo == null || pendingKeys.includes(event.key)) return;
     const nextPaid = !event.paid;
     setBusy(event.key, true);
-    updateRow(event.key, { paid: nextPaid });
     try {
       const response = await creditCardAPI.setInstallmentPaid(event.plan.id, event.installmentNo, nextPaid);
       changedRef.current = true;
+      const refreshed = await expenseAPI.getAll();
+      setMonthsMap(refreshed.months);
       showToast(response?.plan?.status === PLAN_STATUS.COMPLETED ? 'ผ่อนครบแล้ว 🎉' : 'อัปเดตสถานะงวดแล้ว');
     } catch (error) {
-      updateRow(event.key, { paid: event.paid });
       const message = (error as { message?: string } | null)?.message;
       showToast(message || 'อัปเดตสถานะงวดไม่สำเร็จ', 'error');
     } finally {
@@ -295,23 +284,18 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     }
   };
 
-  /** ใช้ผลลัพธ์ cycle จาก server เขียนทับแถว ccr_ ในเดือนนี้ — ตรงตามกติกาการ inject ของ Feature 1 */
-  const applyCycleToRow = (event: CalendarEvent, cycle: { amountDue?: unknown; paymentAction?: string | null } | undefined) => {
-    if (!cycle) return;
-    updateRow(event.key, {
-      actual: cycle.amountDue,
-      paid: cycle.paymentAction !== null,
-      name: `ยอดใช้จ่ายบัตร ${event.card?.name || ''}${cycle.paymentAction === 'minimum' ? ' (ขั้นต่ำ)' : ''}`
-    });
+  const refreshExpenseRows = async () => {
+    const response = await expenseAPI.getAll();
+    setMonthsMap(response.months);
   };
 
   const handleRevolvingFull = async (event: CalendarEvent): Promise<void> => {
     if (!event.card) return;
     setBusy(event.key, true);
     try {
-      const response = await creditCardAPI.setRevolvingAction(event.card.id, monthKey, 'full');
-      applyCycleToRow(event, (response?.cycles || []).find((cycle: { month: string }) => cycle.month === monthKey));
+      await creditCardAPI.setRevolvingAction(event.card.id, monthKey, 'full');
       changedRef.current = true;
+      await refreshExpenseRows();
       showToast('บันทึกการชำระแล้ว');
     } catch (error) {
       const message = (error as { message?: string } | null)?.message;
@@ -325,9 +309,9 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     if (!event.card) return;
     setBusy(event.key, true);
     try {
-      const response = await creditCardAPI.setRevolvingAction(event.card.id, monthKey, null);
-      applyCycleToRow(event, (response?.cycles || []).find((cycle: { month: string }) => cycle.month === monthKey));
+      await creditCardAPI.setRevolvingAction(event.card.id, monthKey, null);
       changedRef.current = true;
+      await refreshExpenseRows();
       showToast('ยกเลิกการชำระแล้ว');
     } catch (error) {
       const message = (error as { message?: string } | null)?.message;
@@ -362,9 +346,9 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     if (!event?.card) { setConfirmState(null); return; }
     setConfirmBusy(true);
     try {
-      const response = await creditCardAPI.setRevolvingAction(event.card.id, monthKey, 'minimum');
-      applyCycleToRow(event, (response?.cycles || []).find((cycle: { month: string }) => cycle.month === monthKey));
+      await creditCardAPI.setRevolvingAction(event.card.id, monthKey, 'minimum');
       changedRef.current = true;
+      await refreshExpenseRows();
       showToast('บันทึกการชำระขั้นต่ำแล้ว');
       setConfirmState(null);
     } catch (error) {

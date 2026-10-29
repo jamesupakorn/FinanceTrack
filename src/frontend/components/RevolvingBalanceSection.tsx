@@ -15,14 +15,15 @@
  */
 
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { getCurrentMonthKey, formatDayLabel, isValidCashbackAmount } from '../../shared/utils/creditCardUtils';
+import { getCurrentMonthKey, formatDayLabel, isValidCashbackAmount, buildRevolvingRowKey } from '../../shared/utils/creditCardUtils';
 import type { buildRevolvingCycles } from '../../shared/utils/creditCardUtils';
 import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
-import { creditCardAPI } from '../../shared/utils/frontend/apiUtils';
+import { creditCardAPI, expenseAPI } from '../../shared/utils/frontend/apiUtils';
 import { formatCurrency, parseAndFormat } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
 import LoadingSkeleton, { SkeletonBlock } from './LoadingSkeleton';
+import CreditSpendItems from './CreditSpendItems';
 
 type RevolvingCycle = ReturnType<typeof buildRevolvingCycles>[number];
 
@@ -84,7 +85,7 @@ export default function RevolvingBalanceSection({
 }: RevolvingBalanceSectionProps) {
   const [cycles, setCycles] = useState<RevolvingCycle[]>([]);
   const [truncated, setTruncated] = useState(false);
-  const [spendDraft, setSpendDraft] = useState('');
+  const [cardTotal, setCardTotal] = useState<{ actual: number; installmentTotal: number } | null>(null);
   const [cashbackDraft, setCashbackDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -96,13 +97,17 @@ export default function RevolvingBalanceSection({
   }, [isMobileView]);
 
   const cardId = card?.id;
+  const readCardTotal = useCallback(async () => {
+    const expense = await expenseAPI.getByMonth(month);
+    const row = cardId ? expense?.[buildRevolvingRowKey(cardId)] : null;
+    return { actual: Number(row?.actual) || 0, installmentTotal: Number(row?.breakdown?.installmentTotal) || 0 };
+  }, [cardId, month]);
 
   const applyChain = useCallback((response: RevolvingResponse) => {
     const nextCycles = Array.isArray(response?.cycles) ? response.cycles : [];
     setCycles(nextCycles);
     setTruncated(response?.truncated === true);
     const current = nextCycles.find(item => item.month === month);
-    setSpendDraft(current ? parseAndFormat(current.newSpend) : '');
     setCashbackDraft(current ? parseAndFormat(current.cashbackAmount || 0) : '');
   }, [month]);
 
@@ -110,16 +115,17 @@ export default function RevolvingBalanceSection({
     if (!cardId) return undefined;
     let cancelled = false;
     setLoading(true);
-    creditCardAPI.getRevolving({ cardId })
-      .then((response) => {
+    Promise.all([creditCardAPI.getRevolving({ cardId, month }), readCardTotal()])
+      .then(([response, total]) => {
         if (cancelled) return;
         applyChain(response);
+        setCardTotal(total);
       })
       .catch(() => {
         if (cancelled) return;
         setCycles([]);
         setTruncated(false);
-        setSpendDraft('');
+        setCardTotal(null);
         setCashbackDraft('');
         showToast('โหลดยอดใช้จ่ายหมุนเวียนไม่สำเร็จ', 'error');
       })
@@ -127,7 +133,7 @@ export default function RevolvingBalanceSection({
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [cardId, applyChain]);
+  }, [card, cardId, month, applyChain, readCardTotal]);
 
   // ต้องอยู่เหนือ `if (!card) return null;` เสมอ — hooks ห้ามถูกเรียกแบบมีเงื่อนไข
   // cycles/month ไม่ผูกกับ card เลย จึง compute ได้แม้ card ยังไม่มา (ผลลัพธ์แค่ยังไม่ได้ใช้)
@@ -149,6 +155,7 @@ export default function RevolvingBalanceSection({
     try {
       const response = await task();
       applyChain(response);
+      setCardTotal(await readCardTotal());
       showToast(successMessage);
       onChanged?.();
     } catch (error) {
@@ -157,18 +164,6 @@ export default function RevolvingBalanceSection({
     } finally {
       setBusy(false);
     }
-  };
-
-  // บันทึกตอน blur เท่านั้น — ไม่ debounce ระหว่างพิมพ์ กัน focus หลุดบนมือถือ
-  const handleSpendBlur = (rawValue: string) => {
-    const formatted = rawValue.trim() ? parseAndFormat(rawValue) : '0.00';
-    setSpendDraft(formatted);
-    if (formatted === parseAndFormat(currentCycle.newSpend)) return;
-    runAction(
-      () => creditCardAPI.saveRevolvingSpend(resolvedCardId, month, formatted),
-      'บันทึกยอดใช้จ่ายแล้ว',
-      'บันทึกยอดใช้จ่ายไม่สำเร็จ'
-    );
   };
 
   // รูปแบบเดียวกับ handleSpendBlur: ว่าง = ล้างเป็น '0.00' (ห้ามส่ง '' เพราะ server ถือว่า no-op)
@@ -288,22 +283,14 @@ export default function RevolvingBalanceSection({
             <p className="m-0 text-sm text-tertiary">ยังไม่ได้บันทึกยอดใช้จ่ายของเดือนนี้</p>
           )}
 
-          <label className="text-sm font-semibold text-secondary" htmlFor="revolving-spend">
-            ยอดใช้จ่ายใหม่เดือนนี้ (บาท)
-          </label>
-          <input
-            id="revolving-spend"
-            name="newSpend"
-            type="text"
-            inputMode="decimal"
-            className={`min-h-12 w-full rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-right font-[family-name:var(--font-numeric)] text-xl font-semibold tabular-nums text-primary outline-none transition-colors duration-fast ease-graphite focus:border-accent disabled:opacity-60 ${FOCUS_RING}`}
-            value={spendDraft}
-            disabled={busy}
-            onChange={(event) => setSpendDraft(event.target.value)}
-            onBlur={(event) => handleSpendBlur(event.target.value)}
-            placeholder="0.00"
-          />
-          <span className="text-xs text-tertiary">กรอกยอดจาก statement ของเดือนนี้</span>
+          <CreditSpendItems key={`${resolvedCardId}-${month}`} cardId={resolvedCardId} month={month} onChanged={async () => {
+            const [response, total] = await Promise.all([creditCardAPI.getRevolving({ cardId: resolvedCardId, month }), readCardTotal()]);
+            applyChain(response);
+            setCardTotal(total);
+            onChanged?.();
+          }} />
+          {cardTotal && <p className="text-sm text-secondary">งวดผ่อนเดือนนี้ {formatCurrency(cardTotal.installmentTotal)} ฿ · ยอดรวมบัตร {formatCurrency(cardTotal.actual)} ฿</p>}
+          <p className="text-sm text-secondary">ยอดใช้จ่ายใหม่ {formatCurrency(currentCycle.newSpend)} ฿</p>
 
           <label className="mt-space-1 text-sm font-semibold text-secondary" htmlFor="revolving-cashback">
             แคชแบคที่ได้รับเดือนนี้ (บาท)

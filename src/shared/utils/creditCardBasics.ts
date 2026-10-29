@@ -50,6 +50,15 @@ export const MAX_ACTIVE_PLANS_PER_USER: number = 50;
 export const MAX_INSTALLMENTS_PER_PLAN: number = 60;
 export const MAX_REVOLVING_CYCLES_PER_CARD: number = 60;
 
+// รายการใช้จ่ายไม่ผ่อน (spend items) — .pipeline/spec-credit-card-spend.md / DATA_MODEL-credit-card-spend.md
+// เก็บใน credit_cards doc เดียวกับ cycles: เพดานต่อบัตรกันเอกสารเกิน 16 MB (20 บัตร × 1000 × ~250 B ≈ 5 MB)
+export const MAX_SPEND_ITEMS_PER_CYCLE: number = 100;
+export const MAX_SPEND_ITEMS_PER_CARD: number = 1000;
+export const MAX_SPEND_ITEM_NAME_LENGTH: number = 60;
+/** ไม่มีเพดานยอดเงินเดิมใน creditCardBasics จึงใช้ค่าตาม DATA_MODEL */
+export const MAX_SPEND_ITEM_AMOUNT: number = 9999999.99;
+export const SPEND_ITEM_ID_RE: RegExp = /^si_[0-9a-f]{12}$/;
+
 export const PLAN_STATUS = {
   ONGOING: 'ongoing',
   COMPLETED: 'completed',
@@ -84,6 +93,7 @@ export const REVOLVING_KEY_RE: RegExp = /^ccr_[0-9a-f]{12}$/;
  * ภายนอก (ไม่มีใครใช้ MONTH_KEY_RE จากภายนอกอยู่แล้ว)
  */
 export const MONTH_KEY_RE: RegExp = /^\d{4}-\d{2}$/;
+export const SPEND_MONTH_KEY_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 /**
  * รูปแบบวันที่ซื้อ 'YYYY-MM-DD' — export เพื่อให้ creditCardRevolving.ts ใช้ตรวจรูปแบบได้

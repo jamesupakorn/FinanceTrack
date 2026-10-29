@@ -24,9 +24,9 @@ import { getUserCreditData } from '../../src/shared/utils/backend/creditCardStor
 import type { CreditData, CreditPlan } from '../../src/shared/utils/backend/creditCardStore';
 import {
   PLAN_STATUS,
-  buildRevolvingCycles,
   summariseRevolving
 } from '../../src/shared/utils/creditCardUtils';
+import { buildRevolvingCyclesForData } from '../../src/shared/utils/creditCardRevolving';
 import {
   THAI_MONTH_LABELS,
   normalizeMonthPart,
@@ -479,7 +479,8 @@ function collectCardDueEvents(creditData: CreditData, target: TargetDate): CardD
     });
 
     // ยอดหมุนเวียนของเดือนเป้าหมาย — แจ้งเฉพาะที่ยังไม่ตัดสินใจชำระ (กติกาเดียวกับงวดผ่อน)
-    const chain = buildRevolvingCycles(card, cycles, { throughMonth: target.monthKey });
+    // ส่ง spendItems ด้วยเสมอ (spec-credit-card-spend §5.2) — newSpend ของเดือนที่มีรายการ = ผลรวมรายการ
+    const chain = buildRevolvingCyclesForData(card, { cycles, spendItems: creditData?.spendItems }, { throughMonth: target.monthKey });
     const summary = summariseRevolving(chain, { asOfMonth: target.monthKey });
     const cycle = summary.cycle;
     const revolving: CardDueEvent['revolving'] = cycle && cycle.amountDue > 0 && cycle.paymentAction === null

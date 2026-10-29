@@ -70,6 +70,8 @@ export const monthlyExpensePatchBodySchema = z.strictObject({
   month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'month must be YYYY-MM'),
   key: expenseRowKeySchema,
   paid: z.boolean(),
+  // ใช้กับแถวยอดรวมบัตร ccr_ เท่านั้น (spec-credit-card-spend §4.3/§5.3) — คีย์อื่นไม่อ่านค่านี้
+  paymentAction: z.enum(['full', 'minimum']).optional(),
   row: z.strictObject({
     name: z.string().max(200),
     actual: z.union([z.number().finite(), z.string().max(40)]),

@@ -4,7 +4,7 @@ import { getUserData } from '../../../backend/data/userUtils';
 import { getMonthlySummaryModel } from '../frontend/monthlySummary';
 import { getUserCreditData } from './creditCardStore';
 import type { CreditData } from './creditCardStore';
-import { buildInstallmentExpenseRows, buildRevolvingExpenseRows } from './creditCardSync';
+import { buildCardTotalExpenseRows } from './creditCardSync';
 import {
   computeDelta,
   computeGoalProgress,
@@ -113,12 +113,13 @@ async function readMonthlyData(userId: string, monthKey: string): Promise<Monthl
 const hasMonthData = (data: MonthlyData): boolean => (['income', 'expense', 'savings', 'dailyExpense'] as const)
   .some(key => data[key] && Object.keys(data[key]).length > 0);
 
-async function buildMonthModel(userId: string, monthKey: string, creditData: Pick<CreditData, 'cards' | 'plans' | 'cycles'>) {
+async function buildMonthModel(userId: string, monthKey: string, creditData: Pick<CreditData, 'cards' | 'plans' | 'cycles' | 'spendItems'>) {
   const data = await readMonthlyData(userId, monthKey);
   const expenseData = {
     ...data.expense,
-    ...buildInstallmentExpenseRows(creditData, monthKey),
-    ...buildRevolvingExpenseRows(creditData, monthKey)
+    // แถวยอดรวมบัตรเท่านั้น (งวดผ่อน + ยอดหมุนเวียน ในแถว ccr_ เดียว) — ห้ามเพิ่มแถวงวดผ่อนแยกอีก
+    // มิฉะนั้นงวดผ่อนถูกนับซ้ำในสรุป LINE (spec-credit-card-spend R1 / AC-S18)
+    ...buildCardTotalExpenseRows(creditData, monthKey)
   };
   const model = getMonthlySummaryModel({
     month: monthKey,
@@ -136,7 +137,7 @@ async function buildMonthModel(userId: string, monthKey: string, creditData: Pic
 const totalExpenseOf = (model: MonthlyModel): number => Math.round((model.generalExpense + model.dailyExpense + model.creditCard) * 100) / 100;
 
 export async function buildMonthlySummaryPayload(userId: string, monthKey: string) {
-  const creditData = await getUserCreditData(userId).catch(() => ({ cards: [], plans: [], cycles: [] }));
+  const creditData = await getUserCreditData(userId).catch(() => ({ cards: [], plans: [], cycles: [], spendItems: [] }));
   const { data, model } = await buildMonthModel(userId, monthKey, creditData);
   const prev = await buildMonthModel(userId, getPrevMonthKey(monthKey), creditData);
   const hasPrevious = hasMonthData(prev.data);

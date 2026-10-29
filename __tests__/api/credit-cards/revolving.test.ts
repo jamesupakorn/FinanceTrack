@@ -469,16 +469,16 @@ describe('/api/credit-cards/revolving (Mongo mode, real DB)', () => {
     expect(doc.cycles).toEqual([]);
   });
 
-  it('11. POST with a missing/non-object cycle returns 400', async () => {
+  it('11. POST without a cycle fails loudly with the replacement endpoint', async () => {
     const { req, res } = makeReqRes({ method: 'POST', body: {} });
 
     await handler(req, res);
 
     expect(res._getStatusCode()).toBe(400);
-    expect(JSON.parse(res._getData())).toEqual({ error: 'cycle payload required' });
+    expect(JSON.parse(res._getData())).toMatchObject({ error: 'newSpend_removed' });
   });
 
-  it('12. POST with validateRevolvingCycleInput failure returns 400 with all three errors keys', async () => {
+  it('12. POST malformed legacy input cannot write newSpend', async () => {
     const { req, res } = makeReqRes({
       method: 'POST',
       body: { cycle: { cardId: '', month: 'not-a-month', newSpend: -5 } }
@@ -487,17 +487,11 @@ describe('/api/credit-cards/revolving (Mongo mode, real DB)', () => {
     await handler(req, res);
 
     expect(res._getStatusCode()).toBe(400);
-    expect(JSON.parse(res._getData())).toEqual({
-      error: 'ข้อมูลยอดใช้จ่ายหมุนเวียนไม่ถูกต้อง',
-      errors: {
-        cardId: 'กรุณาเลือกบัตร',
-        month: 'เดือนต้องอยู่ในรูปแบบ YYYY-MM',
-        newSpend: 'ยอดใช้จ่ายต้องเป็นตัวเลขไม่ติดลบ'
-      }
-    });
+    expect(JSON.parse(res._getData())).toMatchObject({ error: 'newSpend_removed' });
+    expect(await db.collection('credit_cards').countDocuments({})).toBe(0);
   });
 
-  it('13. POST with a nonexistent cardId returns 404 and does not write', async () => {
+  it('13. POST with a nonexistent cardId still returns newSpend_removed and does not write', async () => {
     const { req, res } = makeReqRes({
       method: 'POST',
       body: { cycle: { cardId: 'cc_missing', month: '2099-01', newSpend: 100 } }
@@ -505,13 +499,13 @@ describe('/api/credit-cards/revolving (Mongo mode, real DB)', () => {
 
     await handler(req, res);
 
-    expect(res._getStatusCode()).toBe(404);
-    expect(JSON.parse(res._getData())).toEqual({ error: 'card not found' });
+    expect(res._getStatusCode()).toBe(400);
+    expect(JSON.parse(res._getData())).toMatchObject({ error: 'newSpend_removed' });
     const doc = await db.collection('credit_cards').findOne({ userId: USER_A });
     expect(doc?.cycles ?? []).toEqual([]);
   });
 
-  it('14. MAX_REVOLVING_CYCLES_PER_CARD cap on a genuinely new month returns 409, plan document untouched', async () => {
+  it('14. removed POST leaves a capped document untouched', async () => {
     const cycles = Array.from({ length: MAX_REVOLVING_CYCLES_PER_CARD }, (_, i) => ({
       cardId: 'cc_a',
       month: `${2001 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`,
@@ -526,10 +520,8 @@ describe('/api/credit-cards/revolving (Mongo mode, real DB)', () => {
     });
     await handler(req, res);
 
-    expect(res._getStatusCode()).toBe(409);
-    expect(JSON.parse(res._getData())).toEqual({
-      error: `บันทึกยอดหมุนเวียนได้สูงสุด ${MAX_REVOLVING_CYCLES_PER_CARD} เดือนต่อบัตร`
-    });
+    expect(res._getStatusCode()).toBe(400);
+    expect(JSON.parse(res._getData())).toMatchObject({ error: 'newSpend_removed' });
 
     const doc = await readCreditDoc(USER_A);
     expect(doc.cycles).toHaveLength(MAX_REVOLVING_CYCLES_PER_CARD);
@@ -539,7 +531,7 @@ describe('/api/credit-cards/revolving (Mongo mode, real DB)', () => {
     expect(getRes._getStatusCode()).toBe(200);
   });
 
-  it('15. POST create-success persists only cardId/month/newSpend — every other body field is discarded', async () => {
+  it('15. POST never persists newSpend or client-derived fields', async () => {
     await seedCreditDoc(USER_A, { cards: [makeCard({ id: 'cc_a' })] });
     const { req, res } = makeReqRes({
       method: 'POST',
@@ -556,53 +548,29 @@ describe('/api/credit-cards/revolving (Mongo mode, real DB)', () => {
 
     await handler(req, res);
 
-    expect(res._getStatusCode()).toBe(200);
+    expect(res._getStatusCode()).toBe(400);
     const body = JSON.parse(res._getData());
-    expect(body.success).toBe(true);
-    expect(body.truncated).toBe(false);
-    expect(body.summary).toBeTruthy();
+    expect(body.error).toBe('newSpend_removed');
 
     const doc = await readCreditDoc(USER_A);
-    expect(doc.cycles).toHaveLength(1);
-    const stored = doc.cycles[0];
-    expect(Object.keys(stored).sort()).toEqual(
-      ['id', 'cardId', 'month', 'newSpend', 'paymentAction', 'paidAt', 'paidSource', 'createdAt', 'updatedAt'].sort()
-    );
-    expect(stored.cardId).toBe('cc_a');
-    expect(stored.month).toBe('2099-01');
-    expect(stored.newSpend).toBe(1000);
-    expect(stored.paymentAction).toBeNull();
-    expect(stored.paidAt).toBeNull();
-    expect(stored.paidSource).toBeNull();
+    expect(doc.cycles).toEqual([]);
   });
 
-  it('16. POST update-success replaces newSpend via upsert, not a duplicate insert', async () => {
-    await seedCreditDoc(USER_A, { cards: [makeCard({ id: 'cc_a' })] });
-    const { req: req1, res: res1 } = makeReqRes({
-      method: 'POST',
-      body: { cycle: { cardId: 'cc_a', month: '2099-01', newSpend: 1000, paymentAction: 'full' } }
+  it('16. POST cannot overwrite a stored legacy cycle', async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ id: 'cc_a' })],
+      cycles: [{ id: 'rc_legacy', cardId: 'cc_a', month: '2099-01', newSpend: 1000, paymentAction: 'full' }]
     });
-    await handler(req1, res1);
-    expect(res1._getStatusCode()).toBe(200);
     const firstDoc = await readCreditDoc(USER_A);
-    const firstId = firstDoc.cycles[0].id;
-    const firstUpdatedAt = firstDoc.cycles[0].updatedAt;
-
-    // Ensure a distinguishable updatedAt tick.
-    await new Promise(resolve => setTimeout(resolve, 5));
-
     const { req: req2, res: res2 } = makeReqRes({
       method: 'POST',
       body: { cycle: { cardId: 'cc_a', month: '2099-01', newSpend: 750 } }
     });
     await handler(req2, res2);
 
-    expect(res2._getStatusCode()).toBe(200);
+    expect(res2._getStatusCode()).toBe(400);
     const doc = await readCreditDoc(USER_A);
-    expect(doc.cycles).toHaveLength(1);
-    expect(doc.cycles[0].id).toBe(firstId);
-    expect(doc.cycles[0].newSpend).toBe(750);
-    expect(doc.cycles[0].updatedAt).not.toBe(firstUpdatedAt);
+    expect(doc).toEqual(firstDoc);
   });
 
   // --- PATCH ---------------------------------------------------------------------------------
@@ -638,7 +606,7 @@ describe('/api/credit-cards/revolving (Mongo mode, real DB)', () => {
     expect(JSON.parse(res._getData())).toEqual({ error: 'card not found' });
   });
 
-  it('20. PATCH create-on-patch: marking a never-recorded month paid auto-fills newSpend: 0', async () => {
+  it('20. PATCH create-on-patch does not store derived newSpend', async () => {
     await seedCreditDoc(USER_A, { cards: [makeCard({ id: 'cc_a' })] });
     const { req, res } = makeReqRes({
       method: 'PATCH',
@@ -650,7 +618,7 @@ describe('/api/credit-cards/revolving (Mongo mode, real DB)', () => {
     const doc = await readCreditDoc(USER_A);
     expect(doc.cycles).toHaveLength(1);
     const stored = doc.cycles[0];
-    expect(stored.newSpend).toBe(0);
+    expect(stored.newSpend).toBeUndefined();
     expect(stored.paymentAction).toBe('minimum');
     expect(typeof stored.paidAt).toBe('string');
     expect(stored.paidAt).not.toBeNull();
@@ -854,7 +822,7 @@ describe('/api/credit-cards/revolving cashback PATCH (Mongo mode, real DB)', () 
     expect(cycle.paidAmount).toBe(900);
   });
 
-  it('AC-CB-41 cashback-only PATCH on a never-stored month creates a row with newSpend 0 and no payment', async () => {
+  it('AC-CB-41 cashback-only PATCH creates a row without derived newSpend and no payment', async () => {
     await seedCreditDoc(USER_A, { cards: [makeCard({ id: 'cc_a' })] });
 
     const res = await patch({ cardId: 'cc_a', month: '2099-01', cashbackAmount: '1,250.50' });
@@ -864,7 +832,7 @@ describe('/api/credit-cards/revolving cashback PATCH (Mongo mode, real DB)', () 
     expect(doc.cycles).toHaveLength(1);
     const stored = doc.cycles[0];
     expect(stored.cashbackAmount).toBe(1250.5);
-    expect(stored.newSpend).toBe(0);
+    expect(stored.newSpend).toBeUndefined();
     expect(stored.paymentAction).toBeNull();
     expect(stored.paidAt).toBeNull();
     expect(stored.paidSource).toBeNull();
@@ -925,7 +893,7 @@ describe('/api/credit-cards/revolving cashback PATCH (Mongo mode, real DB)', () 
     expect(stored.paidSource).toBe('credit_card');
   });
 
-  it('AC-CB-44 POST newSpend on a row with cashbackAmount preserves the cashback', async () => {
+  it('AC-CB-44 removed POST preserves both legacy newSpend and cashbackAmount', async () => {
     await seedCreditDoc(USER_A, {
       cards: [makeCard({ id: 'cc_a' })],
       cycles: [{ cardId: 'cc_a', month: '2099-01', newSpend: 1000, cashbackAmount: 100, paymentAction: null }]
@@ -937,10 +905,10 @@ describe('/api/credit-cards/revolving cashback PATCH (Mongo mode, real DB)', () 
 
     await handler(req, res);
 
-    expect(res._getStatusCode()).toBe(200);
+    expect(res._getStatusCode()).toBe(400);
     const doc = await readDoc();
     expect(doc.cycles).toHaveLength(1);
-    expect(doc.cycles[0].newSpend).toBe(2000);
+    expect(doc.cycles[0].newSpend).toBe(1000);
     expect(doc.cycles[0].cashbackAmount).toBe(100);
   });
 

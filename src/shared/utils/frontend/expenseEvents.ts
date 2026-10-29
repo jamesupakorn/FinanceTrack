@@ -18,6 +18,7 @@ import {
   parseInstallmentRowKey
 } from '../creditCardUtils';
 import { parseToNumber } from './numberUtils';
+import type { CardTotalExpenseRow } from '../backend/creditCardSync';
 
 /** ค่าที่ diffDaysFromBase/buildMonthEvents ต้องการจาก card เท่านั้น (id, name, statementDay, dueDay) */
 interface ExpenseEventCard {
@@ -41,6 +42,7 @@ interface ExpenseEventRow {
   account?: string;
   paid?: boolean | string;
   dueDay?: unknown;
+  breakdown?: CardTotalExpenseRow['breakdown'];
   [key: string]: unknown;
 }
 
@@ -106,7 +108,21 @@ export function buildMonthEvents({
   }
 
   const rows = (monthsMap[monthKey] && typeof monthsMap[monthKey] === 'object') ? monthsMap[monthKey] : {};
-  Object.entries(rows).forEach(([key, row]) => {
+  const eventRows: [string, ExpenseEventRow][] = Object.entries(rows);
+  const expandedRows: [string, ExpenseEventRow][] = eventRows.flatMap(([key, row]) => {
+    if (!isRevolvingRowKey(key) || !row?.breakdown) return [[key, row]];
+    const breakdown = row.breakdown;
+    const installments: [string, ExpenseEventRow][] = breakdown.installments.map(line => [
+      line.key, { name: line.name, actual: line.amount, paid: line.paid, dueDay: row.dueDay, account: row.account }
+    ]);
+    const revolving: [string, ExpenseEventRow][] = (breakdown.revolving.totalDue !== 0 || breakdown.revolving.newSpend !== 0) ? [[key, {
+      ...row,
+      actual: Math.max(0, breakdown.revolving.totalDue),
+      paid: breakdown.revolving.paymentAction !== null || breakdown.revolving.totalDue <= 0
+    }]] : [];
+    return [...installments, ...revolving];
+  });
+  expandedRows.forEach(([key, row]) => {
     if (IGNORED_ROW_KEYS.has(key)) return;
     if (!row || typeof row !== 'object') return;
 

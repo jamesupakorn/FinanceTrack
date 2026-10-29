@@ -93,7 +93,7 @@ async function sendWebhook(text: string, lineUserId: string) {
 const CARD = { name: 'บัตรทดสอบ', creditLimit: 50000, annualRate: 0, minPaymentPercent: 10, statementDay: 5, dueDay: 20, color: '#5d5bff' };
 
 describe('credit-card routes are audited', () => {
-  it('card, plan and revolving-cycle creates each emit one user event; reads emit none', async () => {
+  it('card, plan and spend-item creates each emit one user event; reads emit none', async () => {
     const cardRes = await call(cards, { method: 'POST', body: { card: CARD } });
     expect(cardRes.status).toBe(200);
     const cardId = (cardRes.data.card as { id: string }).id;
@@ -108,8 +108,9 @@ describe('credit-card routes are audited', () => {
     expect(planRes.status).toBe(200);
     expect(await events()).toHaveLength(2);
 
-    const cycleRes = await call(revolving, { method: 'POST', body: { cycle: { cardId, month: '2099-01', newSpend: 100 } } });
-    expect(cycleRes.status).toBe(200);
+    const spendItems: Handler = require('../../pages/api/credit-cards/spend-items').default;
+    const cycleRes = await call(spendItems, { method: 'POST', body: { item: { cardId, month: '2099-01', name: 'อาหาร', amount: 100 } } });
+    expect(cycleRes.status).toBe(201);
     expect(await events()).toHaveLength(3);
 
     await call(cards, {});

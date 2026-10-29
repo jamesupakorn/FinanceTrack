@@ -41,7 +41,7 @@ function countBlockingPlans(plans: CreditData['plans'], cardId: string) {
 async function handleGet(req: NextApiRequest, res: NextApiResponse, userId: string) {
   const data = await getUserCreditData(userId);
   // ยอดหมุนเวียนถูก derive จาก data.cycles ทุกครั้งที่ GET ไม่มีการเก็บตัวเลขการเงินไว้ (BR-CC-013)
-  const cards = data.cards.map(card => summariseCard(card, data.plans, data.cycles));
+  const cards = data.cards.map(card => summariseCard(card, data.plans, data.cycles, { spendItems: data.spendItems }));
   return res.status(200).json({ cards, totals: summariseTotals(cards) });
 }
 
@@ -90,7 +90,7 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse, userId: str
   if (failureResponse) return res.status(failureResponse.status).json(failureResponse.body);
   if (!savedCard) throw new Error('Card update completed without a saved card');
 
-  return res.status(200).json({ success: true, card: summariseCard(savedCard, data.plans, data.cycles) });
+  return res.status(200).json({ success: true, card: summariseCard(savedCard, data.plans, data.cycles, { spendItems: data.spendItems }) });
 }
 
 async function handleDelete(req: NextApiRequest, res: NextApiResponse, userId: string) {
@@ -109,7 +109,7 @@ async function handleDelete(req: NextApiRequest, res: NextApiResponse, userId: s
     }
 
     // บล็อกการลบถ้ายังมียอดหมุนเวียนค้าง (BR-CC-013) — เดียวกับ countBlockingPlans ด้านล่าง แต่สำหรับยอดหมุนเวียน
-    const summarised = summariseCard(card, data.plans, data.cycles);
+    const summarised = summariseCard(card, data.plans, data.cycles, { spendItems: data.spendItems });
     if (summarised.revolvingOutstanding > 0) {
       failure = {
         status: 409,
@@ -132,7 +132,9 @@ async function handleDelete(req: NextApiRequest, res: NextApiResponse, userId: s
       cards: data.cards.filter(card => card?.id !== cardId),
       plans: data.plans.filter(plan => plan?.cardId !== cardId),
       // ลบ cycle ของบัตรนี้ด้วย มิฉะนั้นยอดหมุนเวียนจะกลายเป็น orphan ค้างอยู่ในเอกสาร (AC-56)
-      cycles: data.cycles.filter(cycle => cycle?.cardId !== cardId)
+      cycles: data.cycles.filter(cycle => cycle?.cardId !== cardId),
+      // ลบรายการไม่ผ่อนของบัตรนี้ในการเขียนครั้งเดียวกัน (spec-credit-card-spend §5.4 / AC-S13)
+      spendItems: data.spendItems.filter(item => item?.cardId !== cardId)
     };
   });
 

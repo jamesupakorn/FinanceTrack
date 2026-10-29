@@ -95,7 +95,9 @@ describe('credit card account resolution', () => {
       bankAccounts: [{ id: 'bal_0123456789abcdef', name: 'บัญชีใหม่' }]
     }, MONTH, ['บัญชีเดิม']);
 
-    expect(rows[buildInstallmentRowKey('ip_test', 1)].account).toBe('บัญชีใหม่');
+    // spec-credit-card-spend §4.3: safeBuildCreditCardRows returns one card-total ccr_ row per card
+    expect(rows[buildInstallmentRowKey('ip_test', 1)]).toBeUndefined();
+    expect(rows[buildRevolvingRowKey('cc_test')].account).toBe('บัญชีใหม่');
   });
 
   it('uses the same account resolution for revolving rows', () => {

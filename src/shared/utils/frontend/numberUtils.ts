@@ -13,6 +13,7 @@ import { END_OF_MONTH_DUE_DAY, isEndOfMonthDueDay } from '../dateUtils';
 // isCreditCardRowKey ยังเป็น .js (นอก scope ของ slice นี้) — TS จะอนุมาน type แบบหลวมให้ตามที่
 // task-context บันทึกไว้ (ดู spec §Scope A.1)
 import { isCreditCardRowKey } from '../creditCardUtils';
+import type { CardTotalExpenseRow } from '../backend/creditCardSync';
 
 const DEFAULT_BANK_ACCOUNTS = ['กรุงศรี', 'ttb', 'กสิกร', 'UOB'];
 const LEGACY_ITEM_ACCOUNT_MAP: Record<string, string> = {
@@ -285,7 +286,7 @@ export const formatExpenseData = (
 ): { values: Record<string, ExpenseItem>; persistedKeys: string[]; emptyKeysToDelete: string[]; bankAccounts: string[] } => {
   // สร้างแบบหลวมก่อน (ค่า dueDay ที่แท้จริงเป็น string เสมอในไฟล์นี้ สำหรับแสดงผลในฟอร์ม
   // ไม่ตรงกับ DueDay type ของ ExpenseItem เป๊ะๆ) แล้วค่อย cast เป็น ExpenseItem ครั้งเดียวตอน return
-  const formattedData: Record<string, { name: string; actual: string; account: string; paid: boolean; dueDay: string }> = {};
+  const formattedData: Record<string, { name: string; actual: string; account: string; paid: boolean; dueDay: string; breakdown?: CardTotalExpenseRow['breakdown'] }> = {};
   let monthData: Record<string, unknown> = {};
   if (data && typeof data === 'object') {
     const months = data.months as Record<string, unknown> | undefined;
@@ -339,6 +340,7 @@ export const formatExpenseData = (
     const source = (monthData && monthData[item]) ? (monthData[item] as Record<string, unknown>) : {};
     const defaultLabel = DEFAULT_EXPENSE_ITEMS.find(expense => expense.key === item)?.label;
     formattedData[item] = {
+      ...(isCreditCardRowKey(item) && source.breakdown ? { breakdown: source.breakdown as CardTotalExpenseRow['breakdown'] } : {}),
       name: (typeof source.name === 'string' && source.name.trim().length > 0)
         ? source.name
         : (defaultLabel || 'รายการใหม่'),

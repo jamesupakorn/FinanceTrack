@@ -4,8 +4,8 @@
  * ทุกอย่างที่อยู่เหนือไฟล์นี้เป็น mode-agnostic ทั้งหมด (ADR-001 · R-5)
  *
  * โครงสร้าง: 1 เอกสารต่อ 1 ผู้ใช้
- *   json : credit_cards.json → { "u001": { cards, plans, cycles, updatedAt } }
- *   mongo: collection credit_cards → { userId, cards, plans, cycles, updatedAt }
+ *   json : credit_cards.json → { "u001": { cards, plans, cycles, spendItems, updatedAt } }
+ *   mongo: collection credit_cards → { userId, cards, plans, cycles, spendItems, updatedAt }
  *
  * ⚠ เอกสารบัตรเครดิตต้อง **ไม่มี** field `month` ระดับบนสุดเด็ดขาด (BR-CC-002)
  *   enforceMonthLimit() กรองด้วย { month: { $exists: true } } แล้วลบทุกอย่างนอก 15 เดือนล่าสุด
@@ -22,7 +22,7 @@
 import { isJsonMode, getMongoCollection } from '../../../../lib/dataSource';
 import { getUserData, updateUserData } from '../../../backend/data/userUtils';
 import { assertScopedUserId } from './userRequest';
-import type { CardLike, PlanLike, StoredRevolvingCycle } from '../creditCardRevolving';
+import type { CardLike, PlanLike, StoredRevolvingCycle, StoredSpendItem } from '../creditCardRevolving';
 
 const COLLECTION_NAME = 'credit_cards';
 const JSON_FILENAME = 'credit_cards.json';
@@ -31,6 +31,8 @@ export interface CreditData {
   cards: CardLike[];
   plans: PlanLike[];
   cycles: StoredRevolvingCycle[];
+  /** รายการใช้จ่ายไม่ผ่อน (spec-credit-card-spend) — เอกสารเก่าที่ไม่มี field นี้อ่านเป็น [] */
+  spendItems: StoredSpendItem[];
   updatedAt: string | null;
 }
 
@@ -39,7 +41,7 @@ export type CreditPlan = PlanLike;
 
 /** โครงสร้างว่างมาตรฐาน — ผู้ใช้ใหม่เริ่มจากค่าว่างจริง ไม่มี default injection (BR-CC-012 / AC-04) */
 function emptyCreditData(): CreditData {
-  return { cards: [], plans: [], cycles: [], updatedAt: null };
+  return { cards: [], plans: [], cycles: [], spendItems: [], updatedAt: null };
 }
 
 function normaliseCreditData(raw: unknown): CreditData {
@@ -47,11 +49,13 @@ function normaliseCreditData(raw: unknown): CreditData {
   const cards = (raw as { cards?: unknown }).cards;
   const plans = (raw as { plans?: unknown }).plans;
   const cycles = (raw as { cycles?: unknown }).cycles;
+  const spendItems = (raw as { spendItems?: unknown }).spendItems;
   const updatedAt = (raw as { updatedAt?: unknown }).updatedAt;
   return {
     cards: Array.isArray(cards) ? cards : [],
     plans: Array.isArray(plans) ? plans : [],
     cycles: Array.isArray(cycles) ? cycles : [],
+    spendItems: Array.isArray(spendItems) ? spendItems : [],
     updatedAt: typeof updatedAt === 'string' ? updatedAt : null
   };
 }
@@ -114,6 +118,8 @@ export async function updateUserCreditData(
     plans: updated.plans,
     // ⚠ ต้องมี cycles ที่นี่ด้วย — ลืมแล้ว JSON ทำงานได้ แต่ production (Mongo) ทิ้ง cycle ทุกใบ (AC-73)
     cycles: updated.cycles,
+    // ⚠ spendItems ต้องอยู่ที่นี่ด้วยเหตุผลเดียวกับ cycles — ลืมแล้ว Mongo ทิ้งรายการไม่ผ่อนทุกรายการเงียบ ๆ (AC-73 / AC-S6)
+    spendItems: updated.spendItems,
     updatedAt: new Date().toISOString()
   };
   await collection.updateOne(

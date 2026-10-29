@@ -33,6 +33,35 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
+it('AC-S19 refetches nested card breakdown after pay and never replaces the full card total with cycle.amountDue', async () => {
+  const cardId = 'cc_111111111111';
+  const cardRow = {
+    name: 'บัตร G', actual: 1300, paid: false, dueDay: 10,
+    breakdown: {
+      installmentTotal: 300,
+      installments: [{ key: 'cci_bbbbbbbbbbbb_01', name: 'โทรศัพท์ งวด 1', amount: 300, paid: false }],
+      revolving: { newSpend: 1000, carriedBalance: 0, cashbackAmount: 0, totalDue: 1000, minPaymentDue: 100, amountDue: 1000, paymentAction: null }
+    }
+  };
+  mockLoadOk({
+    expenseRows: { ccr_111111111111: cardRow },
+    cards: [{ id: cardId, name: 'บัตร G' }],
+    plans: [{ id: 'ip_bbbbbbbbbbbb', cardId }]
+  });
+  mockedCreditCardAPI.setRevolvingAction.mockResolvedValue({ cycles: [{ month: SELECTED_MONTH, amountDue: 0, paymentAction: 'full' }] });
+  const user = userEvent.setup();
+  render(<ExpenseCalendarModal open onClose={jest.fn()} />);
+  const pay = await screen.findByRole('button', { name: /จ่ายเต็มจำนวน/ });
+  mockedExpenseAPI.getAll.mockResolvedValue({ months: { [SELECTED_MONTH]: {
+    ccr_111111111111: { ...cardRow, breakdown: { ...cardRow.breakdown, revolving: { ...cardRow.breakdown.revolving, paymentAction: 'full' } } }
+  } } });
+  await user.click(pay);
+  await waitFor(() => expect(mockedExpenseAPI.getAll).toHaveBeenCalledTimes(2));
+  const day = within(screen.getByRole('grid')).getByRole('gridcell', { name: /โทรศัพท์ งวด 1/ });
+  expect(day).toHaveAttribute('aria-label', expect.stringContaining('300.00'));
+  expect(day).toHaveAttribute('aria-label', expect.stringContaining('1,000.00'));
+});
+
 /** Escapes regex-special characters so formatCurrency()'s output can be used literally in a RegExp. */
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -170,7 +199,7 @@ describe('ExpenseCalendarModal', () => {
     await waitFor(() => expect(closeButton).toHaveFocus());
   });
 
-  it('9. installment toggle: optimistic update, API call, and success confirmation', async () => {
+  it('9. installment toggle: API call, refetch and server-confirmed status', async () => {
     const planId = 'ip_bbbbbbbbbbbb';
     const rowKey = buildInstallmentRowKey(planId, 1); // cci_bbbbbbbbbbbb_01
     mockLoadOk({
@@ -188,9 +217,13 @@ describe('ExpenseCalendarModal', () => {
     // findByRole (not getByRole): the day-detail pane's auto-selected-day effect commits in a
     // passive-effect pass after the grid itself is visible.
     const toggleButton = await screen.findByRole('button', { name: /ยังไม่ชำระ/ });
+    mockedExpenseAPI.getAll.mockResolvedValue({ months: { [SELECTED_MONTH]: {
+      [rowKey]: { name: 'ผ่อนโทรศัพท์', actual: 1000, account: 'กสิกร', paid: true, dueDay: 10 }
+    } } });
     await user.click(toggleButton);
 
     expect(mockedCreditCardAPI.setInstallmentPaid).toHaveBeenCalledWith(planId, 1, true);
+    expect(mockedExpenseAPI.getAll).toHaveBeenCalledTimes(2);
     await waitFor(() => expect(screen.getByRole('button', { name: /ชำระแล้ว/ })).toBeInTheDocument());
   });
 

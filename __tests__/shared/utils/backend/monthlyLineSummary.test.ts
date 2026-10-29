@@ -15,6 +15,8 @@ import {
   tintBox,
   ctaButton
 } from '../../../../src/shared/utils/backend/lineFlexTheme';
+import { getUserCreditData } from '../../../../src/shared/utils/backend/creditCardStore';
+import { buildCardTotalExpenseRows } from '../../../../src/shared/utils/backend/creditCardSync';
 
 // buildMonthlySummaryPayload pulls from userUtils/getMongoCollection/creditCardStore — in JSON
 // mode (the repo default when DATA_MODE isn't 'mongo') it reads real per-user JSON fixtures via
@@ -60,8 +62,8 @@ jest.mock('../../../../src/shared/utils/backend/creditCardStore', () => ({
 }));
 
 jest.mock('../../../../src/shared/utils/backend/creditCardSync', () => ({
-  buildInstallmentExpenseRows: jest.fn(() => ({})),
-  buildRevolvingExpenseRows: jest.fn(() => ({}))
+  // spec-credit-card-spend R1: the LINE summary now reads only the card-total builder
+  buildCardTotalExpenseRows: jest.fn(() => ({}))
 }));
 
 describe('buildMonthlySummaryPayload (JSON mode, mocked data seams)', () => {
@@ -96,6 +98,23 @@ describe('buildMonthlySummaryPayload (JSON mode, mocked data seams)', () => {
 
     const payload = await buildMonthlySummaryPayload('u001', '2024-02');
     expect(payload.goals).toEqual([]);
+  });
+
+  it('AC-S18 uses the real card-total builder and counts installments plus full revolving once after minimum pay', async () => {
+      const realSync = jest.requireActual<typeof import('../../../../src/shared/utils/backend/creditCardSync')>('../../../../src/shared/utils/backend/creditCardSync');
+      const mockedBuilder = jest.mocked(buildCardTotalExpenseRows);
+      mockedBuilder.mockImplementation(realSync.buildCardTotalExpenseRows);
+      jest.mocked(getUserCreditData).mockResolvedValueOnce({
+        cards: [{ id: 'cc_000000000001', name: 'บัตร A', annualRate: 0, minPaymentPercent: 10, dueDay: 20 }],
+        plans: [{ id: 'ip_000000000001', cardId: 'cc_000000000001', itemName: 'สินค้า', months: 1, status: 'ongoing', schedule: [{ no: 1, dueMonth: '2024-01', payment: 300, paid: true }] }],
+        cycles: [{ cardId: 'cc_000000000001', month: '2024-01', newSpend: 1000, paymentAction: 'minimum' }],
+        spendItems: [], updatedAt: null
+      });
+      const payload = await buildMonthlySummaryPayload('u001', '2024-01');
+      expect(payload.model.creditCard).toBe(1300);
+      expect(payload.model.creditCardInstallment).toBe(300);
+      expect(payload.model.creditCardRevolving).toBe(1000);
+      mockedBuilder.mockImplementation(() => ({}));
   });
 
   it('preserves legacy savings labels and comma-formatted amounts across months', async () => {

@@ -26,7 +26,7 @@ import {
   getDaysInMonth,
   formatMonthKeyTH
 } from '../../shared/utils/dateUtils';
-import { isCreditCardRowKey, isRevolvingRowKey } from '../../shared/utils/creditCardUtils';
+import { isCreditCardRowKey, isRevolvingRowKey, buildRevolvingRowKey } from '../../shared/utils/creditCardUtils';
 import { toBankAccountNames } from '../../shared/utils/bankAccountShape';
 import { compareListValues, matchesListQuery } from '../../shared/utils/frontend/listView';
 import { useListProjection } from '../../shared/utils/frontend/useListProjection';
@@ -38,8 +38,10 @@ import { useSession } from '../contexts/SessionContext';
 import { useListCriteria } from '../contexts/ListViewContext';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
+import CardTotalPaymentDialog from './CardTotalPaymentDialog';
+import type { CardTotalExpenseRow } from '../../shared/utils/backend/creditCardSync';
 
-type ExpenseRow = ExpenseItem & { [field: string]: unknown; dueDate?: unknown };
+type ExpenseRow = ExpenseItem & { [field: string]: unknown; dueDate?: unknown; breakdown?: CardTotalExpenseRow['breakdown'] };
 type ExpenseValues = Record<string, ExpenseRow>;
 type DueStatus = 'overdue' | 'dueToday' | 'dueSoon' | 'future' | 'done' | 'none';
 
@@ -162,6 +164,14 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
   const [persistedKeys, setPersistedKeys] = useState<string[]>([]);
   const [pendingScrollKey, setPendingScrollKey] = useState<string | null>(null);
   const [pendingPaidKeys, setPendingPaidKeys] = useState<string[]>([]);
+  const [cardPayment, setCardPayment] = useState<{ key: string; month: string; paid: boolean; row: ExpenseRow & { breakdown: CardTotalExpenseRow['breakdown'] } } | null>(null);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const selectedMonthRef = useRef(selectedMonth);
+  selectedMonthRef.current = selectedMonth;
+  useEffect(() => {
+    setCardPayment(null);
+    setExpandedCards(new Set());
+  }, [selectedMonth]);
   const pendingPaidRef = useRef<Set<string>>(new Set());
   const [installmentMeta, setInstallmentMeta] = useState<Record<string, InstallmentMetadata>>({});
   const [expenseLoadRevision, setExpenseLoadRevision] = useState(0);
@@ -234,7 +244,10 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
     ]).then(([items, revolving]) => {
       if (cancelled) return;
       const map: Record<string, InstallmentMetadata> = {};
-      items.forEach((item: InstallmentMetadata) => { map[item.key] = item; });
+      items.forEach((item: InstallmentMetadata) => {
+        map[item.key] = item;
+        map[buildRevolvingRowKey(item.cardId)] = item;
+      });
       (Array.isArray(revolving?.cycles) ? revolving.cycles : []).forEach((cycle: InstallmentMetadata) => {
         if (!cycle?.key) return;
         map[cycle.key] = { key: cycle.key, cardId: cycle.cardId, cardName: cycle.cardName, cardColor: cycle.cardColor };
@@ -349,8 +362,12 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
   const handleTogglePaid = async (item: string) => {
     if (!selectedMonth || pendingPaidRef.current.has(item)) return;
     const row = editExpense[item];
-    const previousPaid = Boolean(row?.paid);
+    const previousPaid = row?.paid === true || row?.paid === 'true';
     const nextPaid = !previousPaid;
+    if (isRevolvingRowKey(item) && row.breakdown) {
+      setCardPayment({ key: item, month: selectedMonth, paid: nextPaid, row: { ...row, breakdown: row.breakdown } });
+      return;
+    }
     const derived = isCreditCardRowKey(item);
     const needsRow = !derived && !persistedKeys.includes(item);
     setPendingPaid(item, true);
@@ -381,6 +398,48 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
     } finally {
       setPendingPaid(item, false);
     }
+  };
+
+  const confirmCardPayment = async (action?: 'full' | 'minimum') => {
+    if (!cardPayment || pendingPaidRef.current.has(cardPayment.key)) return;
+    const { key, month, paid } = cardPayment;
+    setPendingPaid(key, true);
+    try {
+      await expenseAPI.setPaid(month, key, paid, undefined, action);
+      const data = await expenseAPI.getByMonth(month);
+      const formatted = formatExpenseData(data || {}, month);
+      if (selectedMonthRef.current === month) setEditExpense(previous => {
+        const refreshed = formatted.values as ExpenseValues;
+        const next = { ...previous };
+        Object.keys(next).filter(isCreditCardRowKey).forEach(item => { delete next[item]; });
+        Object.entries(refreshed).filter(([item]) => isCreditCardRowKey(item)).forEach(([item, row]) => { next[item] = row; });
+        return next;
+      });
+      setCardPayment(null);
+      onSaved?.();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'บันทึกสถานะบัตรไม่สำเร็จ กรุณาโหลดข้อมูลใหม่', 'error');
+    } finally {
+      setPendingPaid(key, false);
+    }
+  };
+
+  const cardDetails = (item: string, row: ExpenseRow, view: 'desktop' | 'mobile') => {
+    if (!row.breakdown) return null;
+    const id = `card-breakdown-${view}-${item}`;
+    const expanded = expandedCards.has(item);
+    return <div className="mt-space-2 text-sm text-secondary">
+      <button type="button" className={`min-h-11 underline ${FOCUS_RING}`} aria-expanded={expanded} aria-controls={id} onClick={() => setExpandedCards(previous => {
+        const next = new Set(previous);
+        if (next.has(item)) next.delete(item); else next.add(item);
+        return next;
+      })}>รายละเอียดบัตร</button>
+      <div id={id} hidden={!expanded}>
+        {row.breakdown.installments.map(line => <p key={line.key}>{line.name} · {formatCurrency(line.amount)} ฿ · {line.paid ? 'ชำระแล้ว' : 'ยังไม่ชำระ'}</p>)}
+        <p>ไม่ผ่อน {formatCurrency(row.breakdown.revolving.newSpend)} ฿</p>
+        {row.breakdown.revolving.paymentAction === 'minimum' && <p>ชำระขั้นต่ำ {formatCurrency(row.breakdown.revolving.minPaymentDue)} ฿</p>}
+      </div>
+    </div>;
   };
 
   const handleSave = async () => {
@@ -640,7 +699,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
                       {item === firstCreditCardKey && <tr><td className="border-t border-dashed border-border-default p-space-3 text-xs font-medium text-tertiary" colSpan={5}>บัตรเครดิต (ซิงก์อัตโนมัติ)</td></tr>}
                       <tr className="border-b border-border-subtle bg-info/5" data-expense-key={item}>
                         <td className="p-space-3 align-middle"><span className="flex items-center gap-space-2 text-secondary" title={displayName}><span aria-hidden="true">🔒</span>{displayName}</span>{meta && <div className="mt-space-1 flex flex-col gap-space-1"><span className="inline-flex w-fit items-center gap-1 rounded-full border border-info/35 bg-info/15 px-space-2 py-[2px] text-xs font-medium text-info">💳 {meta.cardName}</span><Link href={`/credit-cards?card=${meta.cardId}`} className={`text-xs text-accent underline-offset-2 hover:underline ${FOCUS_RING}`}>จัดการที่หน้าบัตรเครดิต →</Link></div>}</td>
-                        <td className="p-space-3 text-right align-middle"><span className="font-[family-name:var(--font-numeric)] tabular-nums text-secondary">{formatCurrency(row.actual)}</span></td><td className="p-space-3 align-middle text-secondary">{selectedAccount}</td><td className="p-space-3 align-middle text-secondary">{formatDueDayText(row.dueDay) || 'ไม่ระบุ'}</td>
+                        <td className="p-space-3 text-right align-middle"><span className="font-[family-name:var(--font-numeric)] tabular-nums text-secondary">{formatCurrency(row.actual)}</span>{cardDetails(item, row, 'desktop')}</td><td className="p-space-3 align-middle text-secondary">{selectedAccount}</td><td className="p-space-3 align-middle text-secondary">{formatDueDayText(row.dueDay) || 'ไม่ระบุ'}</td>
                         <td className="p-space-3 text-center align-middle"><button type="button" className={`mx-auto flex h-11 items-center gap-space-2 rounded-full border px-space-3 text-xs font-semibold ${FOCUS_RING} ${paid ? 'border-pos/40 bg-pos/15 text-pos' : 'border-border-interactive bg-surface-2 text-secondary'}`} onClick={() => handleTogglePaid(item)} disabled={pendingPaidKeys.includes(item)} aria-busy={pendingPaidKeys.includes(item)} aria-pressed={paid}>{paid ? '✓ จ่ายแล้ว' : '○ ยังไม่จ่าย'}</button></td>
                       </tr>
                     </Fragment>;
@@ -673,6 +732,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
                   {meta && <span className="mt-space-1 inline-flex w-fit items-center gap-1 text-xs text-tertiary">💳 {meta.cardName}</span>}
                   <p className="mt-space-2 font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums text-primary">{formatCurrency(row.actual)}</p><p className="mt-space-1 text-xs text-secondary">{`ครบกำหนด ${formatDueDayText(row.dueDay) || 'ไม่ระบุ'} · ${selectedAccount}`}</p>
                   <button type="button" className={`mt-space-3 flex min-h-11 w-full items-center justify-center rounded-sm border px-space-4 text-sm font-semibold ${FOCUS_RING} ${paid ? 'border-pos/40 bg-pos/15 text-pos' : 'border-border-interactive bg-surface-1 text-secondary'}`} onClick={() => handleTogglePaid(item)} disabled={pendingPaidKeys.includes(item)} aria-busy={pendingPaidKeys.includes(item)} aria-pressed={paid}>{paid ? '✓ ชำระแล้ว' : 'ยังไม่ชำระ — แตะเพื่อยืนยัน'}</button>
+                  {cardDetails(item, row, 'mobile')}
                   {meta && <Link href={`/credit-cards?card=${meta.cardId}`} className={`mt-space-2 inline-block text-xs text-accent underline-offset-2 hover:underline ${FOCUS_RING}`}>จัดการที่หน้าบัตรเครดิต →</Link>}
                 </div></Fragment>;
               }
@@ -692,6 +752,13 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
         </>
       )}
       {!isLoading && !hasExpenseRows && <div className="rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">ยังไม่มีรายการค่าใช้จ่ายในเดือนนี้ กด &quot;เพิ่มรายการ&quot; เพื่อเริ่มต้น</div>}
+      {cardPayment && <CardTotalPaymentDialog
+        row={{ name: cardPayment.row.name || 'บัตรเครดิต', breakdown: cardPayment.row.breakdown }}
+        paid={cardPayment.paid}
+        busy={pendingPaidKeys.includes(cardPayment.key)}
+        onCancel={() => setCardPayment(null)}
+        onConfirm={confirmCardPayment}
+      />}
     </div>
   );
 }
