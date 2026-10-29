@@ -440,7 +440,13 @@ export function buildRevolvingCyclesForData(
  */
 export function isMonthBeyondRevolvingCap(derivedCycles: unknown[], month: string): boolean {
   const capEnd = Array.isArray(derivedCycles) ? (derivedCycles as unknown[] & { capEndMonth?: unknown }).capEndMonth : null;
-  return typeof capEnd === 'string' && typeof month === 'string' && capEnd.localeCompare(month) < 0;
+  if (!(typeof capEnd === 'string' && typeof month === 'string' && capEnd.localeCompare(month) < 0)) return false;
+  // R1: นับเป็นเพดานตัดเฉพาะเมื่อ cycle สุดท้ายยังมีเงินค้าง/เครดิต — ถ้าจ่ายหมดแล้ว เดือนหลังจากนั้นไม่มียอดยกมา
+  const last = derivedCycles[derivedCycles.length - 1] as { closingBalance?: unknown; creditBalance?: unknown } | undefined;
+  if (!last || typeof last !== 'object') return false;
+  const closing = Number(last.closingBalance) || 0;
+  const credit = Number(last.creditBalance) || 0;
+  return closing !== 0 || credit !== 0;
 }
 
 export function isRevolvingChainTruncated(derivedCycles: unknown[] & { truncated?: boolean } = []): boolean {

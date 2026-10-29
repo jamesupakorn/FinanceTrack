@@ -194,6 +194,20 @@ describe.each(['json', 'mongo'] as const)('spend items / card totals (%s)', mode
     expect(await store.getUserCreditData('u1')).toEqual(before);
   });
 
+  it('R1: paid off long ago (cap ends chain at zero balance), installment now -> 200 and installment paid', async () => {
+    await store.updateUserCreditData('u1', data => ({
+      ...data,
+      cycles: [{ id: 'rc_000000000001', cardId: card.id, month: '2020-01', newSpend: 1000, paymentAction: 'full' }],
+      plans: [{
+        id: 'ip_000000000001', cardId: card.id, itemName: 'สินค้า', months: 1, status: 'ongoing',
+        schedule: [{ no: 1, dueMonth: month, payment: 300, principal: 300, paid: false }]
+      }]
+    }));
+    const result = await call(expense, 'PATCH', { month, key: 'ccr_000000000001', paid: true });
+    expect(result.status).toBe(200);
+    expect((await store.getUserCreditData('u1')).plans[0].schedule?.[0].paid).toBe(true);
+  });
+
   it('F4: a zero-balance month inside the chain is not a cap hit (installments still pay)', async () => {
     await store.updateUserCreditData('u1', data => ({
       ...data,
@@ -224,6 +238,17 @@ describe.each(['json', 'mongo'] as const)('spend items / card totals (%s)', mode
     expect(carried.body.ccr_000000000002).toMatchObject({ actual: 0, breakdown: { revolving: { totalDue: -500 } } });
     const idle = await call(expense, 'GET', {}, { month: '2026-07' });
     expect(Object.keys(idle.body).filter(k => k.startsWith('ccr_') || k.startsWith('cci_'))).toEqual([]);
+  });
+
+  it('R2 / AC-S7: a zero-balance month after a payoff (inside the chain) gets no row', async () => {
+    await store.updateUserCreditData('u1', data => ({
+      ...data,
+      cycles: [{ id: 'rc_000000000001', cardId: card.id, month: '2026-08', newSpend: 1000, paymentAction: 'full' }]
+    }));
+    const paidOff = await call(expense, 'GET', {}, { month: '2026-08' });
+    expect(paidOff.body.ccr_000000000001).toBeDefined();
+    const after = await call(expense, 'GET', {}, { month });
+    expect(Object.keys(after.body).filter(k => k.startsWith('ccr_') || k.startsWith('cci_'))).toEqual([]);
   });
 
   it('F8 / AC-S12: a new month seeds no credit_* rows; an old stored credit_* row still renders', async () => {
