@@ -384,7 +384,15 @@ export function buildRevolvingCycles(
     carried = closingBalance;
   }
 
-  return withTruncationFlag(derived, truncated);
+  // F4 / AC-S11: จำเดือนสุดท้ายที่สายครอบคลุมเมื่อเพดานตัดก่อนถึงเดือนที่ขอ
+  // (non-enumerable — ไม่กระทบตัวเลข / JSON / การ iterate ใด ๆ)
+  const flagged = withTruncationFlag(derived, truncated);
+  Object.defineProperty(flagged, 'capEndMonth', {
+    value: end.localeCompare(requested) < 0 ? end : null,
+    enumerable: false,
+    configurable: true
+  });
+  return flagged;
 }
 
 /** ผลรวมรายการไม่ผ่อนของบัตรต่อเดือน — Map ว่างเมื่อไม่มีรายการ (ฟังก์ชันล้วน) */
@@ -425,6 +433,16 @@ export function buildRevolvingCyclesForData(
  * @param {array} derivedCycles
  * @returns {boolean}
  */
+/**
+ * true เมื่อเพดาน MAX_REVOLVING_CYCLES_PER_CARD ตัดสายก่อนถึง `month` (สายไม่ derive เดือนนั้นเลย)
+ * ต่างจาก isRevolvingChainTruncated ตรงที่ไม่นับการหลุดของ cycle เก่าก่อนจุดเริ่มสาย
+ * ⚠ ต้องส่ง array ที่ได้จาก buildRevolvingCycles() ตรง ๆ ที่สร้างด้วย throughMonth = month
+ */
+export function isMonthBeyondRevolvingCap(derivedCycles: unknown[], month: string): boolean {
+  const capEnd = Array.isArray(derivedCycles) ? (derivedCycles as unknown[] & { capEndMonth?: unknown }).capEndMonth : null;
+  return typeof capEnd === 'string' && typeof month === 'string' && capEnd.localeCompare(month) < 0;
+}
+
 export function isRevolvingChainTruncated(derivedCycles: unknown[] & { truncated?: boolean } = []): boolean {
   return Array.isArray(derivedCycles) && derivedCycles.truncated === true;
 }

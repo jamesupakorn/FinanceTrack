@@ -227,6 +227,44 @@ describe('ExpenseCalendarModal', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /ชำระแล้ว/ })).toBeInTheDocument());
   });
 
+  it('9b. F6: a failed refetch after a successful installment pay shows an info notice, not an error', async () => {
+    const planId = 'ip_bbbbbbbbbbbb';
+    const rowKey = buildInstallmentRowKey(planId, 1);
+    mockLoadOk({
+      expenseRows: {
+        [rowKey]: { name: 'ผ่อนโทรศัพท์', actual: 1000, account: 'กสิกร', paid: false, dueDay: 10 },
+      },
+      cards: [{ id: 'cc_dddddddddddd', name: 'บัตร D', color: '#222222' }],
+      plans: [{ id: planId, cardId: 'cc_dddddddddddd', itemName: 'โทรศัพท์', months: 10, status: PLAN_STATUS.ONGOING }],
+    });
+    mockedCreditCardAPI.setInstallmentPaid.mockResolvedValue({ plan: { status: PLAN_STATUS.ONGOING } });
+    const toasts: Array<{ message: string; type: string }> = [];
+    const onToast = (e: Event) => toasts.push((e as CustomEvent).detail);
+    window.addEventListener('app:toast', onToast);
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const onClose = jest.fn();
+    try {
+      const user = userEvent.setup();
+      render(<ExpenseCalendarModal open={true} onClose={onClose} />);
+      await screen.findByRole('grid');
+      const toggleButton = await screen.findByRole('button', { name: /ยังไม่ชำระ/ });
+      mockedExpenseAPI.getAll.mockRejectedValueOnce(new Error('network down'));
+      await user.click(toggleButton);
+
+      expect(mockedCreditCardAPI.setInstallmentPaid).toHaveBeenCalledWith(planId, 1, true);
+      await waitFor(() => expect(toasts).toHaveLength(1));
+      expect(toasts[0].type).toBe('info');
+      expect(toasts[0].message).toContain('อัปเดตสถานะงวดแล้ว');
+      expect(toasts.some(t => t.type === 'error')).toBe(false);
+      // the write did happen: closing reports changed so the parent reloads
+      await user.click(screen.getByRole('button', { name: 'ปิด' }));
+      expect(onClose).toHaveBeenCalledWith({ changed: true });
+    } finally {
+      window.removeEventListener('app:toast', onToast);
+      consoleError.mockRestore();
+    }
+  });
+
   it('10. BR-CC-015: revolving minimum payment requires an explicit confirm step before committing', async () => {
     const cardId = 'cc_ffffffffffff';
     mockLoadOk({

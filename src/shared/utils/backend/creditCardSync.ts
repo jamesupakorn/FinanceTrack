@@ -30,7 +30,7 @@ import {
   PLAN_STATUS
 } from '../creditCardUtils';
 import { getUserCreditData, updateUserCreditData } from './creditCardStore';
-import { buildRevolvingCyclesForData } from '../creditCardRevolving';
+import { buildRevolvingCyclesForData, isMonthBeyondRevolvingCap } from '../creditCardRevolving';
 import type { PlanLike, StoredRevolvingCycle, RevolvingCycleRow } from '../creditCardRevolving';
 import { toBankAccountNames, UNASSIGNED_ACCOUNT_LABEL } from '../bankAccountShape';
 import { normaliseBankAccountEntry } from './bankAccountIds';
@@ -517,6 +517,11 @@ export function planCardTotalPaid(
   const storedAction = storedCycle && isValidPaymentAction(storedCycle.paymentAction) ? (storedCycle.paymentAction ?? null) : null;
 
   // --- ตรวจทุกเงื่อนไขก่อน (ยังไม่แตะข้อมูล) ---
+  // F4 / AC-S11: เพดาน 60 cycle ตัดสายก่อนถึงเดือนนี้ → ไม่รู้ยอดหมุนเวียนจริง ห้ามจ่ายเฉพาะงวดผ่อน
+  // (เดือนยอด 0 ที่แค่ถูกข้ามไม่นับ — ดูเฉพาะการที่เพดานตัดปลายสายก่อนถึงเดือนนี้)
+  if (paid && state.cycle === null && isMonthBeyondRevolvingCap(chainFor(card, data, month), month)) {
+    return { status: 'limit_reached', paid: state.paid, applied: 0 };
+  }
   const needsRevolvingAction = paid && state.cycle !== null && state.cycle.totalDue > 0 && storedAction === null;
   if (needsRevolvingAction) {
     if (paymentAction !== 'full' && paymentAction !== 'minimum') return { status: 'needs_choice', paid: state.paid, applied: 0 };

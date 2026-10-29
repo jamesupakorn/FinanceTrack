@@ -273,9 +273,10 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     try {
       const response = await creditCardAPI.setInstallmentPaid(event.plan.id, event.installmentNo, nextPaid);
       changedRef.current = true;
-      const refreshed = await expenseAPI.getAll();
-      setMonthsMap(refreshed.months);
-      showToast(response?.plan?.status === PLAN_STATUS.COMPLETED ? 'ผ่อนครบแล้ว 🎉' : 'อัปเดตสถานะงวดแล้ว');
+      notifyWriteSaved(
+        response?.plan?.status === PLAN_STATUS.COMPLETED ? 'ผ่อนครบแล้ว 🎉' : 'อัปเดตสถานะงวดแล้ว',
+        await refreshExpenseRows()
+      );
     } catch (error) {
       const message = (error as { message?: string } | null)?.message;
       showToast(message || 'อัปเดตสถานะงวดไม่สำเร็จ', 'error');
@@ -284,10 +285,24 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     }
   };
 
-  const refreshExpenseRows = async () => {
-    const response = await expenseAPI.getAll();
-    setMonthsMap(response.months);
-  };
+  // เขียนสำเร็จแล้วค่อยโหลดแถวใหม่ — การโหลดใหม่ล้มเหลวต้องไม่ถูกรายงานว่า "บันทึกไม่สำเร็จ" (F6)
+  // คืน false แทนการ throw เพื่อให้ผู้เรียกแยกผลของการเขียนออกจากผลของการโหลดใหม่ได้
+  async function refreshExpenseRows(): Promise<boolean> {
+    try {
+      const response = await expenseAPI.getAll();
+      setMonthsMap(response?.months && typeof response.months === 'object' ? response.months : {});
+      return true;
+    } catch (refreshError) {
+      console.error('Error refreshing calendar rows after a successful write:', refreshError);
+      return false;
+    }
+  }
+
+  // การเขียนสำเร็จเสมอได้ข้อความสำเร็จ · โหลดใหม่ไม่ได้ = แจ้งแบบ info (ไม่ใช่ error) ให้เปิดปฏิทินใหม่
+  function notifyWriteSaved(successMessage: string, refreshed: boolean): void {
+    if (refreshed) showToast(successMessage);
+    else showToast(`${successMessage} (โหลดข้อมูลล่าสุดไม่สำเร็จ — ปิดแล้วเปิดปฏิทินใหม่เพื่ออัปเดต)`, 'info');
+  }
 
   const handleRevolvingFull = async (event: CalendarEvent): Promise<void> => {
     if (!event.card) return;
@@ -295,8 +310,7 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     try {
       await creditCardAPI.setRevolvingAction(event.card.id, monthKey, 'full');
       changedRef.current = true;
-      await refreshExpenseRows();
-      showToast('บันทึกการชำระแล้ว');
+      notifyWriteSaved('บันทึกการชำระแล้ว', await refreshExpenseRows());
     } catch (error) {
       const message = (error as { message?: string } | null)?.message;
       showToast(message || 'บันทึกไม่สำเร็จ', 'error');
@@ -311,8 +325,7 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     try {
       await creditCardAPI.setRevolvingAction(event.card.id, monthKey, null);
       changedRef.current = true;
-      await refreshExpenseRows();
-      showToast('ยกเลิกการชำระแล้ว');
+      notifyWriteSaved('ยกเลิกการชำระแล้ว', await refreshExpenseRows());
     } catch (error) {
       const message = (error as { message?: string } | null)?.message;
       showToast(message || 'ยกเลิกการชำระไม่สำเร็จ', 'error');
@@ -348,8 +361,7 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     try {
       await creditCardAPI.setRevolvingAction(event.card.id, monthKey, 'minimum');
       changedRef.current = true;
-      await refreshExpenseRows();
-      showToast('บันทึกการชำระขั้นต่ำแล้ว');
+      notifyWriteSaved('บันทึกการชำระขั้นต่ำแล้ว', await refreshExpenseRows());
       setConfirmState(null);
     } catch (error) {
       const message = (error as { message?: string } | null)?.message;

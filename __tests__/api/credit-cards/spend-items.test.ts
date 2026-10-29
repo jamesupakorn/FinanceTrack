@@ -170,6 +170,73 @@ describe.each(['json', 'mongo'] as const)('spend items / card totals (%s)', mode
     expect(await store.getUserCreditData('u1')).toEqual(before);
   });
 
+  it('F8: needs_choice 409 returns the needs_choice error body', async () => {
+    await seedMixedCard();
+    const result = await call(expense, 'PATCH', { month, key: 'ccr_000000000001', paid: true });
+    expect(result.status).toBe(409);
+    expect(result.body).toEqual({ error: 'needs_choice', message: expect.any(String) });
+  });
+
+  it('F4 / AC-S11: cap cuts the chain before the month -> limit_reached, installments not paid', async () => {
+    // one stored minimum cycle in 2020-01 carries a balance; the 60-month cap ends the chain at 2024-12
+    await store.updateUserCreditData('u1', data => ({
+      ...data,
+      cycles: [{ id: 'rc_000000000001', cardId: card.id, month: '2020-01', newSpend: 1000, paymentAction: 'minimum' }],
+      plans: [{
+        id: 'ip_000000000001', cardId: card.id, itemName: 'สินค้า', months: 1, status: 'ongoing',
+        schedule: [{ no: 1, dueMonth: month, payment: 300, principal: 300, paid: false }]
+      }]
+    }));
+    const before = await store.getUserCreditData('u1');
+    const result = await call(expense, 'PATCH', { month, key: 'ccr_000000000001', paid: true, paymentAction: 'full' });
+    expect(result.status).toBe(409);
+    expect(result.body.error).toBe('Revolving cycle limit reached');
+    expect(await store.getUserCreditData('u1')).toEqual(before);
+  });
+
+  it('F4: a zero-balance month inside the chain is not a cap hit (installments still pay)', async () => {
+    await store.updateUserCreditData('u1', data => ({
+      ...data,
+      cycles: [{ id: 'rc_000000000001', cardId: card.id, month: '2026-08', newSpend: 1000, paymentAction: 'full' }],
+      plans: [{
+        id: 'ip_000000000001', cardId: card.id, itemName: 'สินค้า', months: 1, status: 'ongoing',
+        schedule: [{ no: 1, dueMonth: month, payment: 300, principal: 300, paid: false }]
+      }]
+    }));
+    expect((await call(expense, 'PATCH', { month, key: 'ccr_000000000001', paid: true })).status).toBe(200);
+    expect((await store.getUserCreditData('u1')).plans[0].schedule?.[0].paid).toBe(true);
+  });
+
+  it('F8 / AC-S7: carried-balance (with interest) and credit-balance months get a row; an idle card gets none', async () => {
+    await store.updateUserCreditData('u1', data => ({
+      ...data,
+      cycles: [
+        // 1000 paid at minimum (10%) -> 900 carried + 1.5%/month interest = 913.5 into 2026-10
+        { id: 'rc_000000000001', cardId: card.id, month: '2026-09', newSpend: 1000, paymentAction: 'minimum' },
+        // cashback with no spend -> credit balance month
+        { id: 'rc_000000000002', cardId: otherCard.id, month, cashbackAmount: 500, paymentAction: null }
+      ]
+    }));
+    const carried = await call(expense, 'GET', {}, { month });
+    expect(carried.body.ccr_000000000001).toMatchObject({
+      actual: 913.5, breakdown: { installments: [], revolving: { newSpend: 0, carriedBalance: 913.5, totalDue: 913.5 } }
+    });
+    expect(carried.body.ccr_000000000002).toMatchObject({ actual: 0, breakdown: { revolving: { totalDue: -500 } } });
+    const idle = await call(expense, 'GET', {}, { month: '2026-07' });
+    expect(Object.keys(idle.body).filter(k => k.startsWith('ccr_') || k.startsWith('cci_'))).toEqual([]);
+  });
+
+  it('F8 / AC-S12: a new month seeds no credit_* rows; an old stored credit_* row still renders', async () => {
+    const seeded = await call(expense, 'PATCH', { month: '2026-11', key: 'house', paid: true });
+    expect(seeded.status).toBe(200);
+    const fresh = await call(expense, 'GET', {}, { month: '2026-11' });
+    expect(fresh.body.house).toMatchObject({ paid: true });
+    expect(Object.keys(fresh.body).filter(k => k.startsWith('credit_'))).toEqual([]);
+    const legacy = { name: 'บัตรเครดิต กสิกร', actual: 1200, account: 'กสิกร', paid: false };
+    expect((await call(expense, 'POST', { month: '2026-05', expense_data: { credit_kbank: legacy } })).status).toBe(200);
+    expect((await call(expense, 'GET', {}, { month: '2026-05' })).body.credit_kbank).toMatchObject(legacy);
+  });
+
   it('AC-S13: card delete cascades spendItems but preserves another card', async () => {
     await store.updateUserCreditData('u1', data => ({
       ...data, spendItems: [{ ...itemInput, amount: 0, id: 'si_000000000001' }, { ...itemInput, cardId: otherCard.id, amount: 0, id: 'si_000000000002' }]
