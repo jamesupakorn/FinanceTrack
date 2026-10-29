@@ -440,7 +440,7 @@ export default function CreditCardsPage() {
           } else if (completed) {
             showToast('เพิ่มแผนผ่อนชำระแล้ว · ผ่อนครบแล้ว 🎉');
           } else {
-            showToast(`เพิ่มแผนผ่อนชำระแล้ว · บันทึกชำระย้อนหลัง ${paidNos.length} งวด`);
+            showToast(`เพิ่มแผนผ่อนชำระแล้ว · บันทึกชำระแล้ว ${paidNos.length} งวด`);
           }
         }
       }
