@@ -129,3 +129,46 @@ describe('Flex / text parity (AC-10)', () => {
     expect(JSON.stringify(buildMonthlySummaryFlex('x', none))).not.toContain('ต้องจ่ายเดือนหน้า');
   });
 });
+
+// spec-credit-card-cross-month-due.md AC-10: card rows carry resolvedDueDate; sort by real date, full Thai date label when cross-month
+describe('buildUpcomingDues + summary label with resolvedDueDate (AC-10)', () => {
+  const doc = {
+    ค่าเช่า: { actual: 8000, dueDay: 5 },
+    ccr_shopee: { name: 'Shopee SPayLater', actual: 1200, dueDay: 10, resolvedDueDate: '2026-12-10' },
+    ccr_kbank: { name: 'KBank', actual: 900, dueDay: 25, resolvedDueDate: '2026-11-25' },
+    ค่าน้ำ: { actual: 300, dueDay: 28 }
+  };
+
+  it('includes an ISO dueDate on every item and sorts by the real date', () => {
+    const result = buildUpcomingDues(doc, '2026-11');
+    expect(result?.items).toEqual([
+      { name: 'ค่าเช่า', amount: 8000, day: 5, dueDate: '2026-11-05' },
+      { name: 'KBank', amount: 900, day: 25, dueDate: '2026-11-25' },
+      { name: 'ค่าน้ำ', amount: 300, day: 28, dueDate: '2026-11-28' },
+      { name: 'Shopee SPayLater', amount: 1200, day: 10, dueDate: '2026-12-10' }
+    ]);
+  });
+
+  it('an invalid resolvedDueDate falls back to the dueDay path in the page month', () => {
+    const result = buildUpcomingDues({ ccr_x: { actual: 50, dueDay: 7, resolvedDueDate: '2026-02-30' } }, '2026-11');
+    expect(result?.items).toEqual([{ name: 'ccr_x', amount: 50, day: 7, dueDate: '2026-11-07' }]);
+  });
+
+  it('label: full Thai date for the cross-month card, "วันที่ N" for same-month rows (Flex and text)', () => {
+    const payload: SummaryPayload = {
+      model: { netCashFlow: 0, totalIncome: 0, generalExpense: 0, dailyExpense: 0, savings: 0, creditCard: 0 },
+      taxAccumulated: 0,
+      goals: [],
+      comparison: { income: computeDelta(0, 0, true), expense: computeDelta(0, 0, true), savings: computeDelta(0, 0, false) },
+      upcoming: buildUpcomingDues(doc, '2026-11')
+    };
+    const text = formatMonthlySummaryText('ต.ค. 2569', payload);
+    const flexText = JSON.stringify(buildMonthlySummaryFlex('ต.ค. 2569', payload));
+    for (const out of [text, flexText]) {
+      expect(out).toContain('(10 ธ.ค. 2569)');
+      expect(out).toContain('(วันที่ 5)');
+      expect(out).toContain('(วันที่ 25)');
+      expect(out).not.toContain('(วันที่ 10)');
+    }
+  });
+});

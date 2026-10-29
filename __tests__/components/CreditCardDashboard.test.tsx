@@ -11,6 +11,9 @@ type TestCard = {
   revolvingDue?: number;
   revolvingTotalDue?: number;
   revolvingDueMonth?: string | null;
+  statementDay?: number | string;
+  payableRevolvingDue?: number;
+  payableRevolvingMonth?: string | null;
 };
 
 type TestPlan = {
@@ -30,6 +33,8 @@ const makeCard = (
 ): TestCard => ({
   id,
   name,
+  // same-month default (statementDay < dueDay) per spec-credit-card-cross-month-due.md §Test fallout rule
+  statementDay: 1,
   dueDay,
   remainingPayable: 0,
   availableCredit: 10000,
@@ -271,5 +276,80 @@ describe('CreditCardDashboard upcoming groups', () => {
 
     rerender(<CreditCardDashboard cards={[makeCard('cc_no_due')]} />);
     expect(screen.getByText('ไม่มีรายการครบกำหนดใน 7 วันนี้ 🎉')).toBeInTheDocument();
+  });
+});
+
+// spec-credit-card-cross-month-due.md AC-9 / AC-14 (R-2 override: replace, not add)
+describe('CreditCardDashboard upcoming groups: cross-month cards', () => {
+  const LIST = 'รายการบัตรเครดิตที่ครบกำหนดเร็ว ๆ นี้';
+  const shopee = (fields: Partial<TestCard> = {}) => makeCard('cc_sp', 'Shopee SPayLater', 10, { statementDay: 'EOM', ...fields });
+
+  it('AC-14: today 2026-11-05, unpaid Oct cycle listed on 10 Nov with payableRevolvingDue; Nov revolvingDue not added', () => {
+    jest.setSystemTime(new Date(2026, 10, 5, 12, 0, 0));
+    const card = shopee({ revolvingDue: 1500, revolvingDueMonth: '2026-11', payableRevolvingDue: 1200, payableRevolvingMonth: '2026-10' });
+    renderDashboard([card], [makePlan('plan_sp', card.id, [{ dueMonth: '2026-10', payment: 250 }, { dueMonth: '2026-11', payment: 250 }])]);
+
+    const groups = within(screen.getByRole('list', { name: LIST })).getAllByRole('listitem');
+    expect(groups).toHaveLength(1);
+    expect(groups[0].textContent).toContain('10 พ.ย. 2569');
+    expect(within(groups[0]).getByText('ยอดหมุนเวียน · 1,200.00 บาท')).toBeInTheDocument();
+    // AC-9: the Oct installment row is due 2026-11-10 too and lands in the same group
+    expect(within(groups[0]).getByText('ผ่อนชำระ 1 งวด · 250.00 บาท')).toBeInTheDocument();
+    expect(within(groups[0]).getByText('1,450.00 บาท')).toBeInTheDocument();
+    expect(screen.queryByText(/1,500\.00/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/2,700\.00/)).not.toBeInTheDocument();
+  });
+
+  it('AC-9: today 2026-10-29, the Shopee Oct installment is not shown as due 10 Oct (overdue) — it is due 10 Nov, outside 7 days', () => {
+    const card = shopee();
+    renderDashboard([card], [makePlan('plan_sp', card.id, [{ dueMonth: '2026-10', payment: 250 }])]);
+    expect(screen.queryByRole('list', { name: LIST })).not.toBeInTheDocument();
+    expect(screen.getByText('ไม่มีรายการครบกำหนดใน 7 วันนี้ 🎉')).toBeInTheDocument();
+  });
+
+  it('small dueDay (EOM/3, today 28 Nov): unpaid payable Oct entry replaces the Nov entry that is inside the window', () => {
+    jest.setSystemTime(new Date(2026, 10, 28, 12, 0, 0));
+    const card = makeCard('cc_small', 'บัตรวันที่ 3', 3, { statementDay: 'EOM', revolvingDue: 1500, revolvingDueMonth: '2026-11', payableRevolvingDue: 1200, payableRevolvingMonth: '2026-10' });
+    renderDashboard([card]);
+    const groups = within(screen.getByRole('list', { name: LIST })).getAllByRole('listitem');
+    expect(groups).toHaveLength(1);
+    expect(groups[0].textContent).toContain('3 พ.ย. 2569');
+    expect(within(groups[0]).getByText('ยอดหมุนเวียน · 1,200.00 บาท')).toBeInTheDocument();
+    expect(screen.queryByText(/3 ธ\.ค\. 2569/)).not.toBeInTheDocument();
+  });
+
+  it('payable cycle paid (payableRevolvingDue 0) → existing current-cycle path (Nov cycle due 3 Dec)', () => {
+    jest.setSystemTime(new Date(2026, 10, 28, 12, 0, 0));
+    const card = makeCard('cc_small', 'บัตรวันที่ 3', 3, { statementDay: 'EOM', revolvingDue: 1500, revolvingDueMonth: '2026-11', payableRevolvingDue: 0, payableRevolvingMonth: '2026-10' });
+    renderDashboard([card]);
+    const groups = within(screen.getByRole('list', { name: LIST })).getAllByRole('listitem');
+    expect(groups).toHaveLength(1);
+    expect(groups[0].textContent).toContain('3 ธ.ค. 2569');
+    expect(within(groups[0]).getByText('ยอดหมุนเวียน · 1,500.00 บาท')).toBeInTheDocument();
+  });
+
+  it('invalid payableRevolvingMonth → existing path; current cycle used', () => {
+    jest.setSystemTime(new Date(2026, 10, 28, 12, 0, 0));
+    const card = makeCard('cc_small', 'บัตรวันที่ 3', 3, { statementDay: 'EOM', revolvingDue: 1500, revolvingDueMonth: '2026-11', payableRevolvingDue: 1200, payableRevolvingMonth: 'bad' });
+    renderDashboard([card]);
+    const groups = within(screen.getByRole('list', { name: LIST })).getAllByRole('listitem');
+    expect(groups).toHaveLength(1);
+    expect(within(groups[0]).getByText('ยอดหมุนเวียน · 1,500.00 บาท')).toBeInTheDocument();
+  });
+
+  it('invalid payableRevolvingMonth with invalid current month → the existing "invalid → error" guard still fires', () => {
+    const card = makeCard('cc_bad', 'บัตรข้อมูลผิด', 10, { statementDay: 'EOM', revolvingDue: 500, revolvingDueMonth: '2026-13', payableRevolvingDue: 400, payableRevolvingMonth: '2026-13' });
+    renderDashboard([card], [], { onRetry: jest.fn() });
+    expect(screen.getByRole('alert')).toHaveTextContent('ข้อมูลวันครบกำหนดของยอดหมุนเวียนบัตร บัตรข้อมูลผิด ไม่ถูกต้อง');
+  });
+
+  it('payable cycle equals the current cycle (same-month card) → current revolvingDue used, payable amount ignored', () => {
+    const card = makeCard('cc_same', 'บัตรเดือนเดียวกัน', 5, { revolvingDue: 700, revolvingDueMonth: '2026-11', payableRevolvingDue: 999, payableRevolvingMonth: '2026-11' });
+    renderDashboard([card]);
+    const groups = within(screen.getByRole('list', { name: LIST })).getAllByRole('listitem');
+    expect(groups).toHaveLength(1);
+    expect(groups[0].textContent).toContain('5 พ.ย. 2569');
+    expect(within(groups[0]).getByText('ยอดหมุนเวียน · 700.00 บาท')).toBeInTheDocument();
+    expect(screen.queryByText(/999/)).not.toBeInTheDocument();
   });
 });

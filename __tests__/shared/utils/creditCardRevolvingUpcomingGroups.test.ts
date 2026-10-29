@@ -4,6 +4,8 @@ const CARD = {
   id: 'cc_upcoming',
   annualRate: 0,
   minPaymentPercent: 10,
+  // same-month card (dueDay > statementDay) per spec-credit-card-cross-month-due.md §Test fallout rule
+  statementDay: 1,
   dueDay: 5,
   creditLimit: 10000
 };
@@ -80,5 +82,60 @@ describe('summariseCard revolvingDueMonth', () => {
 
     expect(summary.revolvingDueMonth).toBe('2026-10');
     expect(summary.nextDueDate).toBe('2026-09-05');
+  });
+});
+
+// spec-credit-card-cross-month-due.md AC-14 / RR-2: payable cycle derived on read, never stored
+describe('summariseCard payableRevolvingDue / payableRevolvingMonth (AC-14)', () => {
+  const SHOPEE = { id: 'cc_shopee', annualRate: 0, minPaymentPercent: 10, statementDay: 'EOM', dueDay: 10, creditLimit: 20000 };
+
+  it('Shopee as of 2026-11 returns the Oct cycle as payable with its unpaid due', () => {
+    const cycles = [
+      { id: 'rc_oct', cardId: SHOPEE.id, month: '2026-10', newSpend: 1200 },
+      { id: 'rc_nov', cardId: SHOPEE.id, month: '2026-11', newSpend: 300 }
+    ];
+    const originalCycles = JSON.stringify(cycles);
+    const summary = summariseCard(SHOPEE, [], cycles, { asOfMonth: '2026-11' });
+
+    expect(summary.payableRevolvingMonth).toBe('2026-10');
+    expect(summary.payableRevolvingDue).toBe(1200);
+    // current cycle is still the as-of month; unpaid Oct carries into Nov (why R-2 replaces, never adds)
+    expect(summary.revolvingDueMonth).toBe('2026-11');
+    expect(summary.revolvingDue).toBe(1500);
+    // XM-9: totals keep using the current cycle only
+    expect(summary.remainingPayable).toBe(1500);
+    expect(summary.nextDueDate).toBe('2026-11-10');
+    expect(JSON.stringify(cycles)).toBe(originalCycles);
+    expect(cycles[0]).not.toHaveProperty('payableRevolvingDue');
+  });
+
+  it.each(['full', 'minimum'] as const)('payable Oct cycle confirmed %s -> payableRevolvingDue 0', paymentAction => {
+    const summary = summariseCard(
+      SHOPEE,
+      [],
+      [{ id: 'rc_oct', cardId: SHOPEE.id, month: '2026-10', newSpend: 1200, paymentAction }],
+      { asOfMonth: '2026-11' }
+    );
+    expect(summary.payableRevolvingMonth).toBe('2026-10');
+    expect(summary.payableRevolvingDue).toBe(0);
+  });
+
+  it('no stored or derived payable cycle -> payableRevolvingMonth null, due 0', () => {
+    const summary = summariseCard(SHOPEE, [], [], { asOfMonth: '2026-11' });
+    expect(summary.payableRevolvingMonth).toBeNull();
+    expect(summary.payableRevolvingDue).toBe(0);
+  });
+
+  it('same-month card: payable fields equal the current-cycle fields', () => {
+    const summary = summariseCard(
+      CARD,
+      [],
+      [{ id: 'rc_cur', cardId: CARD.id, month: '2026-11', newSpend: 640 }],
+      { asOfMonth: '2026-11' }
+    );
+    expect(summary.payableRevolvingMonth).toBe(summary.revolvingDueMonth);
+    expect(summary.payableRevolvingMonth).toBe('2026-11');
+    expect(summary.payableRevolvingDue).toBe(summary.revolvingDue);
+    expect(summary.payableRevolvingDue).toBe(640);
   });
 });

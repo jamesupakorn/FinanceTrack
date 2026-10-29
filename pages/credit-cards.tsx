@@ -50,6 +50,9 @@ interface CreditCardRecord {
   availableCredit: number | string;
   revolvingDue?: number | string;
   revolvingDueMonth?: string | null;
+  // รอบบิลที่ครบกำหนดในเดือนนี้ (derive ใน summariseCard ทุก GET, ไม่เก็บ) — R-2 spec-credit-card-cross-month-due.md
+  payableRevolvingDue?: number | string;
+  payableRevolvingMonth?: string | null;
 }
 
 interface InstallmentScheduleEntry {

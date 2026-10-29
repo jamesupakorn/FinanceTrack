@@ -26,7 +26,7 @@ import {
   getDaysInMonth,
   formatMonthKeyTH
 } from '../../shared/utils/dateUtils';
-import { isCreditCardRowKey, isRevolvingRowKey } from '../../shared/utils/creditCardUtils';
+import { isCreditCardRowKey, isRevolvingRowKey, buildRevolvingRowKey, formatIsoDateTH, isValidPurchaseDate } from '../../shared/utils/creditCardUtils';
 import { toBankAccountNames } from '../../shared/utils/bankAccountShape';
 import { compareListValues, matchesListQuery } from '../../shared/utils/frontend/listView';
 import { useListProjection } from '../../shared/utils/frontend/useListProjection';
@@ -38,8 +38,11 @@ import { useSession } from '../contexts/SessionContext';
 import { useListCriteria } from '../contexts/ListViewContext';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
+import CardTotalPaymentDialog from './CardTotalPaymentDialog';
+import CardExpenseDetailsDialog from './CardExpenseDetailsDialog';
+import type { CardTotalExpenseRow } from '../../shared/utils/backend/creditCardSync';
 
-type ExpenseRow = ExpenseItem & { [field: string]: unknown; dueDate?: unknown };
+type ExpenseRow = ExpenseItem & { [field: string]: unknown; dueDate?: unknown; breakdown?: CardTotalExpenseRow['breakdown'] };
 type ExpenseValues = Record<string, ExpenseRow>;
 type DueStatus = 'overdue' | 'dueToday' | 'dueSoon' | 'future' | 'done' | 'none';
 
@@ -78,6 +81,8 @@ interface DueUpcomingItem {
   diffDays: number;
   dueDay: unknown;
   resolvedDueDay: number | null;
+  /** resolvedDueDate ของแถวบัตรเมื่ออยู่คนละเดือนกับ selectedMonth — ไม่เช่นนั้น null */
+  crossMonthDueDate: string | null;
 }
 
 interface DueInsights {
@@ -88,6 +93,12 @@ interface DueInsights {
   pendingTotal: number;
   nextDueLabel: string;
   nextDueName: string;
+}
+
+interface SelectedCardDetails {
+  key: string;
+  cardId: string;
+  month: MonthKey;
 }
 
 const DEFAULT_EXPENSE_KEY_ORDER = DEFAULT_EXPENSE_ITEMS.map(item => item.key);
@@ -129,14 +140,40 @@ const formatDueDayText = (dueDayValue: unknown): string => {
   return dueDayValue ? `วันที่ ${String(dueDayValue)}` : '';
 };
 
+type DueRowLike = { dueDay?: unknown; resolvedDueDate?: unknown };
+
+/** resolvedDueDate ('YYYY-MM-DD') ของแถวบัตรจาก GET monthly_expense — ไม่ถูกต้อง/ไม่มี => null */
+// validator เดียวกับ expenseEvents.buildMonthEvents (isValidPurchaseDate) — ตัดวันที่เป็นไปไม่ได้ เช่น 2026-02-30
+const getValidResolvedDueDate = (value: unknown): string | null => (isValidPurchaseDate(value) ? value : null);
+
+/**
+ * วันครบกำหนดจริงของแถว — แถวบัตรใช้ resolvedDueDate (อาจอยู่เดือนถัดไป, spec-credit-card-cross-month-due.md)
+ * แถวปกติ/payload เก่าใช้ dueDay ของเดือนที่เลือกเหมือนเดิม · derive อ่านอย่างเดียว ไม่เก็บ
+ */
+const rowDueDate = (row: DueRowLike, monthKey: MonthKey | null | undefined): Date | null => {
+  const resolved = getValidResolvedDueDate(row.resolvedDueDate);
+  if (resolved) {
+    const [year, month, day] = resolved.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+  return getDueDateFromDay(row.dueDay, monthKey as MonthKey);
+};
+
+/** ข้อความช่องครบกำหนด — ข้ามเดือน => วันที่เต็ม (เช่น "10 พ.ย. 2569") ไม่เช่นนั้นเหมือนเดิม */
+const formatRowDueText = (row: DueRowLike, monthKey: MonthKey | null | undefined): string => {
+  const resolved = getValidResolvedDueDate(row.resolvedDueDate);
+  if (resolved && resolved.slice(0, 7) !== monthKey) return formatIsoDateTH(resolved);
+  return formatDueDayText(row.dueDay);
+};
+
 const describeDueTiming = (
-  dueDayValue: unknown,
+  row: DueRowLike,
   paid: boolean,
   monthKey: MonthKey | null | undefined,
   amount: number
 ): DueTiming => {
-  const parsedDate = getDueDateFromDay(dueDayValue, monthKey as MonthKey);
-  const dueDayText = formatDueDayText(dueDayValue);
+  const parsedDate = rowDueDate(row, monthKey);
+  const dueDayText = formatDueDayText(row.dueDay);
   if (paid) return { status: 'done', badge: 'ชำระแล้ว', helper: dueDayText ? `ครบกำหนดทุก${dueDayText}` : '', date: parsedDate, diffDays: null };
   if (!(amount > 0)) return { status: 'none', badge: 'ยังไม่กรอกยอด', helper: dueDayText ? `ครบกำหนดทุก${dueDayText}` : '', date: parsedDate, diffDays: null };
   if (!parsedDate) return { status: 'none', badge: 'ยังไม่กำหนด', helper: '', date: null, diffDays: null };
@@ -162,6 +199,16 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
   const [persistedKeys, setPersistedKeys] = useState<string[]>([]);
   const [pendingScrollKey, setPendingScrollKey] = useState<string | null>(null);
   const [pendingPaidKeys, setPendingPaidKeys] = useState<string[]>([]);
+  const [cardPayment, setCardPayment] = useState<{ key: string; month: string; paid: boolean; row: ExpenseRow & { breakdown: CardTotalExpenseRow['breakdown'] } } | null>(null);
+  const [selectedCardDetails, setSelectedCardDetails] = useState<SelectedCardDetails | null>(null);
+  const cardDetailsOpenerRef = useRef<HTMLButtonElement | null>(null);
+  const expenseListFallbackRef = useRef<HTMLHeadingElement | null>(null);
+  const selectedMonthRef = useRef(selectedMonth);
+  selectedMonthRef.current = selectedMonth;
+  useEffect(() => {
+    setCardPayment(null);
+    setSelectedCardDetails(null);
+  }, [selectedMonth]);
   const pendingPaidRef = useRef<Set<string>>(new Set());
   const [installmentMeta, setInstallmentMeta] = useState<Record<string, InstallmentMetadata>>({});
   const [expenseLoadRevision, setExpenseLoadRevision] = useState(0);
@@ -234,7 +281,10 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
     ]).then(([items, revolving]) => {
       if (cancelled) return;
       const map: Record<string, InstallmentMetadata> = {};
-      items.forEach((item: InstallmentMetadata) => { map[item.key] = item; });
+      items.forEach((item: InstallmentMetadata) => {
+        map[item.key] = item;
+        map[buildRevolvingRowKey(item.cardId)] = item;
+      });
       (Array.isArray(revolving?.cycles) ? revolving.cycles : []).forEach((cycle: InstallmentMetadata) => {
         if (!cycle?.key) return;
         map[cycle.key] = { key: cycle.key, cardId: cycle.cardId, cardName: cycle.cardName, cardColor: cycle.cardColor };
@@ -349,8 +399,12 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
   const handleTogglePaid = async (item: string) => {
     if (!selectedMonth || pendingPaidRef.current.has(item)) return;
     const row = editExpense[item];
-    const previousPaid = Boolean(row?.paid);
+    const previousPaid = row?.paid === true || row?.paid === 'true';
     const nextPaid = !previousPaid;
+    if (isRevolvingRowKey(item) && row.breakdown) {
+      setCardPayment({ key: item, month: selectedMonth, paid: nextPaid, row: { ...row, breakdown: row.breakdown } });
+      return;
+    }
     const derived = isCreditCardRowKey(item);
     const needsRow = !derived && !persistedKeys.includes(item);
     setPendingPaid(item, true);
@@ -381,6 +435,50 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
     } finally {
       setPendingPaid(item, false);
     }
+  };
+
+  const confirmCardPayment = async (action?: 'full' | 'minimum') => {
+    if (!cardPayment || pendingPaidRef.current.has(cardPayment.key)) return;
+    const { key, month, paid } = cardPayment;
+    setPendingPaid(key, true);
+    try {
+      await expenseAPI.setPaid(month, key, paid, undefined, action);
+      const data = await expenseAPI.getByMonth(month);
+      const formatted = formatExpenseData(data || {}, month);
+      if (selectedMonthRef.current === month) setEditExpense(previous => {
+        const refreshed = formatted.values as ExpenseValues;
+        const next = { ...previous };
+        Object.keys(next).filter(isCreditCardRowKey).forEach(item => { delete next[item]; });
+        Object.entries(refreshed).filter(([item]) => isCreditCardRowKey(item)).forEach(([item, row]) => { next[item] = row; });
+        return next;
+      });
+      setCardPayment(null);
+      onSaved?.();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'บันทึกสถานะบัตรไม่สำเร็จ กรุณาโหลดข้อมูลใหม่', 'error');
+    } finally {
+      setPendingPaid(key, false);
+    }
+  };
+
+  const cardDetails = (item: string, row: ExpenseRow, meta?: InstallmentMetadata) => {
+    if (!row.breakdown || !meta || !selectedMonth) return null;
+    const isSelected = selectedCardDetails?.key === item && selectedCardDetails.month === selectedMonth;
+    return (
+      <button
+        type="button"
+        className={`mt-space-2 inline-flex min-h-11 items-center gap-space-2 text-left text-sm text-accent underline underline-offset-2 ${FOCUS_RING}`}
+        aria-haspopup="dialog"
+        aria-expanded={isSelected}
+        aria-controls={isSelected ? 'expense-card-details-dialog' : undefined}
+        onClick={event => {
+          cardDetailsOpenerRef.current = event.currentTarget;
+          setSelectedCardDetails({ key: item, cardId: meta.cardId, month: selectedMonth });
+        }}
+      >
+        ดูรายละเอียด<span aria-hidden="true" className="flex h-4 w-4 shrink-0 items-center justify-center"><Icons.ChevronDown size={16} /></span>
+      </button>
+    );
   };
 
   const handleSave = async () => {
@@ -457,7 +555,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
       const kind = isRevolvingRowKey(key) ? 'revolving' : isCreditCardRowKey(key) ? 'installment' : 'ordinary';
       if (criteria.filters.kind && kind !== criteria.filters.kind) return false;
       if (criteria.filters.due) {
-        const date = getDueDateFromDay(row.dueDay, selectedMonth as MonthKey);
+        const date = rowDueDate(row, selectedMonth);
         const due = date ? new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() : null;
         const today = getStartOfToday().getTime();
         const status = due === null ? 'undated' : due < today ? (paid ? 'past-paid' : 'overdue') : due === today ? 'today' : 'future';
@@ -477,7 +575,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
         return compareListValues(amount(aRow.actual), amount(bRow.actual), descending);
       }
       if (criteria.order.startsWith('due-')) {
-        const due = (row: ExpenseRow) => getDueDateFromDay(row.dueDay, selectedMonth as MonthKey)?.getTime() ?? null;
+        const due = (row: ExpenseRow) => rowDueDate(row, selectedMonth)?.getTime() ?? null;
         return compareListValues(due(aRow), due(bRow), descending);
       }
       return 0;
@@ -487,6 +585,18 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
     datasetKey: `${selectedMonth ?? ''}:${isLoading ? 'loading' : 'ready'}:${expenseLoadRevision}`,
     editable: true,
   });
+  const selectedCardDetailsRow = selectedCardDetails ? editExpense[selectedCardDetails.key] : undefined;
+  const selectedCardDetailsMeta = selectedCardDetails ? installmentMeta[selectedCardDetails.key] : undefined;
+  const showSelectedCardDetails = Boolean(
+    selectedCardDetails
+    && selectedCardDetails.month === selectedMonth
+    && selectedCardDetailsMeta?.cardId === selectedCardDetails.cardId
+    && selectedCardDetailsRow?.breakdown
+    && expenseProjection.items.includes(selectedCardDetails.key)
+  );
+  useEffect(() => {
+    if (selectedCardDetails && !showSelectedCardDetails) setSelectedCardDetails(null);
+  }, [selectedCardDetails, showSelectedCardDetails]);
   const firstCreditCardKey = useMemo(() => expenseProjection.items.find(key => isCreditCardRowKey(key)) || null, [expenseProjection.items]);
 
   const daysInSelectedMonth = useMemo(() => {
@@ -518,7 +628,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
       if (paid) return;
       const amount = parseToNumber(row.actual);
       if (!(amount > 0)) return;
-      const parsedDate = getDueDateFromDay(row.dueDay, selectedMonth as MonthKey);
+      const parsedDate = rowDueDate(row, selectedMonth);
       if (!parsedDate) {
         pendingTotal += amount;
         return;
@@ -527,7 +637,9 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
       const diffDays = Math.ceil((parsedDate.getTime() - today.getTime()) / DAY_IN_MS);
       if (diffDays < 0) overdueTotal += amount;
       else pendingTotal += amount;
-      upcoming.push({ key: item, name: row.name || DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการ', date: parsedDate, diffDays, dueDay: row.dueDay, resolvedDueDay });
+      const resolvedIso = getValidResolvedDueDate((row as DueRowLike).resolvedDueDate);
+      const crossMonthDueDate = resolvedIso && resolvedIso.slice(0, 7) !== selectedMonth ? resolvedIso : null;
+      upcoming.push({ key: item, name: row.name || DEFAULT_EXPENSE_LABEL_MAP[item] || 'รายการ', date: parsedDate, diffDays, dueDay: row.dueDay, resolvedDueDay, crossMonthDueDate });
     });
     upcoming.sort((a, b) => a.date.getTime() - b.date.getTime());
     const urgentCount = upcoming.filter(item => item.diffDays >= 0 && item.diffDays <= DUE_SOON_THRESHOLD_DAYS).length;
@@ -539,8 +651,9 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
       overdueCount,
       overdueTotal,
       pendingTotal,
+      // แถวบัตรข้ามเดือน => วันที่เต็ม (เช่น "10 พ.ย. 2569") เหมือนช่องครบกำหนด · แถวอื่นเหมือนเดิม
       nextDueLabel: nextDue
-        ? (nextDue.dueDay
+        ? (nextDue.crossMonthDueDate ? formatIsoDateTH(nextDue.crossMonthDueDate) : nextDue.dueDay
           ? (isEndOfMonthDueDay(nextDue.dueDay) ? 'ทุกวันสิ้นเดือน' : `ทุกวันที่ ${nextDue.resolvedDueDay || nextDue.dueDay}`)
           : formatDueDateLabel(nextDue.date, { day: 'numeric', month: 'short' }))
         : 'ยังไม่กำหนด',
@@ -578,7 +691,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
     <div>
       <span role="status" aria-live="polite" className="sr-only">{pendingPaidKeys.length > 0 ? 'กำลังบันทึกสถานะการจ่าย' : ''}</span>
       <div className="mb-space-4 flex flex-wrap items-start justify-between gap-space-3">
-        <div><h3 className="text-lg font-medium text-primary">รายการค่าใช้จ่าย</h3><p className="mt-space-1 text-sm text-secondary">บันทึกยอดค่าใช้จ่ายรายเดือนแบบยอดเดียว</p></div>
+        <div><h3 ref={expenseListFallbackRef} tabIndex={-1} className="text-lg font-medium text-primary">รายการค่าใช้จ่าย</h3><p className="mt-space-1 text-sm text-secondary">บันทึกยอดค่าใช้จ่ายรายเดือนแบบยอดเดียว</p></div>
         <button type="button" className="min-h-11 shrink-0 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2" onClick={handleAddExpenseItem}>+ เพิ่มรายการค่าใช้จ่าย</button>
       </div>
 
@@ -632,7 +745,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
                   const paid = row.paid === true || row.paid === 'true';
                   const displayName = row.name ?? DEFAULT_EXPENSE_LABEL_MAP[item] ?? 'รายการใหม่';
                   const selectedAccount = typeof row.account === 'string' && row.account.trim().length > 0 ? row.account : bankAccounts[0] || 'ไม่ระบุบัญชี';
-                  const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth, parseToNumber(row.actual));
+                  const dueInfo = describeDueTiming(row, paid, selectedMonth, parseToNumber(row.actual));
                   const isCreditCardRow = isCreditCardRowKey(item);
                   const meta = installmentMeta[item];
                   if (isCreditCardRow) {
@@ -640,7 +753,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
                       {item === firstCreditCardKey && <tr><td className="border-t border-dashed border-border-default p-space-3 text-xs font-medium text-tertiary" colSpan={5}>บัตรเครดิต (ซิงก์อัตโนมัติ)</td></tr>}
                       <tr className="border-b border-border-subtle bg-info/5" data-expense-key={item}>
                         <td className="p-space-3 align-middle"><span className="flex items-center gap-space-2 text-secondary" title={displayName}><span aria-hidden="true">🔒</span>{displayName}</span>{meta && <div className="mt-space-1 flex flex-col gap-space-1"><span className="inline-flex w-fit items-center gap-1 rounded-full border border-info/35 bg-info/15 px-space-2 py-[2px] text-xs font-medium text-info">💳 {meta.cardName}</span><Link href={`/credit-cards?card=${meta.cardId}`} className={`text-xs text-accent underline-offset-2 hover:underline ${FOCUS_RING}`}>จัดการที่หน้าบัตรเครดิต →</Link></div>}</td>
-                        <td className="p-space-3 text-right align-middle"><span className="font-[family-name:var(--font-numeric)] tabular-nums text-secondary">{formatCurrency(row.actual)}</span></td><td className="p-space-3 align-middle text-secondary">{selectedAccount}</td><td className="p-space-3 align-middle text-secondary">{formatDueDayText(row.dueDay) || 'ไม่ระบุ'}</td>
+                        <td className="p-space-3 text-right align-middle"><div className="flex flex-col items-end"><span className="font-[family-name:var(--font-numeric)] tabular-nums text-secondary">{formatCurrency(row.actual)}</span>{cardDetails(item, row, meta)}</div></td><td className="p-space-3 align-middle text-secondary">{selectedAccount}</td><td className="p-space-3 align-middle text-secondary">{formatRowDueText(row, selectedMonth) || 'ไม่ระบุ'}</td>
                         <td className="p-space-3 text-center align-middle"><button type="button" className={`mx-auto flex h-11 items-center gap-space-2 rounded-full border px-space-3 text-xs font-semibold ${FOCUS_RING} ${paid ? 'border-pos/40 bg-pos/15 text-pos' : 'border-border-interactive bg-surface-2 text-secondary'}`} onClick={() => handleTogglePaid(item)} disabled={pendingPaidKeys.includes(item)} aria-busy={pendingPaidKeys.includes(item)} aria-pressed={paid}>{paid ? '✓ จ่ายแล้ว' : '○ ยังไม่จ่าย'}</button></td>
                       </tr>
                     </Fragment>;
@@ -664,15 +777,16 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
               const paid = row.paid === true || row.paid === 'true';
               const displayName = row.name ?? DEFAULT_EXPENSE_LABEL_MAP[item] ?? 'รายการใหม่';
               const selectedAccount = typeof row.account === 'string' && row.account.trim().length > 0 ? row.account : bankAccounts[0] || 'ไม่ระบุบัญชี';
-              const dueInfo = describeDueTiming(row.dueDay, paid, selectedMonth, parseToNumber(row.actual));
+              const dueInfo = describeDueTiming(row, paid, selectedMonth, parseToNumber(row.actual));
               const isCreditCardRow = isCreditCardRowKey(item);
               const meta = installmentMeta[item];
               if (isCreditCardRow) {
                 return <Fragment key={item}>{item === firstCreditCardKey && <p className="mt-space-2 text-xs font-medium text-tertiary">บัตรเครดิต (ซิงก์อัตโนมัติ)</p>}<div className={`min-h-14 rounded-md border border-info/30 bg-surface-2 p-space-4 [scroll-margin-top:calc(var(--topbar-safe-top,90px)+8px)] ${paid ? 'opacity-70' : ''}`} data-expense-key={item}>
                   <div className="flex items-center justify-between gap-space-2"><span className="flex items-center gap-space-2 font-medium text-secondary" title={displayName}><span aria-hidden="true">🔒</span>{displayName}</span><span className="inline-flex w-fit shrink-0 items-center gap-1 rounded-full border border-info/35 bg-info/15 px-space-2 py-[2px] text-xs font-medium text-info">บัตรเครดิต</span></div>
                   {meta && <span className="mt-space-1 inline-flex w-fit items-center gap-1 text-xs text-tertiary">💳 {meta.cardName}</span>}
-                  <p className="mt-space-2 font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums text-primary">{formatCurrency(row.actual)}</p><p className="mt-space-1 text-xs text-secondary">{`ครบกำหนด ${formatDueDayText(row.dueDay) || 'ไม่ระบุ'} · ${selectedAccount}`}</p>
+                  <p className="mt-space-2 font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums text-primary">{formatCurrency(row.actual)}</p><p className="mt-space-1 text-xs text-secondary">{`ครบกำหนด ${formatRowDueText(row, selectedMonth) || 'ไม่ระบุ'} · ${selectedAccount}`}</p>
                   <button type="button" className={`mt-space-3 flex min-h-11 w-full items-center justify-center rounded-sm border px-space-4 text-sm font-semibold ${FOCUS_RING} ${paid ? 'border-pos/40 bg-pos/15 text-pos' : 'border-border-interactive bg-surface-1 text-secondary'}`} onClick={() => handleTogglePaid(item)} disabled={pendingPaidKeys.includes(item)} aria-busy={pendingPaidKeys.includes(item)} aria-pressed={paid}>{paid ? '✓ ชำระแล้ว' : 'ยังไม่ชำระ — แตะเพื่อยืนยัน'}</button>
+                  {cardDetails(item, row, meta)}
                   {meta && <Link href={`/credit-cards?card=${meta.cardId}`} className={`mt-space-2 inline-block text-xs text-accent underline-offset-2 hover:underline ${FOCUS_RING}`}>จัดการที่หน้าบัตรเครดิต →</Link>}
                 </div></Fragment>;
               }
@@ -692,6 +806,25 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
         </>
       )}
       {!isLoading && !hasExpenseRows && <div className="rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">ยังไม่มีรายการค่าใช้จ่ายในเดือนนี้ กด &quot;เพิ่มรายการ&quot; เพื่อเริ่มต้น</div>}
+      {showSelectedCardDetails && selectedCardDetails && selectedCardDetailsRow?.breakdown && selectedCardDetailsMeta && (
+        <CardExpenseDetailsDialog
+          cardId={selectedCardDetails.cardId}
+          cardName={selectedCardDetailsMeta.cardName}
+          month={selectedCardDetails.month}
+          total={selectedCardDetailsRow.actual}
+          breakdown={selectedCardDetailsRow.breakdown}
+          opener={cardDetailsOpenerRef.current}
+          fallback={expenseListFallbackRef.current}
+          onClose={() => setSelectedCardDetails(null)}
+        />
+      )}
+      {cardPayment && <CardTotalPaymentDialog
+        row={{ name: cardPayment.row.name || 'บัตรเครดิต', breakdown: cardPayment.row.breakdown }}
+        paid={cardPayment.paid}
+        busy={pendingPaidKeys.includes(cardPayment.key)}
+        onCancel={() => setCardPayment(null)}
+        onConfirm={confirmCardPayment}
+      />}
     </div>
   );
 }

@@ -191,7 +191,7 @@ describe('/api/monthly_expense (Mongo mode)', () => {
       cards: [makeCard()],
       plans: [makePlan()]
     });
-    const key = buildInstallmentRowKey('ip_abc123abc123', 1);
+    const key = buildRevolvingRowKey(makeCard().id);
 
     const { req, res } = makeReqRes({ query: { month: '2026-08' } });
     await handler(req, res);
@@ -199,13 +199,15 @@ describe('/api/monthly_expense (Mongo mode)', () => {
     expect(res._getStatusCode()).toBe(200);
     const body = JSON.parse(res._getData());
     expect(Object.keys(body).some(k => isCreditCardRowKey(k))).toBe(true);
-    expect(body[key]).toEqual({
-      name: 'ของใช้ (งวด 1/3)',
+    expect(body[key]).toMatchObject({
+      name: 'ยอดบัตร บัตร A',
       actual: 300,
       account: 'อื่นๆ/ไม่ระบุบัญชี',
       paid: false,
       dueDay: 20
     });
+    expect(body[key].breakdown.installments).toEqual([{ key: buildInstallmentRowKey('ip_abc123abc123', 1), name: 'ของใช้ (งวด 1/3)', amount: 300, paid: false }]);
+    expect(Object.keys(body).some(k => k.startsWith('cci_'))).toBe(false);
     expect(typeof body.totalActualPaid).toBe('number');
     expect(body.accountSummary).toBeTruthy();
   });
@@ -222,8 +224,8 @@ describe('/api/monthly_expense (Mongo mode)', () => {
 
     expect(res._getStatusCode()).toBe(200);
     const body = JSON.parse(res._getData());
-    expect(body[key]).toEqual({
-      name: 'ยอดใช้จ่ายบัตร บัตร A',
+    expect(body[key]).toMatchObject({
+      name: 'ยอดบัตร บัตร A',
       actual: 1000,
       account: 'อื่นๆ/ไม่ระบุบัญชี',
       paid: false, // paymentAction still null -> not yet paid
@@ -257,7 +259,7 @@ describe('/api/monthly_expense (Mongo mode)', () => {
     //   mapDocToFlatItemObjectWithTotals, then does `flat = Object.assign(flat || {}, derived)` —
     //   the derived map is merged in AFTER the mapper runs, so its own `paid` value overwrites
     //   whatever the mapper produced for the same key.
-    const key = buildInstallmentRowKey('ip_abc123abc123', 1);
+    const key = buildRevolvingRowKey(makeCard().id);
 
     // A legacy `{actual: {...}}`-shaped stored doc, seeded directly (this shape is never written by
     // this route's own real POST path, only used here to independently prove the hardcode threat
@@ -349,7 +351,7 @@ describe('/api/monthly_expense (Mongo mode)', () => {
       cards: [makeCard()],
       plans: [makePlan({ schedule: [{ no: 1, dueMonth: '2026-11', payment: 300, principal: 300, interest: 0, paid: false, paidAt: null, paidSource: null }] })]
     });
-    const key = buildInstallmentRowKey('ip_abc123abc123', 1);
+    const key = buildRevolvingRowKey(makeCard().id);
 
     const { req, res } = makeReqRes({ query: {} });
     await handler(req, res);
@@ -371,7 +373,7 @@ describe('/api/monthly_expense (Mongo mode)', () => {
       cards: [makeCard()],
       plans: [makePlan({ schedule: [{ no: 1, dueMonth: '2026-12', payment: 300, principal: 300, interest: 0, paid: false, paidAt: null, paidSource: null }] })]
     });
-    const key = buildInstallmentRowKey('ip_abc123abc123', 1);
+    const key = buildRevolvingRowKey(makeCard().id);
 
     const { req, res } = makeReqRes({ query: {} });
     await handler(req, res);
@@ -406,15 +408,15 @@ describe('/api/monthly_expense (Mongo mode)', () => {
       cards: [makeCard({ bankName: 'กรุงศรี' })], // bankName set but no matching user bank account -> fallback
       plans: [makePlan()]
     });
-    const key = buildInstallmentRowKey('ip_abc123abc123', 1);
+    const key = buildRevolvingRowKey(makeCard().id);
 
     const { req, res } = makeReqRes({ query: { month: '2026-08' } });
     await handler(req, res);
 
     expect(res._getStatusCode()).toBe(200);
     const body = JSON.parse(res._getData());
-    expect(body[key]).toEqual({
-      name: 'ของใช้ (งวด 1/3)',
+    expect(body[key]).toMatchObject({
+      name: 'ยอดบัตร บัตร A',
       actual: 300,
       account: 'อื่นๆ/ไม่ระบุบัญชี',
       paid: false,
@@ -433,8 +435,8 @@ describe('/api/monthly_expense (Mongo mode)', () => {
         ]
       })]
     });
-    const paidKey = buildInstallmentRowKey('ip_abc123abc123', 1);
-    const unpaidKey = buildInstallmentRowKey('ip_abc123abc123', 2);
+    const paidKey = buildRevolvingRowKey(makeCard().id);
+    const unpaidKey = buildRevolvingRowKey(makeCard().id);
 
     const { req: req1, res: res1 } = makeReqRes({ query: { month: '2026-08' } });
     await handler(req1, res1);
@@ -462,8 +464,8 @@ describe('/api/monthly_expense (Mongo mode)', () => {
 
     expect(res._getStatusCode()).toBe(200);
     const body = JSON.parse(res._getData());
-    expect(body[key]).toEqual({
-      name: 'ยอดใช้จ่ายบัตร บัตร A',
+    expect(body[key]).toMatchObject({
+      name: 'ยอดบัตร บัตร A',
       actual: 500,
       account: 'อื่นๆ/ไม่ระบุบัญชี',
       paid: true, // paymentAction 'full' !== null
@@ -496,7 +498,7 @@ describe('/api/monthly_expense (Mongo mode)', () => {
       cards: [makeCard({ bankName: 'กรุงศรี' })],
       plans: [makePlan()]
     });
-    const key = buildInstallmentRowKey('ip_abc123abc123', 1);
+    const key = buildRevolvingRowKey(makeCard().id);
 
     const { req, res } = makeReqRes({ query: { month: '2026-08' } });
     await handler(req, res);
@@ -515,7 +517,7 @@ describe('/api/monthly_expense (Mongo mode)', () => {
       cards: [makeCard({ bankAccountId: 'ba_aaaaaaaaaaaa', bankName: '' })],
       plans: [makePlan()]
     });
-    const key = buildInstallmentRowKey('ip_abc123abc123', 1);
+    const key = buildRevolvingRowKey(makeCard().id);
 
     const { req, res } = makeReqRes({ query: { month: '2026-08' } });
     await handler(req, res);
@@ -535,7 +537,7 @@ describe('/api/monthly_expense (Mongo mode)', () => {
       cards: [makeCard({ bankAccountId: deriveLegacyBankAccountId('กรุงศรี'), bankName: '' })],
       plans: [makePlan()]
     });
-    const key = buildInstallmentRowKey('ip_abc123abc123', 1);
+    const key = buildRevolvingRowKey(makeCard().id);
 
     const { req, res } = makeReqRes({ query: { month: '2026-08' } });
     await handler(req, res);
@@ -915,5 +917,72 @@ describe('/api/monthly_expense (Mongo mode)', () => {
     expect(body[nowMonth]).toBeTruthy();
     expect(body[nowMonth][key]).toBeTruthy();
     expect(body[nowMonth][key].actual).toBe(750);
+  });
+});
+
+// spec-credit-card-cross-month-due.md AC-1 / AC-16 (GET derives resolvedDueDate from the STORED statementDay)
+// and AC-12 (POST never persists resolvedDueDate)
+describe('/api/monthly_expense — cross-month resolvedDueDate', () => {
+  it('AC-1/AC-16: stored statementDay EOM / dueDay 10 → ccr_ row under 2026-10 with resolvedDueDate 2026-11-10', async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ id: 'cc_5e5e5e5e5e5e', name: 'Shopee SPayLater', statementDay: 'EOM', dueDay: 10 })],
+      cycles: [{ cardId: 'cc_5e5e5e5e5e5e', month: '2026-10', newSpend: 1500, paymentAction: null }]
+    });
+    const key = buildRevolvingRowKey('cc_5e5e5e5e5e5e');
+
+    const oct = makeReqRes({ query: { month: '2026-10' } });
+    await handler(oct.req, oct.res);
+    expect(oct.res._getStatusCode()).toBe(200);
+    const octBody = JSON.parse(oct.res._getData());
+    expect(octBody[key]).toMatchObject({ actual: 1500, dueDay: 10, resolvedDueDate: '2026-11-10' });
+
+    // XM-1: the 2026-10 cycle is grouped under 2026-10, not 2026-11
+    const nov = makeReqRes({ query: { month: '2026-11' } });
+    await handler(nov.req, nov.res);
+    const novBody = JSON.parse(nov.res._getData());
+    // the November row is the November cycle (carry included), due 10 Dec — never the Oct cycle re-keyed
+    expect(novBody[key]).toMatchObject({ resolvedDueDate: '2026-12-10' });
+
+    // all-months GET carries the same derived field
+    const all = makeReqRes({});
+    await handler(all.req, all.res);
+    expect(JSON.parse(all.res._getData())['2026-10'][key]).toMatchObject({ resolvedDueDate: '2026-11-10' });
+  });
+
+  it('AC-16 / AC-3: stored statementDay 5 / dueDay 25 → resolvedDueDate 2026-10-25 (same month, unchanged)', async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ id: 'cc_777777777777', statementDay: 5, dueDay: 25 })],
+      cycles: [{ cardId: 'cc_777777777777', month: '2026-10', newSpend: 800, paymentAction: null }]
+    });
+    const { req, res } = makeReqRes({ query: { month: '2026-10' } });
+    await handler(req, res);
+    expect(JSON.parse(res._getData())[buildRevolvingRowKey('cc_777777777777')]).toMatchObject({ dueDay: 25, resolvedDueDate: '2026-10-25' });
+  });
+
+  it('AC-12: POST with resolvedDueDate on a derived ccr_ row never persists it (row stripped, sync still applies)', async () => {
+    await seedCreditDoc(USER_A, {
+      cards: [makeCard({ id: 'cc_def456def456', statementDay: 'EOM', dueDay: 10 })],
+      cycles: [{ cardId: 'cc_def456def456', month: '2026-10', newSpend: 200, paymentAction: null }]
+    });
+    const key = buildRevolvingRowKey('cc_def456def456');
+    const { req, res } = makeReqRes({
+      method: 'POST',
+      body: {
+        month: '2026-10',
+        expense_data: {
+          [key]: { paid: true, resolvedDueDate: '2026-11-10', dueDay: 10, actual: 200, derived: true },
+          ข้าว: { name: 'ข้าว', actual: 100, account: 'ttb', paid: false }
+        }
+      }
+    });
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(200);
+
+    const expenseDoc = await db.collection('monthly_expense').findOne({ userId: USER_A, month: '2026-10' });
+    expect(expenseDoc![key]).toBeUndefined();
+    expect(JSON.stringify(expenseDoc)).not.toContain('resolvedDueDate');
+    const creditDoc = await db.collection('credit_cards').findOne({ userId: USER_A });
+    expect(JSON.stringify(creditDoc)).not.toContain('resolvedDueDate');
+    expect(creditDoc!.cards[0]).not.toHaveProperty('resolvedDueDate');
   });
 });

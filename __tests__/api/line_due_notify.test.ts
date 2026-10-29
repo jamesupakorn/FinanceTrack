@@ -503,7 +503,7 @@ describe('/api/line_due_notify — บัตรเครดิตแบบ Flex 
   };
 
   it('ไม่มีเหตุการณ์บัตรครบกำหนดเลย → ไม่มีการเรียก fetch สำหรับข้อความบัตรของผู้ใช้คนนี้เลย (AC-16 empty-message guard)', async () => {
-    await seedCardUser({ cards: [{ id: 'card-1', name: 'บัตร A', dueDay: 15 }] });
+    await seedCardUser({ cards: [{ id: 'card-1', name: 'บัตร A', statementDay: 1, dueDay: 15 }] });
     // ไม่ seed monthly_expense → ไม่มีข้อความค่าใช้จ่ายเช่นกัน ทำให้ fetch ทั้งหมดต้องเป็นศูนย์
     const { req, res } = makeReqRes({ body: { date: '2024-01-01', userId: CC_USER_ID, mode: 'both' } });
     await handler(req, res);
@@ -516,7 +516,8 @@ describe('/api/line_due_notify — บัตรเครดิตแบบ Flex 
 
   it('บัตรมีทั้งยอดหมุนเวียนและงวดผ่อนครบกำหนด → ส่งเป็น Flex และยอดหมุนเวียนอยู่ก่อนงวดผ่อนเสมอ (AC-18 ordering)', async () => {
     await seedCardUser({
-      cards: [{ id: 'card-1', name: 'บัตร A', dueDay: 15 }],
+      // same-month card (statementDay < dueDay) per spec-credit-card-cross-month-due.md §Test fallout rule
+      cards: [{ id: 'card-1', name: 'บัตร A', statementDay: 1, dueDay: 15 }],
       plans: [{
         id: 'plan-1', cardId: 'card-1', itemName: 'มือถือ', months: 10, status: 'ongoing',
         schedule: [{ no: 1, dueMonth: '2024-01', payment: 1000, paid: false }]
@@ -555,7 +556,8 @@ describe('/api/line_due_notify — บัตรเครดิตแบบ Flex 
 
   it('Flex ล้มเหลว → fallback เป็นข้อความบัตรเครดิตแบบข้อความล้วน (AC-21)', async () => {
     await seedCardUser({
-      cards: [{ id: 'card-1', name: 'บัตร A', dueDay: 15 }],
+      // same-month card (statementDay < dueDay) per spec-credit-card-cross-month-due.md §Test fallout rule
+      cards: [{ id: 'card-1', name: 'บัตร A', statementDay: 1, dueDay: 15 }],
       plans: [{
         id: 'plan-1', cardId: 'card-1', itemName: 'มือถือ', months: 10, status: 'ongoing',
         schedule: [{ no: 1, dueMonth: '2024-01', payment: 1000, paid: false }]
@@ -577,5 +579,77 @@ describe('/api/line_due_notify — บัตรเครดิตแบบ Flex 
     const secondBody = JSON.parse(secondBodyValue);
     expect(secondBody.messages[0].type).toBe('text');
     expect(secondBody.messages[0].text).toContain('มือถือ');
+  });
+
+  // spec-credit-card-cross-month-due.md AC-4: Shopee (EOM/10) cycle 2026-10 is due 2026-11-10
+  describe('cross-month card (AC-4)', () => {
+    const SHOPEE = { id: 'card-sp', name: 'Shopee SPayLater', statementDay: 'EOM', dueDay: 10 };
+    const seedShopee = () => seedCardUser({
+      cards: [SHOPEE],
+      plans: [
+        { id: 'plan-oct', cardId: 'card-sp', itemName: 'งวดรอบตุลา', months: 3, status: 'ongoing', schedule: [{ no: 1, dueMonth: '2026-10', payment: 400, paid: false }] },
+        { id: 'plan-nov', cardId: 'card-sp', itemName: 'งวดรอบพฤศจิกา', months: 3, status: 'ongoing', schedule: [{ no: 1, dueMonth: '2026-11', payment: 700, paid: false }] }
+      ],
+      cycles: [{ cardId: 'card-sp', month: '2026-10', newSpend: 3000, paymentAction: null }]
+    });
+    const sendFor = async (date: string) => {
+      fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+      const { req, res } = makeReqRes({ body: { date, userId: CC_USER_ID, mode: 'both' } });
+      await handler(req, res);
+      expect(res._getStatusCode()).toBe(200);
+      const { creditCardResults } = JSON.parse(res._getData());
+      const flexCall = fetchMock.mock.calls.find(c => typeof c[1]?.body === 'string' && JSON.parse(c[1].body).messages[0].type === 'flex');
+      const nodes = flexCall && typeof flexCall[1]?.body === 'string' ? collectFlexTextNodes(JSON.parse(flexCall[1].body).messages[0].contents) : [];
+      return { result: creditCardResults[0], text: nodes.join('\n') };
+    };
+
+    it('target 2026-11-08 → one dueSoon event for cycle 2026-10, text "10 พ.ย. 2569"', async () => {
+      await seedShopee();
+      const { result, text } = await sendFor('2026-11-08');
+      expect(result).toMatchObject({ userId: CC_USER_ID, sent: true, format: 'flex' });
+      expect(text).toContain('10 พ.ย. 2569');
+      expect(text).toContain('อีก 2 วัน');
+      expect(text).toContain('งวดรอบตุลา');
+      expect(text).toContain('ยอดใช้จ่ายหมุนเวียน');
+      expect(text).not.toContain('งวดรอบพฤศจิกา');
+      expect(text).not.toContain('10 ต.ค. 2569');
+    });
+
+    it('target 2026-11-25 → overdue 15 days for cycle 2026-10', async () => {
+      await seedShopee();
+      const { result, text } = await sendFor('2026-11-25');
+      expect(result).toMatchObject({ sent: true });
+      expect(text).toContain('10 พ.ย. 2569');
+      expect(text).toContain('เลยกำหนด 15 วัน');
+      expect(text).toContain('งวดรอบตุลา');
+      expect(text).not.toContain('งวดรอบพฤศจิกา');
+    });
+
+    it('target 2026-10-08 never reports cycle 2026-10 (evaluates cycle 2026-09, which has nothing due)', async () => {
+      await seedShopee();
+      const { result, text } = await sendFor('2026-10-08');
+      expect(result).toEqual({ userId: CC_USER_ID, sent: false, reason: 'no credit card due items' });
+      expect(text).toBe('');
+    });
+
+    it('target 2026-11-08 with cycle 2026-10 paid and no Oct installment → nothing to report', async () => {
+      await seedCardUser({
+        cards: [SHOPEE],
+        cycles: [{ cardId: 'card-sp', month: '2026-10', newSpend: 3000, paymentAction: 'full' }]
+      });
+      const { result } = await sendFor('2026-11-08');
+      expect(result).toMatchObject({ sent: false, reason: 'no credit card due items' });
+    });
+
+    it('AC-3 regression: a same-month card (5/25) cycle 2026-10 is still reported on 2026-10-25', async () => {
+      await seedCardUser({
+        cards: [{ id: 'card-sm', name: 'Same Month', statementDay: 5, dueDay: 25 }],
+        plans: [{ id: 'plan-sm', cardId: 'card-sm', itemName: 'งวดเดือนเดียวกัน', months: 3, status: 'ongoing', schedule: [{ no: 1, dueMonth: '2026-10', payment: 500, paid: false }] }]
+      });
+      const { result, text } = await sendFor('2026-10-25');
+      expect(result).toMatchObject({ sent: true });
+      expect(text).toContain('25 ต.ค. 2569');
+      expect(text).toContain('งวดเดือนเดียวกัน');
+    });
   });
 });

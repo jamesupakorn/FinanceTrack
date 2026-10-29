@@ -24,9 +24,11 @@ import { getUserCreditData } from '../../src/shared/utils/backend/creditCardStor
 import type { CreditData, CreditPlan } from '../../src/shared/utils/backend/creditCardStore';
 import {
   PLAN_STATUS,
-  buildRevolvingCycles,
-  summariseRevolving
+  summariseRevolving,
+  getPayableCycleMonth,
+  resolveCardDueDate
 } from '../../src/shared/utils/creditCardUtils';
+import { buildRevolvingCyclesForData } from '../../src/shared/utils/creditCardRevolving';
 import {
   THAI_MONTH_LABELS,
   normalizeMonthPart,
@@ -456,8 +458,16 @@ function collectCardDueEvents(creditData: CreditData, target: TargetDate): CardD
   if (!cards.length) return [];
 
   return cards.map(card => {
-    const resolvedDueDay = resolveDueDayForMonth(card.dueDay, target.daysInMonth);
-    if (!resolvedDueDay) return null;
+    // dueDay เสียยังข้ามบัตรเหมือนเดิม (resolveCardDueDate เองจะ fallback เป็นสิ้นเดือน)
+    if (!resolveDueDayForMonth(card.dueDay, target.daysInMonth)) return null;
+
+    // รอบบิลที่ครบกำหนดในเดือนเป้าหมาย (XM-6) — บัตรข้ามเดือนคือรอบเดือนก่อนหน้า
+    // งวดผ่อน/ยอดหมุนเวียนอิงรอบบิลนี้ ส่วนวัน/สถานะ/ข้อความอิงวันครบกำหนดจริง (XM-5)
+    const cycleMonth = getPayableCycleMonth(card, target.monthKey);
+    const dueDate = resolveCardDueDate(card, cycleMonth);
+    // ป้องกันไว้ก่อน: วันครบกำหนดต้องอยู่ในเดือนเป้าหมายเสมอ ไม่เช่นนั้นข้ามบัตรนี้
+    if (!dueDate || dueDate.slice(0, 7) !== target.monthKey) return null;
+    const resolvedDueDay = Number(dueDate.slice(8, 10));
 
     let status: CardDueEvent['status'] | null = null;
     if (resolvedDueDay === target.day) status = 'due';
@@ -472,15 +482,16 @@ function collectCardDueEvents(creditData: CreditData, target: TargetDate): CardD
       const schedule = Array.isArray(plan.schedule) ? plan.schedule : [];
       const remaining = schedule.filter(row => row?.paid !== true).length;
       schedule.forEach(row => {
-        if (row?.dueMonth !== target.monthKey) return;
+        if (row?.dueMonth !== cycleMonth) return;
         if (row.paid === true) return;
         items.push({ plan, row, remaining });
       });
     });
 
-    // ยอดหมุนเวียนของเดือนเป้าหมาย — แจ้งเฉพาะที่ยังไม่ตัดสินใจชำระ (กติกาเดียวกับงวดผ่อน)
-    const chain = buildRevolvingCycles(card, cycles, { throughMonth: target.monthKey });
-    const summary = summariseRevolving(chain, { asOfMonth: target.monthKey });
+    // ยอดหมุนเวียนของรอบบิลที่ครบกำหนดเดือนนี้ — แจ้งเฉพาะที่ยังไม่ตัดสินใจชำระ (กติกาเดียวกับงวดผ่อน)
+    // ส่ง spendItems ด้วยเสมอ (spec-credit-card-spend §5.2) — newSpend ของเดือนที่มีรายการ = ผลรวมรายการ
+    const chain = buildRevolvingCyclesForData(card, { cycles, spendItems: creditData?.spendItems }, { throughMonth: cycleMonth });
+    const summary = summariseRevolving(chain, { asOfMonth: cycleMonth });
     const cycle = summary.cycle;
     const revolving: CardDueEvent['revolving'] = cycle && cycle.amountDue > 0 && cycle.paymentAction === null
       ? { amountDue: cycle.amountDue, minPaymentDue: cycle.minPaymentDue, paymentAction: cycle.paymentAction }
@@ -492,7 +503,7 @@ function collectCardDueEvents(creditData: CreditData, target: TargetDate): CardD
       card,
       status,
       resolvedDueDay,
-      dueDateText: buildDueDateString(target, card.dueDay ?? resolvedDueDay),
+      dueDateText: buildDueDateString(target, resolvedDueDay),
       isEndOfMonth: isEndOfMonthDueDay(card.dueDay),
       diffDays: resolvedDueDay - target.day,
       items,

@@ -14,10 +14,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatDayLabel,
   formatIsoDateTH,
-  resolveInstallmentDueDate,
+  resolveCardDueDate,
   round2,
-  PLAN_STATUS
+  PLAN_STATUS,
+  getCurrentMonthKey
 } from '../../shared/utils/creditCardUtils';
+import { MONTH_KEY_RE } from '../../shared/utils/creditCardBasics';
 import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { BP } from '../../shared/utils/frontend/breakpoints';
@@ -303,7 +305,7 @@ function PlanCard({
       <span className="text-xs text-secondary">{describePlanInterest(plan)}</span>
       {plan.nextUnpaid && (
         <span className="text-xs text-secondary">
-          {`งวดถัดไป ${plan.nextUnpaid.no}/${plan.months} · ${formatIsoDateTH(resolveInstallmentDueDate(card.dueDay as number | string, plan.nextUnpaid.dueMonth) || '')}`}
+          {`งวดถัดไป ${plan.nextUnpaid.no}/${plan.months} · ${formatIsoDateTH(resolveCardDueDate(card, plan.nextUnpaid.dueMonth) || '')}`}
         </span>
       )}
 
@@ -418,6 +420,7 @@ export default function CreditCardDetail({
   onConfirmMinimum,
   onRevolvingChanged
 }: CreditCardDetailProps) {
+  const [statementMonth, setStatementMonth] = useState(getCurrentMonthKey);
   const [isMobileView, setIsMobileView] = useState(
     () => typeof window !== 'undefined' && window.innerWidth < BP.md
   );
@@ -550,12 +553,21 @@ export default function CreditCardDetail({
         </div>
 
         <div className="flex flex-col gap-space-4">
+          <label className="text-sm text-secondary">เดือนรอบบิล
+            <input type="month" className="ml-space-3 min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-primary"
+              value={statementMonth} onChange={event => { if (MONTH_KEY_RE.test(event.target.value)) setStatementMonth(event.target.value); }} />
+          </label>
           {/* ยอดหมุนเวียนเป็นภาระหลักของบัตร จึงอยู่เหนือรายการแผนผ่อนซึ่งเป็นรายละเอียดย่อย (UX_SPEC §9) */}
           <RevolvingBalanceSection
+            key={`${card.id}-${statementMonth}`}
             card={card}
+            month={statementMonth}
             isMobileView={isMobileView}
             onConfirmMinimum={onConfirmMinimum}
-            onChanged={onRevolvingChanged}
+            onChanged={changedMonth => {
+              if (changedMonth) setStatementMonth(changedMonth);
+              onRevolvingChanged?.();
+            }}
           />
 
           <div className="flex items-center justify-between gap-space-3">
