@@ -39,10 +39,12 @@ full read order. This file only states the rules; it doesn't repeat the content.
 - **Don't delete anything in `scripts/`** without checking `scripts/MIGRATIONS.md` first
   and getting explicit user confirmation — several one-off migrations there have no
   run-record and deletion is tracked per-script, not batched.
-- **This project commits its `.pipeline/` docs and `CLAUDE.md` to git** (confirmed:
-  tracked today; many source comments reference `.pipeline/spec-*.md` as a permanent
-  decision record). Do not gitignore `.pipeline/` or `CLAUDE.md` — that's the opposite
-  of this repo's established convention, even though it's a common default elsewhere.
+- **`.pipeline/` is gitignored and untracked; `CLAUDE.md` is committed.** `.gitignore`
+  lists `.PIPELINE/` as local pipeline notes, and commit `b1a781b` ("ignore and untrack
+  pipeline artifacts") removed it from git on purpose. Treat `.pipeline/*.md` as local
+  working notes: they are not in the repo history, so never rely on a teammate or a fresh
+  clone having them. Don't `git add -f` them or drop the ignore line without asking.
+  Source comments that cite `.pipeline/spec-*.md` point at local files.
 - **No ESLint config exists.** The only enforced gates are `tsc --noEmit` (strict mode),
   the no-JS check, and Jest. Match surrounding code style by observation, not by an
   enforced linter.
