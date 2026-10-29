@@ -281,7 +281,6 @@ export default function InstallmentPlanForm({
   };
 
   const withComputedStartMonth = (next: PlanFormState): PlanFormState => {
-    if (plan) return next;
     const card = cards.find(item => item.id === next.cardId);
     const computed = computeStartMonthFromPurchase(next.purchaseDate, card?.statementDay);
     return computed ? { ...next, startMonth: computed } : next;
