@@ -456,6 +456,45 @@ export function buildCardTotalExpenseRows(
   return rows;
 }
 
+/** ยอดที่ต้องจ่ายของบัตรหนึ่งใบในเดือนหนึ่ง สำหรับ tile บน /credit-cards (spec-credit-card-tiles §3.2) */
+export interface CardMonthDue {
+  /** YYYY-MM ของเดือนที่คำนวณ (เดือนปฏิทินตามเวลาเซิร์ฟเวอร์ ไม่ใช่รอบบิล) */
+  dueMonth: string;
+  /** = row.breakdown.installmentTotal (รวมงวดที่จ่ายแล้ว เหมือนแถว ccr_) */
+  installmentDueThisMonth: number;
+  /** = max(0, row.breakdown.revolving.totalDue) — เทอมเดียวกับที่แถวใช้ (REV-2) */
+  revolvingDueThisMonth: number;
+  /** = row.actual (ยอดเต็ม แม้เลือกจ่ายขั้นต่ำ — SPEND-4) */
+  totalDueThisMonth: number;
+}
+
+/**
+ * แผนที่ cardId -> CardMonthDue อ่านจากแถว ccr_<cardId> ของ buildCardTotalExpenseRows เท่านั้น
+ * (เรียกครั้งเดียว ไม่มีสูตรที่สอง) · ทุกบัตรใน creditData.cards มี entry เสมอ (ไม่มีแถว = ศูนย์)
+ * คำนวณตอน request เท่านั้น ห้ามบันทึกลงเอกสาร (BR-CC-013)
+ */
+export function buildCardMonthDueMap(
+  creditData: CreditDataLike | null | undefined,
+  month: string
+): Record<string, CardMonthDue> {
+  const map: Record<string, CardMonthDue> = {};
+  const rows = buildCardTotalExpenseRows(creditData, month);
+  const cards = (Array.isArray(creditData?.cards) ? creditData?.cards : []) as SyncCard[];
+  cards.forEach(card => {
+    if (!card?.id) return;
+    const row = rows[buildRevolvingRowKey(card.id)];
+    map[card.id] = row
+      ? {
+        dueMonth: month,
+        installmentDueThisMonth: row.breakdown.installmentTotal,
+        revolvingDueThisMonth: Math.max(0, row.breakdown.revolving.totalDue),
+        totalDueThisMonth: row.actual
+      }
+      : { dueMonth: month, installmentDueThisMonth: 0, revolvingDueThisMonth: 0, totalDueThisMonth: 0 };
+  });
+  return map;
+}
+
 // ---------------------------------------------------------------------------
 // จ่ายยอดรวมบัตร (spec-credit-card-spend §5.3 · SPEND-5/6/7/8/9)
 // ---------------------------------------------------------------------------

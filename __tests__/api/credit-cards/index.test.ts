@@ -800,3 +800,156 @@ describe('/api/credit-cards (isolated mocked-collaborator test — the one sanct
     jest.dontMock('../../../src/shared/utils/backend/creditCardStore');
   });
 });
+
+describe('/api/credit-cards tile fields (spec-credit-card-tiles, mocked store, in-memory only)', () => {
+  // Same sanctioned mocked-collaborator pattern as test 22: creditCardStore is replaced by an
+  // in-memory document so the fixture can use the server's current month (D2) and the saved
+  // document can be inspected for persisted tile fields (AC-T5).
+  const utils = require('../../../src/shared/utils/creditCardUtils');
+  const { buildCardTotalExpenseRows } = require('../../../src/shared/utils/backend/creditCardSync');
+  const TILE_KEYS = ['dueMonth', 'installmentDueThisMonth', 'revolvingDueThisMonth', 'totalDueThisMonth'];
+  const A = { id: 'cc_aaaaaaaaaaaa', name: 'A', bankIssuer: 'kbank', annualRate: 0, minPaymentPercent: 10, dueDay: 20, creditLimit: 50000 };
+  const B = { id: 'cc_bbbbbbbbbbbb', name: 'B', bankIssuer: 'scb', annualRate: 0, minPaymentPercent: 10, dueDay: 5, creditLimit: 10000 };
+  type Fixture = {
+    cards: Array<Record<string, unknown>>;
+    plans: Array<Record<string, unknown>>;
+    cycles: Array<Record<string, unknown>>;
+    spendItems: Array<Record<string, unknown>>;
+    updatedAt: null;
+  };
+
+  function fixture(actionA: 'full' | 'minimum' | null = null): Fixture {
+    const month = utils.getCurrentMonthKey();
+    const prev = utils.addMonths(month, -1);
+    return {
+      cards: [A, B],
+      plans: [
+        { id: 'ip_000000000001', cardId: A.id, itemName: 'TV', months: 2, status: 'ongoing', principal: 600,
+          schedule: [{ no: 1, dueMonth: prev, payment: 300, paid: true }, { no: 2, dueMonth: month, payment: 300, paid: true }] },
+        { id: 'ip_000000000002', cardId: A.id, itemName: 'Phone', months: 1, status: 'ongoing', principal: 250,
+          schedule: [{ no: 1, dueMonth: month, payment: 250, paid: false }] }
+      ],
+      cycles: [
+        { cardId: A.id, month: prev, newSpend: 1000, paymentAction: null },
+        { cardId: A.id, month, newSpend: 0, cashbackAmount: 40, paymentAction: actionA },
+        { cardId: B.id, month, newSpend: 100, cashbackAmount: 600, paymentAction: null }
+      ],
+      spendItems: [{ id: 'si_000000000001', cardId: A.id, month, name: 'food', amount: 400, source: 'user' }],
+      updatedAt: null
+    };
+  }
+
+  const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
+
+  function loadWithStore(initial: Fixture) {
+    const store = { doc: clone(initial) };
+    let isolated: NextApiHandler | undefined;
+    jest.isolateModules(() => {
+      jest.doMock('../../../src/shared/utils/backend/creditCardStore', () => ({
+        getUserCreditData: jest.fn(async () => clone(store.doc)),
+        updateUserCreditData: jest.fn(async (_userId: unknown, updater: (data: Fixture) => Fixture) => {
+          store.doc = clone(updater(clone(store.doc)));
+          return clone(store.doc);
+        })
+      }));
+      isolated = require('../../../pages/api/credit-cards/index').default;
+    });
+    jest.dontMock('../../../src/shared/utils/backend/creditCardStore');
+    if (!isolated) throw new Error('Expected credit-cards handler to be loaded');
+    return { handler: isolated, store };
+  }
+
+  const rowOf = (data: Fixture, cardId: string) =>
+    buildCardTotalExpenseRows(data, utils.getCurrentMonthKey())[utils.buildRevolvingRowKey(cardId)];
+
+  it('AC-T1/T3/T4: GET tile total == ccr_ row actual; dueMonth = current month; old fields unchanged', async () => {
+    const data = fixture();
+    const { handler: h } = loadWithStore(data);
+    const { req, res } = makeReqRes();
+    await h(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    const body = JSON.parse(res._getData());
+    const rowA = rowOf(data, A.id);
+    const rowB = rowOf(data, B.id);
+    const cardA = body.cards.find((c: { id: string }) => c.id === A.id);
+    const cardB = body.cards.find((c: { id: string }) => c.id === B.id);
+
+    expect(cardA.dueMonth).toBe(utils.getCurrentMonthKey());
+    expect(rowA.breakdown.revolving.carriedBalance).toBeGreaterThan(0);
+    expect(cardA.totalDueThisMonth).toBe(rowA.actual);
+    expect(cardA.installmentDueThisMonth).toBe(550); // includes the PAID installment
+    expect(cardA.revolvingDueThisMonth).toBe(Math.max(0, rowA.breakdown.revolving.totalDue));
+    // negative totalDue (credit balance) -> 0, total == row.actual
+    expect(rowB.breakdown.revolving.totalDue).toBeLessThan(0);
+    expect(cardB.revolvingDueThisMonth).toBe(0);
+    expect(cardB.totalDueThisMonth).toBe(rowB.actual);
+
+    // backward compat: every pre-existing field equals the plain summariseCard output
+    const plain = data.cards.map(card => utils.summariseCard(card, data.plans, data.cycles, { spendItems: data.spendItems }));
+    plain.forEach((p: Record<string, unknown>, i: number) => {
+      const extra = Object.fromEntries(TILE_KEYS.map(k => [k, body.cards[i][k]]));
+      expect(body.cards[i]).toEqual({ ...clone(p), ...extra });
+      expect(p).toHaveProperty('revolvingTotalDue');
+      expect(p).toHaveProperty('nextDueDate');
+    });
+    // REV-3: summariseTotals ignores the new fields
+    expect(body.totals).toEqual(utils.summariseTotals(plain));
+  });
+
+  it('AC-T6: full amount reported when minimum payment is chosen', async () => {
+    const { handler: h } = loadWithStore(fixture('minimum'));
+    const { req, res } = makeReqRes();
+    await h(req, res);
+    const cardA = JSON.parse(res._getData()).cards.find((c: { id: string }) => c.id === A.id);
+    const rowA = rowOf(fixture('minimum'), A.id);
+    expect(cardA.totalDueThisMonth).toBe(rowA.actual);
+    expect(cardA.totalDueThisMonth).toBeGreaterThan(rowA.breakdown.revolving.minPaymentDue);
+  });
+
+  it('AC-T4/T5 + REV-4: POST edit returns tile fields from post-save data; nothing persisted or read from body', async () => {
+    const { handler: h, store } = loadWithStore(fixture());
+    const { req, res } = makeReqRes({
+      method: 'POST',
+      body: { card: { ...A, name: 'A2', totalDueThisMonth: 999999, installmentDueThisMonth: 1, dueMonth: '1999-01' } }
+    });
+    await h(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    const body = JSON.parse(res._getData());
+    expect(body.card.name).toBe('A2');
+    expect(body.card.totalDueThisMonth).toBe(rowOf(store.doc, A.id).actual);
+    expect(body.card.dueMonth).toBe(utils.getCurrentMonthKey());
+    expect(body.card).toHaveProperty('revolvingTotalDue');
+    expect(body.card).toHaveProperty('nextDueDate');
+    store.doc.cards.forEach(card => TILE_KEYS.forEach(key => expect(card).not.toHaveProperty(key)));
+  });
+
+  it('POST create also returns tile fields (zeros for a fresh card) and persists none', async () => {
+    const { handler: h, store } = loadWithStore(fixture());
+    const input: Record<string, unknown> = { ...B, name: 'New' };
+    delete input.id;
+    const { req, res } = makeReqRes({ method: 'POST', body: { card: input } });
+    await h(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    const card = JSON.parse(res._getData()).card;
+    expect(card).toMatchObject({ dueMonth: utils.getCurrentMonthKey(), installmentDueThisMonth: 0, revolvingDueThisMonth: 0, totalDueThisMonth: 0 });
+    expect(store.doc.cards).toHaveLength(3);
+    store.doc.cards.forEach(saved => TILE_KEYS.forEach(key => expect(saved).not.toHaveProperty(key)));
+  });
+
+  it('T4b: DELETE 409 guard unchanged and success body has no tile fields', async () => {
+    const { handler: h, store } = loadWithStore(fixture());
+    const blocked = makeReqRes({ method: 'DELETE', body: { cardId: A.id } });
+    await h(blocked.req, blocked.res);
+    expect(blocked.res._getStatusCode()).toBe(409);
+    const blockedBody = JSON.parse(blocked.res._getData());
+    expect(blockedBody.error).toBe('card has an outstanding revolving balance');
+    TILE_KEYS.forEach(key => expect(blockedBody).not.toHaveProperty(key));
+
+    // B holds only a credit balance and no plans -> deletable
+    const ok = makeReqRes({ method: 'DELETE', body: { cardId: B.id } });
+    await h(ok.req, ok.res);
+    expect(ok.res._getStatusCode()).toBe(200);
+    expect(JSON.parse(ok.res._getData())).toEqual({ success: true });
+    expect(store.doc.cards.map(card => card.id)).toEqual([A.id]);
+  });
+});
