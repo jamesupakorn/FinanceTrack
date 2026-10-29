@@ -1,12 +1,13 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import RevolvingBalanceSection from '../../src/frontend/components/RevolvingBalanceSection';
-import { creditCardAPI } from '../../src/shared/utils/frontend/apiUtils';
+import { creditCardAPI, expenseAPI } from '../../src/shared/utils/frontend/apiUtils';
 import { buildRevolvingCycles } from '../../src/shared/utils/creditCardUtils';
 
 jest.mock('../../src/shared/utils/frontend/apiUtils', () => ({
+  expenseAPI: { getByMonth: jest.fn().mockResolvedValue({}) },
   creditCardAPI: {
     getRevolving: jest.fn(),
-    saveRevolvingSpend: jest.fn(),
+    listSpendItems: jest.fn().mockResolvedValue({ items: [], totals: {} }),
     saveRevolvingCashback: jest.fn(),
     setRevolvingAction: jest.fn()
   }
@@ -37,6 +38,17 @@ async function renderWith(
 afterEach(() => jest.clearAllMocks());
 
 describe('RevolvingBalanceSection cashback input', () => {
+  it('refreshes the selected-month card total when the parent reloads the card after an installment change', async () => {
+    const expense = expenseAPI.getByMonth as jest.Mock;
+    expense.mockResolvedValue({ ccr_x: { actual: 1000, breakdown: { installmentTotal: 0 } } });
+    const { rerender } = await renderWith([{ month: JAN, newSpend: 1000, paymentAction: null }]);
+    expect(await screen.findByText(/งวดผ่อนเดือนนี้ 0\.00 ฿ · ยอดรวมบัตร 1,000\.00 ฿/)).toBeInTheDocument();
+    expense.mockResolvedValue({ ccr_x: { actual: 1300, breakdown: { installmentTotal: 300 } } });
+    rerender(<RevolvingBalanceSection card={{ ...CARD }} month={JAN} />);
+    expect(await screen.findByText(/งวดผ่อนเดือนนี้ 300\.00 ฿ · ยอดรวมบัตร 1,300\.00 ฿/)).toBeInTheDocument();
+    expense.mockResolvedValue({});
+  });
+
   it('AC-CB-60 structure: text input, inputMode decimal, described by the helper, placeholder 0.00', async () => {
     await renderWith([{ month: JAN, newSpend: 1000, paymentAction: null }]);
     const input = screen.getByLabelText('แคชแบคที่ได้รับเดือนนี้ (บาท)');

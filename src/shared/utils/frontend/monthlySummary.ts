@@ -278,8 +278,17 @@ export function splitExpenseTotals(expenseData: ExpenseDataLike = {}): ExpenseSp
 
     if (isCreditCardRowKey(key)) {
       creditCard += amount;
+      // แถวยอดรวมบัตร (ccr_ ที่มี breakdown — spec-credit-card-spend §4.3) รวมงวดผ่อนไว้ด้วย:
+      // แยกส่วนงวดผ่อนออกจาก breakdown.installmentTotal เพื่อให้ยอดแยกตรงเดิม ยอดรวม creditCard ไม่เปลี่ยน
+      const breakdown = row.breakdown && typeof row.breakdown === 'object'
+        ? (row.breakdown as { installmentTotal?: unknown })
+        : null;
+      const breakdownInstallment = breakdown ? toNumber(breakdown.installmentTotal) : 0;
       if (isInstallmentRowKey(key)) {
         creditCardInstallment += amount;
+      } else if (breakdown) {
+        creditCardInstallment += breakdownInstallment;
+        creditCardRevolving += amount - breakdownInstallment;
       } else {
         // isCreditCardRowKey ที่ไม่ใช่ installment คือยอดหมุนเวียนเสมอ (นิยามของ isCreditCardRowKey เอง)
         creditCardRevolving += amount;

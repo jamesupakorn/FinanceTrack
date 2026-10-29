@@ -1,6 +1,6 @@
 {
   "name": "financetrack",
-  "version": "2.24.0",
+  "version": "2.24.3",
   "description": "บัญชีรับจ่ายย้อนหลัง 12 เดือน",
   "main": "index.js",
   "engines": {
@@ -34,7 +34,7 @@
     "jspdf": "^4.2.0",
     "jspdf-autotable": "^5.0.7",
     "mongodb": "^6.20.0",
-    "next": "^16.1.6",
+    "next": "^16.4.3",
     "react": "latest",
     "react-dom": "latest",
     "zod": "^4.6.7"

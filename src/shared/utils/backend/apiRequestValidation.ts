@@ -54,6 +54,12 @@ const schemas = {
     PATCH: { body },
     DELETE: { body }
   },
+  'credit-cards/spend-items': {
+    GET: { query },
+    POST: { body },
+    PUT: { body },
+    DELETE: { body }
+  },
   'savings-goals': {
     GET: { query },
     POST: { body },

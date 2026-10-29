@@ -30,10 +30,10 @@ export function extractRemovalKeys(payload: { __removeKeys?: unknown } = {}): st
  * mapping สำหรับสรุปยอดตามบัญชี
  */
 export const ACCOUNT_MAPPING: Record<string, string[]> = {
-  "กรุงศรี": ["credit_kungsri"],
-  "ttb": ["house", "credit_ttb"],
-  "กสิกร": ["credit_kbank", "shopee", "netflix", "youtube", "youtube_membership"],
-  "UOB": ["credit_uob"]
+  "กรุงศรี": [],
+  "ttb": ["house"],
+  "กสิกร": ["shopee", "netflix", "youtube", "youtube_membership"],
+  "UOB": []
 };
 
 export const DEFAULT_BANK_ACCOUNTS: string[] = Object.keys(ACCOUNT_MAPPING);
@@ -42,7 +42,7 @@ export const LEGACY_ITEM_ACCOUNT_MAP: Record<string, string> = Object.entries(AC
     acc[item] = account;
   });
   return acc;
-}, {});
+}, { credit_kungsri: 'กรุงศรี', credit_ttb: 'ttb', credit_kbank: 'กสิกร', credit_uob: 'UOB' });
 
 /**
  * คำนวณสรุปยอดตามบัญชีจากข้อมูลค่าใช้จ่าย

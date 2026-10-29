@@ -4,7 +4,9 @@
  * รองรับทั้ง JSON และ MongoDB
  * - GET: อ่านข้อมูลรายเดือนหรือทั้งหมด
  * - POST: บันทึก/อัปเดตข้อมูลและลบรายการที่ถูกลบ
- * - PATCH: ตั้งค่า paid ของแถวเดียว (ADR-028)
+ * - PATCH: ตั้งค่า paid ของแถวเดียว (ADR-028) · แถว ccr_ = ยอดรวมบัตร จ่ายทั้งบัตร (+ paymentAction)
+ * - แถวบัตรเครดิตใน GET: ccr_<cardId> หนึ่งแถวต่อบัตร (งวดผ่อนอยู่ใน breakdown) ไม่มีคีย์ cci_ ระดับบน
+ *   (spec-credit-card-spend §4.3 — ทั้ง 5 จุดเรียก safeBuildCreditCardRows)
  * - จำกัดข้อมูลย้อนหลังสูงสุด 15 เดือน
  * - คำนวณสรุปยอดตามบัญชีและยอดรวมค่าใช้จ่าย
  */
@@ -143,7 +145,7 @@ function safeMapExpenseDoc(doc: Record<string, unknown>, monthLabel: string): Ex
     const docForMapping = { ...doc };
     delete docForMapping._id;
     delete docForMapping.userId;
-    return { ...mapDocToFlatItemObjectWithTotals(docForMapping) };
+    return { ...stripCreditCardKeys(mapDocToFlatItemObjectWithTotals(docForMapping)) };
   } catch (err) {
     console.error('Error mapping expense doc for month:', monthLabel, err, doc);
     return null;
@@ -172,7 +174,7 @@ async function handleJsonExpenseGet(req: NextApiRequest, res: NextApiResponse, u
       if (!Object.keys(derived).length) return res.status(200).json({});
       return res.status(200).json(buildDerivedOnlyMonth(derived));
     }
-    const flat: ExpenseData = { ...mapDocToFlatItemObjectWithTotals(doc) };
+    const flat: ExpenseData = { ...stripCreditCardKeys(mapDocToFlatItemObjectWithTotals(doc)) };
     // merge หลัง mapDocToFlatItemObjectWithTotals เสมอ เพราะ legacy branch ของมัน hardcode paid: false
     Object.assign(flat, derived);
     flat.accountSummary = getAccountSummary(flat, flat.bankAccounts);
@@ -184,7 +186,7 @@ async function handleJsonExpenseGet(req: NextApiRequest, res: NextApiResponse, u
   const withTotals: Record<string, ExpenseData> = {};
   Object.entries(bucket).forEach(([monthKey, doc]: [string, ExpenseData]) => {
     if (!doc || !doc.month) return;
-    let flat = mapDocToFlatItemObjectWithTotals(doc);
+    const flat: ExpenseData = { ...stripCreditCardKeys(mapDocToFlatItemObjectWithTotals(doc)) };
     Object.assign(flat, safeBuildCreditCardRows(context, monthKey, doc.bankAccounts));
     flat.accountSummary = getAccountSummary(flat, flat.bankAccounts);
     const totals = getExpenseTotals(flat);
@@ -310,15 +312,20 @@ async function handleExpensePaidPatch(
 ) {
   const body = parseRequestBody(req, res, monthlyExpensePatchBodySchema);
   if (!body) return;
-  const { month, key, paid } = body;
+  const { month, key, paid, paymentAction } = body;
 
   if (isCreditCardRowKey(key)) {
-    const result = await applyCreditCardPaidForKey(userId, key, paid, month);
+    // ccr_ = แถวยอดรวมบัตร: จ่าย/ยกเลิกทั้งบัตรในการเขียนครั้งเดียว (spec-credit-card-spend §5.3)
+    const result = await applyCreditCardPaidForKey(userId, key, paid, month, paymentAction);
     if (result.status === 'ok') {
       return res.status(200).json({ success: true, paid: result.paid, initialized: false });
     }
     if (result.status === 'not_found') return res.status(404).json({ error: 'Credit card row not found' });
     if (result.status === 'cancelled') return res.status(409).json({ error: 'Credit card plan is cancelled' });
+    if (result.status === 'needs_choice') {
+      // ยอดหมุนเวียน totalDue > 0 ยังไม่มีการตัดสินใจ — client ต้องส่ง paymentAction 'full' | 'minimum' (SPEND-5)
+      return res.status(409).json({ error: 'needs_choice', message: 'กรุณาเลือกจ่ายเต็มจำนวนหรือขั้นต่ำสำหรับยอดหมุนเวียน' });
+    }
     return res.status(409).json({ error: 'Revolving cycle limit reached' });
   }
 

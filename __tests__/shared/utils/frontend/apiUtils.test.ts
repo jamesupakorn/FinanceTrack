@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 import {
   ApiValidationError,
+  creditCardAPI,
   dailyExpenseAPI,
   expenseAPI,
   incomeAPI,
@@ -27,6 +28,28 @@ function mockFetchOnce({ status = 200, body = {} }: { status?: number; body?: un
 }
 
 const headersOf = (fetchMock: jest.Mock) => fetchMock.mock.calls[0][1].headers as Record<string, string>;
+
+it('spend-item mutations use the new endpoint and the shared CSRF convention', async () => {
+  const item = { cardId: 'cc_000000000001', purchaseDate: '2026-10-10', name: 'อาหาร', amount: 100 };
+  const requests: Array<[string, () => Promise<unknown>]> = [
+    ['POST', () => creditCardAPI.createSpendItem(item)],
+    ['PUT', () => creditCardAPI.updateSpendItem({ id: 'si_000000000001', amount: 200 })],
+    ['DELETE', () => creditCardAPI.deleteSpendItem('si_000000000001')]
+  ];
+  for (const [method, request] of requests) {
+    const fetchMock = mockFetchOnce();
+    await request();
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/credit-cards/spend-items');
+    expect(fetchMock.mock.calls[0][1].method).toBe(method);
+    expect(headersOf(fetchMock)['X-CSRF-Token']).toBe(CSRF_VALUE);
+  }
+});
+
+it('shows the server cap message rather than its internal error code', async () => {
+  mockFetchOnce({ status: 409, body: { error: 'MAX_SPEND_ITEMS_PER_CYCLE', message: 'เพิ่มรายการได้สูงสุด 100 รายการต่อบัตรต่อเดือน' } });
+  await expect(creditCardAPI.createSpendItem({ cardId: 'cc_a', purchaseDate: '2026-10-10', name: 'x', amount: 1 }))
+    .rejects.toThrow('เพิ่มรายการได้สูงสุด 100 รายการต่อบัตรต่อเดือน');
+});
 
 beforeEach(() => {
   setActiveUserId('u001');
