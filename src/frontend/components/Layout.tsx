@@ -325,7 +325,7 @@ export default function Layout({
           {headerActions && <div className="mt-space-3 flex items-center gap-space-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">{headerActions}</div>}
         </header>
 
-        <main ref={mainRef} id="main" className={`mx-auto min-h-0 w-full max-w-[1280px] flex-1 overflow-y-auto overscroll-y-contain p-[var(--gutter,clamp(1rem,0.5rem+2vw,2rem))] pb-[calc(var(--nav-safe-bottom,56px)+24px)] lg:pb-[var(--gutter,clamp(1rem,0.5rem+2vw,2rem))] ${contentClassName || ''}`}>
+        <main ref={mainRef} id="main" className={`relative mx-auto min-h-0 w-full max-w-[1280px] flex-1 overflow-y-auto overscroll-y-contain p-[var(--gutter,clamp(1rem,0.5rem+2vw,2rem))] pb-[calc(var(--nav-safe-bottom,56px)+24px)] lg:pb-[var(--gutter,clamp(1rem,0.5rem+2vw,2rem))] ${contentClassName || ''}`}>
           {isLocked ? (
             <div className="flex min-h-full flex-col items-center justify-center gap-space-4 text-secondary"><Icons.Lock size={48} color="var(--accent)" /><p>กำลังตรวจสอบสิทธิ์ผู้ใช้...</p></div>
           ) : children}
