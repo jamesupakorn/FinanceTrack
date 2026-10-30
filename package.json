@@ -1,6 +1,6 @@
 {
   "name": "financetrack",
-  "version": "2.24.17",
+  "version": "2.24.18",
   "description": "บัญชีรับจ่ายย้อนหลัง 12 เดือน",
   "main": "index.js",
   "engines": {
