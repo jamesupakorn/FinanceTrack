@@ -1,8 +1,8 @@
 /**
  * Login rate limiter (TD-H10) — throttles pages/api/auth/profile-login.js against PIN brute-forcing.
  *
- * Counting key: composite `${clientIp}|${userId}` (user-confirmed decision, see
- * .pipeline/spec-login-rate-limit-td-h10.md §4) — balances two failure modes:
+ * Counting key: composite `${clientIp}|${userId}` (user-confirmed decision),
+ * balances two failure modes:
  *   - IP-only would risk false-locking unrelated users sharing a NAT/CGNAT IP.
  *   - userId-only would let anyone DoS-lock any known account (profile list is public).
  * Composite key does neither at the cost of not stopping an attacker who rotates IPs — accepted

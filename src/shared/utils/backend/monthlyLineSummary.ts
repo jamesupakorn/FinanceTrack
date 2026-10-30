@@ -4,7 +4,8 @@ import { getUserData } from '../../../backend/data/userUtils';
 import { getMonthlySummaryModel } from '../frontend/monthlySummary';
 import { getUserCreditData } from './creditCardStore';
 import type { CreditData } from './creditCardStore';
-import { buildInstallmentExpenseRows, buildRevolvingExpenseRows } from './creditCardSync';
+import { buildCardTotalExpenseRows } from './creditCardSync';
+import { formatIsoDateTH } from '../creditCardBasics';
 import {
   computeDelta,
   computeGoalProgress,
@@ -113,12 +114,13 @@ async function readMonthlyData(userId: string, monthKey: string): Promise<Monthl
 const hasMonthData = (data: MonthlyData): boolean => (['income', 'expense', 'savings', 'dailyExpense'] as const)
   .some(key => data[key] && Object.keys(data[key]).length > 0);
 
-async function buildMonthModel(userId: string, monthKey: string, creditData: Pick<CreditData, 'cards' | 'plans' | 'cycles'>) {
+async function buildMonthModel(userId: string, monthKey: string, creditData: Pick<CreditData, 'cards' | 'plans' | 'cycles' | 'spendItems'>) {
   const data = await readMonthlyData(userId, monthKey);
   const expenseData = {
     ...data.expense,
-    ...buildInstallmentExpenseRows(creditData, monthKey),
-    ...buildRevolvingExpenseRows(creditData, monthKey)
+    // แถวยอดรวมบัตรเท่านั้น (งวดผ่อน + ยอดหมุนเวียน ในแถว ccr_ เดียว) — ห้ามเพิ่มแถวงวดผ่อนแยกอีก
+    // มิฉะนั้นงวดผ่อนถูกนับซ้ำในสรุป LINE (spec-credit-card-spend R1 / AC-S18)
+    ...buildCardTotalExpenseRows(creditData, monthKey)
   };
   const model = getMonthlySummaryModel({
     month: monthKey,
@@ -136,7 +138,7 @@ async function buildMonthModel(userId: string, monthKey: string, creditData: Pic
 const totalExpenseOf = (model: MonthlyModel): number => Math.round((model.generalExpense + model.dailyExpense + model.creditCard) * 100) / 100;
 
 export async function buildMonthlySummaryPayload(userId: string, monthKey: string) {
-  const creditData = await getUserCreditData(userId).catch(() => ({ cards: [], plans: [], cycles: [] }));
+  const creditData = await getUserCreditData(userId).catch(() => ({ cards: [], plans: [], cycles: [], spendItems: [] }));
   const { data, model } = await buildMonthModel(userId, monthKey, creditData);
   const prev = await buildMonthModel(userId, getPrevMonthKey(monthKey), creditData);
   const hasPrevious = hasMonthData(prev.data);
@@ -172,11 +174,20 @@ function expenseDeltaRow(comparison: SummaryComparison | undefined) {
   return deltaRow(comparison.expense, `รายจ่ายรวม ${amount(comparison.expense.current)} บาท · `);
 }
 
+// ป้ายวันครบกำหนด: อยู่ในเดือน upcoming → "วันที่ N" เหมือนเดิม · แถวบัตรข้ามเดือน → วันที่เต็ม เช่น "10 พ.ย. 2569"
+function upcomingDueLabel(item: UpcomingDues['items'][number], monthKey: string): string {
+  if (typeof item.dueDate === 'string' && item.dueDate.slice(0, 7) !== monthKey) {
+    const full = formatIsoDateTH(item.dueDate);
+    if (full) return full;
+  }
+  return `วันที่ ${item.day}`;
+}
+
 function upcomingSection(upcoming: UpcomingDues | null | undefined) {
   if (!upcoming) return [];
   return [
     textComponent('📅 ต้องจ่ายเดือนหน้า', 'md', LINE_THEME.textPrimary, '700'),
-    ...upcoming.items.map(item => textComponent(`${item.name} — ${amount(item.amount)} บาท (วันที่ ${item.day})`, 'sm', LINE_THEME.textSecondary)),
+    ...upcoming.items.map(item => textComponent(`${item.name} — ${amount(item.amount)} บาท (${upcomingDueLabel(item, upcoming.monthKey)})`, 'sm', LINE_THEME.textSecondary)),
     ...(upcoming.extraCount > 0 ? [textComponent(`และอีก ${upcoming.extraCount} รายการ`, 'xs', LINE_THEME.textSecondary)] : [])
   ];
 }
@@ -252,7 +263,7 @@ export function formatMonthlySummaryText(monthLabel: string, payload: SummaryPay
   if (upcoming) {
     lines.push(
       '📅 ต้องจ่ายเดือนหน้า:',
-      ...upcoming.items.map(item => `- ${item.name}: ${amount(item.amount)} บาท (วันที่ ${item.day})`),
+      ...upcoming.items.map(item => `- ${item.name}: ${amount(item.amount)} บาท (${upcomingDueLabel(item, upcoming.monthKey)})`),
       ...(upcoming.extraCount > 0 ? [`และอีก ${upcoming.extraCount} รายการ`] : [])
     );
   }

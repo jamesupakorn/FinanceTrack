@@ -10,7 +10,7 @@ import type { ReactNode } from 'react';
  *   1) กล่องประกาศสถานะ role="status" aria-busy="true" + ข้อความ sr-only (เดิมก๊อปเหมือนกัน 5 ที่)
  *   2) โทเคนของบล็อกวิบวับ (animate-pulse + สีพื้น)
  * **ไม่แชร์รูปทรง** — รูปทรงต้องอิงเนื้อหาจริงของแต่ละจุด จึงอยู่ที่ call site เสมอ
- * (UX_SPEC-td-m05-pattern-c.md §3.1 "structural reuse, leaf replacement")
+ * ("structural reuse, leaf replacement")
  *
  * ไม่เกี่ยวข้องกับ Pattern A (pages/index.js, DashboardCalendarSection.js, CreditCardDashboard.js,
  * ExpenseCalendarModal.js) — สี่ไฟล์นั้นมีสเกเลตันที่วัดพิกเซลมาเองและ "ห้ามรวม" โดยมติที่บันทึกไว้

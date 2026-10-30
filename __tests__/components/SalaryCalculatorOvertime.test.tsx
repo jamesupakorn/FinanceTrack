@@ -185,7 +185,7 @@ describe('SalaryCalculator — รายการ OT (Increment 3)', () => {
     expect(screen.getByText('รวม OT').nextElementSibling).toHaveTextContent('4,688');
   });
 
-  it('AC-OT-02/03: identical hours in February (28 days) give 2,009 — the rate is never rounded first', async () => {
+  it('AC-OT-02/03: identical hours in February (28 days) give 1,875 — fixed 30-day divisor, same as any other month', async () => {
     const user = userEvent.setup();
     render(<SalaryCalculator selectedMonth="2026-02" />);
     await waitFor(() => expect(salaryAPI.getByMonth).toHaveBeenCalled());
@@ -193,8 +193,8 @@ describe('SalaryCalculator — รายการ OT (Increment 3)', () => {
     await user.type(within(getSalaryRow()).getByLabelText('จำนวนเงินเงินเดือน'), '30000');
     const row = await addOvertimeRow(user, { hours: '10' });
 
-    // 30,000 / 28 / 8 = 133.928571…; × 1.5 × 10 = 2,008.93 → 2,009 (not 2,010, not 2,003)
-    expect(within(row).getByText('2,009')).toBeInTheDocument();
+    // 30,000 / 30 / 8 = 125 (month length does not matter); × 1.5 × 10 = 1,875
+    expect(within(row).getByText('1,875')).toBeInTheDocument();
   });
 
   it('AC-OT-05: salary 0 shows the inline hint and every OT row reads 0; the hint clears the moment salary is typed', async () => {

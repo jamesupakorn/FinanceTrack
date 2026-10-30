@@ -1,6 +1,5 @@
 /** @jest-environment node */
-// Integration test against a real (ephemeral, in-process) MongoDB instance — see
-// .pipeline/spec-td-c01-api-coverage-6.md for why mongodb-memory-server (not a mocked collection) was
+// Integration test against a real (ephemeral, in-process) MongoDB instance — Rationale: mongodb-memory-server (not a mocked collection) was
 // chosen: `updateUserLineIdMongo`'s upsert-vs-update branching is a real conditional-write operation, and
 // a mocked collection would prove nothing about whether it genuinely creates a new document vs. preserves
 // an existing one's unrelated fields. `crypto` is likewise never mocked — the HMAC-SHA256 signature check

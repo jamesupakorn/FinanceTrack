@@ -29,6 +29,15 @@ const GHOST_BTN = `min-h-11 rounded-sm border border-border-interactive bg-surfa
 const SECONDARY_BTN = `min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary disabled:opacity-50 ${FOCUS_RING}`;
 const PRIMARY_BTN = `min-h-11 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent disabled:opacity-60 ${FOCUS_RING}`;
 
+// keep in sync with SHARED_WINDOW_LIMIT in src/shared/utils/backend/sharedMonthWindow.ts
+const MONTH_WINDOW_LIMIT = 15;
+const DANGER_BTN = `min-h-11 rounded-sm border border-neg/40 bg-neg/10 px-space-4 text-sm font-medium text-neg disabled:opacity-60 ${FOCUS_RING}`;
+
+interface PruneConfirmState {
+  month: string;
+  pruned: string[];
+}
+
 const isValidMonth = (month: string): boolean => {
   if (!/^\d{4}-\d{2}$/.test(month)) return false;
   const [, monthNumber] = month.split('-').map(Number);
@@ -61,6 +70,10 @@ export default function MonthManager({
   const [newMonthName, setNewMonthName] = useState('');
   const [pendingAction, setPendingAction] = useState<PendingAction>('');
   const pendingRef = useRef<PendingAction>('');
+  const [pruneConfirm, setPruneConfirm] = useState<PruneConfirmState | null>(null);
+  const pruneDialogRef = useRef<HTMLDivElement | null>(null);
+  const pruneCancelButtonRef = useRef<HTMLButtonElement | null>(null);
+  const pruneTriggerRef = useRef<HTMLElement | null>(null);
 
   const copyDialogRef = useRef<HTMLDivElement | null>(null);
   const copyCancelButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -88,6 +101,7 @@ export default function MonthManager({
     if (!open) {
       setShowAddForm(false);
       setShowCopyConfirmation(false);
+      setPruneConfirm(null);
     }
   }, [open]);
 
@@ -207,6 +221,46 @@ export default function MonthManager({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [showCopyConfirmation]);
 
+  const showPruneConfirm = Boolean(pruneConfirm);
+
+  useEffect(() => {
+    if (!showPruneConfirm || typeof document === 'undefined') return undefined;
+    pruneTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const timer = setTimeout(() => pruneCancelButtonRef.current?.focus(), 40);
+    return () => {
+      clearTimeout(timer);
+      const opener = pruneTriggerRef.current as (HTMLElement & { disabled?: boolean }) | null;
+      if (opener?.isConnected && !opener.disabled) opener.focus();
+    };
+  }, [showPruneConfirm]);
+
+  useEffect(() => {
+    if (!showPruneConfirm || typeof document === 'undefined') return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setPruneConfirm(null);
+        return;
+      }
+      if (event.key !== 'Tab' || !pruneDialogRef.current) return;
+      event.stopPropagation();
+      const focusable = getTabbableElements(pruneDialogRef.current);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    // capture: ให้ dialog นี้รับ Escape ก่อน handler ของฟอร์มเพิ่มเดือนที่เปิดค้างอยู่ด้านล่าง
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, [showPruneConfirm]);
+
   const startPendingAction = (action: Exclude<PendingAction, ''>) => {
     if (pendingRef.current) return false;
     pendingRef.current = action;
@@ -219,15 +273,35 @@ export default function MonthManager({
     setPendingAction('');
   };
 
-  const createEmptyMonth = async (month: string): Promise<boolean> => {
+  const createEmptyMonth = async (month: string, confirmed = false): Promise<boolean> => {
     if (!isValidMonth(month)) {
       showToast('รูปแบบเดือนไม่ถูกต้อง กรุณาเลือกเดือนที่ถูกต้อง', 'error');
       return false;
     }
     if (monthOptions.some(option => option.value === month)) {
       showToast(`มีข้อมูลเดือน ${formatMonthLabelTH(month)} อยู่แล้ว`, 'info');
+      onMonthSelected(month);
+      setShowAddForm(false);
+      onRequestClose?.();
       return false;
     }
+    // เดือนว่างที่ไกลกว่าเดือนปัจจุบัน+1 ถูก server ข้ามในการจัดอันดับหน้าต่าง (ไม่ลบเดือนเก่า) — ไม่ต้องเตือนการลบ
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const skippedByServerWindow = month > getNextMonth(currentMonth);
+    if (!confirmed && !skippedByServerWindow && monthOptions.length + 1 > MONTH_WINDOW_LIMIT) {
+      // คาดการณ์เท่านั้น: รายการ UI รวม 5 collection (รวม savings) แต่หน้าต่างฝั่ง server ครอบคลุม 4
+      const pruned = [...monthOptions.map(option => option.value), month]
+        .sort((a, b) => b.localeCompare(a))
+        .slice(MONTH_WINDOW_LIMIT);
+      if (pruned.includes(month)) {
+        showToast(`เพิ่มเดือน ${formatMonthLabelTH(month)} ไม่ได้ เพราะเก่ากว่าช่วง ${MONTH_WINDOW_LIMIT} เดือนล่าสุดและจะถูกลบทันที`, 'error');
+        return false;
+      }
+      setPruneConfirm({ month, pruned });
+      return false;
+    }
+    setPruneConfirm(null);
     if (!startPendingAction('create')) return false;
     try {
       const { expenseAPI, incomeAPI, salaryAPI, savingsAPI, investmentAPI } = await import('../../shared/utils/frontend/apiUtils');
@@ -361,6 +435,18 @@ export default function MonthManager({
           <h4 id="copy-month-title" className="mb-space-2 text-lg font-medium text-primary">เขียนทับข้อมูลเดือนนี้?</h4>
           <p id="copy-month-description" className="mb-space-4 text-sm text-secondary">ข้อมูลของ {formatMonthLabelTH(selectedMonth || '')} จะถูกแทนที่ด้วยข้อมูลจาก {formatMonthLabelTH(getPrevMonth(selectedMonth || ''))}</p>
           <div className="flex justify-end gap-space-2"><button ref={copyCancelButtonRef} type="button" className={SECONDARY_BTN} onClick={() => setShowCopyConfirmation(false)} tabIndex={0}>ยกเลิก</button><button type="button" className={PRIMARY_BTN} onClick={() => void confirmCopyPrevMonth()} tabIndex={0}>เขียนทับและคัดลอก</button></div>
+        </div>
+      </div>}
+
+      {pruneConfirm && <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/70 px-space-4" role="presentation" onMouseDown={(event: MouseEvent<HTMLDivElement>) => { if (event.target === event.currentTarget) setPruneConfirm(null); }}>
+        <div ref={pruneDialogRef} className="w-full max-w-sm rounded-lg border border-border-default bg-surface-3 p-space-4 shadow-elev-3" role="alertdialog" aria-modal="true" aria-labelledby="prune-month-title" aria-describedby="prune-month-description">
+          <h4 id="prune-month-title" className="mb-space-2 text-lg font-medium text-primary">เพิ่ม {formatMonthLabelTH(pruneConfirm.month)} แล้วลบเดือนเก่า?</h4>
+          <div id="prune-month-description" className="mb-space-4 text-sm text-secondary">
+            <p className="mb-space-2">ระบบเก็บข้อมูลได้ {MONTH_WINDOW_LIMIT} เดือนล่าสุด เดือนต่อไปนี้จะถูกลบถาวรและกู้คืนไม่ได้:</p>
+            <ul className="mb-space-2 list-disc pl-space-5 text-primary">{pruneConfirm.pruned.map(month => <li key={month}>{formatMonthLabelTH(month)}</li>)}</ul>
+            <p className="text-xs text-tertiary">รายการนี้เป็นการคาดการณ์ อาจมีข้อมูลบางส่วน (เช่น เงินออม) ที่ถูกจำกัดแยกต่างหาก</p>
+          </div>
+          <div className="flex flex-wrap justify-end gap-space-2"><button ref={pruneCancelButtonRef} type="button" className={SECONDARY_BTN} onClick={() => setPruneConfirm(null)}>ยกเลิก</button><button type="button" className={DANGER_BTN} disabled={Boolean(pendingAction)} onClick={() => void createEmptyMonth(pruneConfirm.month, true)}>ลบเดือนเก่าและเพิ่มเดือนใหม่</button></div>
         </div>
       </div>}
     </>,

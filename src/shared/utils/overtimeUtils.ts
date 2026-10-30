@@ -8,8 +8,7 @@
 //   1. hourlyRate ไม่เคยถูกปัดเศษ — ปัดเฉพาะยอดของแต่ละแถว (BR-OT-001)
 //   2. ปัดทีละแถวแล้วค่อยบวก ไม่ใช่บวกแล้วค่อยปัด — ยอดรวมจึงเท่ากับผลบวกของแถวที่แสดงเสมอ (BR-OT-004)
 //   3. ปัดแบบ half-up (Math.round) ไม่ใช่ banker's rounding — 562.5 → 563 (D-3)
-
-import { getDaysInMonth } from './dateUtils';
+//   4. ตัวหารเป็น 30 วันคงที่ ไม่ใช่จำนวนวันจริงของเดือน (BR-OT-001)
 
 // ---------------------------------------------------------------------------
 // ค่าคงที่และชนิดข้อมูล
@@ -62,6 +61,8 @@ const MAX_OVERTIME_HOURS = 744;
 const MONTH_KEY_RE = /^\d{4}-\d{2}$/;
 const ID_PREFIX = 'ot_';
 const HOURS_PER_DAY = 8;
+/** เดือนคิดค่าจ้าง = 30 วันคงที่ ตามสลิปเงินเดือนจริง ไม่ขึ้นกับจำนวนวันจริงของเดือน (BR-OT-001) */
+const DAYS_PER_MONTH_FOR_PAY = 30;
 
 // ---------------------------------------------------------------------------
 // ตัวช่วยภายใน
@@ -128,7 +129,8 @@ export function coerceOvertimeHours(value: unknown): number {
 // ---------------------------------------------------------------------------
 
 /**
- * อัตราค่าจ้างต่อชั่วโมง = เงินเดือน ÷ จำนวนวันจริงของเดือนนั้น ÷ 8 (BR-OT-001)
+ * อัตราค่าจ้างต่อชั่วโมง = เงินเดือน ÷ 30 (คงที่ ไม่ขึ้นกับจำนวนวันจริงของเดือน) ÷ 8 (BR-OT-001)
+ * monthKey ที่ขาดหรือผิดรูปแบบยังคืน 0 (ใช้เป็นด่านตรวจเท่านั้น)
  * คืนค่าเต็มความละเอียด ไม่ปัดเศษ และไม่มีทางคืน NaN/Infinity —
  * NaN ที่หลุดไปถึง summary จะทำให้ total_income ของทั้งเดือนเสีย
  */
@@ -137,15 +139,11 @@ export function getSalaryHourlyRate(salaryAmount: number, monthKey: string): num
   if (salary <= 0) return 0;
   if (typeof monthKey !== 'string' || !MONTH_KEY_RE.test(monthKey)) return 0;
 
-  const [yearStr, monthStr] = monthKey.split('-');
-  const year = Number(yearStr);
-  const monthIndex = Number(monthStr) - 1;
+  // monthKey เป็นแค่ตัวกันค่าผิดรูปแบบ — จำนวนวันของเดือนไม่มีผลต่ออัตราอีกต่อไป
+  const monthIndex = Number(monthKey.split('-')[1]) - 1;
   if (monthIndex < 0 || monthIndex > 11) return 0;
 
-  const daysInMonth = getDaysInMonth(year, monthIndex);
-  if (!Number.isFinite(daysInMonth) || daysInMonth <= 0) return 0;
-
-  const rate = salary / daysInMonth / HOURS_PER_DAY;
+  const rate = salary / DAYS_PER_MONTH_FOR_PAY / HOURS_PER_DAY;
   return Number.isFinite(rate) ? rate : 0;
 }
 

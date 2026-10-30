@@ -7,7 +7,7 @@ import { showToast } from '../src/shared/utils/frontend/toast';
 // เดิม/ลิงก์เก่าที่ค้างอยู่ยังพาไปถูกที่ — แพทเทิร์นเดียวกับ pages/edit.js
 // ปลายทางย้ายจาก /workspace?tab=income&salary=open ไปเป็น /workspace/income?salary=open โดยตรงแล้ว
 // (Amendment A5 — เส้นทางเดียว ไม่ต้องเด้งผ่าน pages/workspace/index.js อีกต่อ) ข้อความ toast คงเดิม
-// ("แท็บ" ไม่ตรงกับ UI ใหม่แล้วก็จริง แต่จงใจไม่แก้คำ — ดู spec-monthly-workspace.md §Shims)
+// ("แท็บ" ไม่ตรงกับ UI ใหม่แล้วก็จริง แต่จงใจไม่แก้คำ)
 export default function SalaryRedirect() {
   const router = useRouter();
 

@@ -1,8 +1,7 @@
 /** @jest-environment node */
 // Integration test against a real (ephemeral, in-process) MongoDB instance for every test case
 // except the isolated loadUsers()-throws -> 500 case below (see that describe block for why a
-// jest.mock('../../lib/userStore') is the one sanctioned exception here, per
-// .pipeline/spec-td-c01-api-coverage-8.md and CODING_STANDARD.md's "mock a collaborator, not the
+// jest.mock('../../lib/userStore') is the one sanctioned exception here, per CODING_STANDARD.md's "mock a collaborator, not the
 // DB" carve-out).
 import { MongoMemoryServer } from '../helpers/mongoReplSet';
 import { createMocks } from 'node-mocks-http';

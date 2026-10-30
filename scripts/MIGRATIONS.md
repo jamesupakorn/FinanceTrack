@@ -7,6 +7,24 @@ guessing from the filename alone.
 
 ## One-off migrations — run-state unknown, do not delete without checking with the user first
 
+- **`migrateCreditExpenseToSpendItems.ts`** — one-off credit-card spend migration
+  (credit-card spend spec §8 / AC-S14). **Run-state: not run.**
+  Defaults to dry-run in JSON and Mongo modes. `--apply` requires `--backup-confirmed`
+  or `--backup <existing-path>`; optional `--map map.json` and `--resolve=subtract`.
+  Stop application writers, back up both credit and expense data, review the dry-run
+  report, then apply manually. Uses the latest 15 stored expense months per user;
+  older cycle `newSpend` fallbacks are still converted. A legacy key matching more
+  than one card (ambiguous issuer, e.g. u001 `credit_kungsri`) STOPS the whole run,
+  dry-run included: the report table is printed, the error names user/key/candidate
+  cards, the exit code is non-zero, and nothing is written for any user. Rerun with
+  `--map`. Keys with no matching card, an invalid explicit mapping, existing user
+  items and validation/cap conflicts are per-row conflicts that retain the source.
+  Rows flagged `warning: legacy_paid_installments_unpaid` (legacy paid=true while
+  installments due that month are unpaid) still set the cycle to `full`, and
+  installment paid flags are NOT changed. Review those rows before `--apply`. Script-owned
+  `creditExpenseMigrationReceipts` in the credit document allow safe crash/retry
+  cleanup (including zero subtraction); keep these until source cleanup is complete.
+  No production data was accessed or changed while implementing/testing this script.
 - **`migrateToMultiUser.js`** — converts flat-array JSON data files to per-user keyed objects. No run
   record found in `.pipeline/STATUS.md`/`STATUS-archive.md`/`TECH_DEBT.md`. **DELETED 2026-09-19** —
   user confirmed this ran against production; script file removed, this entry kept for historical

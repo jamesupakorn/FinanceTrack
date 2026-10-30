@@ -1,6 +1,5 @@
 /** @jest-environment node */
-// Integration test against a real (ephemeral, in-process) MongoDB instance — see
-// .pipeline/spec-td-c01-api-coverage-4.md for why mongodb-memory-server (not mocks) was chosen: this
+// Integration test against a real (ephemeral, in-process) MongoDB instance — Rationale: mongodb-memory-server (not mocks) was chosen: this
 // route's `hasMeaningfulSalaryData` backward-scan carry-forward and, especially,
 // `enforceSharedMonthWindowMongo`'s cross-collection (`salary` + `investment`, here) union/prune
 // round trip are both real multi-document Mongo query behaviors, so mocking the collection would

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { OverdueInstallment } from '../../shared/utils/installmentBackdate';
+import type { TickableInstallment } from '../../shared/utils/installmentBackdate';
 import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
@@ -21,7 +21,7 @@ interface BackdatedInstallmentsDialogProps {
   open: boolean;
   months: number;
   currentMonthKey: string;
-  rows: OverdueInstallment[];
+  rows: TickableInstallment[];
   busy: boolean;
   onCancel: () => void;
   onConfirm: (paidInstallmentNos: number[]) => void;
@@ -128,7 +128,7 @@ export default function BackdatedInstallmentsDialog({
       >
         <div className="flex shrink-0 items-center justify-between gap-space-3 border-b border-border-subtle px-space-5 py-space-4">
           <h2 id="backdated-installments-title" className="m-0 text-lg font-semibold text-primary">
-            {`มีงวดที่ผ่านมาแล้ว ${rows.length} งวด`}
+            {`มีงวดที่ถึงกำหนดแล้ว ${rows.length} งวด`}
           </h2>
           <button
             type="button"
@@ -143,7 +143,7 @@ export default function BackdatedInstallmentsDialog({
 
         <div className="flex min-h-0 flex-1 flex-col gap-space-4 overflow-y-auto px-space-5 py-space-4">
           <p className="m-0 text-sm leading-relaxed text-secondary">
-            {`แผนนี้เริ่มก่อนเดือนนี้ (${formatMonthKeyTH(currentMonthKey)}) — แตะยืนยันเฉพาะงวดที่ชำระไปแล้วจริง งวดที่ไม่ได้แตะจะบันทึกเป็น "ยังไม่ชำระ"`}
+            {`งวดของเดือนนี้ (${formatMonthKeyTH(currentMonthKey)}) และก่อนหน้า — แตะยืนยันเฉพาะงวดที่ชำระไปแล้วจริง งวดที่ไม่ได้แตะจะบันทึกเป็น "ยังไม่ชำระ" ถ้ายังไม่ได้ชำระงวดใดเลย กด "ยืนยัน" ได้ทันที`}
           </p>
           <div className="flex flex-col gap-space-3">
             {rows.map((row, index) => {
@@ -258,7 +258,7 @@ export function BackdatedPaidFailureDialog({
       >
         <div className="flex shrink-0 items-center justify-between gap-space-3 border-b border-border-subtle px-space-5 py-space-4">
           <h2 id="backdated-paid-failure-title" className="m-0 text-lg font-semibold text-primary">
-            บันทึกชำระย้อนหลังไม่ครบ
+            บันทึกชำระไม่ครบ
           </h2>
           <button type="button" className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-sm text-secondary hover:bg-surface-2 ${FOCUS_RING}`} onClick={onClose} aria-label="ปิด">
             <Icons.X size={18} />

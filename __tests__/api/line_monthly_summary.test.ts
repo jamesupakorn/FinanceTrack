@@ -1,6 +1,6 @@
 /** @jest-environment node */
 // Integration test against a real (ephemeral, in-process) MongoDB instance — follows the same
-// pattern as __tests__/api/user-bank-accounts.test.js (see .pipeline/spec-test-suite-foundation.md).
+// pattern as __tests__/api/user-bank-accounts.test.js.
 //
 // Only the actual outbound LINE HTTP call (global `fetch`, used inside sendLineMessage.ts) is mocked.
 // Everything else — auth, Mongo reads/writes, month-end gating, dedup marker — runs against real
@@ -411,7 +411,7 @@ describe('/api/line_monthly_summary (Mongo mode)', () => {
     });
   });
 
-  // spec-line-flex-light-theme.md AC-25: ยืนยันว่าการ์ดสรุปรายเดือนเปลี่ยนเป็นธีมสว่างแล้วจริงๆ
+  // AC-25: ยืนยันว่าการ์ดสรุปรายเดือนเปลี่ยนเป็นธีมสว่างแล้วจริงๆ
   // (ไม่ใช่แค่เพิ่มโมดูลใหม่เฉยๆ) และสีของกล่อง highlight ตอบสนองตามเครื่องหมายของกระแสเงินสดสุทธิ
   describe('AC-5 / AC-25: ธีมสว่าง (recolour only)', () => {
     it('body ใช้พื้นหลังสีขาว และไม่มีสีจากธีมมืดเดิมหลงเหลืออยู่เลย', async () => {
@@ -449,7 +449,7 @@ describe('/api/line_monthly_summary (Mongo mode)', () => {
     });
   });
 
-  describe('getRecipients type guard (hardening: .pipeline/spec-line-monthly-summary-hardening.md)', () => {
+  describe('getRecipients type guard (hardening)', () => {
     it('treats a blank (whitespace-only) userId as matching nobody, via the shared assertScopedUserId guard (C-4)', async () => {
       await db.collection('users').insertOne({ id: TEST_USER_ID, LineId: 'line-a', monthlySummaryEnabled: true });
       const { req, res } = makeReqRes({ body: { date: '2024-01-31', userId: '   ' } });

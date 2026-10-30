@@ -266,28 +266,18 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     setPendingKeys(keys => (busy ? [...keys, key] : keys.filter(item => item !== key)));
   };
 
-  const updateRow = (key: string, patch: Record<string, unknown>) => {
-    setMonthsMap(prev => {
-      const monthRows = prev[monthKey] as Record<string, Record<string, unknown>> | undefined;
-      if (!monthRows || !monthRows[key]) return prev;
-      return {
-        ...prev,
-        [monthKey]: { ...monthRows, [key]: { ...monthRows[key], ...patch } }
-      };
-    });
-  };
-
   const handleToggleInstallment = async (event: CalendarEvent): Promise<void> => {
     if (!event.plan || event.installmentNo == null || pendingKeys.includes(event.key)) return;
     const nextPaid = !event.paid;
     setBusy(event.key, true);
-    updateRow(event.key, { paid: nextPaid });
     try {
       const response = await creditCardAPI.setInstallmentPaid(event.plan.id, event.installmentNo, nextPaid);
       changedRef.current = true;
-      showToast(response?.plan?.status === PLAN_STATUS.COMPLETED ? 'ผ่อนครบแล้ว 🎉' : 'อัปเดตสถานะงวดแล้ว');
+      notifyWriteSaved(
+        response?.plan?.status === PLAN_STATUS.COMPLETED ? 'ผ่อนครบแล้ว 🎉' : 'อัปเดตสถานะงวดแล้ว',
+        await refreshExpenseRows()
+      );
     } catch (error) {
-      updateRow(event.key, { paid: event.paid });
       const message = (error as { message?: string } | null)?.message;
       showToast(message || 'อัปเดตสถานะงวดไม่สำเร็จ', 'error');
     } finally {
@@ -295,24 +285,32 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     }
   };
 
-  /** ใช้ผลลัพธ์ cycle จาก server เขียนทับแถว ccr_ ในเดือนนี้ — ตรงตามกติกาการ inject ของ Feature 1 */
-  const applyCycleToRow = (event: CalendarEvent, cycle: { amountDue?: unknown; paymentAction?: string | null } | undefined) => {
-    if (!cycle) return;
-    updateRow(event.key, {
-      actual: cycle.amountDue,
-      paid: cycle.paymentAction !== null,
-      name: `ยอดใช้จ่ายบัตร ${event.card?.name || ''}${cycle.paymentAction === 'minimum' ? ' (ขั้นต่ำ)' : ''}`
-    });
-  };
+  // เขียนสำเร็จแล้วค่อยโหลดแถวใหม่ — การโหลดใหม่ล้มเหลวต้องไม่ถูกรายงานว่า "บันทึกไม่สำเร็จ" (F6)
+  // คืน false แทนการ throw เพื่อให้ผู้เรียกแยกผลของการเขียนออกจากผลของการโหลดใหม่ได้
+  async function refreshExpenseRows(): Promise<boolean> {
+    try {
+      const response = await expenseAPI.getAll();
+      setMonthsMap(response?.months && typeof response.months === 'object' ? response.months : {});
+      return true;
+    } catch (refreshError) {
+      console.error('Error refreshing calendar rows after a successful write:', refreshError);
+      return false;
+    }
+  }
+
+  // การเขียนสำเร็จเสมอได้ข้อความสำเร็จ · โหลดใหม่ไม่ได้ = แจ้งแบบ info (ไม่ใช่ error) ให้เปิดปฏิทินใหม่
+  function notifyWriteSaved(successMessage: string, refreshed: boolean): void {
+    if (refreshed) showToast(successMessage);
+    else showToast(`${successMessage} (โหลดข้อมูลล่าสุดไม่สำเร็จ — ปิดแล้วเปิดปฏิทินใหม่เพื่ออัปเดต)`, 'info');
+  }
 
   const handleRevolvingFull = async (event: CalendarEvent): Promise<void> => {
     if (!event.card) return;
     setBusy(event.key, true);
     try {
-      const response = await creditCardAPI.setRevolvingAction(event.card.id, monthKey, 'full');
-      applyCycleToRow(event, (response?.cycles || []).find((cycle: { month: string }) => cycle.month === monthKey));
+      await creditCardAPI.setRevolvingAction(event.card.id, event.cycleMonth ?? monthKey, 'full');
       changedRef.current = true;
-      showToast('บันทึกการชำระแล้ว');
+      notifyWriteSaved('บันทึกการชำระแล้ว', await refreshExpenseRows());
     } catch (error) {
       const message = (error as { message?: string } | null)?.message;
       showToast(message || 'บันทึกไม่สำเร็จ', 'error');
@@ -325,10 +323,9 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     if (!event.card) return;
     setBusy(event.key, true);
     try {
-      const response = await creditCardAPI.setRevolvingAction(event.card.id, monthKey, null);
-      applyCycleToRow(event, (response?.cycles || []).find((cycle: { month: string }) => cycle.month === monthKey));
+      await creditCardAPI.setRevolvingAction(event.card.id, event.cycleMonth ?? monthKey, null);
       changedRef.current = true;
-      showToast('ยกเลิกการชำระแล้ว');
+      notifyWriteSaved('ยกเลิกการชำระแล้ว', await refreshExpenseRows());
     } catch (error) {
       const message = (error as { message?: string } | null)?.message;
       showToast(message || 'ยกเลิกการชำระไม่สำเร็จ', 'error');
@@ -340,10 +337,12 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
   // จ่ายขั้นต่ำต้องยืนยันก่อน เพราะมันสร้างหนี้ยกไปเดือนหน้าพร้อมดอกเบี้ย (เหมือน credit-cards.js)
   const handleRevolvingMinimumClick = async (event: CalendarEvent): Promise<void> => {
     if (!event.card) return;
+    // รอบบิลของ event (อาจเป็นเดือนก่อนหน้าเมื่อวันครบกำหนดข้ามเดือน) — ไม่ใช่เดือนที่กำลังดู
+    const cycleMonth = event.cycleMonth ?? monthKey;
     setBusy(event.key, true);
     try {
-      const response = await creditCardAPI.getRevolving({ cardId: event.card.id, month: monthKey });
-      const cycle = (response?.cycles || []).find((item: { month: string }) => item.month === monthKey);
+      const response = await creditCardAPI.getRevolving({ cardId: event.card.id, month: cycleMonth });
+      const cycle = (response?.cycles || []).find((item: { month: string }) => item.month === cycleMonth);
       setConfirmState({
         event,
         minPaymentDue: cycle?.minPaymentDue ?? 0,
@@ -362,10 +361,9 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     if (!event?.card) { setConfirmState(null); return; }
     setConfirmBusy(true);
     try {
-      const response = await creditCardAPI.setRevolvingAction(event.card.id, monthKey, 'minimum');
-      applyCycleToRow(event, (response?.cycles || []).find((cycle: { month: string }) => cycle.month === monthKey));
+      await creditCardAPI.setRevolvingAction(event.card.id, event.cycleMonth ?? monthKey, 'minimum');
       changedRef.current = true;
-      showToast('บันทึกการชำระขั้นต่ำแล้ว');
+      notifyWriteSaved('บันทึกการชำระขั้นต่ำแล้ว', await refreshExpenseRows());
       setConfirmState(null);
     } catch (error) {
       const message = (error as { message?: string } | null)?.message;

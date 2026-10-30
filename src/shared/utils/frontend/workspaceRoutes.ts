@@ -2,7 +2,7 @@
  * workspaceRoutes.ts
  * ตารางแมป "section ↔ path" เดียวของทั้งฟีเจอร์ /workspace (Amendment A5 · monthly-workspace)
  * ผู้ใช้: pages/workspace/index.js, pages/edit.js และ WorkspaceShell.js — ห้ามมีสำเนาที่สอง
- * (spec-monthly-workspace.md §Amendment A5 §Files: "หนึ่งตาราง สามจุดเรียกใช้ — สำเนาที่สองที่ไหน
+ * (Amendment A5, Files: "หนึ่งตาราง สามจุดเรียกใช้ — สำเนาที่สองที่ไหน
  * ก็ตามถือว่า review ไม่ผ่าน")
  */
 

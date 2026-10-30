@@ -13,7 +13,8 @@ import UnsavedChangesDialog from './UnsavedChangesDialog';
 import { Icons } from './Icons';
 import { useSession } from '../contexts/SessionContext';
 import { incomeAPI, expenseAPI, savingsAPI, salaryAPI, investmentAPI } from '../../shared/utils/frontend/apiUtils';
-import { formatMonthLabelTH, collectMonthKeys } from '../../shared/utils/frontend/monthUtils';
+import { formatMonthLabelTH, collectMonthKeys, getMeaningfulMonthKeys } from '../../shared/utils/frontend/monthUtils';
+import { getNextMonth } from '../../shared/utils/frontend/numberUtils';
 import { WORKSPACE_SECTIONS, sectionHref } from '../../shared/utils/frontend/workspaceRoutes';
 import { isListViewControl } from '../../shared/utils/frontend/listView';
 
@@ -98,9 +99,31 @@ const buildMonthChangeCopy = (heading: string, monthLabel: string) => (
   `ข้อมูลใน "${heading}" ของเดือน ${monthLabel} ยังไม่ได้บันทึก ถ้าเปลี่ยนเดือนตอนนี้ข้อมูลที่แก้ไว้จะหายไป`
 );
 
+// เดือนที่ผู้ใช้เลือก/สร้างใน page session นี้ แยกตาม userId — อยู่ระดับ module เพื่อคงอยู่ข้ามการสลับ /workspace/* (แต่ละหน้า mount WorkspaceShell ใหม่)
+// หายเมื่อ reload เต็มหน้า และไม่ปนข้ามผู้ใช้ — ห้ามส่งเข้า monthsCache
+const sessionCreatedMonths = new Map<string, Set<string>>();
+
+const getSessionMonths = (userId: string | null): Set<string> => {
+  if (!userId) return new Set();
+  let set = sessionCreatedMonths.get(userId);
+  if (!set) {
+    set = new Set();
+    sessionCreatedMonths.set(userId, set);
+  }
+  return set;
+};
+
+const withSessionMonths = (list: string[], sessionMonths: Set<string>): string[] => {
+  // merge เฉพาะเดือน > เดือนถัดไป (เดือนเดียวที่ BR-b ซ่อน) — เดือนที่ server ลบทิ้งแล้วต้องไม่โผล่กลับมา
+  const nextMonth = getNextMonth(getCurrentMonth());
+  const extra = Array.from(sessionMonths).filter(month => month > nextMonth && !list.includes(month));
+  return extra.length ? [...list, ...extra].sort((a, b) => b.localeCompare(a)) : list;
+};
+
 export default function WorkspaceShell({ section, overlay, children }: WorkspaceShellProps) {
   const router = useRouter();
   const routerRef = useRef(router);
+  const pendingMonthRef = useRef<string | null>(null);
   routerRef.current = router;
   const { currentUser } = useSession();
   const userId = currentUser?.id || null;
@@ -147,7 +170,7 @@ export default function WorkspaceShell({ section, overlay, children }: Workspace
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [months, setMonths] = useState<string[]>(() => (userId && monthsCache.has(userId) ? monthsCache.get(userId) || [] : []));
+  const [months, setMonths] = useState<string[]>(() => (userId && monthsCache.has(userId) ? withSessionMonths(monthsCache.get(userId) || [], getSessionMonths(userId)) : []));
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -169,14 +192,18 @@ export default function WorkspaceShell({ section, overlay, children }: Workspace
         salaryAPI.getAll(),
         investmentAPI.getAll()
       ]);
-      const allMonths = collectMonthKeys({ expense: expenseRes, income: incomeRes, savings: savingsRes, salary: salaryRes, investment: investmentRes });
+      const responses = { expense: expenseRes, income: incomeRes, savings: savingsRes, salary: salaryRes, investment: investmentRes };
+      const allMonths = collectMonthKeys(responses);
+      const meaningful = getMeaningfulMonthKeys(responses);
       const currentMonth = getCurrentMonth();
-      const normalizedMonths = Array.from(new Set([currentMonth, ...allMonths.filter(month => month <= currentMonth)])).sort((a, b) => b.localeCompare(a));
-      setMonths(normalizedMonths);
+      const nextMonth = getNextMonth(currentMonth);
+      // เดือน <= เดือนถัดไปที่มีเอกสารแสดงเสมอ (เดือนว่างที่เพิ่งสร้างยังอยู่หลัง refresh); เดือนไกลกว่านั้นต้องมีข้อมูลจริง
+      const normalizedMonths = Array.from(new Set([currentMonth, ...allMonths.filter(month => month <= nextMonth || meaningful.has(month))])).sort((a, b) => b.localeCompare(a));
+      setMonths(withSessionMonths(normalizedMonths, getSessionMonths(userId)));
       if (userId) monthsCache.set(userId, normalizedMonths);
     } catch {
       const currentMonth = getCurrentMonth();
-      setMonths([currentMonth]);
+      setMonths(withSessionMonths([currentMonth], getSessionMonths(userId)));
       if (userId) monthsCache.set(userId, [currentMonth]);
     }
   }, [userId]);
@@ -184,13 +211,17 @@ export default function WorkspaceShell({ section, overlay, children }: Workspace
   useEffect(() => {
     if (!currentUser) return;
     if (userId && monthsCache.has(userId)) {
-      setMonths(monthsCache.get(userId) || []);
+      setMonths(withSessionMonths(monthsCache.get(userId) || [], getSessionMonths(userId)));
       return;
     }
     fetchMonths();
   }, [refreshTrigger, currentUser, userId, fetchMonths]);
 
   const applyMonthChange = useCallback((month: string) => {
+    // optimistic: เดือนที่เพิ่งสร้างต้องอยู่ใน months ทันที ไม่งั้น effect resolve เดือนจะดีดกลับ — ไม่เขียนลง monthsCache
+    if (userId) getSessionMonths(userId).add(month);
+    setMonths(prev => (prev.includes(month) ? prev : [...prev, month].sort((a, b) => b.localeCompare(a))));
+    pendingMonthRef.current = month;
     setSelectedMonth(month);
     if (typeof window !== 'undefined' && userId) {
       try { localStorage.setItem(selectedMonthKey, month); } catch { /* private mode */ }
@@ -202,6 +233,10 @@ export default function WorkspaceShell({ section, overlay, children }: Workspace
   useEffect(() => {
     if (!router.isReady || !months.length) return;
     const queryMonth = typeof router.query.month === 'string' ? router.query.month : null;
+    // shallow replace ของ applyMonthChange ยังไม่สะท้อนใน router.query — อย่า resolve จาก query เก่าจนกว่าจะตรงกัน
+    const pendingMonth = pendingMonthRef.current;
+    if (pendingMonth && months.includes(pendingMonth) && queryMonth !== pendingMonth) return;
+    pendingMonthRef.current = null;
     let resolved: string;
     if (queryMonth && MONTH_RE.test(queryMonth) && months.includes(queryMonth)) {
       resolved = queryMonth;

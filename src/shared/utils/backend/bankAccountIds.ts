@@ -97,8 +97,7 @@ export function assignBankAccountIds(
 
     // A client-supplied id is only kept when it's both format-valid AND still present in
     // `stored` — otherwise it may be a stale/deleted id resurrected by a stale browser tab,
-    // which must not silently re-link a dangling credit card to a new account (see
-    // .pipeline/spec-findings-bank-account-manager-fix.md Fix 1).
+    // which must not silently re-link a dangling credit card to a new account (stale-tab guard).
     let id: string | undefined = isBankAccountId(requestedId) && storedIds.has(requestedId)
       ? requestedId
       : undefined;

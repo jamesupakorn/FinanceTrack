@@ -1,6 +1,5 @@
 /** @jest-environment node */
-// Integration test against a real (ephemeral, in-process) MongoDB instance — see
-// .pipeline/spec-td-c01-api-coverage-7.md for why mongodb-memory-server (not mocks) was chosen:
+// Integration test against a real (ephemeral, in-process) MongoDB instance — Rationale: mongodb-memory-server (not mocks) was chosen:
 // the partial-field-update guard on POST and `mutateTaxYear`'s read-mutate-write cycle are both
 // real Mongo document-round-trip behaviors that a mocked collection could never meaningfully prove.
 //

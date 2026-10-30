@@ -3,6 +3,7 @@
 
 import { isEndOfMonthDueDay, normalizeDueDayValue, resolveDueDayForMonth, getDaysInMonth } from '../dateUtils';
 import { isPaidFlag } from '../commonUtils';
+import { isValidPurchaseDate } from '../creditCardBasics';
 
 export const MAX_UPCOMING_DUES = 5;
 
@@ -19,6 +20,8 @@ export interface UpcomingDue {
   name: string;
   amount: number;
   day: number;
+  /** วันครบกำหนดจริง 'YYYY-MM-DD' — แถวบัตรข้ามเดือนอาจอยู่เดือนถัดจาก monthKey (XM-1) */
+  dueDate: string;
 }
 
 export interface UpcomingDues {
@@ -87,14 +90,21 @@ export function buildUpcomingDues(
     if (isPaidFlag(item.paid)) return;
     const amount = Number(item.actual || 0);
     if (!Number.isFinite(amount) || amount <= 0) return;
+    const name = String(item.name || key || 'รายการไม่มีชื่อ');
+    // แถวบัตรที่ derive มามีวันครบกำหนดจริงแล้ว (resolveCardDueDate) — ใช้ตรง ๆ ห้ามคำนวณซ้ำ
+    if (isValidPurchaseDate(item.resolvedDueDate)) {
+      dues.push({ name, amount, day: Number(item.resolvedDueDate.slice(8, 10)), dueDate: item.resolvedDueDate });
+      return;
+    }
     const rawDay = isEndOfMonthDueDay(item.dueDay) ? item.dueDay : normalizeDueDayValue(item.dueDay);
     const day = resolveDueDayForMonth(rawDay, daysInMonth);
     if (!day) return;
-    dues.push({ name: String(item.name || key || 'รายการไม่มีชื่อ'), amount, day });
+    dues.push({ name, amount, day, dueDate: `${monthKey}-${String(day).padStart(2, '0')}` });
   });
 
   if (!dues.length) return null;
-  dues.sort((a, b) => a.day - b.day);
+  // เรียงตามวันที่จริง (ISO เทียบแบบ string ได้) — แถวเดือนเดียวกันได้ลำดับเดิมตาม day
+  dues.sort((a, b) => (a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0));
   return {
     monthKey,
     items: dues.slice(0, MAX_UPCOMING_DUES),

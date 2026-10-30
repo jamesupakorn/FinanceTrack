@@ -1,7 +1,7 @@
 /**
  * คอมโพเนนต์: DashboardCalendarSection
  * ห่อ ExpenseCalendar แบบฝังตรงในหน้าภาพรวม (ไม่ผ่าน ExpenseCalendarModal — ตามมติ ADR-012)
- * เป็น thin wrapper ตาม §Files ของ spec-dashboard.md: ไม่ fetch เอง ไม่มี state ของ handler เอง —
+ * เป็น thin wrapper: ไม่ fetch เอง ไม่มี state ของ handler เอง —
  * รับ calendarData (จาก buildMonthEvents ตัวเดียวกับปฏิทิน/รายการครบกำหนด) และ handler ทั้งสี่ตัวมาจาก
  * pages/index.js ซึ่งเป็นเจ้าของ "แหล่งข้อมูลเดียว" ของทั้งหน้า (tiles/ring/budget/ปฏิทิน/รายการครบกำหนด
  * ต้องขยับพร้อมกันหลังทำรายการสำเร็จ — "One refresh function, one source" ตาม spec §4) เดียวกับที่

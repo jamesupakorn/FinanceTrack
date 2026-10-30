@@ -1,6 +1,5 @@
 /** @jest-environment node */
-// Integration test against a real (ephemeral, in-process) MongoDB instance — see
-// .pipeline/spec-td-c01-api-coverage-2.md for why mongodb-memory-server (not mocks) was chosen: this
+// Integration test against a real (ephemeral, in-process) MongoDB instance — Rationale: mongodb-memory-server (not mocks) was chosen: this
 // route's `enforceMonthLimit` retention/deletion behavior is a real Mongo find/sort/deleteMany round
 // trip, so mocking the collection would never prove the cross-user deletion-scope guarantee holds.
 //

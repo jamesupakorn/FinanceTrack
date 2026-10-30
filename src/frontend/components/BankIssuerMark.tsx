@@ -2,7 +2,7 @@
  * คอมโพเนนต์: BankIssuerMark
  * แสดงโลโก้ธนาคาร/ผู้ออกบัตร ถ้ามีและโหลดสำเร็จ ไม่งั้น fallback เป็นจุดสีเดิม (12px)
  *
- * ฟีเจอร์: credit-card-bank-issuer-logo — ดู .pipeline/spec-credit-card-bank-issuer-logo.md AC-BI-25..28
+ * ฟีเจอร์: credit-card-bank-issuer-logo — AC-BI-25..28
  * ใช้ getBankIssuer(card) เพื่ออ่านค่าตอน render เท่านั้น — ไม่เขียนกลับ (BR-CC-020)
  * ทุกจอ (Dashboard/Detail/Form preview) ใช้คอมโพเนนต์นี้ร่วมกัน เพื่อให้ fallback logic อยู่ที่เดียว
  *
