@@ -275,7 +275,7 @@ describe('buildMonthlySummaryPayload — comparison & upcoming (AC-7/AC-9)', () 
     expect(payload.upcoming).not.toBeNull();
     if (payload.upcoming === null) throw new Error('Expected upcoming dues for next month');
     expect(payload.upcoming.monthKey).toBe('2025-01');
-    // UpcomingDue gained an ISO dueDate (spec-credit-card-cross-month-due.md §Interfaces); the day is unchanged
+    // UpcomingDue gained an ISO dueDate (cross-month-due); the day is unchanged
     expect(payload.upcoming.items).toEqual([{ name: 'ค่าเช่า', amount: 10000, day: 5, dueDate: '2025-01-05' }]);
   });
 

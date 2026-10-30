@@ -66,7 +66,7 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
-   GRAPHITE DESIGN TOKENS — UX_SPEC-full-redesign-2026-08.md §3, verbatim.
+   GRAPHITE DESIGN TOKENS, verbatim.
    This is the redesign's actual palette/scale. It is the single source of truth for every
    Tailwind-migrated surface; `tailwind.config.js` implements the colour/spacing/radius/font-family
    subset of this same list. These CSS custom properties exist for contexts Tailwind's utility

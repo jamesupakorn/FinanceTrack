@@ -3,7 +3,7 @@
  * แสดงสรุปรายรับ รายจ่าย เงินออม และโครงสร้างกระแสเงินสด (CashFlowRing) ของเดือนที่เลือก
  * ตัวเลขทั้งหมดมาจาก getMonthlySummaryModel() เดียวกับ Dashboard/MonthComparison (BR-DASH-005) —
  * ปิดข้อยกเว้นสุดท้ายของ BR-DASH-005 (Amendment A2) หลังจากที่ก่อนหน้านี้ไฟล์นี้ยังมี pipeline คำนวณยอด
- * แยกเป็นของตัวเอง (ดูรายละเอียดใน spec-reports-settings.md §Amendment A2)
+ * แยกเป็นของตัวเอง (Amendment A2)
  *
  * Graphite redesign (Reports pass) — Tailwind only, ไม่ import SummaryReport.module.css อีกต่อไป
  * (task-size-reports-graphite.md Step 1). ไม่มี card ของตัวเอง — คอมโพเนนต์นี้ mount อยู่ในตัว body ของ

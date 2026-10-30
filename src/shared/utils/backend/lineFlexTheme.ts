@@ -2,7 +2,7 @@
 // ธีมสีและ Flex primitive ที่ใช้ร่วมกันทั้ง 3 ข้อความ LINE (monthly summary / due notify / credit card)
 // เป็นโมดูล pure — ไม่อ่าน config/env/DB/request state ใดๆ (สเปก AC-1)
 //
-// ที่มาของค่าสี: .pipeline/spec-line-flex-light-theme.md §2 / .pipeline/UX_SPEC-line-flex-light-theme.md §2
+// ที่มาของค่าสี: ธีมสว่างของ LINE Flex (light-theme palette)
 // ค่าทุกตัวผ่านการวัด WCAG AA แล้ว ห้ามเปลี่ยนโดยไม่วัดคอนทราสต์ใหม่ (R-4)
 
 export const LINE_THEME = {

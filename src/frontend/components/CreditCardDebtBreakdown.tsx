@@ -3,7 +3,7 @@
  * แผงแสดงหนี้คงเหลือแยกตามบัตร (drill-down ของ tile "หนี้คงเหลือรวม")
  *
  * แสดงค่า remainingPayable ที่เซิร์ฟเวอร์ส่งมาตรง ๆ ไม่คำนวณยอดเงินใหม่ที่ client
- * (parse/sort เพื่อการแสดงผลเท่านั้น) — spec-credit-card-kpi-drilldown.md D-1..D-4
+ * (parse/sort เพื่อการแสดงผลเท่านั้น) — D-1..D-4
  *
  * หมายเหตุ: import token จาก CreditCardDashboard เป็น circular แต่ใช้เฉพาะตอน render จึงปลอดภัย
  */

@@ -156,7 +156,7 @@ const getRowCycleMonth = (row: { [field: string]: unknown } | null | undefined):
 };
 
 /**
- * วันครบกำหนดจริงของแถว — แถวบัตรใช้ resolvedDueDate (อาจอยู่เดือนถัดไป, spec-credit-card-cross-month-due.md)
+ * วันครบกำหนดจริงของแถว — แถวบัตรใช้ resolvedDueDate (อาจอยู่เดือนถัดไป)
  * แถวปกติ/payload เก่าใช้ dueDay ของเดือนที่เลือกเหมือนเดิม · derive อ่านอย่างเดียว ไม่เก็บ
  */
 const rowDueDate = (row: DueRowLike, monthKey: MonthKey | null | undefined): Date | null => {

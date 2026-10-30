@@ -2,7 +2,7 @@
  * คอมโพเนนต์: BudgetHealthPanel
  * 4 แถวสุขภาพงบประมาณ + rollup — อ่านจาก evaluateBudgetHealth() ล้วน ไม่คำนวณเกณฑ์เอง (BR-DASH-005)
  *
- * Collapsible ตาม §UX Review ของ spec-dashboard.md — พับเก็บเป็นค่าเริ่มต้นเสมอทั้งมือถือและเดสก์ท็อป
+ * Collapsible ตาม §UX Review — พับเก็บเป็นค่าเริ่มต้นเสมอทั้งมือถือและเดสก์ท็อป
  * (รวม lg — UX_SPEC §6.4 ยังโชว์ "สุขภาพงบประมาณ ▾" พับอยู่) ใช้ CollapsibleHeading ตัวเดียวกับที่
  * DashboardCalendarSection ใช้ (architecture-review-dashboard-graphite.md Finding 3) รายบรรทัด rollup
  * ยังโผล่ในหัวข้อตอนพับอยู่เสมอ (AC-DB-29)

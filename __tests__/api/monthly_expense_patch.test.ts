@@ -179,7 +179,7 @@ describe('PATCH /api/monthly_expense — derived cci_/ccr_ keys', () => {
   });
 });
 
-// spec-credit-card-cross-month-due.md AC-12: PATCH never persists resolvedDueDate
+// AC-12: PATCH never persists resolvedDueDate
 describe('PATCH /api/monthly_expense — resolvedDueDate is never persisted (AC-12)', () => {
   const card = { id: 'cc_abc123abc123', name: 'Shopee', creditLimit: 50000, annualRate: 0, minPaymentPercent: 10, statementDay: 'EOM', dueDay: 10, color: '#5d5bff', bankName: '', last4: '' };
 

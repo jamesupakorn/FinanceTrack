@@ -296,7 +296,7 @@ export default function CreditCardDashboard({
     });
 
     for (const card of cards) {
-      // R-2 override (spec-credit-card-cross-month-due.md): รอบบิลที่ครบกำหนดในเดือนนี้ (payable) ยังค้างจ่าย
+      // R-2 override: รอบบิลที่ครบกำหนดในเดือนนี้ (payable) ยังค้างจ่าย
       // และไม่ใช่รอบปัจจุบัน → ใช้รอบนั้น "แทน" รอบปัจจุบัน ไม่บวกเพิ่ม (ยอดค้างถูก carry เข้ารอบปัจจุบันแล้ว)
       // ยอด derive ฝั่งเซิร์ฟเวอร์ใน summariseCard ทุกครั้งที่ GET ไม่ได้คำนวณ/เก็บที่ client
       const payableMonth = card.payableRevolvingMonth;

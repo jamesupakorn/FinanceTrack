@@ -1,6 +1,5 @@
 /** @jest-environment node */
-// Integration test against a real (ephemeral, in-process) MongoDB instance — see
-// .pipeline/spec-td-c01-api-coverage-3.md for why mongodb-memory-server (not mocks) was chosen: this
+// Integration test against a real (ephemeral, in-process) MongoDB instance — Rationale: mongodb-memory-server (not mocks) was chosen: this
 // route's `enforceMonthLimit` retention/deletion behavior and the `transfer` sub-flow's `$ne`-guarded
 // `$push` idempotency guarantee are both real Mongo round trips, so mocking the collection would never
 // prove either property actually holds.

@@ -8,7 +8,7 @@ guessing from the filename alone.
 ## One-off migrations — run-state unknown, do not delete without checking with the user first
 
 - **`migrateCreditExpenseToSpendItems.ts`** — one-off credit-card spend migration
-  (`.pipeline/spec-credit-card-spend.md` §8 / AC-S14). **Run-state: not run.**
+  (credit-card spend spec §8 / AC-S14). **Run-state: not run.**
   Defaults to dry-run in JSON and Mongo modes. `--apply` requires `--backup-confirmed`
   or `--backup <existing-path>`; optional `--map map.json` and `--resolve=subtract`.
   Stop application writers, back up both credit and expense data, review the dry-run

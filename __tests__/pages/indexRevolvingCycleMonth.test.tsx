@@ -1,4 +1,4 @@
-// spec-credit-card-cross-month-due.md AC-15 (RR-1): home-page revolving actions write to the event's
+// AC-15 (RR-1): home-page revolving actions write to the event's
 // own cycle month (event.cycleMonth ?? selectedMonth), from both the calendar and the upcoming list.
 // buildMonthEvents / collectUpcomingPayments and the page's handlers are real; only the API client,
 // session/router, and the presentational children are stubbed so the handlers can be driven directly.

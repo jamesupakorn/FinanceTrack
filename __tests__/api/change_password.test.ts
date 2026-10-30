@@ -1,6 +1,5 @@
 /** @jest-environment node */
-// Integration test against a real (ephemeral, in-process) MongoDB instance — see
-// .pipeline/spec-td-c01-api-coverage.md for why mongodb-memory-server (not mocks) was chosen: this
+// Integration test against a real (ephemeral, in-process) MongoDB instance — Rationale: mongodb-memory-server (not mocks) was chosen: this
 // route's entire value is the real bcrypt-compare-then-bcrypt-hash round trip, so mocking
 // lib/userStore.js would test nothing meaningful.
 //

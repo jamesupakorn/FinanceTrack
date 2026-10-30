@@ -1,6 +1,5 @@
 /** @jest-environment node */
-// Integration test against a real (ephemeral, in-process) MongoDB instance — see
-// .pipeline/spec-td-c01-api-coverage-13.md for why mongodb-memory-server (not mocks) was chosen: the
+// Integration test against a real (ephemeral, in-process) MongoDB instance — Rationale: mongodb-memory-server (not mocks) was chosen: the
 // cross-collection write (an expense POST writing into a *different* collection, `credit_cards`, via
 // creditCardSync.js's applyCreditCardPaidFromExpensePayload), the strip-on-write invariant (no
 // cci_*/ccr_* key ever reaching monthly_expense), and the accountSummary-leak fact are all real,
@@ -920,7 +919,7 @@ describe('/api/monthly_expense (Mongo mode)', () => {
   });
 });
 
-// spec-credit-card-cross-month-due.md AC-1 / AC-16 (GET derives resolvedDueDate from the STORED statementDay)
+// AC-1 / AC-16 (GET derives resolvedDueDate from the STORED statementDay)
 // and AC-12 (POST never persists resolvedDueDate)
 describe('/api/monthly_expense — cross-month resolvedDueDate', () => {
   it('AC-1/AC-16: stored statementDay EOM / dueDay 10 → 2026-10 cycle listed under its DUE month 2026-11 with resolvedDueDate 2026-11-10 (cash basis, DP-1)', async () => {

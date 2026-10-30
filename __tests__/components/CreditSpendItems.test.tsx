@@ -86,7 +86,7 @@ it('keeps a date-less legacy item date-less when editing its name and amount', a
   }));
 });
 
-// spec-credit-card-cross-month-due.md AC-9: billing-month due hint uses resolveCardDueDate
+// AC-9: billing-month due hint uses resolveCardDueDate
 it('cross-month card (EOM/10): billing month 2026-10 is due 10 พ.ย. 2569, not 10 ต.ค.', async () => {
   render(<CreditSpendItems cardId={item.cardId} month={item.month} statementDay="EOM" dueDay={10} onChanged={jest.fn()} />);
   await screen.findByText('อาหาร');

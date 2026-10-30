@@ -2,7 +2,7 @@
 // Integration test against a real (ephemeral, in-process) MongoDB instance for every test case
 // except the isolated getUserCreditData()-throw -> 500 case at the bottom of this file (see that
 // describe block for why jest.mock('.../creditCardStore') is the one sanctioned exception here,
-// per .pipeline/spec-td-c01-api-coverage-11.md and CODING_STANDARD.md's "mock a collaborator, not
+// per CODING_STANDARD.md's "mock a collaborator, not
 // the DB" carve-out — same pattern slices #9/#10 already used).
 //
 // The DELETE implicit-row-reappearance case and the PATCH create-on-mark-paid case are regression
@@ -17,8 +17,7 @@
 // console.logging its output for each of this file's own seed shapes (the 3-month carry-forward
 // chain, the truncation literal, the implicit gap-fill / skip-not-break literals, and — most
 // importantly — the DELETE implicit-row-reappearance post-delete literal) — every value below
-// matches that live output digit-for-digit. See .pipeline/changes-td-c01-api-coverage-11.md for
-// the verification transcript.
+// matches that live output digit-for-digit.
 import { MongoMemoryServer } from '../../helpers/mongoReplSet';
 import { createMocks } from 'node-mocks-http';
 import {
@@ -191,8 +190,7 @@ function makeCard(overrides: Partial<CardFixture> = {}) {
 
 // --- buildRevolvingCycles() literals, independently re-verified against the live function ------
 // (see file-header comment; every value below was confirmed digit-for-digit against a real
-// buildRevolvingCycles() call before being hard-coded here — verification transcript in
-// .pipeline/changes-td-c01-api-coverage-11.md).
+// buildRevolvingCycles() call before being hard-coded here).
 
 // Card cc_a used by the 3-month carry-forward chain and the DELETE implicit-row-reappearance case.
 // annualRate: 12 => monthlyRate = 12/100/12 = 0.01 exactly.

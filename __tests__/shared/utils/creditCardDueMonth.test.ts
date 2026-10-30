@@ -1,5 +1,5 @@
 /** @jest-environment node */
-// spec-credit-card-due-month-placement.md — DP-AC-3 (edge cases P1–P10 + the three getCardDueMonth invariants).
+// DP-AC-3 (edge cases P1–P10 + the three getCardDueMonth invariants).
 import {
   getCardDueMonth,
   getPayableCycleMonth,

@@ -1,6 +1,5 @@
 /** @jest-environment node */
-// Integration test against a real (ephemeral, in-process) MongoDB instance — see
-// .pipeline/spec-td-c01-api-coverage-8.md for why mongodb-memory-server (not mocks) was chosen: this
+// Integration test against a real (ephemeral, in-process) MongoDB instance — Rationale: mongodb-memory-server (not mocks) was chosen: this
 // route's full-overwrite (no partial-field-update guard) POST semantics and its own call site of
 // enforceSharedMonthWindowMongo are both real multi-document Mongo query behaviors, so mocking the
 // collection would never prove either property actually holds.

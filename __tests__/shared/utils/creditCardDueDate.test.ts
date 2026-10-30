@@ -1,5 +1,5 @@
 /** @jest-environment node */
-// spec-credit-card-cross-month-due.md — AC-1, AC-2 (E1–E14 + getPayableCycleMonth), AC-11 (grep).
+// AC-1, AC-2 (E1–E14 + getPayableCycleMonth), AC-11 (grep).
 import fs from 'fs';
 import path from 'path';
 import {

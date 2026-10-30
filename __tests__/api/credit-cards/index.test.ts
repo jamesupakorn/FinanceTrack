@@ -2,7 +2,7 @@
 // Integration test against a real (ephemeral, in-process) MongoDB instance for every test case
 // except the isolated getUserCreditData()/updateUserCreditData()-throw -> 500 case at the bottom
 // of this file (see that describe block for why jest.mock('.../creditCardStore') is the one
-// sanctioned exception here, per .pipeline/spec-td-c01-api-coverage-9.md and CODING_STANDARD.md's
+// sanctioned exception here, per CODING_STANDARD.md's
 // "mock a collaborator, not the DB" carve-out — same pattern slice #8 already used for users.js).
 //
 // credit-cards/index.js's delete cascade (removing a card's own plans/cycles from the same
@@ -954,7 +954,7 @@ describe('/api/credit-cards tile fields (spec-credit-card-tiles, mocked store, i
   });
 });
 
-// spec-credit-card-cross-month-due.md AC-14 / RR-2: two derived GET response fields, never persisted
+// AC-14 / RR-2: two derived GET response fields, never persisted
 describe('/api/credit-cards payableRevolvingDue / payableRevolvingMonth (AC-14)', () => {
   const utils = require('../../../src/shared/utils/creditCardUtils');
   const SHOPEE = { id: 'cc_5e5e5e5e5e5e', name: 'Shopee', creditLimit: 20000, annualRate: 0, minPaymentPercent: 10, statementDay: 'EOM', dueDay: 10, color: '#ee4d2d', bankName: '', last4: '' };

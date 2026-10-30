@@ -1,6 +1,5 @@
 /** @jest-environment node */
-// Focused regression test for the `getUsersForNotify` non-string `userId` type guard added in
-// .pipeline/spec-line-monthly-summary-hardening.md. Follows a real-Mongo-instance pattern
+// Focused regression test for the `getUsersForNotify` non-string `userId` type guard added for the monthly-summary hardening. Follows a real-Mongo-instance pattern
 // (mongodb-memory-server) rather than mocking the DB.
 import { MongoMemoryServer } from '../helpers/mongoReplSet';
 import { createMocks } from 'node-mocks-http';
@@ -30,7 +29,7 @@ jest.mock('../../src/shared/utils/backend/creditCardStore', () => {
   return { ...actual, getUserCreditData: jest.fn(actual.getUserCreditData) };
 });
 
-// spec-line-flex-light-theme.md AC-24: helper ที่เดินโครงสร้าง Flex `contents` แล้วรวบรวมข้อความ
+// AC-24: helper ที่เดินโครงสร้าง Flex `contents` แล้วรวบรวมข้อความ
 // ของทุกโหนด type:'text' ตามลำดับที่ปรากฏในเอกสาร (document order) — ใช้แทนการอ่าน `.text` ตรงๆ
 // แบบเดิม เพราะข้อความหลักตอนนี้เป็น Flex ไม่ใช่ plain text แล้ว
 function collectFlexTextNodes(node: unknown, out: string[] = []): string[] {
@@ -269,7 +268,7 @@ describe('/api/line_due_notify — per-user isolation', () => {
   });
 });
 
-// spec-line-notify-account-grouping.md AC-9: message-format coverage สำหรับการจัดกลุ่มรายการตามบัญชี
+// AC-9: message-format coverage สำหรับการจัดกลุ่มรายการตามบัญชี
 describe('/api/line_due_notify — จัดกลุ่มรายการตามบัญชีในข้อความ (AC-1…AC-6)', () => {
   const FMT_USER_ID = 'user-fmt';
   const TARGET_DATE = '2024-01-15'; // target.day = 15, daysInMonth = 31
@@ -488,7 +487,7 @@ describe('/api/line_due_notify — จัดกลุ่มรายการต
   });
 });
 
-// spec-line-flex-light-theme.md AC-25: message-format coverage สำหรับข้อความบัตรเครดิตแบบ Flex
+// AC-25: message-format coverage สำหรับข้อความบัตรเครดิตแบบ Flex
 describe('/api/line_due_notify — บัตรเครดิตแบบ Flex (AC-16…AC-21, AC-25)', () => {
   const CC_USER_ID = 'user-cc-flex';
   const TARGET_DATE = '2024-01-15';
@@ -516,7 +515,7 @@ describe('/api/line_due_notify — บัตรเครดิตแบบ Flex 
 
   it('บัตรมีทั้งยอดหมุนเวียนและงวดผ่อนครบกำหนด → ส่งเป็น Flex และยอดหมุนเวียนอยู่ก่อนงวดผ่อนเสมอ (AC-18 ordering)', async () => {
     await seedCardUser({
-      // same-month card (statementDay < dueDay) per spec-credit-card-cross-month-due.md §Test fallout rule
+      // same-month card (statementDay < dueDay) per the cross-month-due test-fallout rule
       cards: [{ id: 'card-1', name: 'บัตร A', statementDay: 1, dueDay: 15 }],
       plans: [{
         id: 'plan-1', cardId: 'card-1', itemName: 'มือถือ', months: 10, status: 'ongoing',
@@ -556,7 +555,7 @@ describe('/api/line_due_notify — บัตรเครดิตแบบ Flex 
 
   it('Flex ล้มเหลว → fallback เป็นข้อความบัตรเครดิตแบบข้อความล้วน (AC-21)', async () => {
     await seedCardUser({
-      // same-month card (statementDay < dueDay) per spec-credit-card-cross-month-due.md §Test fallout rule
+      // same-month card (statementDay < dueDay) per the cross-month-due test-fallout rule
       cards: [{ id: 'card-1', name: 'บัตร A', statementDay: 1, dueDay: 15 }],
       plans: [{
         id: 'plan-1', cardId: 'card-1', itemName: 'มือถือ', months: 10, status: 'ongoing',
@@ -581,7 +580,7 @@ describe('/api/line_due_notify — บัตรเครดิตแบบ Flex 
     expect(secondBody.messages[0].text).toContain('มือถือ');
   });
 
-  // spec-credit-card-cross-month-due.md AC-4: Shopee (EOM/10) cycle 2026-10 is due 2026-11-10
+  // AC-4: Shopee (EOM/10) cycle 2026-10 is due 2026-11-10
   describe('cross-month card (AC-4)', () => {
     const SHOPEE = { id: 'card-sp', name: 'Shopee SPayLater', statementDay: 'EOM', dueDay: 10 };
     const seedShopee = () => seedCardUser({

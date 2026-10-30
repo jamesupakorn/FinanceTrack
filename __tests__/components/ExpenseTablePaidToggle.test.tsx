@@ -241,7 +241,7 @@ describe('ExpenseTable optimistic paid toggle (ADR-028)', () => {
   });
 });
 
-// spec-credit-card-cross-month-due.md AC-8: card rows show/use their server-derived resolvedDueDate
+// AC-8: card rows show/use their server-derived resolvedDueDate
 describe('ExpenseTable cross-month card due date (AC-8)', () => {
   const OCT = '2026-10';
   const emptyBreakdown = {

@@ -82,7 +82,7 @@ export const IGNORED_ROW_KEYS: Set<string> = new Set([
 /**
  * สร้างแผนที่เหตุการณ์ของเดือนหนึ่งจาก monthly_expense + cards (วันสรุปยอด)
  * ย้ายมาจาก ExpenseCalendarModal.js:263-355 แบบคำต่อคำ — cardById/planById ถูกสร้างขึ้นภายในแทนที่จะรับ
- * เป็นพารามิเตอร์ เพราะที่นี่รับ cards/plans ดิบตาม §Interfaces ของ spec-dashboard.md
+ * เป็นพารามิเตอร์ เพราะที่นี่รับ cards/plans ดิบ
  * @returns {{eventsByDay: Map<number, object[]>, unscheduledEvents: object[], windowState: string, monthTotals: {total:number, paid:number, remaining:number}}}
  */
 export function buildMonthEvents({

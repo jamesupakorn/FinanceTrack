@@ -138,7 +138,7 @@ describe('loadIssuerFilter / saveIssuerFilter (AC-T10)', () => {
 });
 
 describe('countOverdueInstallments', () => {
-  // same-month card (statementDay < dueDay) per spec-credit-card-cross-month-due.md §Test fallout rule
+  // same-month card (statementDay < dueDay) per the cross-month-due test-fallout rule
   const card = { id: 'cc_1', statementDay: 1, dueDay: 15 };
   const plans = [
     { cardId: 'cc_1', status: 'ongoing', schedule: [
@@ -158,7 +158,7 @@ describe('countOverdueInstallments', () => {
     expect(countOverdueInstallments(card, null, TODAY)).toBe(0);
     expect(countOverdueInstallments({ dueDay: 1 }, plans, TODAY)).toBe(0);
   });
-  // spec-credit-card-cross-month-due.md AC-9: Shopee (EOM/10) cycle 2026-10 is due 2026-11-10
+  // AC-9: Shopee (EOM/10) cycle 2026-10 is due 2026-11-10
   it('cross-month card: cycle 2026-10 row is due 2026-11-10, not 2026-10-10 (AC-9)', () => {
     const shopee = { id: 'cc_sp', statementDay: 'EOM', dueDay: 10 };
     const shopeePlans = [{ cardId: 'cc_sp', status: 'ongoing', schedule: [{ no: 1, dueMonth: '2026-10', paid: false }] }];

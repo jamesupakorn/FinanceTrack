@@ -1,4 +1,4 @@
-// spec-credit-card-cross-month-due.md AC-9 / AC-3: the "งวดถัดไป …" date uses resolveCardDueDate.
+// AC-9 / AC-3: the "งวดถัดไป …" date uses resolveCardDueDate.
 import { render, screen } from '@testing-library/react';
 import CreditCardDetail from '../../src/frontend/components/CreditCardDetail';
 

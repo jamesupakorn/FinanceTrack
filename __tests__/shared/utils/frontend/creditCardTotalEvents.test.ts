@@ -34,7 +34,7 @@ it('keeps breakdown through expense formatting and splits summary totals only on
   expect(model.creditCardRevolving).toBe(1000);
 });
 
-// spec-credit-card-cross-month-due.md AC-5 / AC-7 / AC-3: derived card rows placed on their real due date
+// AC-5 / AC-7 / AC-3: derived card rows placed on their real due date
 // Re-fixtured for spec-credit-card-due-month-placement (DP-1/DP-7): GET now puts each cross-month card row
 // in its due-month map with `cycleMonth`, and buildMonthEvents reads only monthsMap[M].
 describe('cross-month card rows (AC-5, AC-7)', () => {

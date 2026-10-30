@@ -4,7 +4,7 @@ const CARD = {
   id: 'cc_upcoming',
   annualRate: 0,
   minPaymentPercent: 10,
-  // same-month card (dueDay > statementDay) per spec-credit-card-cross-month-due.md §Test fallout rule
+  // same-month card (dueDay > statementDay) per the cross-month-due test-fallout rule
   statementDay: 1,
   dueDay: 5,
   creditLimit: 10000
@@ -85,7 +85,7 @@ describe('summariseCard revolvingDueMonth', () => {
   });
 });
 
-// spec-credit-card-cross-month-due.md AC-14 / RR-2: payable cycle derived on read, never stored
+// AC-14 / RR-2: payable cycle derived on read, never stored
 describe('summariseCard payableRevolvingDue / payableRevolvingMonth (AC-14)', () => {
   const SHOPEE = { id: 'cc_shopee', annualRate: 0, minPaymentPercent: 10, statementDay: 'EOM', dueDay: 10, creditLimit: 20000 };
 

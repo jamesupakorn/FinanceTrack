@@ -33,7 +33,7 @@ const makeCard = (
 ): TestCard => ({
   id,
   name,
-  // same-month default (statementDay < dueDay) per spec-credit-card-cross-month-due.md §Test fallout rule
+  // same-month default (statementDay < dueDay) per the cross-month-due test-fallout rule
   statementDay: 1,
   dueDay,
   remainingPayable: 0,
@@ -279,7 +279,7 @@ describe('CreditCardDashboard upcoming groups', () => {
   });
 });
 
-// spec-credit-card-cross-month-due.md AC-9 / AC-14 (R-2 override: replace, not add)
+// AC-9 / AC-14 (R-2 override: replace, not add)
 describe('CreditCardDashboard upcoming groups: cross-month cards', () => {
   const LIST = 'รายการบัตรเครดิตที่ครบกำหนดเร็ว ๆ นี้';
   const shopee = (fields: Partial<TestCard> = {}) => makeCard('cc_sp', 'Shopee SPayLater', 10, { statementDay: 'EOM', ...fields });

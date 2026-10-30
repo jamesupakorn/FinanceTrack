@@ -130,7 +130,7 @@ describe('Flex / text parity (AC-10)', () => {
   });
 });
 
-// spec-credit-card-cross-month-due.md AC-10: card rows carry resolvedDueDate; sort by real date, full Thai date label when cross-month
+// AC-10: card rows carry resolvedDueDate; sort by real date, full Thai date label when cross-month
 describe('buildUpcomingDues + summary label with resolvedDueDate (AC-10)', () => {
   const doc = {
     ค่าเช่า: { actual: 8000, dueDay: 5 },

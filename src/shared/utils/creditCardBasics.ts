@@ -50,7 +50,7 @@ export const MAX_ACTIVE_PLANS_PER_USER: number = 50;
 export const MAX_INSTALLMENTS_PER_PLAN: number = 60;
 export const MAX_REVOLVING_CYCLES_PER_CARD: number = 60;
 
-// รายการใช้จ่ายไม่ผ่อน (spend items) — .pipeline/spec-credit-card-spend.md / DATA_MODEL-credit-card-spend.md
+// รายการใช้จ่ายไม่ผ่อน (spend items)
 // เก็บใน credit_cards doc เดียวกับ cycles: เพดานต่อบัตรกันเอกสารเกิน 16 MB (20 บัตร × 1000 × ~250 B ≈ 5 MB)
 export const MAX_SPEND_ITEMS_PER_CYCLE: number = 100;
 export const MAX_SPEND_ITEMS_PER_CARD: number = 1000;
@@ -164,7 +164,7 @@ export function getDaysInMonthKey(monthKey: string): number {
  * ใช้ resolveDueDayForMonth ตัวเดียวกับ ExpenseTable และ LINE (BR-CC-003)
  *
  * primitive แบบ "เดือนเดียวกัน" เท่านั้น — ไม่รู้จักวันสรุปยอด ผู้เรียกที่แปลงบัตร + รอบบิล
- * เป็นวันครบกำหนดต้องใช้ resolveCardDueDate แทนเสมอ (XM-5, spec-credit-card-cross-month-due.md)
+ * เป็นวันครบกำหนดต้องใช้ resolveCardDueDate แทนเสมอ (XM-5)
  * ห้ามเรียกฟังก์ชันนี้ตรง ๆ จากนอกไฟล์นี้ (AC-11)
  * @returns 'YYYY-MM-DD'
  */

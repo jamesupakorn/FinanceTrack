@@ -355,7 +355,7 @@ describe('ExpenseCalendarModal', () => {
   });
 });
 
-// spec-credit-card-cross-month-due.md AC-6: actions on a cross-month event write to the event's cycle month
+// AC-6: actions on a cross-month event write to the event's cycle month
 describe('ExpenseCalendarModal cross-month revolving actions (AC-6)', () => {
   const CYCLE_MONTH = addMonths(SELECTED_MONTH, -1);
   const cardId = 'cc_5e5e5e5e5e5e';
