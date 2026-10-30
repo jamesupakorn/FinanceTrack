@@ -54,7 +54,7 @@ export default function CreditCardDebtBreakdown({ id, cards, total, onOpenCard, 
   };
 
   return (
-    <section id={id} role="region" aria-labelledby={titleId} className={`${CARD} flex flex-col gap-space-3`} onKeyDown={handleKeyDown}>
+    <section id={id} aria-labelledby={titleId} className={`${CARD} flex flex-col gap-space-3`} onKeyDown={handleKeyDown}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-space-3 gap-y-space-1">
         <h2 id={titleId} className={SECTION_TITLE}>หนี้คงเหลือแยกตามบัตร</h2>
         <span className="text-sm text-secondary">{`รวม ${formatCurrency(total || 0)} บาท · ${withDebt.length} บัตร`}</span>
