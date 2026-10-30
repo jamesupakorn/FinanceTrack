@@ -24,6 +24,8 @@ import { fitFontSizeCss } from '../../shared/utils/frontend/ringTextFit';
 import { Icons } from './Icons';
 import CreditCardTileGrid, { TILE_GRID_CLASS } from './CreditCardTileGrid';
 import CreditCardDebtBreakdown from './CreditCardDebtBreakdown';
+import CreditCardCreditBreakdown from './CreditCardCreditBreakdown';
+import CreditCardPlansBreakdown from './CreditCardPlansBreakdown';
 
 interface DashboardCard {
   id: string;
@@ -111,7 +113,8 @@ const VALID_MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/;
 export const HIGH_UTILISATION_PERCENT = 80;
 
 export const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
-const DEBT_PANEL_ID = 'cc-debt-breakdown';
+type Panel = 'debt' | 'credit' | 'plans';
+const PANEL_IDS = { debt: 'cc-debt-breakdown', credit: 'cc-credit-breakdown', plans: 'cc-plans-breakdown' } as const;
 const TILE_BUTTON_EXTRA = 'transition-colors duration-fast ease-graphite hover:bg-surface-2 motion-reduce:transition-none';
 export const CARD = 'rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5';
 // รักษา line-box เดิมของ text-2xl ไว้แม้ font-size จะหดลง เพื่อให้แถว caption ของ 4 tile เรียงกันพอดี (spec D-5)
@@ -218,30 +221,42 @@ export default function CreditCardDashboard({
 }: CreditCardDashboardProps) {
   const cardById = useMemo(() => new Map(cards.map(card => [card.id, card])), [cards]);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
-  const [openPanel, setOpenPanel] = useState<'debt' | null>(null);
+  const [openPanel, setOpenPanel] = useState<Panel | null>(null);
   const debtOpen = openPanel === 'debt';
-  const desktopTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const mobileTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const creditOpen = openPanel === 'credit';
+  const plansOpen = openPanel === 'plans';
+  const debtDesktopRef = useRef<HTMLButtonElement | null>(null);
+  const debtMobileRef = useRef<HTMLButtonElement | null>(null);
+  const creditDesktopRef = useRef<HTMLButtonElement | null>(null);
+  const creditMobileRef = useRef<HTMLButtonElement | null>(null);
+  const plansDesktopRef = useRef<HTMLButtonElement | null>(null);
+  const plansMobileRef = useRef<HTMLButtonElement | null>(null);
+  const triggerRefs = {
+    debt: { desktop: debtDesktopRef, mobile: debtMobileRef },
+    credit: { desktop: creditDesktopRef, mobile: creditMobileRef },
+    plans: { desktop: plansDesktopRef, mobile: plansMobileRef }
+  } as const;
   const activeTriggerRef = useRef<HTMLElement | null>(null);
 
-  /** คืน focus ให้ trigger ที่เปิดแผง; ถ้าไม่ได้แสดงอยู่ (ข้าม 768px) ใช้ตัวที่แสดงอยู่แทน */
-  const restoreDebtFocus = () => {
+  /** คืน focus ให้ trigger ที่เปิดแผง; ถ้าไม่ได้แสดงอยู่ (ข้าม 768px) ใช้ตัวคู่ของแผงเดียวกันที่แสดงอยู่แทน */
+  const restoreFocus = (panel: Panel) => {
     const stored = activeTriggerRef.current;
-    const other = stored === desktopTriggerRef.current ? mobileTriggerRef.current : desktopTriggerRef.current;
+    const { desktop, mobile } = triggerRefs[panel];
+    const other = stored === desktop.current ? mobile.current : desktop.current;
     const target = stored && stored.offsetParent !== null ? stored : (other && other.offsetParent !== null ? other : stored);
     target?.focus();
   };
-  const closeDebtPanel = () => {
+  const closePanel = (panel: Panel) => {
     setOpenPanel(null);
-    restoreDebtFocus();
+    restoreFocus(panel);
   };
-  const toggleDebt = (trigger: HTMLElement) => {
+  const togglePanel = (panel: Panel, trigger: HTMLElement) => {
     activeTriggerRef.current = trigger;
-    setOpenPanel(current => (current === 'debt' ? null : 'debt'));
+    setOpenPanel(current => (current === panel ? null : panel));
   };
-  const handleDebtTriggerKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
-    if (event.key !== 'Escape' || !debtOpen) return;
-    closeDebtPanel();
+  const handleTriggerKeyDown = (panel: Panel) => (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'Escape' || openPanel !== panel) return;
+    closePanel(panel);
     event.stopPropagation();
   };
   const scrollToUpcoming = () => {
@@ -405,12 +420,12 @@ export default function CreditCardDashboard({
       <div className="hidden grid-cols-4 gap-space-3 md:grid" aria-live="polite">
         <button
           type="button"
-          ref={desktopTriggerRef}
+          ref={debtDesktopRef}
           className={`${CARD} relative block w-full min-w-0 text-left [container-type:inline-size] ${TILE_BUTTON_EXTRA} ${FOCUS_RING}`}
           aria-expanded={debtOpen}
-          aria-controls={DEBT_PANEL_ID}
-          onClick={event => toggleDebt(event.currentTarget)}
-          onKeyDown={handleDebtTriggerKeyDown}
+          aria-controls={PANEL_IDS.debt}
+          onClick={event => togglePanel('debt', event.currentTarget)}
+          onKeyDown={handleTriggerKeyDown('debt')}
         >
           <span aria-hidden="true" className={`absolute right-space-3 top-space-3 text-tertiary transition-transform duration-fast motion-reduce:transition-none ${debtOpen ? 'rotate-180' : ''}`}>
             <Icons.ChevronDown size={16} />
@@ -443,33 +458,55 @@ export default function CreditCardDashboard({
           <span className="text-xs text-tertiary">{`บาท · ${dueCardCount} บัตร`}</span>
         </button>
         <span id="upcoming-jump-hint" hidden>ไปยังรายการครบกำหนดด้านล่าง</span>
-        <div className={`${CARD} min-w-0 [container-type:inline-size]`}>
-          <p className="m-0 mb-space-1 text-sm text-secondary">วงเงินคงเหลือ</p>
-          <p
-            className="m-0 whitespace-nowrap font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary"
+        <button
+          type="button"
+          ref={creditDesktopRef}
+          className={`${CARD} relative block w-full min-w-0 text-left [container-type:inline-size] ${TILE_BUTTON_EXTRA} ${FOCUS_RING}`}
+          aria-expanded={creditOpen}
+          aria-controls={PANEL_IDS.credit}
+          onClick={event => togglePanel('credit', event.currentTarget)}
+          onKeyDown={handleTriggerKeyDown('credit')}
+        >
+          <span aria-hidden="true" className={`absolute right-space-3 top-space-3 text-tertiary transition-transform duration-fast motion-reduce:transition-none ${creditOpen ? 'rotate-180' : ''}`}>
+            <Icons.ChevronDown size={16} />
+          </span>
+          <span className="m-0 mb-space-1 block text-sm text-secondary">วงเงินคงเหลือ</span>
+          <span
+            className="m-0 block whitespace-nowrap font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary"
             style={{ fontSize: fitFontSizeCss(formatCurrency(totals?.availableCredit || 0)), lineHeight: TILE_AMOUNT_LINE_HEIGHT }}
           >
             {formatCurrency(totals?.availableCredit || 0)}
-          </p>
+          </span>
           <span className="text-xs text-tertiary">{`/ `}<span className="whitespace-nowrap">{formatCurrency(totals?.creditLimit || 0)}</span>{` บาท`}</span>
-        </div>
-        <div className={CARD}>
-          <p className="m-0 mb-space-1 text-sm text-secondary">แผนที่กำลังผ่อน</p>
-          <p className="m-0 text-2xl font-semibold text-primary">{`${totals?.ongoingPlanCount || 0} แผน`}</p>
+        </button>
+        <button
+          type="button"
+          ref={plansDesktopRef}
+          className={`${CARD} relative block w-full min-w-0 text-left [container-type:inline-size] ${TILE_BUTTON_EXTRA} ${FOCUS_RING}`}
+          aria-expanded={plansOpen}
+          aria-controls={PANEL_IDS.plans}
+          onClick={event => togglePanel('plans', event.currentTarget)}
+          onKeyDown={handleTriggerKeyDown('plans')}
+        >
+          <span aria-hidden="true" className={`absolute right-space-3 top-space-3 text-tertiary transition-transform duration-fast motion-reduce:transition-none ${plansOpen ? 'rotate-180' : ''}`}>
+            <Icons.ChevronDown size={16} />
+          </span>
+          <span className="m-0 mb-space-1 block text-sm text-secondary">แผนที่กำลังผ่อน</span>
+          <span className="m-0 block text-2xl font-semibold text-primary">{`${totals?.ongoingPlanCount || 0} แผน`}</span>
           <span className="text-xs text-tertiary">{`ใน ${totals?.cardCount || 0} บัตร`}</span>
-        </div>
+        </button>
       </div>
 
       {/* summary — mobile single card (J1: อ่านหนี้รวมได้โดยไม่ต้อง scroll) */}
       <div className="md:hidden" aria-live="polite">
         <button
           type="button"
-          ref={mobileTriggerRef}
+          ref={debtMobileRef}
           className={`${CARD} block w-full min-w-0 text-left transition-colors duration-fast ease-graphite hover:bg-surface-2 motion-reduce:transition-none ${FOCUS_RING}`}
           aria-expanded={debtOpen}
-          aria-controls={DEBT_PANEL_ID}
-          onClick={event => toggleDebt(event.currentTarget)}
-          onKeyDown={handleDebtTriggerKeyDown}
+          aria-controls={PANEL_IDS.debt}
+          onClick={event => togglePanel('debt', event.currentTarget)}
+          onKeyDown={handleTriggerKeyDown('debt')}
         >
           <span className="m-0 mb-space-1 block text-sm text-secondary">หนี้คงเหลือรวม</span>
           <span className="m-0 block font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary">
@@ -488,15 +525,67 @@ export default function CreditCardDashboard({
             {debtOpen ? 'ซ่อนรายละเอียด' : 'แตะเพื่อดูแยกตามบัตร'}
           </span>
         </button>
+        <div className="mt-space-2 grid grid-cols-2 gap-space-2">
+          <button
+            type="button"
+            ref={creditMobileRef}
+            className={`${BTN_GHOST} w-full min-w-0 text-center`}
+            aria-expanded={creditOpen}
+            aria-controls={PANEL_IDS.credit}
+            onClick={event => togglePanel('credit', event.currentTarget)}
+            onKeyDown={handleTriggerKeyDown('credit')}
+          >
+            วงเงินคงเหลือ
+            <span aria-hidden="true" className={`transition-transform duration-fast motion-reduce:transition-none ${creditOpen ? 'rotate-180' : ''}`}>
+              <Icons.ChevronDown size={16} />
+            </span>
+          </button>
+          <button
+            type="button"
+            ref={plansMobileRef}
+            className={`${BTN_GHOST} w-full min-w-0 text-center`}
+            aria-expanded={plansOpen}
+            aria-controls={PANEL_IDS.plans}
+            onClick={event => togglePanel('plans', event.currentTarget)}
+            onKeyDown={handleTriggerKeyDown('plans')}
+          >
+            แผนที่กำลังผ่อน
+            <span aria-hidden="true" className={`transition-transform duration-fast motion-reduce:transition-none ${plansOpen ? 'rotate-180' : ''}`}>
+              <Icons.ChevronDown size={16} />
+            </span>
+          </button>
+        </div>
       </div>
 
       {debtOpen && (
         <CreditCardDebtBreakdown
-          id={DEBT_PANEL_ID}
+          id={PANEL_IDS.debt}
           cards={cards}
           total={totals?.remainingPayable}
           onOpenCard={onOpenCard}
-          onClose={closeDebtPanel}
+          onClose={() => closePanel('debt')}
+        />
+      )}
+
+      {creditOpen && (
+        <CreditCardCreditBreakdown
+          id={PANEL_IDS.credit}
+          cards={cards}
+          totalAvailable={totals?.availableCredit}
+          totalLimit={totals?.creditLimit}
+          onOpenCard={onOpenCard}
+          onClose={() => closePanel('credit')}
+        />
+      )}
+
+      {plansOpen && (
+        <CreditCardPlansBreakdown
+          id={PANEL_IDS.plans}
+          cards={cards}
+          plans={plans}
+          totalPlans={totals?.ongoingPlanCount}
+          onOpenCard={onOpenCard}
+          onClose={() => closePanel('plans')}
         />
       )}
 

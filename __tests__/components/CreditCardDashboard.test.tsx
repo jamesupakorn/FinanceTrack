@@ -431,10 +431,133 @@ describe('CreditCardDashboard KPI drill-down', () => {
     expect(desktop).toHaveFocus();
   });
 
-  it('keeps the credit and plan tiles static', () => {
-    renderDebt();
-    expect(screen.queryByRole('button', { name: /^วงเงินคงเหลือ/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^แผนที่กำลังผ่อน/ })).not.toBeInTheDocument();
+  describe('credit and plans panels (phase 2)', () => {
+    const phase2Cards = () => [
+      makeCard('cc_a', 'บัตรเอ', 29, { remainingPayable: 3000, availableCredit: 1200, creditLimit: 30000 } as Partial<TestCard>),
+      makeCard('cc_b', 'บัตรบี', 29, { availableCredit: 500, creditLimit: 1000 } as Partial<TestCard>)
+    ];
+    const phase2Plans = () => [
+      { ...makePlan('p1', 'cc_a', [{ dueMonth: '2026-11', payment: 100, paid: true }, { dueMonth: '2026-12', payment: 4990 }]), itemName: 'iPhone' }
+    ];
+    const renderP2 = (props: Partial<React.ComponentProps<typeof CreditCardDashboard>> = {}) => render(
+      <CreditCardDashboard
+        cards={phase2Cards()}
+        plans={phase2Plans()}
+        totals={{ remainingPayable: 3000, availableCredit: 99999, creditLimit: 88888, ongoingPlanCount: 1, cardCount: 2 }}
+        {...props}
+      />
+    );
+    const creditTriggers = () => screen.getAllByRole('button', { name: /^วงเงินคงเหลือ/ });
+    const plansTriggers = () => screen.getAllByRole('button', { name: /^แผนที่กำลังผ่อน/ });
+    const creditPanel = () => screen.queryByRole('region', { name: 'วงเงินคงเหลือแยกตามบัตร' });
+    const plansPanel = () => screen.queryByRole('region', { name: 'แผนที่กำลังผ่อนแยกตามแผน' });
+    const debtPanel = () => screen.queryByRole('region', { name: 'หนี้คงเหลือแยกตามบัตร' });
+
+    it('desktop credit tile toggles the credit panel with a single id', () => {
+      renderP2();
+      const [desktop] = creditTriggers();
+      expect(desktop).toHaveAttribute('aria-expanded', 'false');
+      expect(desktop).toHaveAttribute('aria-controls', 'cc-credit-breakdown');
+      fireEvent.click(desktop);
+      expect(desktop).toHaveAttribute('aria-expanded', 'true');
+      expect(document.querySelectorAll('#cc-credit-breakdown')).toHaveLength(1);
+      const items = within(creditPanel()!).getAllByRole('listitem');
+      expect(items[0].textContent).toContain('บัตรบี');
+      expect(within(creditPanel()!).getByText('99,999.00 / 88,888.00 บาท · 2 บัตร')).toBeInTheDocument();
+      fireEvent.click(desktop);
+      expect(creditPanel()).not.toBeInTheDocument();
+    });
+
+    it('desktop plans tile toggles the plans panel and shows lowest unpaid installment', () => {
+      renderP2();
+      const [desktop] = plansTriggers();
+      expect(desktop).toHaveAttribute('aria-controls', 'cc-plans-breakdown');
+      fireEvent.click(desktop);
+      const panel = plansPanel()!;
+      expect(within(panel).getByText('เหลือ 1/2 งวด')).toBeInTheDocument();
+      expect(within(panel).getByText(/งวดถัดไป 4,990.00 บาท/)).toBeInTheDocument();
+      fireEvent.click(desktop);
+      expect(plansPanel()).not.toBeInTheDocument();
+    });
+
+    it('opening a different panel replaces the current one', () => {
+      renderP2();
+      fireEvent.click(debtTriggers()[0]);
+      expect(debtPanel()).toBeInTheDocument();
+      fireEvent.click(creditTriggers()[0]);
+      expect(debtPanel()).not.toBeInTheDocument();
+      expect(creditPanel()).toBeInTheDocument();
+      expect(debtTriggers()[0]).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(plansTriggers()[0]);
+      expect(creditPanel()).not.toBeInTheDocument();
+      expect(plansPanel()).toBeInTheDocument();
+      expect(creditTriggers()[0]).toHaveAttribute('aria-expanded', 'false');
+      expect(plansTriggers()[0]).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('mobile buttons sit outside the summary button and toggle their panels', () => {
+      renderP2();
+      const summary = debtTriggers()[1];
+      const mobileCredit = screen.getByRole('button', { name: 'วงเงินคงเหลือ' });
+      const mobilePlans = screen.getByRole('button', { name: 'แผนที่กำลังผ่อน' });
+      expect(summary.contains(mobileCredit)).toBe(false);
+      expect(summary.contains(mobilePlans)).toBe(false);
+      fireEvent.click(mobileCredit);
+      expect(creditPanel()).toBeInTheDocument();
+      expect(debtPanel()).not.toBeInTheDocument();
+      fireEvent.click(mobilePlans);
+      expect(plansPanel()).toBeInTheDocument();
+    });
+
+    it('row clicks call onOpenCard once; tiles never do', () => {
+      const onOpenCard = jest.fn();
+      renderP2({ onOpenCard });
+      fireEvent.click(creditTriggers()[0]);
+      fireEvent.click(plansTriggers()[0]);
+      expect(onOpenCard).not.toHaveBeenCalled();
+      fireEvent.click(within(plansPanel()!).getByRole('button', { name: /แผน iPhone/ }));
+      expect(onOpenCard).toHaveBeenCalledTimes(1);
+      expect(onOpenCard).toHaveBeenCalledWith('cc_a');
+      fireEvent.click(creditTriggers()[0]);
+      fireEvent.click(within(creditPanel()!).getByRole('button', { name: /บัตรบี วงเงินคงเหลือ 500.00 จาก 1,000.00 บาท/ }));
+      expect(onOpenCard).toHaveBeenCalledTimes(2);
+      expect(onOpenCard).toHaveBeenLastCalledWith('cc_b');
+    });
+
+    it('Escape closes only the matching open panel; hide button restores focus', () => {
+      renderP2();
+      const [credit] = creditTriggers();
+      const [plans] = plansTriggers();
+      Object.defineProperty(credit, 'offsetParent', { configurable: true, get: () => document.body });
+      fireEvent.click(credit);
+      fireEvent.keyDown(plans, { key: 'Escape' });
+      expect(creditPanel()).toBeInTheDocument();
+      fireEvent.keyDown(credit, { key: 'Escape' });
+      expect(creditPanel()).not.toBeInTheDocument();
+      expect(credit).toHaveFocus();
+
+      fireEvent.click(credit);
+      fireEvent.click(within(creditPanel()!).getByRole('button', { name: 'ซ่อนรายละเอียด' }));
+      expect(creditPanel()).not.toBeInTheDocument();
+      expect(credit).toHaveFocus();
+    });
+
+    it('focus falls back to the same-panel counterpart when the stored trigger is hidden', () => {
+      renderP2();
+      const [desktop] = creditTriggers();
+      const mobile = screen.getByRole('button', { name: 'วงเงินคงเหลือ' });
+      Object.defineProperty(desktop, 'offsetParent', { configurable: true, get: () => null });
+      Object.defineProperty(mobile, 'offsetParent', { configurable: true, get: () => document.body });
+      fireEvent.click(desktop);
+      fireEvent.click(within(creditPanel()!).getByRole('button', { name: 'ซ่อนรายละเอียด' }));
+      expect(mobile).toHaveFocus();
+    });
+
+    it('plans panel shows the empty state without ongoing plans', () => {
+      renderP2({ plans: [] });
+      fireEvent.click(plansTriggers()[0]);
+      expect(within(plansPanel()!).getByText('ไม่มีแผนที่กำลังผ่อน')).toBeInTheDocument();
+    });
   });
 
   describe('due-soon tile', () => {
