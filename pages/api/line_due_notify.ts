@@ -41,7 +41,8 @@ import {
   formatThaiDate,
   buildDueDateString
 } from '../../src/shared/utils/dateUtils';
-import { loadUsers, getUserData } from '../../src/backend/data/userUtils';
+import { getUserData } from '../../src/backend/data/userUtils';
+import { loadUsers } from '../../lib/userStore';
 import {
   LINE_THEME,
   textComponent,
@@ -408,8 +409,8 @@ async function getUsersForNotify(targetUserId: unknown): Promise<LineUser[]> {
     return [];
   }
   if (isJsonMode()) {
-    const users = loadUsers();
-    return users.filter((user): user is LineUser =>
+    const users = await loadUsers();
+    return users.filter((user): user is typeof user & LineUser =>
       isLineUser(user) && (!targetUserId || user.id === targetUserId)
     );
   }

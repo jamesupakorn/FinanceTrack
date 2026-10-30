@@ -2,8 +2,8 @@ import crypto from 'crypto';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import { getMongoCollection, isJsonMode } from '../../lib/dataSource';
-import { loadUsers } from '../../src/backend/data/userUtils';
 import {
+  loadUsers,
   getUserMonthlySummaryEnabled,
   getUserLastMonthlySummarySent,
   markUserMonthlySummarySent
@@ -43,7 +43,7 @@ async function getRecipients(rawTargetUserId: unknown): Promise<LineUser[]> {
     }
   }
   if (isJsonMode()) {
-    return loadUsers()
+    return (await loadUsers())
       .filter(isLineUser)
       .filter(user => !targetUserId || user.id === targetUserId);
   }

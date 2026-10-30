@@ -8,6 +8,7 @@ let dir: string;
 let store: typeof import('../../lib/auditJsonStore');
 let audited: typeof import('../../lib/auditedMutation');
 let userUtils: typeof import('../../src/backend/data/userUtils');
+let userStore: typeof import('../../lib/userStore');
 
 const read = (name: string) => (fs.existsSync(path.join(dir, name)) ? JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')) : undefined);
 
@@ -21,6 +22,7 @@ beforeAll(() => {
   store = require('../../lib/auditJsonStore');
   audited = require('../../lib/auditedMutation');
   userUtils = require('../../src/backend/data/userUtils');
+  userStore = require('../../lib/userStore');
 });
 
 afterAll(() => {
@@ -140,13 +142,13 @@ describe('JSON atomic data + audit commit', () => {
   });
 
   it('password changes and LINE links are audited without secrets', async () => {
-    userUtils.saveUsers([{ id: 'u1', name: 'n', passwordHash: 'h1' } as never]);
+    userStore.saveUsers([{ id: 'u1', name: 'n', passwordHash: 'h1' } as never]);
     // saveUsers outside a transaction writes directly; seed the journal baseline from it.
     const change = audited.withAudit(async (_q, res) => {
-      const users = userUtils.loadUsers() as Array<Record<string, unknown>>;
+      const users = userStore.loadUsersJson() as Array<Record<string, unknown>>;
       users[0].passwordHash = 'h2';
       users[0].LineId = 'Usecret';
-      userUtils.saveUsers(users as never);
+      userStore.saveUsers(users as never);
       res.status(200).json({});
     }, { source: 'change_password' });
     await change(req(), mockRes());

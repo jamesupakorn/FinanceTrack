@@ -14,7 +14,7 @@ const DATA_MODE = (dataModeConfig?.mode || 'json').toLowerCase();
 const usersFile = (): string => path.join(dataDir(), 'users.json');
 type BudgetThresholds = ReturnType<typeof normaliseBudgetThresholds>;
 
-interface UserRecord extends Document {
+export interface UserRecord extends Document {
   id: string;
   displayName: string;
   passwordHash: string;
@@ -26,7 +26,7 @@ interface UserRecord extends Document {
   LineId?: string;
 }
 
-interface PublicUser {
+export interface PublicUser {
   id: string;
   displayName: string;
   avatar?: string | null;
@@ -49,7 +49,8 @@ function assertUserScope(userId: unknown): string {
   return assertScopedUserId(userId, 'userStore');
 }
 
-async function readUsersJson(): Promise<UserRecord[]> {
+/** JSON-only synchronous read of users.json — for scripts and tests that run outside the request path. */
+export function loadUsersJson(): UserRecord[] {
   try {
     const raw = jsonRead(usersFile());
     if (raw === null) return [];
@@ -61,8 +62,31 @@ async function readUsersJson(): Promise<UserRecord[]> {
   }
 }
 
-async function writeUsersJson(users: UserRecord[]): Promise<void> {
+/** JSON-only synchronous write of users.json (audited via jsonWrite). */
+export function saveUsers(users: UserRecord[] = []): void {
   jsonWrite(usersFile(), JSON.stringify(users, null, 2));
+}
+
+const USER_ID_PREFIX = 'u';
+const USER_ID_PADDING = 3;
+const USER_ID_PATTERN = /^u([0-9]+)$/i;
+
+/** Next sequential id (u001, u002, ...) based on the JSON users file. */
+export function generateUserId(users: UserRecord[] = loadUsersJson()): string {
+  const next = users.reduce((max, user) => {
+    const match = typeof user.id === 'string' ? user.id.match(USER_ID_PATTERN) : null;
+    const counter = match ? parseInt(match[1], 10) : 0;
+    return counter > max ? counter : max;
+  }, 0) + 1;
+  return `${USER_ID_PREFIX}${String(next).padStart(USER_ID_PADDING, '0')}`;
+}
+
+async function readUsersJson(): Promise<UserRecord[]> {
+  return loadUsersJson();
+}
+
+async function writeUsersJson(users: UserRecord[]): Promise<void> {
+  saveUsers(users);
 }
 
 export async function loadUsers(): Promise<UserRecord[]> {
