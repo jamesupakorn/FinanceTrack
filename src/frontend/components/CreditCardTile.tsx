@@ -6,13 +6,14 @@
  * BACK:  หนี้คงเหลือรวม, วงเงิน/ใช้ไป/เหลือ, วันสรุปยอด/ครบกำหนด, จำนวนแผน, "เลยกำหนด K งวด" (K > 0),
  *        ปุ่มดูรายละเอียด + CardMenu เดิม (export in place จาก CreditCardDashboard, REV-5)
  *
- * A11y (REV-6): ปุ่มพลิกเป็น <button aria-pressed> ชื่อบอกด้านที่แสดง; ด้านที่ซ่อน = inert + aria-hidden;
+ * A11y (REV-6; แก้ 2026-10-30): พลิกได้ด้วยการแตะพื้นที่ว่างของหน้าบัตรเท่านั้น (ไม่มีปุ่มพลิกทั้งสองด้าน —
+ * user อนุมัติ trade-off a11y; Escape บนด้านหลังยังกลับด้านหน้าได้); ด้านที่ซ่อน = inert + aria-hidden;
  * ย้าย focus ไปปุ่มแรกของด้านใหม่ "ก่อน" ซ่อนด้านเดิม; Escape บนด้านหลัง = กลับด้านหน้า;
  * prefers-reduced-motion => สลับทันที (ไม่มี transition / ไม่ cross-fade)
  * สีตัวอักษรคงที่ขาว/ดำจาก pickTileTextColor (ไม่ขึ้นกับ theme)
  */
 
-import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useRef, useState, type KeyboardEvent, type MouseEvent, type TouchEvent } from 'react';
 import { flushSync } from 'react-dom';
 import { diffDaysFromToday, formatDayLabel, round2 } from '../../shared/utils/creditCardUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
@@ -24,7 +25,6 @@ import BankIssuerMark from './BankIssuerMark';
 import {
   CardMenu,
   BTN_GHOST,
-  FOCUS_RING,
   HIGH_UTILISATION_PERCENT,
   TILE_AMOUNT_LINE_HEIGHT,
   UPCOMING_WINDOW_DAYS
@@ -69,6 +69,42 @@ function firstFocusable(root: HTMLElement | null): HTMLElement | null {
   return candidates.find(el => el.tabIndex >= 0 && !(el as HTMLButtonElement).disabled) || null;
 }
 
+const INTERACTIVE_SELECTOR = 'button, a, input, select, textarea, label, [role="menu"], [role="menuitem"], [contenteditable="true"]';
+const TAP_MOVE_TOLERANCE_PX = 10;
+
+interface PointerDownInfo {
+  x: number;
+  y: number;
+  menuWasOpen: boolean;
+}
+
+/** กฎกรองการแตะเพื่อพลิก (spec-credit-card-add-expense §6.1) — คืน false = ไม่พลิก */
+function shouldFlipFromTap(
+  event: MouseEvent<HTMLElement>,
+  faceEl: HTMLElement | null,
+  down: PointerDownInfo | null,
+  isVisibleFace: boolean
+): boolean {
+  if (!faceEl || !isVisibleFace) return false;
+  if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return false;
+  const target = event.target as Element | null;
+  const interactive = target?.closest?.(INTERACTIVE_SELECTOR);
+  if (interactive && faceEl.contains(interactive)) return false;
+  if (down) {
+    if (down.menuWasOpen) return false;
+    if (Math.hypot(event.clientX - down.x, event.clientY - down.y) > TAP_MOVE_TOLERANCE_PX) return false;
+  }
+  const selection = typeof window !== 'undefined' ? window.getSelection?.() : null;
+  if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
+    try {
+      if (selection.getRangeAt(0).intersectsNode(faceEl)) return false;
+    } catch {
+      /* intersectsNode ไม่รองรับ — ถือว่าไม่ตัดกัน */
+    }
+  }
+  return true;
+}
+
 export default function CreditCardTile({
   card,
   overdueInstallmentCount = 0,
@@ -86,10 +122,35 @@ export default function CreditCardTile({
   const flipTo = useCallback((target: Side) => {
     if (target === side) return;
     flushSync(() => setOpening(target));
-    firstFocusable(target === 'back' ? backRef.current : frontRef.current)?.focus();
+    const next = firstFocusable(target === 'back' ? backRef.current : frontRef.current);
+    if (next) {
+      next.focus();
+    } else {
+      // ด้านหน้าไม่มีปุ่ม — ปล่อย focus จากด้านที่กำลังซ่อน ไม่ให้ค้างบน element ที่ inert
+      const active = document.activeElement as HTMLElement | null;
+      const old = target === 'back' ? frontRef.current : backRef.current;
+      if (active && old?.contains(active)) active.blur();
+    }
     setSide(target);
     setOpening(null);
   }, [side]);
+
+  const pointerDownRef = useRef<PointerDownInfo | null>(null);
+  const recordPointerDown = (x: number, y: number) => {
+    pointerDownRef.current = { x, y, menuWasOpen: !!document.querySelector('[role="menu"]') };
+  };
+  const onMouseDownCapture = (event: MouseEvent<HTMLElement>) => recordPointerDown(event.clientX, event.clientY);
+  const onTouchStartCapture = (event: TouchEvent<HTMLElement>) => {
+    const touch = event.touches[0];
+    if (touch) recordPointerDown(touch.clientX, touch.clientY);
+  };
+  const handleFaceClick = (face: Side, target: Side) => (event: MouseEvent<HTMLElement>) => {
+    const down = pointerDownRef.current;
+    pointerDownRef.current = null;
+    if (shouldFlipFromTap(event, face === 'front' ? frontRef.current : backRef.current, down, face === side)) {
+      flipTo(target);
+    }
+  };
 
   const isBack = side === 'back';
   const isHidden = (face: Side) => face !== side && face !== opening;
@@ -120,7 +181,6 @@ export default function CreditCardTile({
   const amountText = formatCurrency(totalDue);
 
   const FACE = 'flex min-h-[13rem] min-w-0 flex-col gap-space-2 rounded-md p-space-4 [backface-visibility:hidden] [grid-area:face] md:p-space-5';
-  const FLIP_BTN = `inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-space-1 rounded-sm border border-current px-space-2 text-xs font-medium ${FOCUS_RING}`;
   const faceStyle = { background, color: textColor };
 
   const handleBackKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -144,26 +204,20 @@ export default function CreditCardTile({
         {/* FRONT */}
         <div
           ref={frontRef}
-          className={`${FACE} ${isHidden('front') ? 'motion-reduce:invisible' : ''}`}
+          className={`${FACE} ${isHidden('front') ? 'motion-reduce:invisible' : 'cursor-pointer'}`}
           style={faceStyle}
           aria-hidden={isHidden('front') ? true : undefined}
           inert={isHidden('front')}
           data-face="front"
+          onMouseDownCapture={onMouseDownCapture}
+          onTouchStartCapture={onTouchStartCapture}
+          onClick={handleFaceClick('front', 'back')}
         >
           <div className="flex items-start justify-between gap-space-2">
             <span className="inline-flex min-w-0 items-center gap-space-2 text-base font-semibold">
               <BankIssuerMark card={card} size={24} />
               <span className="min-w-0 break-words">{card.name}</span>
             </span>
-            <button
-              type="button"
-              className={FLIP_BTN}
-              aria-pressed={isBack}
-              aria-label={`แสดงด้านหลังบัตร ${card.name}`}
-              onClick={() => flipTo('back')}
-            >
-              <Icons.ChevronRight size={16} />
-            </button>
           </div>
 
           <span className="text-xs">ยอดที่ต้องจ่ายรอบนี้</span>
@@ -213,23 +267,17 @@ export default function CreditCardTile({
         {/* BACK */}
         <div
           ref={backRef}
-          className={`${FACE} [transform:rotateY(180deg)] ${isHidden('back') ? 'motion-reduce:invisible' : ''}`}
+          className={`${FACE} [transform:rotateY(180deg)] ${isHidden('back') ? 'motion-reduce:invisible' : 'cursor-pointer'}`}
           style={faceStyle}
           aria-hidden={isHidden('back') ? true : undefined}
           inert={isHidden('back')}
           data-face="back"
           onKeyDown={handleBackKeyDown}
+          onMouseDownCapture={onMouseDownCapture}
+          onTouchStartCapture={onTouchStartCapture}
+          onClick={handleFaceClick('back', 'front')}
         >
-          <div className="flex items-start justify-between gap-space-2">
-            <button
-              type="button"
-              className={FLIP_BTN}
-              aria-pressed={isBack}
-              aria-label={`กลับด้านหน้าบัตร ${card.name}`}
-              onClick={() => flipTo('front')}
-            >
-              <Icons.ChevronLeft size={16} />
-            </button>
+          <div className="flex items-start justify-end gap-space-2">
             <CardMenu
               card={card}
               onEdit={onEditCard as ((c: MenuCard) => void) | undefined}

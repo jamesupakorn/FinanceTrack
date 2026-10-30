@@ -187,6 +187,22 @@ describe('ADR-027 validation error handling', () => {
     expect(err.message).toBe('month and expense_data required');
   });
 
+  it('attaches the API errors object to the thrown Error, keeping message/status behaviour', async () => {
+    const errors = { amount: 'ยอดเงินต้องเป็นตัวเลขไม่ติดลบ' };
+    mockFetchOnce({ status: 400, body: { error: 'ข้อมูลรายการไม่ถูกต้อง', errors } });
+    const err = await creditCardAPI.createSpendItem({ cardId: 'c', purchaseDate: '2026-10-10', name: 'x', amount: 'z' }).catch(e => e);
+    expect(err).not.toBeInstanceOf(ApiValidationError);
+    expect(err.message).toBe('ข้อมูลรายการไม่ถูกต้อง');
+    expect(err.errors).toEqual(errors);
+  });
+
+  it('leaves errors undefined when the body has none or a non-object', async () => {
+    mockFetchOnce({ status: 400, body: { error: 'bad', errors: 'nope' } });
+    const err = await incomeAPI.getByMonth('2026-01').catch(e => e);
+    expect(err.message).toBe('bad');
+    expect(err.errors).toBeUndefined();
+  });
+
   it('malformed issues payload falls back to the legacy error string', async () => {
     mockFetchOnce({ status: 400, body: { error: 'Validation failed', issues: 'nope' } });
     const err = await dailyExpenseAPI.save('2026-01', []).catch(e => e);

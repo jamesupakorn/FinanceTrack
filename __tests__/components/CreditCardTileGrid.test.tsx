@@ -105,7 +105,7 @@ describe('CreditCardTileGrid', () => {
   test('flip state survives re-order (keyed by card.id)', async () => {
     const user = userEvent.setup();
     const { rerender } = render(<CreditCardTileGrid cards={CARDS} />);
-    await user.click(screen.getByRole('button', { name: 'แสดงด้านหลังบัตร Alpha' }));
+    await user.click(within(screen.getByTestId('cc-tile-a')).getByTestId('cc-tile-amount'));
     rerender(<CreditCardTileGrid cards={[...CARDS].reverse()} />);
     expect(screen.getByTestId('cc-tile-a')).toHaveAttribute('data-side', 'back');
     expect(screen.getByTestId('cc-tile-b')).toHaveAttribute('data-side', 'front');
@@ -130,5 +130,14 @@ describe('CreditCardDashboard integration', () => {
     const { container } = render(<CreditCardDashboard loading />);
     expect(container.innerHTML).toContain('md:grid-cols-[repeat(auto-fill,minmax(18rem,1fr))]');
     expect(container.innerHTML).not.toContain('lg:grid-cols-3');
+  });
+});
+
+describe('add-expense labels (AC-AE1)', () => {
+  test('Dashboard primary button says เพิ่มรายจ่าย, old label gone', () => {
+    const { container } = render(<CreditCardDashboard cards={CARDS} plans={[]} onAddPlan={jest.fn()} onAddPlanForCard={jest.fn()} />);
+    expect(screen.getByRole('button', { name: 'เพิ่มรายจ่าย' })).toBeInTheDocument();
+    expect(container.textContent).not.toContain('เพิ่มแผนผ่อนในบัตรนี้');
+    expect(screen.queryByText(/เพิ่มแผนผ่อนในบัตรนี้/)).toBeNull();
   });
 });

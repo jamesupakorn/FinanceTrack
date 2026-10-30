@@ -214,6 +214,15 @@ export function resolveCardDueDate(
 }
 
 /**
+ * วันตัดรอบ (statement cut-off) ของเดือนปฏิทิน monthKey — clamp สิ้นเดือนแบบเดียวกับ resolveCardDueDate
+ * ไม่ใช่วันครบกำหนด; ใช้แทนการเรียก resolveInstallmentDueDate จากนอกไฟล์นี้ (AC-11)
+ * @returns 'YYYY-MM-DD' หรือ null เมื่อ monthKey ไม่ถูกต้อง
+ */
+export function resolveStatementCutoffDate(statementDay: DayLike, monthKey: string): string | null {
+  return resolveInstallmentDueDate(statementDay as number | string, monthKey);
+}
+
+/**
  * รอบบิลที่ครบกำหนดชำระในเดือนปฏิทิน calendarMonth = addMonths(calendarMonth, -offset) (XM-6)
  * ใช้กับจุดแจ้งเตือนที่อิงวันที่ปฏิทิน (LINE card notify) — ยอดเงิน/สรุปยังอิงรอบบิลเหมือนเดิม
  * @returns 'YYYY-MM' — calendarMonth ไม่ถูกต้อง → คืนค่าเดิม

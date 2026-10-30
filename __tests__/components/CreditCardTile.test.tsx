@@ -68,19 +68,18 @@ describe('CreditCardTile', () => {
     expect(screen.getByTestId('cc-tile-amount')).toHaveTextContent('0.00');
   });
 
-  test('flip button: aria-pressed + side name; Enter flips, focus moves to back, Escape returns', async () => {
+  test('no flip buttons on either face; tap flips, focus moves to the menu trigger, Escape returns', async () => {
     const user = userEvent.setup();
     const { container } = render(<CreditCardTile card={baseCard} />);
-    const toBack = screen.getByRole('button', { name: 'แสดงด้านหลังบัตร Shopee' });
-    expect(toBack).toHaveAttribute('aria-pressed', 'false');
-    toBack.focus();
-    await user.keyboard('{Enter}');
-
     const back = face(container, 'back');
     const front = face(container, 'front');
-    const toFront = within(back).getByRole('button', { name: 'กลับด้านหน้าบัตร Shopee' });
-    expect(toFront).toHaveAttribute('aria-pressed', 'true');
-    expect(document.activeElement).toBe(toFront);
+    expect(within(front).queryByRole('button')).toBeNull();
+    expect(screen.queryByRole('button', { name: /แสดงด้านหลังบัตร/ })).toBeNull();
+    await user.click(screen.getByTestId('cc-tile-amount'));
+
+    expect(within(back).queryByRole('button', { name: /กลับด้านหน้าบัตร/ })).toBeNull();
+    expect(back.querySelector('[aria-pressed]')).toBeNull();
+    expect(document.activeElement).toBe(within(back).getByRole('button', { name: 'ตัวเลือกของบัตร Shopee' }));
     expect(back).not.toHaveAttribute('inert');
     expect(front).toHaveAttribute('inert');
     expect(front).toHaveAttribute('aria-hidden', 'true');
@@ -89,16 +88,8 @@ describe('CreditCardTile', () => {
 
     await user.keyboard('{Escape}');
     expect(container.querySelector('[data-side]')).toHaveAttribute('data-side', 'front');
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'แสดงด้านหลังบัตร Shopee' }));
     expect(back).toHaveAttribute('inert');
-  });
-
-  test('Space flips too', async () => {
-    const user = userEvent.setup();
-    const { container } = render(<CreditCardTile card={baseCard} />);
-    screen.getByRole('button', { name: 'แสดงด้านหลังบัตร Shopee' }).focus();
-    await user.keyboard(' ');
-    expect(container.querySelector('[data-side]')).toHaveAttribute('data-side', 'back');
+    expect(back.contains(document.activeElement)).toBe(false);
   });
 
   test('focus moves to the new face before the old face is hidden', async () => {
@@ -108,7 +99,7 @@ describe('CreditCardTile', () => {
     const states: Array<string | null> = [];
     const back = face(container, 'back');
     back.addEventListener('focusin', () => states.push(front.getAttribute('aria-hidden')));
-    await user.click(screen.getByRole('button', { name: 'แสดงด้านหลังบัตร Shopee' }));
+    await user.click(screen.getByTestId('cc-tile-amount'));
     expect(states[0]).toBeNull();
   });
 
@@ -139,7 +130,7 @@ describe('CreditCardTile', () => {
     rerender(<CreditCardTile card={baseCard} overdueInstallmentCount={3} onEditCard={onEdit} onOpenCard={onOpen} />);
     expect(within(back).getByTestId('cc-tile-overdue-installments')).toHaveTextContent('เลยกำหนด 3 งวด');
 
-    await user.click(screen.getByRole('button', { name: 'แสดงด้านหลังบัตร Shopee' }));
+    await user.click(screen.getByTestId('cc-tile-amount'));
     await user.click(within(back).getByRole('button', { name: 'ดูรายละเอียด' }));
     expect(onOpen).toHaveBeenCalledWith('cc_1');
     await user.click(within(back).getByRole('button', { name: 'ตัวเลือกของบัตร Shopee' }));
@@ -150,7 +141,7 @@ describe('CreditCardTile', () => {
   test('Escape while the card menu is open closes the menu only', async () => {
     const user = userEvent.setup();
     const { container } = render(<CreditCardTile card={baseCard} />);
-    await user.click(screen.getByRole('button', { name: 'แสดงด้านหลังบัตร Shopee' }));
+    await user.click(screen.getByTestId('cc-tile-amount'));
     await user.click(screen.getByRole('button', { name: 'ตัวเลือกของบัตร Shopee' }));
     screen.getAllByRole('menuitem')[0].focus();
     await user.keyboard('{Escape}');
@@ -172,9 +163,7 @@ describe('CreditCardTile', () => {
 
   test('44px targets and no lg:/sm: prefixes', () => {
     render(<CreditCardTile card={baseCard} />);
-    const flip = screen.getByRole('button', { name: 'แสดงด้านหลังบัตร Shopee' });
-    expect(flip.className).toMatch(/min-h-11/);
-    expect(flip.className).toMatch(/min-w-11/);
+    expect(screen.queryByRole('button', { name: /กลับด้านหน้าบัตร|แสดงด้านหลังบัตร/, hidden: true })).toBeNull();
     ['CreditCardTile.tsx', 'CreditCardFilterBar.tsx', 'CreditCardTileGrid.tsx'].forEach(file => {
       const src = readFileSync(path.join(__dirname, '../../src/frontend/components', file), 'utf8');
       expect(src).not.toMatch(/\b(lg|sm|xl|2xl):/);

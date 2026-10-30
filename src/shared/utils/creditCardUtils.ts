@@ -34,6 +34,7 @@ export {
   resolveInstallmentDueDate,
   getCardDueMonthOffset,
   resolveCardDueDate,
+  resolveStatementCutoffDate,
   getPayableCycleMonth,
   isValidPurchaseDate,
   computeStartMonthFromPurchase,

@@ -127,6 +127,7 @@ export function CardMenu({ card, onEdit, onAddPlan, onDelete }: {
 }) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -145,6 +146,8 @@ export function CardMenu({ card, onEdit, onAddPlan, onDelete }: {
   }, [open]);
 
   const run = (action?: CardAction) => {
+    // รายการเมนูที่กดจะถูก unmount เมื่อเมนูปิด — คืน focus ที่ปุ่ม ⋯ ก่อน เพื่อให้ dialog ที่เปิดต่อคืน focus ได้ถูกที่
+    triggerRef.current?.focus();
     setOpen(false);
     action?.(card);
   };
@@ -153,6 +156,7 @@ export function CardMenu({ card, onEdit, onAddPlan, onDelete }: {
     <div className="relative shrink-0" ref={wrapperRef}>
       <button
         type="button"
+        ref={triggerRef}
         className={ICON_BTN}
         aria-haspopup="true"
         aria-expanded={open}
@@ -177,7 +181,7 @@ export function CardMenu({ card, onEdit, onAddPlan, onDelete }: {
             className={`flex min-h-11 items-center gap-space-2 rounded-sm px-space-3 text-left text-sm text-primary hover:bg-surface-2 ${FOCUS_RING}`}
             onClick={() => run(onAddPlan)}
           >
-            <Icons.Plus size={16} /> เพิ่มแผนผ่อนในบัตรนี้
+            <Icons.Plus size={16} /> เพิ่มรายจ่าย
           </button>
           <button
             type="button"
@@ -503,11 +507,11 @@ export default function CreditCardDashboard({
         />
       </div>
 
-      {!hasPlans && <p className="m-0 text-sm text-tertiary">ยังไม่มีแผนผ่อน — กด + เพิ่มแผนผ่อนชำระ</p>}
+      {!hasPlans && <p className="m-0 text-sm text-tertiary">ยังไม่มีแผนผ่อน — กด + เพิ่มรายจ่าย</p>}
 
       <div>
-        <button type="button" className={BTN_PRIMARY} onClick={onAddPlan}>
-          <Icons.Plus size={16} /> เพิ่มแผนผ่อนชำระ
+        <button type="button" data-add-expense-fallback className={BTN_PRIMARY} onClick={onAddPlan}>
+          <Icons.Plus size={16} /> เพิ่มรายจ่าย
         </button>
       </div>
     </div>

@@ -183,7 +183,12 @@ async function jsonFetch(url: string, options: RequestInit = {}): Promise<any> {
 			throw new ApiValidationError(data.issues);
 		}
 		const message = (typeof data?.message === 'string' && data.message) || data?.error || 'ไม่สามารถเชื่อมต่อ API ได้';
-		throw new Error(message);
+		const error = new Error(message);
+		// แนบ field errors ของ API (เช่น spend-items 400 {error, errors:{amount:'...'}}) — additive เท่านั้น
+		if (data?.errors && typeof data.errors === 'object' && !Array.isArray(data.errors)) {
+			(error as Error & { errors?: Record<string, unknown> }).errors = data.errors;
+		}
+		throw error;
 	}
 	return data;
 }
