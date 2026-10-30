@@ -59,6 +59,25 @@ describe('CreditCardCreditBreakdown', () => {
     expect(within(list).getByRole('button', { name: 'ดูรายละเอียดบัตร บัตรบี ไม่ได้ระบุวงเงิน' })).toHaveTextContent('ไม่ได้ระบุวงเงิน');
   });
 
+  it('stacks the row on narrow widths and keeps amount and chevron for long names', () => {
+    const longName = 'บัตรเครดิต'.repeat(10);
+    render(<CreditCardCreditBreakdown id="x" cards={[card('z', longName, 1234567, 9999999)]} onClose={jest.fn()} />);
+    const btn = screen.getByRole('button', { name: /บัตรเครดิต/ });
+    expect(btn.className).toMatch(/\bflex-col\b/);
+    expect(btn.className).toMatch(/\bmd:flex-row\b/);
+    expect(btn.className).toMatch(/\bmin-h-11\b/);
+    expect(btn.className).not.toMatch(/(^|\s)(sm|lg|xl|2xl):/);
+    const amount = within(btn).getByText('1,234,567.00 /');
+    expect(amount).toHaveClass('whitespace-nowrap');
+    expect(within(btn).getByText('9,999,999.00 บาท')).toHaveClass('whitespace-nowrap');
+    const block = amount.parentElement!.parentElement!;
+    expect(block.className).toMatch(/\bw-full\b/);
+    expect(block.className).toMatch(/\bjustify-between\b/);
+    expect(block.className).toMatch(/\bmd:w-auto\b/);
+    expect(block.querySelector('svg')).toBeInTheDocument();
+    expect(within(btn).getByText(longName)).toHaveClass('break-words');
+  });
+
   it('calls onOpenCard, onClose on hide and on Escape', () => {
     const { onClose, onOpenCard } = setup();
     fireEvent.click(screen.getByRole('button', { name: /บัตรเอ/ }));

@@ -78,7 +78,7 @@ export default function CreditCardCreditBreakdown({ id, cards, totalAvailable, t
             <li key={card.id}>
               <button
                 type="button"
-                className={`flex min-h-11 w-full items-start justify-between gap-space-3 rounded-sm border border-border-default bg-surface-2 px-space-3 py-space-2 text-left text-primary hover:bg-surface-3 ${FOCUS_RING}`}
+                className={`flex min-h-11 w-full flex-col items-stretch gap-space-2 md:flex-row md:items-start md:justify-between md:gap-space-3 rounded-sm border border-border-default bg-surface-2 px-space-3 py-space-2 text-left text-primary hover:bg-surface-3 ${FOCUS_RING}`}
                 aria-label={limited
                   ? `ดูรายละเอียดบัตร ${label} วงเงินคงเหลือ ${available} จาก ${limit} บาท`
                   : `ดูรายละเอียดบัตร ${label} ไม่ได้ระบุวงเงิน`}
@@ -88,7 +88,7 @@ export default function CreditCardCreditBreakdown({ id, cards, totalAvailable, t
                   <span className="mt-[4px] h-3 w-3 shrink-0 rounded-xs" style={{ background: card.color }} aria-hidden="true" />
                   <span className="min-w-0 break-words">{label}</span>
                 </span>
-                <span className="flex min-w-0 max-w-[60%] items-start gap-space-2">
+                <span className="flex w-full min-w-0 items-start justify-between gap-space-2 md:w-auto md:max-w-[60%] md:justify-end">
                   {limited ? (
                     <span className="text-right font-[family-name:var(--font-numeric)] font-semibold tabular-nums">
                       <span className="whitespace-nowrap">{available} /</span>{' '}<span className="whitespace-nowrap">{limit} บาท</span>
