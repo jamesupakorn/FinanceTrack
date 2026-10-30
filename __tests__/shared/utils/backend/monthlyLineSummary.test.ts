@@ -279,6 +279,36 @@ describe('buildMonthlySummaryPayload — comparison & upcoming (AC-7/AC-9)', () 
     expect(payload.upcoming.items).toEqual([{ name: 'ค่าเช่า', amount: 10000, day: 5, dueDate: '2025-01-05' }]);
   });
 
+  // DP-AC-12 (cash basis): a cycle whose due date falls in the next month (dueDay <= statementDay) is
+  // counted in the DUE month's LINE summary, not in the cycle month's.
+  it('DP-AC-12 counts a cross-month card cycle in its due month only', async () => {
+    const userUtils = require('../../../../src/backend/data/userUtils');
+    userUtils.getUserData.mockImplementation((filename: string) => {
+      if (filename === 'monthly_income.json') {
+        return { '2026-10': { รวม: 50000, salary: 50000 }, '2026-11': { รวม: 50000, salary: 50000 } };
+      }
+      return {};
+    });
+    const realSync = jest.requireActual<typeof import('../../../../src/shared/utils/backend/creditCardSync')>('../../../../src/shared/utils/backend/creditCardSync');
+    const mockedBuilder = jest.mocked(buildCardTotalExpenseRows);
+    mockedBuilder.mockImplementation(realSync.buildCardTotalExpenseRows);
+    jest.mocked(getUserCreditData).mockResolvedValue({
+      cards: [{ id: 'cc_000000000001', name: 'Shopee SPayLater', annualRate: 0, minPaymentPercent: 10, statementDay: 25, dueDay: 10 }],
+      plans: [],
+      cycles: [{ cardId: 'cc_000000000001', month: '2026-10', newSpend: 1500 }],
+      spendItems: [], updatedAt: null
+    });
+    try {
+      const october = await buildMonthlySummaryPayload('u001', '2026-10');
+      const november = await buildMonthlySummaryPayload('u001', '2026-11');
+      expect(october.model.creditCard).toBe(0);
+      expect(november.model.creditCard).toBe(1500);
+    } finally {
+      mockedBuilder.mockImplementation(() => ({}));
+      jest.mocked(getUserCreditData).mockResolvedValue({ cards: [], plans: [], cycles: [], spendItems: [], updatedAt: null });
+    }
+  });
+
   it('marks comparison as noPrevious when the previous month has no documents', async () => {
     const userUtils = require('../../../../src/backend/data/userUtils');
     userUtils.getUserData.mockImplementation((filename: string) =>
