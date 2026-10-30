@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   resolveCardDueDate,
   formatIsoDateTH,
@@ -22,6 +23,7 @@ import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { fitFontSizeCss } from '../../shared/utils/frontend/ringTextFit';
 import { Icons } from './Icons';
 import CreditCardTileGrid, { TILE_GRID_CLASS } from './CreditCardTileGrid';
+import CreditCardDebtBreakdown from './CreditCardDebtBreakdown';
 
 interface DashboardCard {
   id: string;
@@ -109,13 +111,15 @@ const VALID_MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/;
 export const HIGH_UTILISATION_PERCENT = 80;
 
 export const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
-const CARD = 'rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5';
+const DEBT_PANEL_ID = 'cc-debt-breakdown';
+const TILE_BUTTON_EXTRA = 'transition-colors duration-fast ease-graphite hover:bg-surface-2 motion-reduce:transition-none';
+export const CARD = 'rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5';
 // รักษา line-box เดิมของ text-2xl ไว้แม้ font-size จะหดลง เพื่อให้แถว caption ของ 4 tile เรียงกันพอดี (spec D-5)
 export const TILE_AMOUNT_LINE_HEIGHT = 'calc(var(--text-2xl) * 1.3)';
 const BTN_PRIMARY = `inline-flex min-h-11 items-center justify-center gap-space-2 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent transition-colors duration-fast ease-graphite hover:opacity-90 ${FOCUS_RING}`;
 export const BTN_GHOST = `inline-flex min-h-11 items-center justify-center gap-space-2 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING}`;
 const ICON_BTN = `flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border border-border-default bg-surface-2 text-secondary transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING}`;
-const SECTION_TITLE = 'm-0 text-lg font-semibold text-primary';
+export const SECTION_TITLE = 'm-0 text-lg font-semibold text-primary';
 const WARN_CHIP = 'inline-flex w-fit items-center gap-space-1 rounded-full border border-warn/40 bg-warn/14 px-space-2 py-[2px] text-xs font-medium text-warn';
 
 /** เมนู ⋯ ของการ์ด — ปิดเมื่อคลิกนอกพื้นที่หรือกด Escape (แบบเดียวกับ userMenuWrapper ใน edit.js) */
@@ -214,6 +218,39 @@ export default function CreditCardDashboard({
 }: CreditCardDashboardProps) {
   const cardById = useMemo(() => new Map(cards.map(card => [card.id, card])), [cards]);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
+  const [openPanel, setOpenPanel] = useState<'debt' | null>(null);
+  const debtOpen = openPanel === 'debt';
+  const desktopTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const mobileTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const activeTriggerRef = useRef<HTMLElement | null>(null);
+
+  /** คืน focus ให้ trigger ที่เปิดแผง; ถ้าไม่ได้แสดงอยู่ (ข้าม 768px) ใช้ตัวที่แสดงอยู่แทน */
+  const restoreDebtFocus = () => {
+    const stored = activeTriggerRef.current;
+    const other = stored === desktopTriggerRef.current ? mobileTriggerRef.current : desktopTriggerRef.current;
+    const target = stored && stored.offsetParent !== null ? stored : (other && other.offsetParent !== null ? other : stored);
+    target?.focus();
+  };
+  const closeDebtPanel = () => {
+    setOpenPanel(null);
+    restoreDebtFocus();
+  };
+  const toggleDebt = (trigger: HTMLElement) => {
+    activeTriggerRef.current = trigger;
+    setOpenPanel(current => (current === 'debt' ? null : 'debt'));
+  };
+  const handleDebtTriggerKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'Escape' || !debtOpen) return;
+    closeDebtPanel();
+    event.stopPropagation();
+  };
+  const scrollToUpcoming = () => {
+    const heading = document.getElementById('upcoming-heading');
+    if (!heading) return;
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+    heading.scrollIntoView?.({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+    heading.focus({ preventScroll: true });
+  };
 
   /** รวมภาระที่ยังไม่ชำระตามบัตรและวันที่ครบกำหนด ก่อนจำกัดจำนวนกลุ่มที่แสดง */
   const upcomingProjection = useMemo<UpcomingProjection>(() => {
@@ -366,26 +403,46 @@ export default function CreditCardDashboard({
     <div className="flex flex-col gap-space-5">
       {/* summary — desktop 4 tiles (C3 stats) */}
       <div className="hidden grid-cols-4 gap-space-3 md:grid" aria-live="polite">
-        <div className={`${CARD} min-w-0 [container-type:inline-size]`}>
-          <p className="m-0 mb-space-1 text-sm text-secondary">หนี้คงเหลือรวม</p>
-          <p
-            className="m-0 whitespace-nowrap font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary"
+        <button
+          type="button"
+          ref={desktopTriggerRef}
+          className={`${CARD} relative block w-full min-w-0 text-left [container-type:inline-size] ${TILE_BUTTON_EXTRA} ${FOCUS_RING}`}
+          aria-expanded={debtOpen}
+          aria-controls={DEBT_PANEL_ID}
+          onClick={event => toggleDebt(event.currentTarget)}
+          onKeyDown={handleDebtTriggerKeyDown}
+        >
+          <span aria-hidden="true" className={`absolute right-space-3 top-space-3 text-tertiary transition-transform duration-fast motion-reduce:transition-none ${debtOpen ? 'rotate-180' : ''}`}>
+            <Icons.ChevronDown size={16} />
+          </span>
+          <span className="m-0 mb-space-1 block text-sm text-secondary">หนี้คงเหลือรวม</span>
+          <span
+            className="m-0 block whitespace-nowrap font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary"
             style={{ fontSize: fitFontSizeCss(formatCurrency(totals?.remainingPayable || 0)), lineHeight: TILE_AMOUNT_LINE_HEIGHT }}
           >
             {formatCurrency(totals?.remainingPayable || 0)}
-          </p>
+          </span>
           <span className="text-xs text-tertiary">บาท</span>
-        </div>
-        <div className={`${CARD} min-w-0 [container-type:inline-size]`}>
-          <p className="m-0 mb-space-1 text-sm text-secondary">ครบกำหนดเร็ว ๆ นี้</p>
-          <p
-            className="m-0 whitespace-nowrap font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary"
+        </button>
+        <button
+          type="button"
+          className={`${CARD} relative block w-full min-w-0 text-left [container-type:inline-size] ${TILE_BUTTON_EXTRA} ${FOCUS_RING}`}
+          aria-describedby="upcoming-jump-hint"
+          onClick={scrollToUpcoming}
+        >
+          <span aria-hidden="true" className="absolute right-space-3 top-space-3 text-tertiary">
+            <Icons.ChevronRight size={16} />
+          </span>
+          <span className="m-0 mb-space-1 block text-sm text-secondary">ครบกำหนดเร็ว ๆ นี้</span>
+          <span
+            className="m-0 block whitespace-nowrap font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary"
             style={{ fontSize: fitFontSizeCss(formatCurrency(monthlyDueTotal)), lineHeight: TILE_AMOUNT_LINE_HEIGHT }}
           >
             {formatCurrency(monthlyDueTotal)}
-          </p>
+          </span>
           <span className="text-xs text-tertiary">{`บาท · ${dueCardCount} บัตร`}</span>
-        </div>
+        </button>
+        <span id="upcoming-jump-hint" hidden>ไปยังรายการครบกำหนดด้านล่าง</span>
         <div className={`${CARD} min-w-0 [container-type:inline-size]`}>
           <p className="m-0 mb-space-1 text-sm text-secondary">วงเงินคงเหลือ</p>
           <p
@@ -404,24 +461,54 @@ export default function CreditCardDashboard({
       </div>
 
       {/* summary — mobile single card (J1: อ่านหนี้รวมได้โดยไม่ต้อง scroll) */}
-      <div className={`${CARD} min-w-0 md:hidden`} aria-live="polite">
-        <p className="m-0 mb-space-1 text-sm text-secondary">หนี้คงเหลือรวม</p>
-        <p className="m-0 font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary">
-          <span className="whitespace-nowrap">{formatCurrency(totals?.remainingPayable || 0)}</span>{' บาท'}
-        </p>
-        <p className="m-0 mt-space-1 text-xs text-tertiary">
-          {'ครบกำหนดเร็ว ๆ นี้ '}<span className="max-w-full break-all">{formatCurrency(monthlyDueTotal)}</span>
-          {` · ${dueCardCount} บัตร`}
-          {' · เหลือวงเงิน '}<span className="whitespace-nowrap">{formatCurrency(totals?.availableCredit || 0)}</span>
-          {` · ${totals?.ongoingPlanCount || 0} แผน`}
-        </p>
+      <div className="md:hidden" aria-live="polite">
+        <button
+          type="button"
+          ref={mobileTriggerRef}
+          className={`${CARD} block w-full min-w-0 text-left transition-colors duration-fast ease-graphite hover:bg-surface-2 motion-reduce:transition-none ${FOCUS_RING}`}
+          aria-expanded={debtOpen}
+          aria-controls={DEBT_PANEL_ID}
+          onClick={event => toggleDebt(event.currentTarget)}
+          onKeyDown={handleDebtTriggerKeyDown}
+        >
+          <span className="m-0 mb-space-1 block text-sm text-secondary">หนี้คงเหลือรวม</span>
+          <span className="m-0 block font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary">
+            <span className="whitespace-nowrap">{formatCurrency(totals?.remainingPayable || 0)}</span>{' บาท'}
+          </span>
+          <span className="m-0 mt-space-1 block text-xs text-tertiary">
+            {'ครบกำหนดเร็ว ๆ นี้ '}<span className="max-w-full break-all">{formatCurrency(monthlyDueTotal)}</span>
+            {` · ${dueCardCount} บัตร`}
+            {' · เหลือวงเงิน '}<span className="whitespace-nowrap">{formatCurrency(totals?.availableCredit || 0)}</span>
+            {` · ${totals?.ongoingPlanCount || 0} แผน`}
+          </span>
+          <span aria-hidden="true" className="mt-space-2 flex items-center gap-space-1 text-xs text-secondary">
+            <span aria-hidden="true" className={`text-tertiary transition-transform duration-fast motion-reduce:transition-none ${debtOpen ? 'rotate-180' : ''}`}>
+              <Icons.ChevronDown size={16} />
+            </span>
+            {debtOpen ? 'ซ่อนรายละเอียด' : 'แตะเพื่อดูแยกตามบัตร'}
+          </span>
+        </button>
       </div>
+
+      {debtOpen && (
+        <CreditCardDebtBreakdown
+          id={DEBT_PANEL_ID}
+          cards={cards}
+          total={totals?.remainingPayable}
+          onOpenCard={onOpenCard}
+          onClose={closeDebtPanel}
+        />
+      )}
 
       {planCreatedNote && <p className="m-0 text-sm text-tertiary">{planCreatedNote}</p>}
 
       <div>
         <div className="mb-space-3 flex items-center justify-between gap-space-3">
-          <h2 className={SECTION_TITLE}>ครบกำหนดเร็ว ๆ นี้</h2>
+          <h2
+            id="upcoming-heading"
+            tabIndex={-1}
+            className={`${SECTION_TITLE} focus:outline-none focus-visible:outline-none`}
+          >ครบกำหนดเร็ว ๆ นี้</h2>
         </div>
 
         {upcoming.length === 0 ? (

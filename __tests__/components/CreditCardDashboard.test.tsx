@@ -353,3 +353,124 @@ describe('CreditCardDashboard upcoming groups: cross-month cards', () => {
     expect(screen.queryByText(/999/)).not.toBeInTheDocument();
   });
 });
+
+describe('CreditCardDashboard KPI drill-down', () => {
+  const debtCards = () => [
+    makeCard('cc_a', 'บัตรเอ', 29, { remainingPayable: 3000 }),
+    makeCard('cc_b', 'บัตรบี', 29, { remainingPayable: 30000 }),
+    makeCard('cc_c', 'บัตรซี', 29, { remainingPayable: 0 })
+  ];
+  const renderDebt = (props: Partial<React.ComponentProps<typeof CreditCardDashboard>> = {}) => render(
+    <CreditCardDashboard
+      cards={debtCards()}
+      plans={[]}
+      totals={{ remainingPayable: 33000, availableCredit: 10000, creditLimit: 10000, ongoingPlanCount: 0, cardCount: 3 }}
+      {...props}
+    />
+  );
+  const debtTriggers = () => screen.getAllByRole('button', { name: /^หนี้คงเหลือรวม/ });
+  const getPanel = () => screen.queryByRole('region', { name: 'หนี้คงเหลือแยกตามบัตร' });
+
+  it('toggles the panel with aria-expanded/aria-controls and a single panel id', () => {
+    renderDebt();
+    const [desktop, mobile] = debtTriggers();
+    expect(desktop).toHaveAttribute('aria-expanded', 'false');
+    expect(desktop).toHaveAttribute('aria-controls', 'cc-debt-breakdown');
+    expect(mobile).toHaveAttribute('aria-controls', 'cc-debt-breakdown');
+    expect(getPanel()).not.toBeInTheDocument();
+    expect(screen.getByText('แตะเพื่อดูแยกตามบัตร')).toBeInTheDocument();
+
+    fireEvent.click(desktop);
+    expect(desktop).toHaveAttribute('aria-expanded', 'true');
+    expect(document.querySelectorAll('#cc-debt-breakdown')).toHaveLength(1);
+    const panel = getPanel()!;
+    expect(within(panel).getByText('รวม 33,000.00 บาท · 2 บัตร')).toBeInTheDocument();
+    expect(within(panel).getByText('บัตรที่ไม่มีหนี้คงเหลือ 1 ใบ')).toBeInTheDocument();
+    expect(within(panel).getAllByRole('listitem')[0].textContent).toContain('บัตรบี');
+
+    fireEvent.click(desktop);
+    expect(getPanel()).not.toBeInTheDocument();
+  });
+
+  it('opens via the mobile card, and row click calls onOpenCard once', () => {
+    const onOpenCard = jest.fn();
+    renderDebt({ onOpenCard });
+    fireEvent.click(debtTriggers()[1]);
+    fireEvent.click(within(getPanel()!).getByRole('button', { name: /ดูรายละเอียดบัตร บัตรเอ หนี้คงเหลือ 3,000.00 บาท/ }));
+    expect(onOpenCard).toHaveBeenCalledTimes(1);
+    expect(onOpenCard).toHaveBeenCalledWith('cc_a');
+  });
+
+  it('closes on Escape from the panel or the trigger', () => {
+    renderDebt();
+    const [desktop] = debtTriggers();
+    fireEvent.click(desktop);
+    fireEvent.keyDown(within(getPanel()!).getAllByRole('button')[0], { key: 'Escape' });
+    expect(getPanel()).not.toBeInTheDocument();
+
+    fireEvent.click(desktop);
+    fireEvent.keyDown(desktop, { key: 'Escape' });
+    expect(getPanel()).not.toBeInTheDocument();
+  });
+
+  it('does not close on Escape pressed elsewhere', () => {
+    renderDebt();
+    fireEvent.click(debtTriggers()[0]);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(getPanel()).toBeInTheDocument();
+  });
+
+  it('hide button closes the panel and returns focus to the opening trigger', () => {
+    renderDebt();
+    const [desktop] = debtTriggers();
+    // jsdom always reports offsetParent null
+    Object.defineProperty(desktop, 'offsetParent', { configurable: true, get: () => document.body });
+    fireEvent.click(desktop);
+    fireEvent.click(within(getPanel()!).getByRole('button', { name: 'ซ่อนรายละเอียด' }));
+    expect(getPanel()).not.toBeInTheDocument();
+    expect(desktop).toHaveFocus();
+  });
+
+  it('keeps the credit and plan tiles static', () => {
+    renderDebt();
+    expect(screen.queryByRole('button', { name: /^วงเงินคงเหลือ/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^แผนที่กำลังผ่อน/ })).not.toBeInTheDocument();
+  });
+
+  describe('due-soon tile', () => {
+    const scrollIntoView = jest.fn();
+    let originalScroll: typeof Element.prototype.scrollIntoView;
+    let originalMatchMedia: typeof window.matchMedia;
+    beforeEach(() => {
+      originalScroll = Element.prototype.scrollIntoView;
+      originalMatchMedia = window.matchMedia;
+      Element.prototype.scrollIntoView = scrollIntoView;
+      scrollIntoView.mockClear();
+    });
+    afterEach(() => {
+      Element.prototype.scrollIntoView = originalScroll;
+      window.matchMedia = originalMatchMedia;
+    });
+    const mockReduced = (matches: boolean) => {
+      window.matchMedia = jest.fn().mockReturnValue({ matches }) as unknown as typeof window.matchMedia;
+    };
+
+    it('scrolls smoothly to and focuses the heading when the upcoming list is empty', () => {
+      mockReduced(false);
+      renderDebt();
+      fireEvent.click(screen.getByRole('button', { name: /^ครบกำหนดเร็ว ๆ นี้/ }));
+      const heading = document.getElementById('upcoming-heading');
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+      expect(scrollIntoView.mock.instances[0]).toBe(heading);
+      expect(heading).toHaveFocus();
+      expect(getPanel()).not.toBeInTheDocument();
+    });
+
+    it('uses auto behaviour under reduced motion', () => {
+      mockReduced(true);
+      renderDebt();
+      fireEvent.click(screen.getByRole('button', { name: /^ครบกำหนดเร็ว ๆ นี้/ }));
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' });
+    });
+  });
+});
