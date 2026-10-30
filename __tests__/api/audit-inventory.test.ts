@@ -109,7 +109,7 @@ describe('credit-card routes are audited', () => {
     expect(await events()).toHaveLength(2);
 
     const spendItems: Handler = require('../../pages/api/credit-cards/spend-items').default;
-    const cycleRes = await call(spendItems, { method: 'POST', body: { item: { cardId, month: '2099-01', name: 'อาหาร', amount: 100 } } });
+    const cycleRes = await call(spendItems, { method: 'POST', body: { item: { cardId, purchaseDate: '2099-01-01', name: 'อาหาร', amount: 100 } } });
     expect(cycleRes.status).toBe(201);
     expect(await events()).toHaveLength(3);
 

@@ -90,8 +90,8 @@ const SP_ID = 'cc_5e5e5e5e5e5e';
 const SP_KEY = 'ccr_5e5e5e5e5e5e';
 const SM_ID = 'cc_777777777777';
 const SM_KEY = 'ccr_777777777777';
-const revolvingRow = (name: string, resolvedDueDate: string, dueDay: number) => ({
-  name, actual: 1500, paid: false, account: '', dueDay, derived: true, resolvedDueDate
+const revolvingRow = (name: string, resolvedDueDate: string, dueDay: number, cycleMonth: string) => ({
+  name, actual: 1500, paid: false, account: '', dueDay, derived: true, cycleMonth, resolvedDueDate
 });
 
 function load(monthsMap: Record<string, unknown>) {
@@ -116,8 +116,9 @@ afterEach(() => { jest.useRealTimers(); });
 
 describe('home page revolving actions use event.cycleMonth (AC-15)', () => {
   const NOV_VIEW = {
-    '2026-10': { [SP_KEY]: revolvingRow('Shopee', '2026-11-10', 10) },
-    '2026-11': { [SP_KEY]: revolvingRow('Shopee', '2026-12-10', 10) }
+    // cash basis (DP-1): rows are keyed by DUE month and tagged with the cycle they came from
+    '2026-11': { [SP_KEY]: revolvingRow('Shopee', '2026-11-10', 10, '2026-10') },
+    '2026-12': { [SP_KEY]: revolvingRow('Shopee', '2026-12-10', 10, '2026-11') }
   };
 
   it('calendar (view 2026-11): full / undo / minimum on the Shopee 2026-10 event write and read cycle 2026-10', async () => {
@@ -129,7 +130,7 @@ describe('home page revolving actions use event.cycleMonth (AC-15)', () => {
     ] } as never);
     render(<DashboardPage />);
     const row = await screen.findByTestId(`cal-2026-10_${SP_KEY}`);
-    // the Nov cycle (due 10 Dec) is not in the Nov calendar
+    // the Nov cycle (due 10 Dec, listed under 2026-12) is not in the Nov calendar
     expect(screen.queryByTestId(`cal-2026-11_${SP_KEY}`)).not.toBeInTheDocument();
 
     fireEvent.click(within(row).getByText('cal-full'));
@@ -177,7 +178,7 @@ describe('home page revolving actions use event.cycleMonth (AC-15)', () => {
     useClock(new Date(2026, 10, 28, 12, 0, 0));
     load({
       '2026-11': { ค่าเช่า: { name: 'ค่าเช่า', actual: 5000, dueDay: 1 } },
-      '2026-12': { [SM_KEY]: revolvingRow('Same Month', '2026-12-03', 3) }
+      '2026-12': { [SM_KEY]: revolvingRow('Same Month', '2026-12-03', 3, '2026-12') }
     });
     render(<DashboardPage />);
     const item = await screen.findByTestId(`up-2026-12_${SM_KEY}`);

@@ -360,11 +360,11 @@ describe('ExpenseCalendarModal cross-month revolving actions (AC-6)', () => {
   const CYCLE_MONTH = addMonths(SELECTED_MONTH, -1);
   const cardId = 'cc_5e5e5e5e5e5e';
   const loadCrossMonth = (paid: boolean) => {
+    // cash basis (DP-1/DP-7): the server lists the row under its DUE month (the viewed month) and tags it with cycleMonth
     mockedExpenseAPI.getAll.mockResolvedValue({ months: {
-      [CYCLE_MONTH]: {
-        ccr_5e5e5e5e5e5e: { name: 'ยอดใช้จ่ายบัตร Shopee', actual: 4000, account: '', paid, dueDay: 10, resolvedDueDate: `${SELECTED_MONTH}-10` }
-      },
-      [SELECTED_MONTH]: {}
+      [SELECTED_MONTH]: {
+        ccr_5e5e5e5e5e5e: { name: 'ยอดใช้จ่ายบัตร Shopee', actual: 4000, account: '', paid, dueDay: 10, cycleMonth: CYCLE_MONTH, resolvedDueDate: `${SELECTED_MONTH}-10` }
+      }
     } });
     mockedCreditCardAPI.getCards.mockResolvedValue({ cards: [{ id: cardId, name: 'บัตร Shopee', color: '#ee4d2d', statementDay: 'EOM', dueDay: 10 }] });
     mockedCreditCardAPI.getPlans.mockResolvedValue({ plans: [] });

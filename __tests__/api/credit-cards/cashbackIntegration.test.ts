@@ -238,7 +238,7 @@ describe('PATCH cashback round trips', () => {
     expect((await readDoc()).cycles[0]).toMatchObject({ paymentAction: 'full', paidAt: 'P', paidSource: 'credit_card', cashbackAmount: 1200 });
 
     // 2) next month spend absorbs the carried credit
-    expect((await call(spendItemsHandler, { method: 'POST', body: { item: { cardId: 'cc_cb', month: '2099-02', name: 'รายการใหม่', amount: 500 } } })).status).toBe(201);
+    expect((await call(spendItemsHandler, { method: 'POST', body: { item: { cardId: 'cc_cb', purchaseDate: '2099-02-01', name: 'รายการใหม่', amount: 500 } } })).status).toBe(201);
     res = await call(revolvingHandler, { query: { cardId: 'cc_cb', month: '2099-02' } });
     expect(res.status).toBe(200);
     expect(res.body.cycles.find((cycle: IntegrationCycle) => cycle.month === '2099-02')).toMatchObject({ carriedBalance: -200, totalDue: 300, amountDue: 300 });

@@ -923,7 +923,7 @@ describe('/api/monthly_expense (Mongo mode)', () => {
 // spec-credit-card-cross-month-due.md AC-1 / AC-16 (GET derives resolvedDueDate from the STORED statementDay)
 // and AC-12 (POST never persists resolvedDueDate)
 describe('/api/monthly_expense — cross-month resolvedDueDate', () => {
-  it('AC-1/AC-16: stored statementDay EOM / dueDay 10 → ccr_ row under 2026-10 with resolvedDueDate 2026-11-10', async () => {
+  it('AC-1/AC-16: stored statementDay EOM / dueDay 10 → 2026-10 cycle listed under its DUE month 2026-11 with resolvedDueDate 2026-11-10 (cash basis, DP-1)', async () => {
     await seedCreditDoc(USER_A, {
       cards: [makeCard({ id: 'cc_5e5e5e5e5e5e', name: 'Shopee SPayLater', statementDay: 'EOM', dueDay: 10 })],
       cycles: [{ cardId: 'cc_5e5e5e5e5e5e', month: '2026-10', newSpend: 1500, paymentAction: null }]
@@ -934,19 +934,21 @@ describe('/api/monthly_expense — cross-month resolvedDueDate', () => {
     await handler(oct.req, oct.res);
     expect(oct.res._getStatusCode()).toBe(200);
     const octBody = JSON.parse(oct.res._getData());
-    expect(octBody[key]).toMatchObject({ actual: 1500, dueDay: 10, resolvedDueDate: '2026-11-10' });
+    // cash basis (DP-1): the Oct cycle is no longer listed under Oct
+    expect(octBody[key]).toBeUndefined();
 
-    // XM-1: the 2026-10 cycle is grouped under 2026-10, not 2026-11
+    // it is listed under its due month, tagged with the cycle it came from
     const nov = makeReqRes({ query: { month: '2026-11' } });
     await handler(nov.req, nov.res);
     const novBody = JSON.parse(nov.res._getData());
-    // the November row is the November cycle (carry included), due 10 Dec — never the Oct cycle re-keyed
-    expect(novBody[key]).toMatchObject({ resolvedDueDate: '2026-12-10' });
+    expect(novBody[key]).toMatchObject({ actual: 1500, dueDay: 10, cycleMonth: '2026-10', resolvedDueDate: '2026-11-10' });
 
-    // all-months GET carries the same derived field
+    // all-months GET carries the same placement
     const all = makeReqRes({});
     await handler(all.req, all.res);
-    expect(JSON.parse(all.res._getData())['2026-10'][key]).toMatchObject({ resolvedDueDate: '2026-11-10' });
+    const allBody = JSON.parse(all.res._getData());
+    expect(allBody['2026-11'][key]).toMatchObject({ cycleMonth: '2026-10', resolvedDueDate: '2026-11-10' });
+    expect(allBody['2026-10']?.[key]).toBeUndefined();
   });
 
   it('AC-16 / AC-3: stored statementDay 5 / dueDay 25 → resolvedDueDate 2026-10-25 (same month, unchanged)', async () => {
