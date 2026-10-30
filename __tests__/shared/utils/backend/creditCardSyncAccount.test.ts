@@ -35,6 +35,7 @@ describe('credit card account resolution', () => {
       name: 'บัตร A',
       bankAccountId: 'ba_aaaaaaaaaaaa',
       bankName: 'ttb',
+      statementDay: 10,
       dueDay: 20
     }, [
       { id: 'ba_aaaaaaaaaaaa', name: 'กสิกร' },
@@ -48,6 +49,7 @@ describe('credit card account resolution', () => {
       name: 'บัตร A',
       bankAccountId: 'ba_deleted0000',
       bankName: 'ttb',
+      statementDay: 10,
       dueDay: 20
     }, [{ id: 'ba_bbbbbbbbbbbb', name: 'ttb' }]).account).toBe('ttb');
 
@@ -56,6 +58,7 @@ describe('credit card account resolution', () => {
       name: 'บัตร A',
       bankAccountId: 'ba_deleted0000',
       bankName: '',
+      statementDay: 10,
       dueDay: 20
     }, []).account).toBe(UNASSIGNED_ACCOUNT_LABEL);
   });
@@ -67,6 +70,7 @@ describe('credit card account resolution', () => {
       name: 'บัตร A',
       bankAccountId: legacyId,
       bankName: '',
+      statementDay: 10,
       dueDay: 20
     };
 
@@ -82,6 +86,7 @@ describe('credit card account resolution', () => {
           name: 'บัตร A',
           bankAccountId: 'bal_0123456789abcdef',
           bankName: '',
+          statementDay: 10,
           dueDay: 20
         }],
         plans: [{
@@ -107,6 +112,7 @@ describe('credit card account resolution', () => {
         name: 'บัตร A',
         bankAccountId: 'ba_aaaaaaaaaaaa',
         bankName: '',
+        statementDay: 10,
         dueDay: 20
       }],
       cycles: [{ cardId: 'cc_test', month: MONTH, newSpend: 1000, paymentAction: null }]

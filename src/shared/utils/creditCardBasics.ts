@@ -237,6 +237,21 @@ export function getPayableCycleMonth(
 }
 
 /**
+ * เดือนตาราง (เดือนที่ชำระจริง) ของรอบบิล cycleMonth = addMonths(cycleMonth, offset) (DP-1)
+ * เป็นฟังก์ชันผกผันของ getPayableCycleMonth และเท่ากับ resolveCardDueDate(card, cycleMonth).slice(0, 7)
+ * ใช้จัดวางแถวบัตร ccr_ ในตารางรายจ่ายรายเดือน — derive ตอนอ่านเสมอ ไม่เก็บลงฐานข้อมูล (DP-3)
+ * @returns 'YYYY-MM' — cycleMonth ไม่ถูกต้อง → คืนค่าเดิม (เหมือน getPayableCycleMonth)
+ */
+export function getCardDueMonth(
+  card: { statementDay?: DayLike; dueDay?: DayLike },
+  cycleMonth: string
+): string {
+  if (typeof cycleMonth !== 'string' || !MONTH_KEY_RE.test(cycleMonth)) return cycleMonth;
+  const offset = getCardDueMonthOffset(card?.statementDay, card?.dueDay);
+  return addMonths(cycleMonth, offset);
+}
+
+/**
  * true เมื่อเป็น 'YYYY-MM-DD' และเป็นวันที่ที่มีอยู่จริงในปฏิทิน
  * ปฏิเสธทั้งรูปแบบผิด และวันที่ที่ไม่มีจริง เช่น '2026-02-30', '2026-04-31', '2026-02-29'
  */

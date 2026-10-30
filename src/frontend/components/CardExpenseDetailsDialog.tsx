@@ -13,6 +13,7 @@ const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:
 interface CardExpenseDetailsDialogProps {
   cardId: string;
   cardName: string;
+  /** รอบบิลที่แถวแสดง (row.cycleMonth) — ไม่ใช่เดือนของตาราง (spec-credit-card-due-month-placement) */
   month: MonthKey;
   total: number | string;
   breakdown: CardTotalExpenseRow['breakdown'];
@@ -100,7 +101,7 @@ export default function CardExpenseDetailsDialog({
             <h2 id="expense-card-details-title" className="break-words text-lg font-semibold text-primary [overflow-wrap:anywhere]">
               {cardName}
             </h2>
-            <p className="mt-space-1 text-sm text-secondary">{formatMonthKeyTH(month)}</p>
+            <p className="mt-space-1 text-sm text-secondary">{`รอบบิล ${formatMonthKeyTH(month)}`}</p>
             <p className="mt-space-2 text-sm text-secondary">ยอดค่าใช้จ่ายรายเดือน</p>
             <p className="font-[family-name:var(--font-numeric)] text-xl font-semibold tabular-nums text-primary">
               {formatCurrency(total)} ฿

@@ -10,7 +10,6 @@
 
 import { resolveDueDayForMonth } from '../dateUtils';
 import {
-  addMonths,
   getDaysInMonthKey,
   round2,
   isRevolvingRowKey,
@@ -47,6 +46,8 @@ interface ExpenseEventRow {
   breakdown?: CardTotalExpenseRow['breakdown'];
   /** วันครบกำหนดจริงของแถวบัตร (ccr_/cci_) จาก GET monthly_expense — derive อ่านอย่างเดียว */
   resolvedDueDate?: unknown;
+  /** รอบบิลที่แถวบัตร ccr_ แสดง ('YYYY-MM') จาก GET monthly_expense — derive อ่านอย่างเดียว */
+  cycleMonth?: unknown;
   [key: string]: unknown;
 }
 
@@ -70,6 +71,8 @@ interface ExpenseEvent {
 
 // 'YYYY-MM-DD' → [, 'YYYY-MM', 'DD']
 const RESOLVED_DUE_DATE_RE = /^(\d{4}-(?:0[1-9]|1[0-2]))-(0[1-9]|[12]\d|3[01])$/;
+// 'YYYY-MM' — รอบบิลของแถวบัตร (row.cycleMonth จาก GET monthly_expense)
+const CYCLE_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 // ฟิลด์ระบบที่ไม่ใช่แถวค่าใช้จ่าย — ชุดเดียวกับ EXPENSE_IGNORED_FIELDS ของ line_due_notify.js:51-58
 export const IGNORED_ROW_KEYS: Set<string> = new Set([
@@ -116,15 +119,20 @@ export function buildMonthEvents({
     windowState = monthKey < monthKeys[0] ? 'pruned' : 'future';
   }
 
-  // แหล่งแถว: เดือน M เอง + เดือน M-1 (รอบบิลที่ครบกำหนดข้ามมาเดือนนี้, spec-credit-card-cross-month-due.md)
-  // แถวบัตรที่มี resolvedDueDate วางตามวันครบกำหนดจริง — แถวที่ไม่มี (แถวปกติ/payload เก่า) ใช้ทางเดิมเฉพาะแถวของ M
-  // ทูเพิล [key, row, cycleMonth] — cycleMonth = เดือนต้นทางของแถว (รอบบิล)
-  // Set กันอ่านเดือนเดียวกันซ้ำเมื่อ monthKey ไม่ถูกต้อง (addMonths คืนค่าเดิม)
-  const sourceMonths = Array.from(new Set([addMonths(monthKey, -1), monthKey]));
-  const eventRows: [string, ExpenseEventRow, string][] = sourceMonths.flatMap(cycleMonth => {
-    const rows = (monthsMap[cycleMonth] && typeof monthsMap[cycleMonth] === 'object') ? monthsMap[cycleMonth] : {};
+  // แหล่งแถว: เดือน M เท่านั้น (spec-credit-card-due-month-placement DP-7) — server วางแถวบัตรไว้ในเดือนที่ครบกำหนดแล้ว
+  // จึงไม่ดึงเดือน M-1 อีก (ไม่มีทางซ้ำ: แต่ละ (บัตร, รอบบิล) อยู่ใน monthsMap เดือนเดียว)
+  // ทูเพิล [key, row, cycleMonth] — cycleMonth = รอบบิลที่แถวบัตรแสดง (row.cycleMonth) ไม่เช่นนั้น = M
+  const sourceMonths = [monthKey];
+  const eventRows: [string, ExpenseEventRow, string][] = sourceMonths.flatMap(viewMonth => {
+    const rows = (monthsMap[viewMonth] && typeof monthsMap[viewMonth] === 'object') ? monthsMap[viewMonth] : {};
     return Object.entries(rows as Record<string, ExpenseEventRow>)
-      .map(([key, row]): [string, ExpenseEventRow, string] => [key, row, cycleMonth]);
+      .map(([key, row]): [string, ExpenseEventRow, string] => [
+        key,
+        row,
+        (isRevolvingRowKey(key) || isInstallmentRowKey(key)) && typeof row?.cycleMonth === 'string' && CYCLE_MONTH_RE.test(row.cycleMonth)
+          ? row.cycleMonth
+          : viewMonth
+      ]);
   });
   const expandedRows: [string, ExpenseEventRow, string][] = eventRows.flatMap(([key, row, cycleMonth]) => {
     if (!isRevolvingRowKey(key) || !row?.breakdown) return [[key, row, cycleMonth]];
@@ -168,8 +176,8 @@ export function buildMonthEvents({
     const resolvedMatch = source !== 'plain' && isValidPurchaseDate(row.resolvedDueDate)
       ? RESOLVED_DUE_DATE_RE.exec(row.resolvedDueDate)
       : null;
+    // resolvedDueDate นอกเดือน M (payload เก่า/ปนกัน) → ข้าม ไม่มีทางซ้ำ · ไม่มี resolvedDueDate → ใช้ dueDay ของ M
     if (resolvedMatch && resolvedMatch[1] !== monthKey) return;
-    if (!resolvedMatch && cycleMonth !== monthKey) return;
 
     const event: ExpenseEvent = {
       id: `${cycleMonth}_${key}`,

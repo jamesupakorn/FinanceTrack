@@ -36,6 +36,7 @@ export {
   resolveCardDueDate,
   resolveStatementCutoffDate,
   getPayableCycleMonth,
+  getCardDueMonth,
   isValidPurchaseDate,
   computeStartMonthFromPurchase,
   formatIsoDateTH,

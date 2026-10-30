@@ -23,6 +23,8 @@ import {
   parseRevolvingRowKey,
   resolvePlanStatus,
   resolveCardDueDate,
+  getPayableCycleMonth,
+  getCardDueMonth,
   getCurrentMonthKey,
   isCreditCardRowKey,
   isValidPaymentAction,
@@ -122,6 +124,23 @@ interface InstallmentUpdate {
 interface RevolvingUpdate {
   cardId: string;
   paid: boolean;
+  /** cycleMonth ที่ client echo มาจากแถว GET — ใช้เป็นตัวกันข้อมูลเก่า (DP-4) เท่านั้น ไม่เคยเลือกรอบบิลเอง */
+  cycleMonth: unknown;
+}
+
+/** รูปแบบเดียวกับ monthlyExpensePatchBodySchema.cycleMonth (เดือน 01-12) */
+const CYCLE_MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+type CycleGuardResult = 'ok' | 'malformed' | 'mismatch';
+
+/**
+ * ตัวกันข้อมูลเก่าของแถว ccr_ (DP-4): เซิร์ฟเวอร์คำนวณรอบบิลเป้าหมายเองเสมอ (expected)
+ * cycleMonth จาก client ใช้ตรวจว่าตรงกันเท่านั้น — ไม่ส่ง (undefined/null) = ผ่าน (client เก่า)
+ */
+function checkCycleMonthGuard(cycleMonth: unknown, expected: string): CycleGuardResult {
+  if (cycleMonth === undefined || cycleMonth === null) return 'ok';
+  if (typeof cycleMonth !== 'string' || !CYCLE_MONTH_PATTERN.test(cycleMonth)) return 'malformed';
+  return cycleMonth === expected ? 'ok' : 'mismatch';
 }
 
 /** One derived ExpenseTable row (the shape both buildInstallmentExpenseRows/buildRevolvingExpenseRows
@@ -147,6 +166,8 @@ interface DerivedExpenseRow {
  * immediately after the existing guard" pattern as slice 9's ExpenseRowLike). */
 interface PayloadRow {
   paid?: unknown;
+  /** แถว ccr_ ที่ Save All echo มาจาก GET อาจมี cycleMonth (DP-4) — อ่านเป็นตัวกันเท่านั้น */
+  cycleMonth?: unknown;
 }
 
 /** Resolve card dues by stable account id, then the legacy name, then the fixed unassigned bucket. */
@@ -177,6 +198,8 @@ function shouldIncludeRow(plan: SyncPlan | undefined, row: SyncScheduleRow | und
 
 /**
  * สร้างแถวค่าใช้จ่ายที่ derive จากแผนผ่อนของเดือนที่ระบุ
+ * หมายเหตุ (DP-1): ฟังก์ชัน legacy นี้ยังจัดกลุ่มตามรอบบิล (month = dueMonth ของงวด) และไม่ใช่เส้นทาง GET
+ * แล้ว (ไม่มีผู้เรียกใน production) — GET ใช้ buildCardTotalExpenseRows ซึ่งจัดวางตามเดือนที่ชำระจริง
  * @param {object} creditData - { cards, plans }
  * @param {string} month - YYYY-MM
  * @param {array} bankAccounts - บัญชีธนาคารของผู้ใช้ (ใช้จับคู่ชื่อบัญชี)
@@ -232,6 +255,8 @@ export function buildInstallmentExpenseRows(
 /**
  * สร้างแถวค่าใช้จ่ายที่ derive จากยอดใช้จ่ายหมุนเวียนของเดือนที่ระบุ (BR-CC-016)
  * 1 แถวต่อ 1 บัตร และปล่อยออกเมื่อ amountDue > 0 เท่านั้น
+ * หมายเหตุ (DP-1): ฟังก์ชัน legacy นี้ยังจัดกลุ่มตามรอบบิล (month = cycle.month) และไม่ใช่เส้นทาง GET
+ * แล้ว (ไม่มีผู้เรียกใน production) — GET ใช้ buildCardTotalExpenseRows ซึ่งจัดวางตามเดือนที่ชำระจริง
  * @param {object} creditData - { cards, cycles }
  * @param {string} month - YYYY-MM
  * @param {array} bankAccounts
@@ -274,6 +299,7 @@ export function buildRevolvingExpenseRows(
  * รายชื่อเดือนทั้งหมดที่มีแถวผ่อนชำระ
  * ใช้ union เข้ากับ branch "ทุกเดือน" ของ GET เพื่อให้เดือนที่ยังไม่เคยมีเอกสารก็ปรากฏ
  * (Stage 4 MAJOR-1 / AC-34)
+ * คืน "เดือนตาราง" (DP-1): dueMonth ของงวด (รอบบิล) แปลงผ่าน getCardDueMonth ของบัตรเจ้าของแผน
  * @param {object} creditData
  * @returns {string[]}
  */
@@ -284,16 +310,17 @@ export function getInstallmentMonths(creditData: CreditDataLike | null | undefin
   const cards = (Array.isArray(cardsRaw) ? cardsRaw : []) as SyncCard[];
   const plans = (Array.isArray(plansRaw) ? plansRaw : []) as SyncPlan[];
   if (!plans.length || !cards.length) return [];
-  const cardIds = new Set(cards.map(card => card?.id));
+  const cardById = new Map(cards.map(card => [card?.id, card]));
 
   plans.forEach(plan => {
-    if (!cardIds.has(plan?.cardId)) return;
+    const card = cardById.get(plan?.cardId);
+    if (!card) return;
     // Narrowing guard (§Design A.5.4): `plan` here is already `SyncPlan` (see above), so
     // `plan.schedule` is already typed `SyncScheduleRow[] | undefined` — no additional cast beyond
     // the top-of-function `SyncPlan[]` cast is needed.
     (Array.isArray(plan.schedule) ? plan.schedule : []).forEach(row => {
       if (!shouldIncludeRow(plan, row)) return;
-      if (typeof row?.dueMonth === 'string') months.add(row.dueMonth);
+      if (typeof row?.dueMonth === 'string') months.add(getCardDueMonth(card, row.dueMonth));
     });
   });
 
@@ -303,6 +330,8 @@ export function getInstallmentMonths(creditData: CreditDataLike | null | undefin
 /**
  * รายชื่อเดือนทั้งหมดที่มีแถวบัตรเครดิต (งวดผ่อน + ยอดหมุนเวียน)
  * เดือนที่มีเฉพาะแถวหมุนเวียนต้องอยู่ใน list นี้ด้วย มิฉะนั้น branch "ทุกเดือน" จะไม่มีเดือนนั้น
+ * คืน "เดือนตาราง" (DP-1): cycle.month และ spend-item month แปลงผ่าน getCardDueMonth ของบัตรเจ้าของ
+ * — รอบบิลปัจจุบันของบัตรข้ามเดือน (offset 1) จึงได้เดือนถัดไปมาด้วย (เดือน derive-only)
  * @param {object} creditData
  * @returns {string[]}
  */
@@ -317,18 +346,19 @@ export function getCreditCardMonths(creditData: CreditDataLike | null | undefine
   if (cards.length && (cycles.length || spendItems.length)) {
     // materialise ถึงเดือนปัจจุบันเสมอ เพื่อให้เดือนที่มีแต่ยอดยกมาก็ปรากฏ
     const throughMonth = getCurrentMonthKey();
-    const cardIds = new Set(cards.map(card => card?.id));
+    const cardById = new Map(cards.map(card => [card?.id, card]));
     cards.forEach(card => {
       if (!card?.id || !creditData) return;
       chainFor(card, creditData, throughMonth).forEach(cycle => {
         // ตรงกับกติกาแสดงแถวยอดรวมบัตร (§4.3 / R2 ตัวเลือก ก): totalDue ≠ 0 รวมเดือนเครดิตด้วย
-        if (cycle.amountDue > 0 || cycle.totalDue !== 0) months.add(cycle.month);
+        if (cycle.amountDue > 0 || cycle.totalDue !== 0) months.add(getCardDueMonth(card, cycle.month));
       });
     });
     // เดือนที่มีรายการไม่ผ่อน (แม้ผลรวม 0) ก็มีแถวยอดรวมบัตร
     spendItems.forEach(item => {
-      if (cardIds.has(item.cardId as string | undefined) && typeof item.month === 'string' && /^\d{4}-\d{2}$/.test(item.month)) {
-        months.add(item.month);
+      const card = cardById.get(item.cardId as string | undefined);
+      if (card && typeof item.month === 'string' && /^\d{4}-\d{2}$/.test(item.month)) {
+        months.add(getCardDueMonth(card, item.month));
       }
     });
   }
@@ -362,6 +392,8 @@ export interface CardTotalRevolvingPart {
 /** แถว ccr_<cardId> แบบยอดรวมบัตร — derive ตอน GET เท่านั้น ไม่เคยถูกเก็บ */
 export interface CardTotalExpenseRow extends DerivedExpenseRow {
   derived: true;
+  /** รอบบิล (YYYY-MM) ที่แถวนี้แสดงตัวเลข (DP-4) — derive ตอน GET ไม่เคยถูกเก็บ ไม่ใช่ข้อมูลเงิน */
+  cycleMonth: string;
   breakdown: {
     installments: CardTotalInstallmentLine[];
     installmentTotal: number;
@@ -388,7 +420,10 @@ interface CardMonthState {
   paid: boolean;
 }
 
-/** สถานะของบัตรหนึ่งใบในเดือนหนึ่ง — ใช้ร่วมกันระหว่าง GET (แสดงแถว) และการจ่ายยอดรวม (ฟังก์ชันล้วน) */
+/**
+ * สถานะของบัตรหนึ่งใบในรอบบิลหนึ่ง — ใช้ร่วมกันระหว่าง GET (แสดงแถว) และการจ่ายยอดรวม (ฟังก์ชันล้วน)
+ * @param month - cycleMonth: รอบบิล (ไม่ใช่เดือนตาราง) — ผู้เรียกแปลงด้วย getPayableCycleMonth แล้ว (DP-1)
+ */
 function computeCardMonthState(card: SyncCard, creditData: CreditDataLike, month: string): CardMonthState {
   const plans = (Array.isArray(creditData.plans) ? creditData.plans : []) as SyncPlan[];
   const installments: CardTotalInstallmentLine[] = [];
@@ -417,8 +452,10 @@ function computeCardMonthState(card: SyncCard, creditData: CreditDataLike, month
 }
 
 /**
- * แถวยอดรวมบัตรของเดือนที่ระบุ: 1 แถว ccr_<cardId> ต่อบัตร (ไม่จัดกลุ่มตามธนาคาร)
- * แสดงเมื่อบัตรมีงวดผ่อนในเดือนนี้ หรือมีรายการไม่ผ่อน หรือ totalDue ของยอดหมุนเวียน ≠ 0 (R2 ตัวเลือก ก)
+ * แถวยอดรวมบัตรของเดือนตารางที่ระบุ: 1 แถว ccr_<cardId> ต่อบัตร (ไม่จัดกลุ่มตามธนาคาร)
+ * month = เดือนตาราง (เดือนที่ชำระจริง, DP-1) — แต่ละบัตรแสดงรอบบิล cycleMonth = getPayableCycleMonth(card, month)
+ *   บัตร offset 1 (dueDay <= statementDay) จึงแสดงรอบบิลเดือนก่อน · บัตร offset 0 แสดงรอบบิลเดือนเดียวกัน
+ * แสดงเมื่อบัตรมีงวดผ่อนในรอบนั้น หรือมีรายการไม่ผ่อน หรือ totalDue ของยอดหมุนเวียน ≠ 0 (R2 ตัวเลือก ก)
  * actual = ผลรวมงวดผ่อน + max(0, totalDue) (SPEND-4) · จ่ายขั้นต่ำแสดงแยก · paid ตาม SPEND-6
  * งวดผ่อนอยู่ใน breakdown.installments เท่านั้น — ไม่มีคีย์ cci_ ระดับบน (§3.4 / R1c)
  */
@@ -433,7 +470,8 @@ export function buildCardTotalExpenseRows(
 
   cards.forEach(card => {
     if (!card?.id) return;
-    const state = computeCardMonthState(card, creditData, month);
+    const cycleMonth = getPayableCycleMonth(card, month);
+    const state = computeCardMonthState(card, creditData, cycleMonth);
     const { cycle } = state;
     if (!state.installments.length && !state.hasItems && !(cycle && cycle.totalDue !== 0)) return;
 
@@ -455,9 +493,10 @@ export function buildCardTotalExpenseRows(
       account: resolveRowAccount(card, bankAccounts),
       paid: state.paid,
       dueDay: card.dueDay,
-      // จัดกลุ่มตามรอบบิล month เหมือนเดิม (XM-1) — เฉพาะวันครบกำหนดที่อาจข้ามไปเดือนถัดไป
-      resolvedDueDate: resolveCardDueDate(card, month),
+      // จัดวางในเดือนที่ชำระจริง (DP-1 แทน XM-1) — ส่วนเดือนของ resolvedDueDate เท่ากับ month เสมอโดยโครงสร้าง
+      resolvedDueDate: resolveCardDueDate(card, cycleMonth),
       derived: true,
+      cycleMonth,
       breakdown: {
         installments: state.installments,
         installmentTotal: state.installmentTotal,
@@ -484,6 +523,7 @@ export interface CardMonthDue {
 /**
  * แผนที่ cardId -> CardMonthDue อ่านจากแถว ccr_<cardId> ของ buildCardTotalExpenseRows เท่านั้น
  * (เรียกครั้งเดียว ไม่มีสูตรที่สอง) · ทุกบัตรใน creditData.cards มี entry เสมอ (ไม่มีแถว = ศูนย์)
+ * month = เดือนปฏิทิน → ได้รอบบิลที่ต้องชำระในเดือนนั้นตาม DP-1 (OQ-1: tile == แถว ccr_ ของเดือนเดียวกัน)
  * คำนวณตอน request เท่านั้น ห้ามบันทึกลงเอกสาร (BR-CC-013)
  */
 export function buildCardMonthDueMap(
@@ -544,6 +584,8 @@ export interface CardTotalPayPlan {
  *
  * onlyOnTransition: ใช้กับ POST แบบทั้งตาราง — ทำเฉพาะเมื่อสถานะ derive ปัจจุบันต่างจากที่ขอ
  *   (POST ส่ง paid=false ของแถวที่จ่ายไปบางงวดทุกครั้งที่กด Save All ห้ามไปยกเลิกงวดที่จ่ายแล้ว)
+ *
+ * @param month - cycleMonth: รอบบิลเป้าหมาย (ไม่ใช่เดือนตาราง) — ผู้เรียกแปลงด้วย getPayableCycleMonth (DP-8)
  */
 export function planCardTotalPaid(
   data: CardTotalPayData,
@@ -680,12 +722,16 @@ function applyInstallmentUpdates(
  * ccr_ = แถวยอดรวมบัตร: จ่าย/ยกเลิกทั้งบัตรในครั้งเดียว (planCardTotalPaid) แบบ onlyOnTransition —
  *   Save All ส่ง paid ของทุกแถวทุกครั้ง แถวที่ derive เป็น false เพราะจ่ายไปบางงวด ต้องไม่ไปยกเลิกงวดที่จ่ายแล้ว
  *   paid=true ที่ยังไม่มี action ใช้ 'full' (พฤติกรรมเดิม) · เพดาน cycle เต็ม = ข้ามทั้งบัตร ไม่จ่ายครึ่ง ๆ
+ *   month = เดือนตาราง (DP-1/DP-8): รอบบิลเป้าหมายต่อบัตร = getPayableCycleMonth(card, month) คำนวณจาก
+ *   data.cards ภายใน updater เสมอ · cycleMonth ในแถว payload เป็นแค่ตัวกันข้อมูลเก่า (DP-4):
+ *   ไม่ส่ง → ใช้ค่าที่คำนวณ · รูปแบบผิด หรือไม่ตรงค่าที่คำนวณ → ข้ามแถวบัตรนั้น (console.warn) แถวอื่นบันทึกต่อ
+ *   ไม่พบบัตร → ข้ามคีย์นั้น (เหมือนเดิม)
  * cci_ = คีย์รายงวดแบบเดิม (client เก่า — GET ไม่ปล่อยคีย์นี้แล้ว) ยังรองรับเหมือนเดิม
  * ทุกอย่างอยู่ใน updateUserCreditData ครั้งเดียว
  *
  * @param {string} userId
  * @param {object} expenseData
- * @param {string} month - บังคับสำหรับแถว ccr_ เพราะคีย์ ccr_ ไม่ได้เข้ารหัสเดือนไว้ในตัวเอง
+ * @param {string} month - เดือนตาราง บังคับสำหรับแถว ccr_ เพราะคีย์ ccr_ ไม่ได้เข้ารหัสเดือนไว้ในตัวเอง
  * @returns {Promise<number>} จำนวนรายการที่ถูกอัปเดต
  */
 export async function applyCreditCardPaidFromExpensePayload(
@@ -711,7 +757,7 @@ export async function applyCreditCardPaidFromExpensePayload(
       return;
     }
     const revolving = parseRevolvingRowKey(key);
-    if (revolving) revolvingUpdates.push({ ...revolving, paid });
+    if (revolving) revolvingUpdates.push({ ...revolving, paid, cycleMonth: payloadRow.cycleMonth });
   });
 
   if (!installmentUpdates.length && !revolvingUpdates.length) return 0;
@@ -727,8 +773,18 @@ export async function applyCreditCardPaidFromExpensePayload(
     appliedCount += plansApplied;
     let current = { ...data, plans: installmentPlans };
     const now = new Date().toISOString();
-    revolvingUpdates.forEach(({ cardId, paid }) => {
-      const plan = planCardTotalPaid(current, cardId, month, paid, 'full', {
+    revolvingUpdates.forEach(({ cardId, paid, cycleMonth }) => {
+      const card = (current.cards as SyncCard[]).find(item => item?.id === cardId);
+      if (!card) return;
+      const expected = getPayableCycleMonth(card, month);
+      const guard = checkCycleMonthGuard(cycleMonth, expected);
+      if (guard !== 'ok') {
+        console.warn(
+          `Credit card sync: skipped ${buildRevolvingRowKey(cardId)} on POST (${guard} cycleMonth, expected ${expected})`
+        );
+        return;
+      }
+      const plan = planCardTotalPaid(current, cardId, expected, paid, 'full', {
         now,
         paidSource: 'expense_table',
         onlyOnTransition: true
@@ -744,7 +800,7 @@ export async function applyCreditCardPaidFromExpensePayload(
 }
 
 interface CreditCardPaidKeyResult {
-  status: 'ok' | 'not_found' | 'cancelled' | 'limit_reached' | 'needs_choice';
+  status: 'ok' | 'not_found' | 'cancelled' | 'limit_reached' | 'needs_choice' | 'cycle_mismatch';
   paid: boolean;
 }
 
@@ -756,18 +812,27 @@ interface CreditCardPaidKeyResult {
  *   - 'limit_reached'  ยอดหมุนเวียนยังไม่มี cycle ของเดือนนี้ และสร้างใหม่ไม่ได้ (ครบ MAX_REVOLVING_CYCLES_PER_CARD)
  *                      — ไม่มีอะไรถูกเขียนเลย งวดผ่อนก็ไม่ถูกจ่าย (AC-S11)
  *   - 'needs_choice'   ccr_ paid=true, ยอดหมุนเวียน totalDue > 0, ยังไม่มี action และไม่ได้ส่ง paymentAction
+ *   - 'cycle_mismatch' ccr_ เท่านั้น: cycleMonth ที่ส่งมาไม่ตรงกับรอบบิลที่เซิร์ฟเวอร์คำนวณ หรือ offset ของบัตร
+ *                      เปลี่ยนระหว่าง snapshot กับตอนเขียน (DP-4) — ไม่มีอะไรถูกเขียน
  *   - 'ok'             เขียนสำเร็จ (หรือ idempotent no-op ที่ state ตรงกับที่ขอแล้ว) — `paid` คือสถานะสุดท้ายจริง
+ *
+ * ⚠ ความหมายของ `month` ต่างกันตามชนิดคีย์ (ตั้งใจ — spec-credit-card-due-month-placement R-3 ห้ามรวมเป็นแบบเดียว):
+ *   - ccr_ : month = เดือนตาราง (เดือนที่หน้าแสดง) → รอบบิลเป้าหมาย = getPayableCycleMonth(card, month) (DP-8)
+ *            cycleMonth (ไม่บังคับ) = ตัวกันข้อมูลเก่าเท่านั้น ไม่เคยใช้เลือกรอบบิลเอง
+ *   - cci_ : month = dueMonth ของงวดในตารางผ่อน (รอบบิล) เหมือนเดิม — applyPaidSequentially
+ *            (installmentBackdate.ts) ส่ง expenseAPI.setPaid(row.dueMonth, …) ห้ามเปลี่ยน · cycleMonth ถูกเพิกเฉย
  *
  * ccr_ = แถวยอดรวมบัตร (spec-credit-card-spend §5.3): จ่ายทุกงวด + ยอดหมุนเวียนใน updateUserCreditData ครั้งเดียว
  *   ตรวจเงื่อนไขกับ snapshot ก่อน ถ้าไม่ผ่านจะไม่เรียก updateUserCreditData เลย (ไม่ bump updatedAt)
- *   และตรวจซ้ำภายใน updater อีกครั้ง (กันข้อมูลเปลี่ยนระหว่างทาง)
+ *   และตรวจซ้ำภายใน updater อีกครั้ง (กันข้อมูลเปลี่ยนระหว่างทาง รวมถึงรอบบิลเป้าหมายที่เปลี่ยน)
  */
 export async function applyCreditCardPaidForKey(
   userId: unknown,
   key: string,
   paid: boolean,
   month: string,
-  paymentAction?: 'full' | 'minimum' | null
+  paymentAction?: 'full' | 'minimum' | null,
+  cycleMonth?: string
 ): Promise<CreditCardPaidKeyResult> {
   const installment = parseInstallmentRowKey(key);
   if (installment) {
@@ -813,13 +878,28 @@ export async function applyCreditCardPaidForKey(
   const revolving = parseRevolvingRowKey(key);
   if (revolving) {
     const snapshot = await getUserCreditData(userId);
-    const precheck = planCardTotalPaid(snapshot, revolving.cardId, month, paid, paymentAction);
+    const snapshotCard = (snapshot.cards as SyncCard[]).find(item => item?.id === revolving.cardId);
+    if (!snapshotCard) return { status: 'not_found', paid };
+    const expected = getPayableCycleMonth(snapshotCard, month);
+    if (checkCycleMonthGuard(cycleMonth, expected) !== 'ok') return { status: 'cycle_mismatch', paid };
+
+    const precheck = planCardTotalPaid(snapshot, revolving.cardId, expected, paid, paymentAction);
     if (precheck.status !== 'ok') return { status: precheck.status, paid: precheck.paid };
     if (!precheck.next) return { status: 'ok', paid: precheck.paid };
 
     let result: CreditCardPaidKeyResult = { status: 'ok', paid: precheck.paid };
     await updateUserCreditData(userId, (data) => {
-      const plan = planCardTotalPaid(data, revolving.cardId, month, paid, paymentAction);
+      const card = (data.cards as SyncCard[]).find(item => item?.id === revolving.cardId);
+      if (!card) {
+        result = { status: 'not_found', paid };
+        return data;
+      }
+      // offset ของบัตรเปลี่ยนระหว่าง snapshot กับตอนเขียน → ไม่เขียนผิดรอบบิล (DP-4)
+      if (getPayableCycleMonth(card, month) !== expected) {
+        result = { status: 'cycle_mismatch', paid };
+        return data;
+      }
+      const plan = planCardTotalPaid(data, revolving.cardId, expected, paid, paymentAction);
       result = { status: plan.status, paid: plan.paid };
       if (plan.status !== 'ok' || !plan.next) return data;
       return { ...data, plans: plan.next.plans, cycles: plan.next.cycles };

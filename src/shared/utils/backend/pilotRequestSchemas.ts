@@ -66,12 +66,18 @@ export const expenseRowKeySchema = z
   .regex(/^[A-Za-z0-9_-]{1,100}$/, 'invalid row key')
   .refine(key => !RESERVED_EXPENSE_KEYS.has(key) && !key.startsWith('__'), 'reserved row key');
 
+/**
+ * ⚠ `month` มีความหมายต่างกันตามชนิดคีย์ (ตั้งใจ — spec-credit-card-due-month-placement R-3 ห้ามรวมเป็นแบบเดียว):
+ *   ccr_ = เดือนตาราง (เดือนที่หน้าแสดง) · cci_ = dueMonth ของงวด (รอบบิล, applyPaidSequentially) · คีย์ธรรมดา = เดือนของเอกสาร
+ */
 export const monthlyExpensePatchBodySchema = z.strictObject({
   month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'month must be YYYY-MM'),
   key: expenseRowKeySchema,
   paid: z.boolean(),
   // ใช้กับแถวยอดรวมบัตร ccr_ เท่านั้น (spec-credit-card-spend §4.3/§5.3) — คีย์อื่นไม่อ่านค่านี้
   paymentAction: z.enum(['full', 'minimum']).optional(),
+  // ccr_ เท่านั้น: รอบบิลที่แถวแสดง ใช้เป็นตัวกันข้อมูลเก่า (DP-4) ไม่ตรงค่าที่เซิร์ฟเวอร์คำนวณ → 409 · คีย์อื่นไม่อ่าน
+  cycleMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'cycleMonth must be YYYY-MM').optional(),
   row: z.strictObject({
     name: z.string().max(200),
     actual: z.union([z.number().finite(), z.string().max(40)]),

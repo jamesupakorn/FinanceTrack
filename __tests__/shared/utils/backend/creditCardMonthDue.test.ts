@@ -13,8 +13,8 @@ jest.mock('../../../../src/shared/utils/backend/creditCardStore', () => ({
 }));
 
 const MONTH = '2024-02';
-const A = { id: 'cc_aaaaaaaaaaaa', name: 'A', annualRate: 0, minPaymentPercent: 10, dueDay: 20 };
-const B = { id: 'cc_bbbbbbbbbbbb', name: 'B', annualRate: 0, minPaymentPercent: 10, dueDay: 5 };
+const A = { id: 'cc_aaaaaaaaaaaa', name: 'A', annualRate: 0, minPaymentPercent: 10, statementDay: 10, dueDay: 20 };
+const B = { id: 'cc_bbbbbbbbbbbb', name: 'B', annualRate: 0, minPaymentPercent: 10, statementDay: 2, dueDay: 5 };
 const C = { id: 'cc_cccccccccccc', name: 'C', annualRate: 0, minPaymentPercent: 10, dueDay: 1 };
 
 function fixture(actionA: 'full' | 'minimum' | null = null) {

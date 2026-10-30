@@ -183,7 +183,10 @@ async function jsonFetch(url: string, options: RequestInit = {}): Promise<any> {
 			throw new ApiValidationError(data.issues);
 		}
 		const message = (typeof data?.message === 'string' && data.message) || data?.error || 'ไม่สามารถเชื่อมต่อ API ได้';
-		const error = new Error(message);
+		const error = new Error(message) as Error & { status?: number; code?: string };
+		// แนบ HTTP status + error code (เช่น 409 'cycle_mismatch') ให้ caller แยกกรณีได้ — additive เท่านั้น
+		error.status = response.status;
+		if (typeof data?.error === 'string' && data.error) error.code = data.error;
 		// แนบ field errors ของ API (เช่น spend-items 400 {error, errors:{amount:'...'}}) — additive เท่านั้น
 		if (data?.errors && typeof data.errors === 'object' && !Array.isArray(data.errors)) {
 			(error as Error & { errors?: Record<string, unknown> }).errors = data.errors;
@@ -223,11 +226,20 @@ export const expenseAPI = {
 		key: string,
 		paid: boolean,
 		row?: { name: string; actual: string; account: string; dueDay: unknown },
-		paymentAction?: 'full' | 'minimum'
+		paymentAction?: 'full' | 'minimum',
+		// DP-4: staleness guard for `ccr_` rows only (billing cycle the row showed). Never money data.
+		cycleMonth?: string
 	): Promise<any> => jsonFetch(API_URLS.EXPENSE, {
 		method: 'PATCH',
 		headers: { 'Content-Type': 'application/json' },
-		body: withUserPayload({ month, key, paid, ...(row ? { row } : {}), ...(paymentAction ? { paymentAction } : {}) })
+		body: withUserPayload({
+			month,
+			key,
+			paid,
+			...(row ? { row } : {}),
+			...(paymentAction ? { paymentAction } : {}),
+			...(cycleMonth ? { cycleMonth } : {})
+		})
 	})
 };
 

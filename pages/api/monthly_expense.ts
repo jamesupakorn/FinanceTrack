@@ -4,9 +4,12 @@
  * รองรับทั้ง JSON และ MongoDB
  * - GET: อ่านข้อมูลรายเดือนหรือทั้งหมด
  * - POST: บันทึก/อัปเดตข้อมูลและลบรายการที่ถูกลบ
- * - PATCH: ตั้งค่า paid ของแถวเดียว (ADR-028) · แถว ccr_ = ยอดรวมบัตร จ่ายทั้งบัตร (+ paymentAction)
+ * - PATCH: ตั้งค่า paid ของแถวเดียว (ADR-028) · แถว ccr_ = ยอดรวมบัตร จ่ายทั้งบัตร (+ paymentAction, cycleMonth)
  * - แถวบัตรเครดิตใน GET: ccr_<cardId> หนึ่งแถวต่อบัตร (งวดผ่อนอยู่ใน breakdown) ไม่มีคีย์ cci_ ระดับบน
- *   (spec-credit-card-spend §4.3 — ทั้ง 5 จุดเรียก safeBuildCreditCardRows)
+ *   (spec-credit-card-spend §4.3 — 4 จุดเรียก safeBuildCreditCardRows ตรง ๆ + 1 จุดใน mergeCreditCardOnlyMonths)
+ * - เดือน (`month`) ของ GET/POST และของ PATCH แถว ccr_ = "เดือนตาราง" (เดือนที่ชำระจริง, DP-1)
+ *   แถว ccr_ แสดงรอบบิล getPayableCycleMonth(card, month) และมี cycleMonth (derive, ไม่เคยเก็บ)
+ *   ⚠ PATCH แถว cci_ ยังใช้ month = dueMonth ของงวดในตารางผ่อน (รอบบิล) — ห้ามรวมกับ ccr_ (R-3)
  * - จำกัดข้อมูลย้อนหลังสูงสุด 15 เดือน
  * - คำนวณสรุปยอดตามบัญชีและยอดรวมค่าใช้จ่าย
  */
@@ -118,7 +121,8 @@ function mergeCreditCardOnlyMonths(withTotals: Record<string, ExpenseData>, cont
  * การ sync ล้มเหลวไม่ทำให้การบันทึกรายจ่ายล้มเหลว — log แล้วบันทึกต่อ (R-2)
  * @param {string} userId
  * @param {object} expenseData
- * @param {string} month - บังคับ เพราะคีย์ ccr_ ไม่ได้เข้ารหัสเดือนไว้ในตัวเอง (ADR-011)
+ * ตัวกันรอบบิล cycleMonth ของแถว ccr_ (DP-4) อยู่ใน creditCardSync — ทั้ง 2 จุดเรียก POST (JSON/Mongo) ได้เหมือนกัน
+ * @param {string} month - เดือนตาราง บังคับ เพราะคีย์ ccr_ ไม่ได้เข้ารหัสเดือนไว้ในตัวเอง (ADR-011)
  * @returns {Promise<object>} payload ที่พร้อมบันทึก
  */
 async function applyCreditCardPaid(userId: string, expenseData: ExpenseData, month: string): Promise<ExpenseData> {
@@ -303,6 +307,9 @@ function planPaidPatch(
 /**
  * PATCH /api/monthly_expense — ตั้งค่า paid ของแถวเดียวแบบ strict (ADR-028)
  * แถว cci_/ccr_ ไปที่ creditCardSync เท่านั้น ไม่เคยถูกเก็บใน monthly_expense
+ * ⚠ ccr_: month = เดือนตาราง (หน้าแสดง) → รอบบิลเป้าหมาย getPayableCycleMonth(card, month) · cycleMonth = ตัวกัน
+ *   ข้อมูลเก่า ไม่ตรง → 409 cycle_mismatch (DP-4)
+ * ⚠ cci_: month ยังเป็น dueMonth ของงวด (รอบบิล) ที่ applyPaidSequentially ส่งมา — ห้ามเปลี่ยนเป็นเดือนตาราง (R-3)
  */
 async function handleExpensePaidPatch(
   req: NextApiRequest,
@@ -312,11 +319,11 @@ async function handleExpensePaidPatch(
 ) {
   const body = parseRequestBody(req, res, monthlyExpensePatchBodySchema);
   if (!body) return;
-  const { month, key, paid, paymentAction } = body;
+  const { month, key, paid, paymentAction, cycleMonth } = body;
 
   if (isCreditCardRowKey(key)) {
     // ccr_ = แถวยอดรวมบัตร: จ่าย/ยกเลิกทั้งบัตรในการเขียนครั้งเดียว (spec-credit-card-spend §5.3)
-    const result = await applyCreditCardPaidForKey(userId, key, paid, month, paymentAction);
+    const result = await applyCreditCardPaidForKey(userId, key, paid, month, paymentAction, cycleMonth);
     if (result.status === 'ok') {
       return res.status(200).json({ success: true, paid: result.paid, initialized: false });
     }
@@ -325,6 +332,10 @@ async function handleExpensePaidPatch(
     if (result.status === 'needs_choice') {
       // ยอดหมุนเวียน totalDue > 0 ยังไม่มีการตัดสินใจ — client ต้องส่ง paymentAction 'full' | 'minimum' (SPEND-5)
       return res.status(409).json({ error: 'needs_choice', message: 'กรุณาเลือกจ่ายเต็มจำนวนหรือขั้นต่ำสำหรับยอดหมุนเวียน' });
+    }
+    if (result.status === 'cycle_mismatch') {
+      // cycleMonth จาก client ไม่ตรงรอบบิลที่เซิร์ฟเวอร์คำนวณ (ตั้งค่าบัตรเปลี่ยนหลัง GET) — ไม่มีอะไรถูกเขียน (DP-4)
+      return res.status(409).json({ error: 'cycle_mismatch', message: 'ข้อมูลรอบบิลของบัตรเปลี่ยนแล้ว กรุณาโหลดหน้านี้ใหม่' });
     }
     return res.status(409).json({ error: 'Revolving cycle limit reached' });
   }

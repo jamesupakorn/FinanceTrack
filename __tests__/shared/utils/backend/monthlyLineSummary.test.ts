@@ -105,7 +105,7 @@ describe('buildMonthlySummaryPayload (JSON mode, mocked data seams)', () => {
       const mockedBuilder = jest.mocked(buildCardTotalExpenseRows);
       mockedBuilder.mockImplementation(realSync.buildCardTotalExpenseRows);
       jest.mocked(getUserCreditData).mockResolvedValueOnce({
-        cards: [{ id: 'cc_000000000001', name: 'บัตร A', annualRate: 0, minPaymentPercent: 10, dueDay: 20 }],
+        cards: [{ id: 'cc_000000000001', name: 'บัตร A', annualRate: 0, minPaymentPercent: 10, statementDay: 10, dueDay: 20 }],
         plans: [{ id: 'ip_000000000001', cardId: 'cc_000000000001', itemName: 'สินค้า', months: 1, status: 'ongoing', schedule: [{ no: 1, dueMonth: '2024-01', payment: 300, paid: true }] }],
         cycles: [{ cardId: 'cc_000000000001', month: '2024-01', newSpend: 1000, paymentAction: 'minimum' }],
         spendItems: [], updatedAt: null

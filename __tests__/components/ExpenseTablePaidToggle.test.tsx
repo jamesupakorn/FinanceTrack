@@ -97,7 +97,8 @@ describe('ExpenseTable optimistic paid toggle (ADR-028)', () => {
     const dialog = screen.getByRole('dialog');
     fireEvent.click(within(dialog).getByRole('radio', { name: /จ่ายขั้นต่ำ/ }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'ยืนยัน' }));
-    expect(api.setPaid).toHaveBeenCalledWith(MONTH, key, true, undefined, 'minimum');
+    // 6th arg = cycleMonth guard (spec-credit-card-due-month-placement DP-4); this row has none → undefined
+    expect(api.setPaid).toHaveBeenCalledWith(MONTH, key, true, undefined, 'minimum', undefined);
     expect(trigger).toHaveAttribute('aria-pressed', 'false');
     api.getByMonth.mockResolvedValue({ ...rows, [key]: { ...cardRow, paid: true } });
     await act(async () => { pending.resolve({ success: true }); });

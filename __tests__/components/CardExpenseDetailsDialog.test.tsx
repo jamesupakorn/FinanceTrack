@@ -65,7 +65,8 @@ describe('CardExpenseDetailsDialog', () => {
     const { dialog } = openDialog();
 
     expect(dialog).toHaveAttribute('aria-modal', 'true');
-    expect(within(dialog).getByText(formatMonthKeyTH(MONTH))).toBeInTheDocument();
+    // subtitle = billing cycle the row shows (spec-credit-card-due-month-placement §UX)
+    expect(within(dialog).getByText(`รอบบิล ${formatMonthKeyTH(MONTH)}`)).toBeInTheDocument();
     expect(within(dialog).getByText(`${formatCurrency(1300)} ฿`)).toBeInTheDocument();
     expect(within(dialog).getByText('เครื่องใช้ไฟฟ้ารายการยาวสำหรับทดสอบการตัดบรรทัด')).toBeInTheDocument();
     expect(within(dialog).getByText('ยังไม่ชำระ')).toBeInTheDocument();

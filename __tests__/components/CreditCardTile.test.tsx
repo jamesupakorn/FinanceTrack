@@ -164,6 +164,12 @@ describe('CreditCardTile', () => {
   test('44px targets and no lg:/sm: prefixes', () => {
     render(<CreditCardTile card={baseCard} />);
     expect(screen.queryByRole('button', { name: /กลับด้านหน้าบัตร|แสดงด้านหลังบัตร/, hidden: true })).toBeNull();
+    // Class names are the only 44px signal in jsdom (no layout); assert the actual classes applied.
+    const trigger = screen.getByRole('button', { name: 'ตัวเลือกของบัตร Shopee', hidden: true });
+    expect(trigger.className).toMatch(/\bh-11\b/);
+    expect(trigger.className).toMatch(/\bw-11\b/);
+    const details = screen.getByRole('button', { name: 'ดูรายละเอียด', hidden: true });
+    expect(details.className).toMatch(/\bmin-h-11\b/);
     ['CreditCardTile.tsx', 'CreditCardFilterBar.tsx', 'CreditCardTileGrid.tsx'].forEach(file => {
       const src = readFileSync(path.join(__dirname, '../../src/frontend/components', file), 'utf8');
       expect(src).not.toMatch(/\b(lg|sm|xl|2xl):/);

@@ -35,6 +35,8 @@ it('keeps breakdown through expense formatting and splits summary totals only on
 });
 
 // spec-credit-card-cross-month-due.md AC-5 / AC-7 / AC-3: derived card rows placed on their real due date
+// Re-fixtured for spec-credit-card-due-month-placement (DP-1/DP-7): GET now puts each cross-month card row
+// in its due-month map with `cycleMonth`, and buildMonthEvents reads only monthsMap[M].
 describe('cross-month card rows (AC-5, AC-7)', () => {
   const SP_KEY = 'ccr_00000000005e';
   const SP_CARD = { id: 'cc_00000000005e', name: 'Shopee SPayLater', statementDay: 'EOM', dueDay: 10 };
@@ -42,18 +44,18 @@ describe('cross-month card rows (AC-5, AC-7)', () => {
   const SM_KEY = 'ccr_000000000077';
   const SM_CARD = { id: 'cc_000000000077', name: 'Same Month', statementDay: 5, dueDay: 25 };
   const shopeeRow = (month: string, resolvedDueDate: string) => ({
-    name: 'Shopee SPayLater', actual: 1500, paid: false, account: 'บัญชี B', dueDay: 10, derived: true, resolvedDueDate,
+    name: 'Shopee SPayLater', actual: 1500, paid: false, account: 'บัญชี B', dueDay: 10, derived: true, resolvedDueDate, cycleMonth: month,
     breakdown: {
       installmentTotal: 500,
       installments: [{ key: 'cci_0000000000aa_01', name: `สินค้า ${month} งวด 1`, amount: 500, paid: false }],
       revolving: { newSpend: 1000, carriedBalance: 0, cashbackAmount: 0, totalDue: 1000, minPaymentDue: 100, amountDue: 1000, paymentAction: null }
     }
   });
-  const sameMonthRow = { name: 'Same Month', actual: 800, paid: false, dueDay: 25, derived: true, resolvedDueDate: '2026-10-25' };
+  const sameMonthRow = { name: 'Same Month', actual: 800, paid: false, dueDay: 25, derived: true, resolvedDueDate: '2026-10-25', cycleMonth: '2026-10' };
+  // GET-shaped (DP-1): Shopee's cycle C lives in map C+1; the same-month card stays in its own month
   const monthsMap = {
-    '2026-09': { [SP_KEY]: shopeeRow('2026-09', '2026-10-10') },
-    '2026-10': { [SP_KEY]: shopeeRow('2026-10', '2026-11-10'), [SM_KEY]: sameMonthRow, rent: { name: 'ค่าเช่า', actual: 5000, dueDay: 1 } },
-    '2026-11': { rent: { name: 'ค่าเช่า', actual: 5000, dueDay: 1 } }
+    '2026-10': { [SP_KEY]: shopeeRow('2026-09', '2026-10-10'), [SM_KEY]: sameMonthRow, rent: { name: 'ค่าเช่า', actual: 5000, dueDay: 1 } },
+    '2026-11': { [SP_KEY]: shopeeRow('2026-10', '2026-11-10'), rent: { name: 'ค่าเช่า', actual: 5000, dueDay: 1 } }
   };
   const cards = [SP_CARD, SM_CARD];
   const plans = [SP_PLAN];
@@ -98,10 +100,63 @@ describe('cross-month card rows (AC-5, AC-7)', () => {
     expect(view.windowState).toBe('future');
   });
 
-  it('future view with only M-1 present still shows the cross-month events (windowState unchanged)', () => {
+  it('DP-7: future view with only M-1 present shows no card events (no M-1 pull any more)', () => {
     const view = buildMonthEvents({ monthKey: '2026-12', monthsMap: { '2026-11': { [SP_KEY]: shopeeRow('2026-11', '2026-12-10') } }, cards, plans });
     expect(view.windowState).toBe('future');
-    expect((view.eventsByDay.get(10) || []).filter(e => e.type === 'expense').map(e => e.cycleMonth)).toEqual(['2026-11', '2026-11']);
+    expect(Array.from(view.eventsByDay.values()).flat().filter(e => e.type === 'expense')).toEqual([]);
+  });
+
+  it('DP-AC-7: view 2026-11 never reads monthsMap[2026-10]', () => {
+    const reads: string[] = [];
+    const spied: Record<string, unknown> = {};
+    Object.entries(monthsMap).forEach(([month, rows]) => {
+      Object.defineProperty(spied, month, { enumerable: true, get: () => { reads.push(month); return rows; } });
+    });
+    const view = buildMonthEvents({ monthKey: '2026-11', monthsMap: spied as typeof monthsMap, cards, plans });
+    expect(reads).not.toContain('2026-10');
+    expect(reads).toContain('2026-11');
+    expect((view.eventsByDay.get(10) || []).filter(e => e.type === 'expense').map(e => e.cycleMonth)).toEqual(['2026-10', '2026-10']);
+  });
+
+  it('DP-AC-7: no event id appears twice in any view, and each Shopee cycle appears in exactly one view', () => {
+    const shopeeCycles: string[] = [];
+    ['2026-10', '2026-11'].forEach(monthKey => {
+      const view = buildMonthEvents({ monthKey, monthsMap, cards, plans });
+      const ids = Array.from(view.eventsByDay.values()).flat().map(e => e.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      Array.from(view.eventsByDay.values()).flat()
+        .filter(e => e.type === 'expense' && e.key === SP_KEY)
+        .forEach(e => shopeeCycles.push(e.cycleMonth as string));
+    });
+    expect(shopeeCycles.sort()).toEqual(['2026-09', '2026-10']);
+  });
+
+  it('DP-AC-7: calendar monthTotals card part equals the 2026-11 table card total', () => {
+    const view = buildMonthEvents({ monthKey: '2026-11', monthsMap, cards, plans });
+    const cardEventTotal = Array.from(view.eventsByDay.values()).flat()
+      .filter(e => e.type === 'expense' && e.source !== 'plain')
+      .reduce((sum, e) => sum + Number(e.amount), 0);
+    const tableCardTotal = Object.entries(monthsMap['2026-11'])
+      .filter(([rowKey]) => rowKey.startsWith('ccr_'))
+      .reduce((sum, [, r]) => sum + Number((r as { actual: number }).actual), 0);
+    expect(cardEventTotal).toBe(tableCardTotal);
+    expect(cardEventTotal).toBe(1500);
+    expect(view.monthTotals.total).toBe(tableCardTotal + 5000);
+  });
+
+  it('DP-7: a card row without cycleMonth falls back to the view month; a resolvedDueDate outside M is skipped', () => {
+    const { cycleMonth: _c, ...noCycle } = shopeeRow('2026-11', '2026-11-10');
+    const fallback = buildMonthEvents({ monthKey: '2026-11', monthsMap: { '2026-11': { [SP_KEY]: noCycle } }, cards, plans });
+    expect((fallback.eventsByDay.get(10) || []).filter(e => e.type === 'expense').map(e => e.cycleMonth)).toEqual(['2026-11', '2026-11']);
+    // stale/mixed payload: a row whose resolvedDueDate is in Dec sitting in the Nov map is not placed
+    const stale = buildMonthEvents({ monthKey: '2026-11', monthsMap: { '2026-11': { [SP_KEY]: shopeeRow('2026-11', '2026-12-10') } }, cards, plans });
+    expect(Array.from(stale.eventsByDay.values()).flat().filter(e => e.type === 'expense')).toEqual([]);
+    // a malformed cycleMonth is ignored (view month used)
+    const junk = buildMonthEvents({ monthKey: '2026-11', monthsMap: { '2026-11': { [SP_KEY]: { ...shopeeRow('2026-10', '2026-11-10'), cycleMonth: '2026-13' } } }, cards, plans });
+    expect((junk.eventsByDay.get(10) || []).filter(e => e.type === 'expense').map(e => e.cycleMonth)).toEqual(['2026-11', '2026-11']);
+    // cycleMonth on a plain row never changes its cycle label
+    const plain = buildMonthEvents({ monthKey: '2026-11', monthsMap: { '2026-11': { rent: { name: 'ค่าเช่า', actual: 5000, dueDay: 1, cycleMonth: '2026-10' } } }, cards, plans });
+    expect((plain.eventsByDay.get(1) || []).filter(e => e.type === 'expense').map(e => e.cycleMonth)).toEqual(['2026-11']);
   });
 
   it('statement events carry the view month as cycleMonth', () => {

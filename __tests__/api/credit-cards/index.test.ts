@@ -808,8 +808,8 @@ describe('/api/credit-cards tile fields (spec-credit-card-tiles, mocked store, i
   const utils = require('../../../src/shared/utils/creditCardUtils');
   const { buildCardTotalExpenseRows } = require('../../../src/shared/utils/backend/creditCardSync');
   const TILE_KEYS = ['dueMonth', 'installmentDueThisMonth', 'revolvingDueThisMonth', 'totalDueThisMonth'];
-  const A = { id: 'cc_aaaaaaaaaaaa', name: 'A', bankIssuer: 'kbank', annualRate: 0, minPaymentPercent: 10, dueDay: 20, creditLimit: 50000 };
-  const B = { id: 'cc_bbbbbbbbbbbb', name: 'B', bankIssuer: 'scb', annualRate: 0, minPaymentPercent: 10, dueDay: 5, creditLimit: 10000 };
+  const A = { id: 'cc_aaaaaaaaaaaa', name: 'A', bankIssuer: 'kbank', annualRate: 0, minPaymentPercent: 10, statementDay: 10, dueDay: 20, creditLimit: 50000 };
+  const B = { id: 'cc_bbbbbbbbbbbb', name: 'B', bankIssuer: 'scb', annualRate: 0, minPaymentPercent: 10, statementDay: 2, dueDay: 5, creditLimit: 10000 };
   type Fixture = {
     cards: Array<Record<string, unknown>>;
     plans: Array<Record<string, unknown>>;

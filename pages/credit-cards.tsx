@@ -34,7 +34,7 @@ import { applyPaidSequentially } from '../src/shared/utils/installmentBackdate';
 import { showToast } from '../src/shared/utils/frontend/toast';
 import { formatCurrency } from '../src/shared/utils/frontend/numberUtils';
 import { formatMonthKeyTH } from '../src/shared/utils/dateUtils';
-import { addMonths, buildSchedule, getCurrentMonthKey, PLAN_STATUS } from '../src/shared/utils/creditCardUtils';
+import { addMonths, buildSchedule, getCardDueMonth, getCurrentMonthKey, PLAN_STATUS } from '../src/shared/utils/creditCardUtils';
 import { getTabbableElements } from '../src/shared/utils/frontend/focusTrap';
 import AddCardExpenseTypeDialog, { type AddExpenseType } from '../src/frontend/components/AddCardExpenseTypeDialog';
 import CardSpendItemDialog, { type SpendDialogCard } from '../src/frontend/components/CardSpendItemDialog';
@@ -433,8 +433,15 @@ export default function CreditCardsPage() {
           ? created.plan.schedule
           : [];
         const lastMonth = addMonths(planValues.startMonth, planValues.months - 1);
+        // ตารางรายจ่ายวางงวดไว้ในเดือนที่ครบกำหนด (spec-credit-card-due-month-placement DP-1/DP-5)
+        // ไม่พบบัตร => ข้อความเดิม (เดือนรอบบิล)
+        // GET /api/credit-cards ส่ง statementDay มาด้วย (summariseCard spread การ์ดทั้งใบ) แต่ type ในหน้านี้ไม่ได้ประกาศไว้
+        const planCard = cards.find(card => card.id === planValues.cardId) as
+          (CreditCardRecord & { statementDay?: number | string | null }) | undefined;
+        const firstTableMonth = planCard ? getCardDueMonth(planCard, planValues.startMonth) : planValues.startMonth;
+        const lastTableMonth = planCard ? getCardDueMonth(planCard, lastMonth) : lastMonth;
         setPlanCreatedNote(
-          `เพิ่มเข้ารายจ่ายเดือน ${formatMonthKeyTH(planValues.startMonth)} – ${formatMonthKeyTH(lastMonth)} แล้ว`
+          `เพิ่มเข้ารายจ่ายเดือน ${formatMonthKeyTH(firstTableMonth)} – ${formatMonthKeyTH(lastTableMonth)} แล้ว`
         );
         if (paidNos.length === 0) {
           showToast('เพิ่มแผนผ่อนชำระแล้ว');

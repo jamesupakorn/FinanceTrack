@@ -40,6 +40,23 @@ describe('CreditCardTileGrid', () => {
     expect(grid.className).not.toMatch(/lg:/);
   });
 
+  test('AC-FL4: with a tile menu open, tapping another tile front closes the menu only and does not flip it', async () => {
+    const user = userEvent.setup();
+    render(<CreditCardTileGrid cards={CARDS} />);
+    const tileA = screen.getByTestId('cc-tile-a');
+    const tileB = screen.getByTestId('cc-tile-b');
+    await user.click(within(tileA).getByTestId('cc-tile-amount'));
+    expect(tileA).toHaveAttribute('data-side', 'back');
+    await user.click(within(tileA).getByRole('button', { name: 'ตัวเลือกของบัตร Alpha' }));
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    await user.click(within(tileB).getByTestId('cc-tile-amount'));
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(tileB).toHaveAttribute('data-side', 'front');
+    expect(tileA).toHaveAttribute('data-side', 'back');
+    await user.click(within(tileB).getByTestId('cc-tile-amount'));
+    expect(tileB).toHaveAttribute('data-side', 'back');
+  });
+
   test('multi-select shows exactly the chosen banks; none selected == all; persists', async () => {
     const user = userEvent.setup();
     render(<CreditCardTileGrid cards={CARDS} />);
