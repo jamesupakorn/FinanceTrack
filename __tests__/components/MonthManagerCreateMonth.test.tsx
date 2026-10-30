@@ -1,5 +1,5 @@
 /**
- * MonthManager — create-new-month flow + 15-month prune warning (.pipeline/spec.md §3.3, §4, §6)
+ * MonthManager — create-new-month flow + 15-month prune warning
  */
 
 import { render, screen, waitFor } from '@testing-library/react';

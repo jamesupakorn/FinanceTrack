@@ -11,7 +11,7 @@
  *
  * ขอบเขต: expense, income, salary, investment เท่านั้น — savings/daily_expenses ไม่แตะ
  *
- * Far-future guard (.pipeline/spec.md §3.4): เดือนที่ > เดือนปัจจุบัน+1 และ "ว่าง" ในทั้ง 4
+ * Far-future guard (local spec §3.4): เดือนที่ > เดือนปัจจุบัน+1 และ "ว่าง" ในทั้ง 4
  * collection (skipped) ไม่ถูกนับเข้าหน้าต่าง 15 เดือน — ทำผ่าน limit = 15 + k (k = จำนวน skipped)
  * โดยไม่แก้ signature ของ enforceMonthLimit. เพราะ skipped ทุกเดือน > current+1 จึงอยู่บนสุดของ
  * การเรียง desc: top (15 + k) = skipped ทั้งหมด + 15 เดือนจริงล่าสุด (ยกเว้นกรณีมีเดือนจริง > 15

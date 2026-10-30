@@ -1,5 +1,5 @@
 /**
- * WorkspaceShell — month list rule + applyMonthChange (.pipeline/spec.md §3.2, §6).
+ * WorkspaceShell — month list rule + applyMonthChange.
  * Clock pinned to 2026-10-29 (current 2026-10, next 2026-11). All APIs mocked.
  */
 
