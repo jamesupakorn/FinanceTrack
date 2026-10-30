@@ -10,7 +10,7 @@
  */
 
 import { isCreditCardRowKey, isInstallmentRowKey, round2 } from '../creditCardUtils';
-import { isPaidFlag } from '../commonUtils';
+import { isPaidFlag, EXPENSE_METADATA_KEYS } from '../commonUtils';
 
 /** ยอดรับ/เงินเดือน — รูปร่างหลวมตาม Record<string, unknown> เพื่อให้ตรงกับ summaryUtils.ts's
  *  SummaryDataInput ที่เป็น caller .ts เพียงรายเดียว (task-context §summaryUtils.ts's real call site) —
@@ -19,7 +19,7 @@ type IncomeDataLike = Record<string, unknown>;
 type SalaryDataLike = Record<string, unknown>;
 
 /** แถวรายจ่ายหนึ่งแถว — รูปร่างเดียวกับ ExpenseItem (domain.ts) แต่ปล่อยให้เป็น optional/loose เพราะ
- *  ถูกกรอง SUMMARY_IGNORED_KEYS/typeof/Array.isArray ก่อนอ่านเสมอ ไม่ประกาศใหม่ซ้ำ ExpenseItem ตรง ๆ
+ *  ถูกกรอง EXPENSE_METADATA_KEYS/typeof/Array.isArray ก่อนอ่านเสมอ ไม่ประกาศใหม่ซ้ำ ExpenseItem ตรง ๆ
  *  เพราะ ExpenseItem.actual/paid ไม่ optional แต่ค่าที่รอดผ่านตัวกรองในไฟล์นี้อาจขาด actual/paid ได้จริง
  *  (แถวที่ยังไม่กรอก) */
 interface ExpenseRowLike {
@@ -28,7 +28,7 @@ interface ExpenseRowLike {
   [key: string]: unknown;
 }
 type ExpenseDataLike = Record<string, unknown>; // ยังไม่ narrow เป็น ExpenseRowLike จนกว่าจะผ่าน
-                                                  // SUMMARY_IGNORED_KEYS + typeof/Array.isArray guard
+                                                  // EXPENSE_METADATA_KEYS + typeof/Array.isArray guard
 
 interface SavingsDataLike {
   'รวมเงินเก็บ'?: number | string;
@@ -107,12 +107,6 @@ interface BudgetHealthResult {
   attentionCount: number;
   rollupMessage: string;
 }
-
-/** ฟิลด์ metadata ที่ไม่ใช่แถวรายจ่ายจริง — ใช้กรองก่อนวนลูป expenseData */
-export const SUMMARY_IGNORED_KEYS: Set<string> = new Set([
-  'totalActualPaid', 'accountSummary', 'bankAccounts',
-  'month', '_id', 'id', 'userId', 'periodKey', '__removeKeys'
-]);
 
 /** เพดานงบประมาณเริ่มต้น (% ของรายรับ) — ผู้ใช้ปรับต่อคนได้ใน P4 (persist เป็น budgetThresholds บน user document) */
 export const DEFAULT_BUDGET_THRESHOLDS: BudgetThresholds = Object.freeze({
@@ -266,7 +260,7 @@ export function splitExpenseTotals(expenseData: ExpenseDataLike = {}): ExpenseSp
   let generalRowCount = 0;
 
   Object.entries(expenseData || {}).forEach(([key, value]) => {
-    if (SUMMARY_IGNORED_KEYS.has(key)) return;
+    if (EXPENSE_METADATA_KEYS.has(key)) return;
     if (!value || typeof value !== 'object' || Array.isArray(value)) return;
 
     // typeof === 'object' guard narrows unknown -> object เท่านั้น ไม่ใช่ shape เฉพาะ จึงต้อง assert
