@@ -29,6 +29,19 @@ describe('CreditCardDebtBreakdown', () => {
     expect(within(panel).getByText('บัตรที่ไม่มีหนี้คงเหลือ 1 ใบ')).toBeInTheDocument();
   });
 
+  it('stacks the amount under a long name below md and goes side by side from md', () => {
+    const longName = 'บัตรเครดิต'.repeat(10);
+    render(<CreditCardDebtBreakdown id="p" cards={[card('a', longName, '1234567.89')]} total={1234567.89} onClose={jest.fn()} />);
+    const row = screen.getByRole('button', { name: new RegExp(`ดูรายละเอียดบัตร ${longName}`) });
+    expect(row.className).toContain('flex-col');
+    expect(row.className).toContain('md:flex-row');
+    expect(row.className).not.toMatch(/(^|\s)(sm|lg|xl|2xl):/);
+    const amount = within(row).getByText('1,234,567.89 บาท');
+    expect(amount.className).toContain('whitespace-nowrap');
+    expect(amount.parentElement?.className).toContain('w-full');
+    expect(within(row).getByText(longName).className).toContain('break-words');
+  });
+
   it('shows the empty state without list or footer when all zero', () => {
     render(<CreditCardDebtBreakdown id="p" cards={[card('a', 'A', 0), card('b', 'B', 'x')]} total={0} onClose={jest.fn()} />);
     expect(screen.getByText('ไม่มีหนี้คงเหลือในบัตรใด')).toBeInTheDocument();

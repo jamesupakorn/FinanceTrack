@@ -71,7 +71,7 @@ export default function CreditCardDebtBreakdown({ id, cards, total, onOpenCard, 
               <li key={card.id}>
                 <button
                   type="button"
-                  className={`flex min-h-11 w-full items-start justify-between gap-space-3 rounded-sm border border-border-default bg-surface-2 px-space-3 py-space-2 text-left text-primary hover:bg-surface-3 ${FOCUS_RING}`}
+                  className={`flex min-h-11 w-full flex-col items-stretch gap-space-2 md:flex-row md:items-start md:justify-between md:gap-space-3 rounded-sm border border-border-default bg-surface-2 px-space-3 py-space-2 text-left text-primary hover:bg-surface-3 ${FOCUS_RING}`}
                   aria-label={`ดูรายละเอียดบัตร ${label} หนี้คงเหลือ ${amount} บาท`}
                   onClick={() => onOpenCard?.(card.id)}
                 >
@@ -79,7 +79,7 @@ export default function CreditCardDebtBreakdown({ id, cards, total, onOpenCard, 
                     <span className="mt-[4px] h-3 w-3 shrink-0 rounded-xs" style={{ background: card.color }} aria-hidden="true" />
                     <span className="min-w-0 break-words">{label}</span>
                   </span>
-                  <span className="flex shrink-0 items-start gap-space-2">
+                  <span className="flex w-full min-w-0 items-start justify-between gap-space-2 md:w-auto md:shrink-0 md:justify-end">
                     <span className="whitespace-nowrap font-[family-name:var(--font-numeric)] font-semibold tabular-nums">{`${amount} บาท`}</span>
                     <span aria-hidden="true" className="mt-[2px] text-tertiary"><Icons.ChevronRight size={16} /></span>
                   </span>
