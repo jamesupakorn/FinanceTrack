@@ -150,12 +150,18 @@ describe('InstallmentPlanForm — editing an existing plan', () => {
     expect(cycleSelect().value).toBe('2026-12');
   });
 
-  it('C-2: editing a stored purchase date does not move startMonth', () => {
-    const plan = basePlan({ purchaseDate: '2026-10-03', startMonth: '2026-10' });
-    render(<InstallmentPlanForm open plan={plan} lockedCardId="c5" cards={[CARD_5]} onClose={jest.fn()} onSubmit={jest.fn()} />);
-    fireEvent.change(dateInput(), { target: { value: '2026-10-20' } });
-    expect(dateInput().value).toBe('2026-10-20');
+  it('C-2: editing a stored purchase date recomputes startMonth from statementDay', () => {
+    const plan = basePlan({ purchaseDate: '2026-10-03', startMonth: '2026-11' });
+    const onSubmit = jest.fn();
+    render(<InstallmentPlanForm open plan={plan} lockedCardId="c5" cards={[CARD_5]} onClose={jest.fn()} onSubmit={onSubmit} />);
+    fireEvent.change(dateInput(), { target: { value: '2026-10-04' } });
+    expect(dateInput().value).toBe('2026-10-04');
     expect(cycleSelect().value).toBe('2026-10');
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึกแผนผ่อน' }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      purchaseDate: '2026-10-04',
+      startMonth: '2026-10'
+    }));
   });
 
   it('legacy unpaid plan allows a blank date and saves with an empty date', () => {
@@ -169,11 +175,11 @@ describe('InstallmentPlanForm — editing an existing plan', () => {
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ purchaseDate: '', startMonth: '2026-10' });
   });
 
-  it('back-filling a date on a legacy unpaid plan does not recompute startMonth', () => {
+  it('back-filling a date on a legacy unpaid plan recomputes startMonth', () => {
     render(<InstallmentPlanForm open plan={basePlan()} lockedCardId="c5" cards={[CARD_5]} onClose={jest.fn()} onSubmit={jest.fn()} />);
     expect(cycleSelect().value).toBe('2026-10');
     fireEvent.change(dateInput(), { target: { value: '2026-10-20' } });
-    expect(cycleSelect().value).toBe('2026-10');
+    expect(cycleSelect().value).toBe('2026-11');
   });
 
   it('AC-PD-37: locked plan with purchaseDate shows two read-only tiles', () => {

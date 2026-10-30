@@ -20,8 +20,10 @@ import {
   summariseCard,
   summariseTotals,
   MAX_CARDS_PER_USER,
-  PLAN_STATUS
+  PLAN_STATUS,
+  getCurrentMonthKey
 } from '../../../src/shared/utils/creditCardUtils';
+import { buildCardMonthDueMap } from '../../../src/shared/utils/backend/creditCardSync';
 import { withAudit } from '../../../lib/auditedMutation';
 
 function generateCardId() {
@@ -41,7 +43,14 @@ function countBlockingPlans(plans: CreditData['plans'], cardId: string) {
 async function handleGet(req: NextApiRequest, res: NextApiResponse, userId: string) {
   const data = await getUserCreditData(userId);
   // ยอดหมุนเวียนถูก derive จาก data.cycles ทุกครั้งที่ GET ไม่มีการเก็บตัวเลขการเงินไว้ (BR-CC-013)
-  const cards = data.cards.map(card => summariseCard(card, data.plans, data.cycles));
+  // ยอดที่ต้องจ่ายเดือนนี้ของ tile: เดือนปฏิทินตามเวลาเซิร์ฟเวอร์ (getCurrentMonthKey, D2) ส่งกลับเป็น dueMonth
+  // อ่านจากแถว ccr_ ของ buildCardTotalExpenseRows เท่านั้น ไม่บันทึก (spec-credit-card-tiles §3.3 / REV-1)
+  const dueMap = buildCardMonthDueMap(data, getCurrentMonthKey());
+  const cards = data.cards.map(card => ({
+    ...summariseCard(card, data.plans, data.cycles, { spendItems: data.spendItems }),
+    ...(card.id ? dueMap[card.id] : undefined)
+  }));
+  // summariseTotals อ่านเฉพาะฟิลด์ที่ระบุชื่อ ฟิลด์ใหม่ของ tile จึงไม่กระทบยอดรวม (REV-3)
   return res.status(200).json({ cards, totals: summariseTotals(cards) });
 }
 
@@ -90,7 +99,13 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse, userId: str
   if (failureResponse) return res.status(failureResponse.status).json(failureResponse.body);
   if (!savedCard) throw new Error('Card update completed without a saved card');
 
-  return res.status(200).json({ success: true, card: summariseCard(savedCard, data.plans, data.cycles) });
+  // คำนวณจาก data หลังบันทึก (REV-4) — ไม่อ่านฟิลด์ tile จาก request body และไม่บันทึก
+  const saved: CreditCard = savedCard;
+  const dueMap = buildCardMonthDueMap({ ...data, cards: [saved] }, getCurrentMonthKey());
+  return res.status(200).json({
+    success: true,
+    card: { ...summariseCard(saved, data.plans, data.cycles, { spendItems: data.spendItems }), ...(saved.id ? dueMap[saved.id] : undefined) }
+  });
 }
 
 async function handleDelete(req: NextApiRequest, res: NextApiResponse, userId: string) {
@@ -109,7 +124,7 @@ async function handleDelete(req: NextApiRequest, res: NextApiResponse, userId: s
     }
 
     // บล็อกการลบถ้ายังมียอดหมุนเวียนค้าง (BR-CC-013) — เดียวกับ countBlockingPlans ด้านล่าง แต่สำหรับยอดหมุนเวียน
-    const summarised = summariseCard(card, data.plans, data.cycles);
+    const summarised = summariseCard(card, data.plans, data.cycles, { spendItems: data.spendItems });
     if (summarised.revolvingOutstanding > 0) {
       failure = {
         status: 409,
@@ -132,7 +147,9 @@ async function handleDelete(req: NextApiRequest, res: NextApiResponse, userId: s
       cards: data.cards.filter(card => card?.id !== cardId),
       plans: data.plans.filter(plan => plan?.cardId !== cardId),
       // ลบ cycle ของบัตรนี้ด้วย มิฉะนั้นยอดหมุนเวียนจะกลายเป็น orphan ค้างอยู่ในเอกสาร (AC-56)
-      cycles: data.cycles.filter(cycle => cycle?.cardId !== cardId)
+      cycles: data.cycles.filter(cycle => cycle?.cardId !== cardId),
+      // ลบรายการไม่ผ่อนของบัตรนี้ในการเขียนครั้งเดียวกัน (spec-credit-card-spend §5.4 / AC-S13)
+      spendItems: data.spendItems.filter(item => item?.cardId !== cardId)
     };
   });
 

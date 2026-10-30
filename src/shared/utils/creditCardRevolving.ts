@@ -11,6 +11,9 @@ import {
   CARD_COLORS,
   MAX_INSTALLMENTS_PER_PLAN,
   MAX_REVOLVING_CYCLES_PER_CARD,
+  MAX_SPEND_ITEM_NAME_LENGTH,
+  MAX_SPEND_ITEM_AMOUNT,
+  SPEND_ITEM_ID_RE,
   PLAN_STATUS,
   INTEREST_MODES,
   CALC_METHODS,
@@ -18,11 +21,13 @@ import {
   DEFAULT_ANNUAL_RATE,
   DEFAULT_MIN_PAYMENT_PERCENT,
   MONTH_KEY_RE,
+  SPEND_MONTH_KEY_RE,
   round2,
   toAmount,
   addMonths,
   getCurrentMonthKey,
-  resolveInstallmentDueDate,
+  resolveCardDueDate,
+  getPayableCycleMonth,
   normaliseDayValue,
   isValidPurchaseDate
 } from './creditCardBasics';
@@ -41,6 +46,7 @@ type PaymentAction = 'full' | 'minimum' | null;
 /** บัตร — เฉพาะฟิลด์ที่ฟังก์ชันในไฟล์นี้อ่านจริง */
 export type CardLike = {
   id?: string;
+  statementDay?: number | string | null;
   bankAccountId?: string;
   annualRate?: number | string;
   minPaymentPercent?: number | string;
@@ -64,8 +70,24 @@ export type StoredRevolvingCycle = {
   updatedAt?: string;
 };
 
+/**
+ * รายการใช้จ่ายไม่ผ่อน (spend item) ที่เก็บจริง — ไม่มี paid ต่อรายการ (SPEND-1)
+ * newSpend ของ (card, month) = round2(ผลรวม amount) เมื่อมีอย่างน้อย 1 รายการ (SPEND-2)
+ */
+export type StoredSpendItem = {
+  id?: string;
+  cardId?: string;
+  month?: string;
+  purchaseDate?: string;
+  name?: string;
+  amount?: number | string;
+  source?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 /** cycle ที่ derive แล้ว — ผลลัพธ์ของ buildRevolvingCycles ใช้ต่อโดย summariseRevolving/resolveCardNextDueDate/summariseCard */
-type RevolvingCycleRow = {
+export type RevolvingCycleRow = {
   id: string | null;
   cardId: string;
   month: string;
@@ -212,19 +234,33 @@ function withTruncationFlag<T extends unknown[]>(cycles: T, truncated: boolean):
 export function buildRevolvingCycles(
   card: CardLike = {},
   storedCycles: StoredRevolvingCycle[] = [],
-  options: { throughMonth?: string } = {}
+  options: { throughMonth?: string; spendItems?: unknown } = {}
 ): RevolvingCycleRow[] & { truncated: boolean } {
   const cardId = card?.id;
   if (!cardId) return withTruncationFlag<RevolvingCycleRow[]>([], false);
 
-  const cycles = (Array.isArray(storedCycles) ? storedCycles : [])
+  const realCycles = (Array.isArray(storedCycles) ? storedCycles : [])
     .filter((cycle): cycle is StoredRevolvingCycle & { month: string } =>
       cycle?.cardId === cardId && typeof cycle?.month === 'string' && MONTH_KEY_RE.test(cycle?.month ?? ''))
     .sort((a, b) => a.month.localeCompare(b.month));
-  if (!cycles.length) return withTruncationFlag<RevolvingCycleRow[]>([], false);
 
   const storedByMonth = new Map<string, StoredRevolvingCycle & { month: string }>();
-  cycles.forEach(cycle => storedByMonth.set(cycle.month, cycle));
+  realCycles.forEach(cycle => storedByMonth.set(cycle.month, cycle));
+
+  // SPEND-2: ผลรวมรายการไม่ผ่อนต่อเดือนของบัตรนี้ (อ่านแบบ defensive: ค่าเสีย/ติดลบ = 0)
+  const itemSumByMonth = sumSpendItemsByMonth(cardId, options.spendItems);
+
+  // spec-credit-card-spend §3.1: เดือนที่มีแต่รายการ (ไม่มี cycle เก็บไว้) ต้องเข้าชุดเดือนที่กำหนด
+  // lastStored / start / truncated ด้วย — ใช้ "cycle เสมือน" {month, paymentAction: null, cashbackAmount: 0}
+  // ไม่มีรายการ = ชุดเดือนเท่ากับ realCycles ทุกประการ ผลลัพธ์จึงเหมือนเดิมทุกไบต์ (invariant 7)
+  const virtualByMonth = new Map<string, StoredRevolvingCycle & { month: string }>();
+  itemSumByMonth.forEach((_sum, month) => {
+    if (!storedByMonth.has(month)) virtualByMonth.set(month, { month, paymentAction: null, cashbackAmount: 0 });
+  });
+  const cycles = virtualByMonth.size
+    ? [...realCycles, ...virtualByMonth.values()].sort((a, b) => a.month.localeCompare(b.month))
+    : realCycles;
+  if (!cycles.length) return withTruncationFlag<RevolvingCycleRow[]>([], false);
 
   const lastStored = cycles[cycles.length - 1].month;
   const requested = typeof options.throughMonth === 'string' && MONTH_KEY_RE.test(options.throughMonth)
@@ -267,7 +303,8 @@ export function buildRevolvingCycles(
   let carried = 0;
 
   for (let month = start; month.localeCompare(end) <= 0; month = addMonths(month, 1)) {
-    const stored = storedByMonth.get(month) || null;
+    const realStored = storedByMonth.get(month) || null;
+    const stored = realStored || virtualByMonth.get(month) || null;
 
     // เดือนที่ไม่มีการบันทึกและไม่มียอดค้าง = ไม่มีอะไรจะแสดง → ข้ามไป ไม่ปล่อยแถวผีออกมา
     // จ่ายเต็มแล้วหยุดใช้บัตร จึงไม่เกิดแถวว่างยาวเป็นหางว่าว (BR-CC-014)
@@ -277,7 +314,11 @@ export function buildRevolvingCycles(
     //   ถ้า break ตรงนี้ ยอดที่บันทึกไว้จริงของทุกเดือนหลังช่องว่างจะหายไปทั้งหมด
     if (!stored && carried === 0) continue;
 
-    const newSpend = round2(Math.max(0, toAmount(stored?.newSpend ?? '') || 0));
+    // SPEND-2: มีรายการ = ผลรวมรายการ (ทับ newSpend เดิม) · ไม่มี = newSpend ที่เก็บไว้ (fallback ก่อน migrate)
+    const itemSum = itemSumByMonth.get(month);
+    const newSpend = itemSum !== undefined
+      ? itemSum
+      : round2(Math.max(0, toAmount(stored?.newSpend ?? '') || 0));
     // แคชแบคเป็นค่าไม่ติดลบเสมอ — อ่านแบบ defensive แบบเดียวกับ newSpend (ค่าเสีย/ติดลบในข้อมูล = 0)
     const cashbackAmount = round2(Math.max(0, toAmount(stored?.cashbackAmount ?? '') || 0));
     const carriedBalance = carried;
@@ -338,14 +379,50 @@ export function buildRevolvingCycles(
         interest: minimumInterest,
         closingBalance: round2(minimumRemaining + minimumInterest)
       },
-      stored: Boolean(stored),
+      // เดือนที่มีแต่รายการ: ไม่มี cycle เก็บจริง (stored false) แต่ไม่ใช่แถวยอดยกมาเปล่า (isImplicit false)
+      stored: Boolean(realStored),
       isImplicit: !stored
     });
 
     carried = closingBalance;
   }
 
-  return withTruncationFlag(derived, truncated);
+  // F4 / AC-S11: จำเดือนสุดท้ายที่สายครอบคลุมเมื่อเพดานตัดก่อนถึงเดือนที่ขอ
+  // (non-enumerable — ไม่กระทบตัวเลข / JSON / การ iterate ใด ๆ)
+  const flagged = withTruncationFlag(derived, truncated);
+  Object.defineProperty(flagged, 'capEndMonth', {
+    value: end.localeCompare(requested) < 0 ? end : null,
+    enumerable: false,
+    configurable: true
+  });
+  return flagged;
+}
+
+/** ผลรวมรายการไม่ผ่อนของบัตรต่อเดือน — Map ว่างเมื่อไม่มีรายการ (ฟังก์ชันล้วน) */
+function sumSpendItemsByMonth(cardId: string, spendItems: unknown): Map<string, number> {
+  const sums = new Map<string, number>();
+  if (!Array.isArray(spendItems)) return sums;
+  (spendItems as Array<StoredSpendItem | null | undefined>).forEach(item => {
+    if (!item || typeof item !== 'object' || item.cardId !== cardId) return;
+    if (typeof item.month !== 'string' || !SPEND_MONTH_KEY_RE.test(item.month)) return;
+    const amount = Math.max(0, toAmount(item.amount ?? '') || 0);
+    sums.set(item.month, (sums.get(item.month) || 0) + amount);
+  });
+  sums.forEach((sum, month) => sums.set(month, round2(sum)));
+  return sums;
+}
+
+/**
+ * ทางเข้าที่ call site ฝั่ง server ทุกจุดต้องใช้ (spec-credit-card-spend §5.2)
+ * บังคับที่ระดับ type ให้ส่งทั้ง cycles และ spendItems มาด้วยกัน จึงลืมส่งรายการไม่ได้
+ */
+export function buildRevolvingCyclesForData(
+  card: CardLike,
+  data: { cycles: unknown; spendItems: unknown },
+  options: { throughMonth?: string } = {}
+): RevolvingCycleRow[] & { truncated: boolean } {
+  const cycles = (Array.isArray(data?.cycles) ? data.cycles : []) as StoredRevolvingCycle[];
+  return buildRevolvingCycles(card, cycles, { ...options, spendItems: data?.spendItems });
 }
 
 /**
@@ -359,6 +436,22 @@ export function buildRevolvingCycles(
  * @param {array} derivedCycles
  * @returns {boolean}
  */
+/**
+ * true เมื่อเพดาน MAX_REVOLVING_CYCLES_PER_CARD ตัดสายก่อนถึง `month` (สายไม่ derive เดือนนั้นเลย)
+ * ต่างจาก isRevolvingChainTruncated ตรงที่ไม่นับการหลุดของ cycle เก่าก่อนจุดเริ่มสาย
+ * ⚠ ต้องส่ง array ที่ได้จาก buildRevolvingCycles() ตรง ๆ ที่สร้างด้วย throughMonth = month
+ */
+export function isMonthBeyondRevolvingCap(derivedCycles: unknown[], month: string): boolean {
+  const capEnd = Array.isArray(derivedCycles) ? (derivedCycles as unknown[] & { capEndMonth?: unknown }).capEndMonth : null;
+  if (!(typeof capEnd === 'string' && typeof month === 'string' && capEnd.localeCompare(month) < 0)) return false;
+  // R1: นับเป็นเพดานตัดเฉพาะเมื่อ cycle สุดท้ายยังมีเงินค้าง/เครดิต — ถ้าจ่ายหมดแล้ว เดือนหลังจากนั้นไม่มียอดยกมา
+  const last = derivedCycles[derivedCycles.length - 1] as { closingBalance?: unknown; creditBalance?: unknown } | undefined;
+  if (!last || typeof last !== 'object') return false;
+  const closing = Number(last.closingBalance) || 0;
+  const credit = Number(last.creditBalance) || 0;
+  return closing !== 0 || credit !== 0;
+}
+
 export function isRevolvingChainTruncated(derivedCycles: unknown[] & { truncated?: boolean } = []): boolean {
   return Array.isArray(derivedCycles) && derivedCycles.truncated === true;
 }
@@ -471,7 +564,8 @@ export function resolveCardNextDueDate(card: CardLike = {}, plans: PlanLike[] = 
   });
   if (!dueMonths.length) return null;
   dueMonths.sort();
-  return resolveInstallmentDueDate(card.dueDay ?? '', dueMonths[0]);
+  // offset ข้ามเดือนคงที่ต่อบัตร (XM-3) รอบบิลที่เร็วที่สุดจึงได้วันครบกำหนดที่เร็วที่สุดเสมอ
+  return resolveCardDueDate(card, dueMonths[0]);
 }
 
 /**
@@ -485,7 +579,7 @@ export function summariseCard(
   card: CardLike = {},
   plans: PlanLike[] = [],
   cycles: StoredRevolvingCycle[] = [],
-  options: { asOfMonth?: string } = {}
+  options: { asOfMonth?: string; spendItems?: unknown } = {}
 ): CardLike & {
   annualRate: number;
   minPaymentPercent: number;
@@ -496,10 +590,13 @@ export function summariseCard(
   revolvingTotalDue: number;
   revolvingMinDue: number;
   revolvingDue: number;
+  revolvingDueMonth: string | null;
   revolvingOutstanding: number;
   revolvingCarryForward: number;
   revolvingAction: PaymentAction;
   revolvingCredit: number;
+  payableRevolvingDue: number;
+  payableRevolvingMonth: string | null;
   availableCredit: number;
   ongoingPlanCount: number;
   nextDueDate: string | null;
@@ -521,8 +618,19 @@ export function summariseCard(
     ? options.asOfMonth
     : getCurrentMonthKey();
   const normalisedCard = normaliseCardDefaults(card);
-  const derivedCycles = buildRevolvingCycles(normalisedCard, cycles, { throughMonth: asOfMonth });
+  const derivedCycles = buildRevolvingCyclesForData(
+    normalisedCard,
+    { cycles, spendItems: options.spendItems },
+    { throughMonth: asOfMonth }
+  );
   const revolving = summariseRevolving(derivedCycles, { asOfMonth });
+  // รอบบิลที่ครบกำหนดชำระในเดือน asOfMonth (XM-6 · RR-2) — บัตรข้ามเดือนคือรอบ asOfMonth - 1
+  // ซึ่งมีอยู่ใน derivedCycles แล้ว (throughMonth: asOfMonth) derive ตอน GET เท่านั้น ไม่เก็บ (XM-8)
+  // ใช้แทน (ไม่ใช่บวกเพิ่ม) ยอดรอบปัจจุบันใน upcoming groups — ห้ามนำไปรวมใน totals (XM-9)
+  const payableMonth = getPayableCycleMonth(card, asOfMonth);
+  const payable = payableMonth === asOfMonth
+    ? revolving
+    : summariseRevolving(derivedCycles, { asOfMonth: payableMonth });
 
   // จ่ายขั้นต่ำแล้ว = ไม่ต้องจ่ายอะไรอีกเดือนนี้ (revolvingDue = 0)
   // แต่ยอดคงค้างยังกินวงเงินอยู่ (revolvingOutstanding) — บัตรจริงทำงานแบบนี้
@@ -541,11 +649,14 @@ export function summariseCard(
     revolvingTotalDue: revolving.totalDue,
     revolvingMinDue: revolving.minDue,
     revolvingDue: revolving.due,
+    revolvingDueMonth: revolving.cycle?.month ?? null,
     revolvingOutstanding: revolving.outstanding,
     revolvingCarryForward: revolving.carryForward,
     revolvingAction: revolving.paymentAction,
     // เครดิตแคชแบคแสดงแยกเท่านั้น ไม่หักหนี้ผ่อน/ไม่เพิ่ม availableCredit (N-1, BR-CC-031)
     revolvingCredit: revolving.credit,
+    payableRevolvingDue: payable.due,
+    payableRevolvingMonth: payable.cycle?.month ?? null,
     availableCredit: round2(Math.max(0, creditLimit - remainingPrincipal)),
     ongoingPlanCount: ongoingPlans.length,
     nextDueDate: resolveCardNextDueDate(card, ongoingPlans, derivedCycles)
@@ -743,6 +854,89 @@ export function validateRevolvingCycleInput(input: RevolvingCycleInputLike = {})
       cardId,
       month,
       newSpend: Number.isFinite(rawSpend) && rawSpend >= 0 ? round2(rawSpend) : 0
+    }
+  };
+}
+
+type SpendItemInputLike = {
+  id?: unknown;
+  cardId?: unknown;
+  purchaseDate?: unknown;
+  name?: unknown;
+  amount?: unknown;
+  [key: string]: unknown;
+};
+
+/**
+ * ตรวจรายการใช้จ่ายไม่ผ่อน (SPEND-3) — ไม่รับ month จาก client; server derive จาก purchaseDate
+ * ฟิลด์อื่นทั้งหมด (newSpend, source, totalDue, …) ไม่ถูกอ่านเลย จึงไม่มีทางถูกเก็บ
+ * mode 'create': ต้องมี cardId / purchaseDate / name / amount
+ * mode 'update': ต้องมี id และอย่างน้อยหนึ่งใน name / amount / purchaseDate
+ *   (cardId แก้ไม่ได้; month คำนวณจาก purchaseDate)
+ * error shape เดียวกับ validateRevolvingCycleInput
+ */
+export function validateSpendItemInput(
+  input: SpendItemInputLike = {},
+  { mode = 'create' }: { mode?: 'create' | 'update' } = {}
+): {
+  valid: boolean;
+  errors: Record<string, string>;
+  value: { id: string; cardId: string; purchaseDate?: string; name?: string; amount?: number };
+} {
+  const errors: Record<string, string> = {};
+  const source: SpendItemInputLike = input && typeof input === 'object' ? input : {};
+  const isUpdate = mode === 'update';
+
+  const id = typeof source.id === 'string' ? source.id.trim() : '';
+  if (isUpdate && !SPEND_ITEM_ID_RE.test(id)) errors.id = 'รหัสรายการไม่ถูกต้อง';
+
+  const cardId = isUpdate ? '' : String(source.cardId ?? '').trim();
+  if (!isUpdate && !cardId) errors.cardId = 'กรุณาเลือกบัตร';
+
+  const hasPurchaseDate = source.purchaseDate !== undefined && source.purchaseDate !== null;
+  let purchaseDate: string | undefined;
+  if (!isUpdate || hasPurchaseDate) {
+    if (isValidPurchaseDate(source.purchaseDate)) purchaseDate = source.purchaseDate;
+    else errors.purchaseDate = hasPurchaseDate ? 'วันที่ซื้อไม่ถูกต้อง' : 'กรุณาเลือกวันที่ซื้อ';
+  }
+
+  const hasName = source.name !== undefined && source.name !== null;
+  const hasAmount = source.amount !== undefined && source.amount !== null && source.amount !== '';
+
+  let name: string | undefined;
+  if (hasName || !isUpdate) {
+    const trimmed = typeof source.name === 'string' ? source.name.trim() : '';
+    if (!trimmed) errors.name = 'กรุณาระบุชื่อรายการ';
+    else if (trimmed.length > MAX_SPEND_ITEM_NAME_LENGTH) {
+      errors.name = `ชื่อรายการยาวได้ไม่เกิน ${MAX_SPEND_ITEM_NAME_LENGTH} ตัวอักษร`;
+    } else {
+      name = trimmed;
+    }
+  }
+
+  let amount: number | undefined;
+  if (hasAmount || !isUpdate) {
+    const raw = typeof source.amount === 'number' || typeof source.amount === 'string'
+      ? toAmount(source.amount)
+      : NaN;
+    if (!Number.isFinite(raw) || raw < 0 || raw > MAX_SPEND_ITEM_AMOUNT) {
+      errors.amount = 'ยอดเงินต้องเป็นตัวเลขไม่ติดลบ';
+    } else {
+      amount = round2(raw);
+    }
+  }
+
+  if (isUpdate && !hasName && !hasAmount && !hasPurchaseDate) errors.item = 'ไม่มีข้อมูลให้แก้ไข';
+
+  return {
+    valid: Object.keys(errors).length === 0,
+    errors,
+    value: {
+      id,
+      cardId,
+      ...(purchaseDate !== undefined ? { purchaseDate } : {}),
+      ...(name !== undefined ? { name } : {}),
+      ...(amount !== undefined ? { amount } : {})
     }
   };
 }

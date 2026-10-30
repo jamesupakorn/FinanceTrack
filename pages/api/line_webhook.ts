@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import { getMongoCollection, isJsonMode } from '../../lib/dataSource';
-import { updateUserLineId } from '../../src/backend/data/userUtils';
+import { updateUserLineId } from '../../lib/userStore';
 import { withAudit } from '../../lib/auditedMutation';
 
 export const config = {
@@ -100,10 +100,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (event?.message?.type !== 'text') continue;
     const lineUserId = event?.source?.userId;
     const targetUserId = parseLinkCommand(event?.message?.text);
-    if (typeof lineUserId !== 'string' || !targetUserId) continue;
+    if (typeof lineUserId !== 'string' || !lineUserId || !targetUserId) continue;
     let updated = null;
     if (isJsonMode()) {
-      updated = updateUserLineId(targetUserId, lineUserId);
+      updated = await updateUserLineId(targetUserId, lineUserId);
     } else {
       updated = await updateUserLineIdMongo(targetUserId, lineUserId);
     }

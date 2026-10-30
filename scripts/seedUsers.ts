@@ -36,7 +36,7 @@ const USERS_SNAPSHOT = [
   },
   {
     // TD-H09: real server-side demo user — restores "ทดลองใช้" login through the normal
-    // /api/auth/profile-login path (see .pipeline/spec-demo-profile-login-fix.md §1).
+    // /api/auth/profile-login path.
     // `isDemo: true` is the only new field this task adds; passwordHash is never read for
     // this user (profile-login.ts gates the passwordless branch strictly on `user.isDemo`).
     id: 'demo',

@@ -338,7 +338,7 @@ export default function DashboardPage() {
     if (!event.card || !selectedMonth) return;
     setBusy(event.key, true);
     try {
-      await creditCardAPI.setRevolvingAction(event.card.id, selectedMonth, 'full');
+      await creditCardAPI.setRevolvingAction(event.card.id, event.cycleMonth ?? selectedMonth, 'full');
       showToast('บันทึกการชำระแล้ว');
       await refreshData();
     } catch (error) {
@@ -352,7 +352,7 @@ export default function DashboardPage() {
     if (!event.card || !selectedMonth) return;
     setBusy(event.key, true);
     try {
-      await creditCardAPI.setRevolvingAction(event.card.id, selectedMonth, null);
+      await creditCardAPI.setRevolvingAction(event.card.id, event.cycleMonth ?? selectedMonth, null);
       showToast('ยกเลิกการชำระแล้ว');
       await refreshData();
     } catch (error) {
@@ -364,10 +364,12 @@ export default function DashboardPage() {
 
   const handleRevolvingMinimumClick = useCallback(async (event: CalendarEvent) => {
     if (!event.card || !selectedMonth) return;
+    // รอบบิลของ event (วันครบกำหนดข้ามเดือน / รายการเดือนถัดไปใน upcoming) — ไม่ใช่ selectedMonth เสมอไป (RR-1)
+    const cycleMonth = event.cycleMonth ?? selectedMonth;
     setBusy(event.key, true);
     try {
-      const response = await creditCardAPI.getRevolving({ cardId: event.card.id, month: selectedMonth });
-      const cycle = (response?.cycles || []).find((item: { month?: string }) => item.month === selectedMonth);
+      const response = await creditCardAPI.getRevolving({ cardId: event.card.id, month: cycleMonth });
+      const cycle = (response?.cycles || []).find((item: { month?: string }) => item.month === cycleMonth);
       setConfirmState({ event, minPaymentDue: cycle?.minPaymentDue ?? 0, preview: cycle?.minimumPreview || { remaining: 0, interest: 0, closingBalance: 0 } });
     } catch (error) {
       showToast((error as { message?: string } | null)?.message || 'โหลดข้อมูลยอดหมุนเวียนไม่สำเร็จ', 'error');
@@ -384,7 +386,7 @@ export default function DashboardPage() {
     }
     setConfirmBusy(true);
     try {
-      await creditCardAPI.setRevolvingAction(event.card.id, selectedMonth, 'minimum');
+      await creditCardAPI.setRevolvingAction(event.card.id, event.cycleMonth ?? selectedMonth, 'minimum');
       showToast('บันทึกการชำระขั้นต่ำแล้ว');
       setConfirmState(null);
       await refreshData();

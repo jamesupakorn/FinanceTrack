@@ -2,7 +2,7 @@
 // แคตาล็อกผู้ออกบัตร (ธนาคาร/บริษัทบัตรเครดิต) 11 รายชื่อ + 'other' — ที่เดียวที่กำหนดข้อมูลผู้ออกบัตร
 // Pure module: ไม่มี import, ไม่มี I/O
 //
-// ฟีเจอร์: credit-card-bank-issuer-logo — ดู .pipeline/spec-credit-card-bank-issuer-logo.md
+// ฟีเจอร์: credit-card-bank-issuer-logo
 // กฎของไฟล์นี้:
 // - `color` ทุกตัวต้องเป็น hex 6 หลัก ตัวพิมพ์เล็กเสมอ (CARD_COLORS.includes() เทียบ string ตรงตัว)
 // - `logo` เป็น string | null — ถ้ายังตรวจสิทธิ์การใช้โลโก้ไม่ได้ ให้ใส่ null (fallback เป็นจุดสี, R-1)

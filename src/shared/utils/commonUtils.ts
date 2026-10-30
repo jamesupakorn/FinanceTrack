@@ -30,10 +30,10 @@ export function extractRemovalKeys(payload: { __removeKeys?: unknown } = {}): st
  * mapping สำหรับสรุปยอดตามบัญชี
  */
 export const ACCOUNT_MAPPING: Record<string, string[]> = {
-  "กรุงศรี": ["credit_kungsri"],
-  "ttb": ["house", "credit_ttb"],
-  "กสิกร": ["credit_kbank", "shopee", "netflix", "youtube", "youtube_membership"],
-  "UOB": ["credit_uob"]
+  "กรุงศรี": [],
+  "ttb": ["house"],
+  "กสิกร": ["shopee", "netflix", "youtube", "youtube_membership"],
+  "UOB": []
 };
 
 export const DEFAULT_BANK_ACCOUNTS: string[] = Object.keys(ACCOUNT_MAPPING);
@@ -42,7 +42,7 @@ export const LEGACY_ITEM_ACCOUNT_MAP: Record<string, string> = Object.entries(AC
     acc[item] = account;
   });
   return acc;
-}, {});
+}, { credit_kungsri: 'กรุงศรี', credit_ttb: 'ttb', credit_kbank: 'กสิกร', credit_uob: 'UOB' });
 
 /**
  * คำนวณสรุปยอดตามบัญชีจากข้อมูลค่าใช้จ่าย
@@ -83,13 +83,10 @@ export function getAccountSummary(expenseData: Record<string, unknown> | undefin
 }
 
 /**
- * คีย์ metadata ที่ไม่ใช่แถวรายจ่ายจริง — ต้องข้ามตอนรวมยอด totalActualPaid (TD-L04)
- * รายการเดียวกับที่ getAccountSummary ใช้ (บรรทัด 65 ไฟล์นี้) บวก 'id'/'accountSummary' เพื่อให้
- * ครอบคลุมเท่ากับ monthlySummary.js's SUMMARY_IGNORED_KEYS (ไม่ import ข้ามมาโดยตรง เพราะไฟล์นั้นอยู่
- * ใต้ frontend/ และ commonUtils.ts ถูก import โดย API route handler — ดู task-context "Why not
- * import" สำหรับเหตุผลเต็ม)
+ * คีย์ metadata ที่ไม่ใช่แถวรายจ่ายจริง — ต้องข้ามตอนรวมยอด (TD-L04)
+ * แหล่งเดียว: monthlySummary.ts (frontend) import ชุดนี้จากไฟล์นี้
  */
-const EXPENSE_TOTALS_IGNORED_KEYS = new Set([
+export const EXPENSE_METADATA_KEYS = new Set([
   'totalActualPaid', 'accountSummary', 'bankAccounts',
   'month', '_id', 'id', 'userId', 'periodKey', '__removeKeys'
 ]);
@@ -103,7 +100,7 @@ export function getExpenseTotals(expenseData: Record<string, unknown> | undefine
   let totalActualPaid = 0; // รวมยอดจ่ายจริง
   // วนลูปแต่ละรายการค่าใช้จ่าย — ข้าม metadata key ที่รู้จักและค่าที่เป็น array เสมอ (TD-L04)
   Object.entries(expenseData || {}).forEach(([key, itemValue]) => {
-    if (EXPENSE_TOTALS_IGNORED_KEYS.has(key)) return;
+    if (EXPENSE_METADATA_KEYS.has(key)) return;
     if (itemValue && typeof itemValue === 'object' && !Array.isArray(itemValue)) {
       const item = itemValue as Partial<{ actual: number | string }>;
       totalActualPaid += parseFloat(String(item.actual || 0));

@@ -1,6 +1,5 @@
 /** @jest-environment node */
-// Integration test against a real (ephemeral, in-process) MongoDB instance — see
-// .pipeline/spec-td-c01-api-coverage-12.md for why mongodb-memory-server (not mocks) was chosen: this
+// Integration test against a real (ephemeral, in-process) MongoDB instance — Rationale: mongodb-memory-server (not mocks) was chosen: this
 // route's legacy-doc materialization side effect (a write triggered by a GET), its partial-$set/$unset
 // POST semantics, and the dotted-path __labels.<key> persistence are all real Mongo document-shape
 // behaviors a mocked collection would trivially fake without proving anything about the real

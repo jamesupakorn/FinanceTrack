@@ -1,6 +1,6 @@
 /** @jest-environment node */
 // Integration test against a real (ephemeral, in-process) MongoDB instance — mirrors the pattern
-// in __tests__/api/user-bank-accounts.test.js (see .pipeline/spec-test-suite-foundation.md §3).
+// in __tests__/api/user-bank-accounts.test.js.
 //
 // Covers TD-H10 (login rate limiting): composite IP+userId lockout, demo-login exclusion, and
 // fail-open behavior on the limiter's own Mongo failure. lib/dataMode.config.js / lib/userStore.js /

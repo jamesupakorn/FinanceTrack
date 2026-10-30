@@ -9,7 +9,7 @@ export class MongoMemoryServer {
   private constructor(private server: BaseServer, private uri: string) {}
 
   static async create(): Promise<MongoMemoryServer> {
-    const server = await BaseServer.create({ instance: { replSet: 'rs0', storageEngine: 'wiredTiger' } });
+    const server = await BaseServer.create({ instance: { replSet: 'rs0', storageEngine: 'wiredTiger', launchTimeout: 30000 } });
     const direct = server.getUri().replace(/\/?(\?.*)?$/, '/?directConnection=true');
     const client = new MongoClient(direct);
     try {

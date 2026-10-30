@@ -2,8 +2,8 @@ import React from 'react';
 
 // React error boundaries must be class components (componentDidCatch/getDerivedStateFromError
 // have no hook equivalent) — the one narrow, deliberate exception to CODING_STANDARD.md's
-// "no class components" rule. See .pipeline/architecture-review-error-boundary.md for the
-// recorded rationale/carve-out.
+// "no class components" rule.
+// This is the only carve-out; do not add other class components.
 interface ErrorBoundaryState {
   hasError: boolean;
 }

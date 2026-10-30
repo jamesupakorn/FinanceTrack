@@ -2,12 +2,13 @@
  * API: /api/credit-cards/revolving
  * จัดการยอดใช้จ่ายหมุนเวียนของบัตร (per-card per-month, เก็บแบบ sparse)
  * - GET    : cycle ที่ derive แล้ว กรองด้วย cardId / month ได้
- * - POST   : upsert ยอดใช้จ่ายใหม่ของเดือน (newSpend)
+ * - POST   : ถูกถอดแล้ว — คืน 400 `newSpend_removed` เสมอ (spec-credit-card-spend §4.2 / Q1)
+ *            ยอดใช้จ่ายของเดือนมาจากรายการไม่ผ่อน /api/credit-cards/spend-items (SPEND-2)
  * - PATCH  : บันทึกการตัดสินใจชำระ ('full' | 'minimum' | null) และ/หรือแคชแบคของเดือน (cashbackAmount)
  *            แบบ partial-merge: เขียนเฉพาะ key ที่ส่งมา — PATCH แคชแบคอย่างเดียวไม่แตะ paymentAction /
  *            paidAt / paidSource / newSpend; คำขอที่ไม่มีทั้งสอง key = ล้าง paymentAction แบบเดิม;
  *            cashbackAmount ว่าง ('' / null) = ไม่เปลี่ยนค่าที่เก็บไว้ (BR-CC-032)
- *            แคชแบคเข้าได้ทาง PATCH เท่านั้น — POST เขียนทับ newSpend ทุกครั้ง จึงห้ามใช้ส่งแคชแบค
+ *            แคชแบคเข้าได้ทาง PATCH เท่านั้น · cycle ที่ PATCH สร้างใหม่ไม่มี newSpend แล้ว (อ่านเป็น 0)
  * - DELETE : ลบ cycle ที่เก็บไว้ของเดือนนั้น (เดือนถัด ๆ ไป derive ใหม่เอง)
  *
  * ทุก handler: assertUserId → store เท่านั้น ไม่มีข้อยกเว้น (BR-CC-001)
@@ -27,10 +28,8 @@ import { assertUserId } from '../../../src/shared/utils/backend/userRequest';
 import { validateApiRequest } from '../../../src/shared/utils/backend/apiRequestValidation';
 import { getUserCreditData, updateUserCreditData, type CreditData } from '../../../src/shared/utils/backend/creditCardStore';
 import {
-  buildRevolvingCycles,
   buildRevolvingRowKey,
   summariseRevolving,
-  validateRevolvingCycleInput,
   isValidPaymentAction,
   isValidCashbackAmount,
   isRevolvingChainTruncated,
@@ -39,6 +38,7 @@ import {
   toAmount,
   MAX_REVOLVING_CYCLES_PER_CARD
 } from '../../../src/shared/utils/creditCardUtils';
+import { buildRevolvingCyclesForData } from '../../../src/shared/utils/creditCardRevolving';
 import { withAudit } from '../../../lib/auditedMutation';
 
 const MONTH_KEY_RE = /^\d{4}-\d{2}$/;
@@ -66,9 +66,10 @@ function resolveTargetMonth(throughMonth: string | undefined): string {
  * @returns {Map<string, array>} cardId → chain
  */
 function buildCardChains(data: CreditData, asOfMonth: string) {
-  const map = new Map<string, ReturnType<typeof buildRevolvingCycles>>();
+  const map = new Map<string, ReturnType<typeof buildRevolvingCyclesForData>>();
   data.cards.forEach(card => {
-    map.set(card.id ?? '', buildRevolvingCycles(card, data.cycles, { throughMonth: asOfMonth }));
+    // ส่ง spendItems ด้วยเสมอ — newSpend ของเดือนที่มีรายการ = ผลรวมรายการ (SPEND-2)
+    map.set(card.id ?? '', buildRevolvingCyclesForData(card, data, { throughMonth: asOfMonth }));
   });
   return map;
 }
@@ -88,7 +89,7 @@ function materialise(
   const cards = cardId ? data.cards.filter(card => card?.id === cardId) : data.cards;
 
   let truncated = false;
-  const cycles: Array<ReturnType<typeof buildRevolvingCycles>[number] & {
+  const cycles: Array<ReturnType<typeof buildRevolvingCyclesForData>[number] & {
     key: string;
     cardName: string;
     cardColor: string;
@@ -182,67 +183,16 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse, userId: stri
   });
 }
 
-async function handlePost(req: NextApiRequest, res: NextApiResponse, userId: string) {
-  const input = req.body?.cycle;
-  if (!input || typeof input !== 'object') {
-    return res.status(400).json({ error: 'cycle payload required' });
-  }
-
-  // อ่านเฉพาะ cardId / month / newSpend — ฟิลด์การเงินอื่นใน body ถูกละทิ้งทั้งหมด (AC-38)
-  const { valid, errors, value } = validateRevolvingCycleInput(input);
-  if (!valid) {
-    return res.status(400).json({ error: 'ข้อมูลยอดใช้จ่ายหมุนเวียนไม่ถูกต้อง', errors });
-  }
-  if (!(await ownsCard(userId, value.cardId))) {
-    return res.status(404).json({ error: 'card not found' });
-  }
-
-  let failure: { status: number; body: Record<string, unknown> } | null = null;
-
-  const data = await updateUserCreditData(userId, (data) => {
-    const card = data.cards.find(item => item?.id === value.cardId);
-    if (!card) {
-      failure = { status: 404, body: { error: 'card not found' } };
-      return data;
-    }
-
-    const index = data.cycles.findIndex(
-      cycle => cycle?.cardId === value.cardId && cycle?.month === value.month
-    );
-    const now = new Date().toISOString();
-
-    if (index === -1) {
-      if (countStoredCycles(data.cycles, value.cardId) >= MAX_REVOLVING_CYCLES_PER_CARD) {
-        failure = {
-          status: 409,
-          body: { error: `บันทึกยอดหมุนเวียนได้สูงสุด ${MAX_REVOLVING_CYCLES_PER_CARD} เดือนต่อบัตร` }
-        };
-        return data;
-      }
-      return {
-        ...data,
-        cycles: [...data.cycles, {
-          id: generateCycleId(),
-          cardId: value.cardId,
-          month: value.month,
-          newSpend: value.newSpend,
-          paymentAction: null,
-          paidAt: null,
-          paidSource: null,
-          createdAt: now,
-          updatedAt: now
-        }]
-      };
-    }
-
-    const cycles = [...data.cycles];
-    cycles[index] = { ...cycles[index], newSpend: value.newSpend, updatedAt: now };
-    return { ...data, cycles };
+/**
+ * POST ถูกถอด (spec-credit-card-spend §4.2 · Q1): newSpend เป็นค่า derive จากรายการไม่ผ่อนแล้ว (SPEND-2)
+ * client เก่าที่ยังส่ง newSpend มาต้องล้มดัง ๆ ด้วย 400 `newSpend_removed` — ไม่แตะเอกสารเลย
+ * (POST นี้มีหน้าที่เดียวคือเขียน newSpend จึงคืน 400 ทุกคำขอ ไม่ว่าจะมี newSpend หรือไม่)
+ */
+async function handlePost(_req: NextApiRequest, res: NextApiResponse) {
+  return res.status(400).json({
+    error: 'newSpend_removed',
+    message: 'ยอดใช้จ่ายหมุนเวียนคำนวณจากรายการไม่ผ่อนแล้ว — ใช้ /api/credit-cards/spend-items แทน'
   });
-
-  const failureResponse = failure as { status: number; body: Record<string, unknown> } | null;
-  if (failureResponse) return res.status(failureResponse.status).json(failureResponse.body);
-  return respondWithCardChain(res, data, value.cardId, value.month);
 }
 
 async function handlePatch(req: NextApiRequest, res: NextApiResponse, userId: string) {
@@ -290,7 +240,7 @@ async function handlePatch(req: NextApiRequest, res: NextApiResponse, userId: st
     const now = new Date().toISOString();
     const index = data.cycles.findIndex(cycle => cycle?.cardId === cardId && cycle?.month === month);
 
-    // เดือนที่มีแต่ยอดยกมา (ยังไม่เคยบันทึก) ต้องกดชำระได้ → สร้าง cycle ด้วย newSpend: 0
+    // เดือนที่มีแต่ยอดยกมา (ยังไม่เคยบันทึก) ต้องกดชำระได้ → สร้าง cycle ใหม่โดยไม่เขียน newSpend (อ่านเป็น 0 · spec-credit-card-spend DATA_MODEL)
     if (index === -1) {
       if (countStoredCycles(data.cycles, cardId) >= MAX_REVOLVING_CYCLES_PER_CARD) {
         failure = {
@@ -305,7 +255,6 @@ async function handlePatch(req: NextApiRequest, res: NextApiResponse, userId: st
           id: generateCycleId(),
           cardId,
           month,
-          newSpend: 0,
           // ทุกแถวที่ PATCH สร้างเริ่มด้วย cashbackAmount (0 เมื่อไม่ได้ส่งมา)
           cashbackAmount: cashbackAmount ?? 0,
           // paymentAction เป็น null เสมอเมื่อ !applyAction (กำหนดไว้ด้านบน)
@@ -377,7 +326,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   try {
     if (req.method === 'GET') return await handleGet(req, res, userId);
-    if (req.method === 'POST') return await handlePost(req, res, userId);
+    if (req.method === 'POST') return await handlePost(req, res);
     if (req.method === 'PATCH') return await handlePatch(req, res, userId);
     if (req.method === 'DELETE') return await handleDelete(req, res, userId);
   } catch (error) {

@@ -14,10 +14,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatDayLabel,
   formatIsoDateTH,
-  resolveInstallmentDueDate,
+  resolveCardDueDate,
   round2,
-  PLAN_STATUS
+  PLAN_STATUS,
+  getCurrentMonthKey
 } from '../../shared/utils/creditCardUtils';
+import { MONTH_KEY_RE } from '../../shared/utils/creditCardBasics';
 import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { BP } from '../../shared/utils/frontend/breakpoints';
@@ -92,7 +94,7 @@ interface CreditCardDetailProps {
   onBack?: () => void;
   onEditCard?: (card: CreditCardDetailData) => void;
   onDeleteCard?: (card: CreditCardDetailData) => void;
-  onAddPlanForCard?: (card: CreditCardDetailData) => void;
+  onAddPlanForCard?: (card: CreditCardDetailData, month?: string) => void;
   onRenamePlan?: PlanAction;
   onEditPlan?: PlanAction;
   onCancelPlan?: PlanAction;
@@ -303,7 +305,7 @@ function PlanCard({
       <span className="text-xs text-secondary">{describePlanInterest(plan)}</span>
       {plan.nextUnpaid && (
         <span className="text-xs text-secondary">
-          {`งวดถัดไป ${plan.nextUnpaid.no}/${plan.months} · ${formatIsoDateTH(resolveInstallmentDueDate(card.dueDay as number | string, plan.nextUnpaid.dueMonth) || '')}`}
+          {`งวดถัดไป ${plan.nextUnpaid.no}/${plan.months} · ${formatIsoDateTH(resolveCardDueDate(card, plan.nextUnpaid.dueMonth) || '')}`}
         </span>
       )}
 
@@ -392,7 +394,7 @@ interface CreditCardDetailProps {
   onBack?: () => void;
   onEditCard?: (card: CreditCardDetailData) => void;
   onDeleteCard?: (card: CreditCardDetailData) => void;
-  onAddPlanForCard?: (card: CreditCardDetailData) => void;
+  onAddPlanForCard?: (card: CreditCardDetailData, month?: string) => void;
   onRenamePlan?: PlanAction;
   onEditPlan?: PlanAction;
   onCancelPlan?: PlanAction;
@@ -400,6 +402,10 @@ interface CreditCardDetailProps {
   onToggleInstallment?: InstallmentAction;
   onConfirmMinimum?: (params: { card: RevolvingCard; cycle: CurrentCycle; onConfirm: () => void | Promise<void> }) => void;
   onRevolvingChanged?: () => void;
+  /** เพิ่มทุกครั้งที่บันทึกรายจ่ายธรรมดาสำเร็จ — ให้โหลดยอด/รายการจากเซิร์ฟเวอร์ใหม่ (ไม่คำนวณฝั่ง client) */
+  spendRefreshKey?: number;
+  /** เดือนรอบบิลที่เซิร์ฟเวอร์ตอบกลับของรายการที่เพิ่งบันทึก — สลับ statementMonth ไปเดือนนั้น */
+  spendSavedMonth?: string | null;
 }
 
 export default function CreditCardDetail({
@@ -416,8 +422,18 @@ export default function CreditCardDetail({
   onDeletePlan,
   onToggleInstallment,
   onConfirmMinimum,
-  onRevolvingChanged
+  onRevolvingChanged,
+  spendRefreshKey = 0,
+  spendSavedMonth = null
 }: CreditCardDetailProps) {
+  const [statementMonth, setStatementMonth] = useState(getCurrentMonthKey);
+  // เปลี่ยนเดือนเฉพาะเมื่อ key เปลี่ยนหลัง mount; ค่า key ที่ค้างจากการบันทึกก่อนหน้าต้องไม่ดึงเดือนตอนเปิดหน้า
+  const seenSpendKeyRef = useRef(spendRefreshKey);
+  useEffect(() => {
+    if (seenSpendKeyRef.current === spendRefreshKey) return;
+    seenSpendKeyRef.current = spendRefreshKey;
+    if (spendRefreshKey > 0 && spendSavedMonth && MONTH_KEY_RE.test(spendSavedMonth)) setStatementMonth(spendSavedMonth);
+  }, [spendRefreshKey, spendSavedMonth]);
   const [isMobileView, setIsMobileView] = useState(
     () => typeof window !== 'undefined' && window.innerWidth < BP.md
   );
@@ -550,27 +566,37 @@ export default function CreditCardDetail({
         </div>
 
         <div className="flex flex-col gap-space-4">
+          <label className="text-sm text-secondary">เดือนรอบบิล
+            <input type="month" className="ml-space-3 min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-primary"
+              value={statementMonth} onChange={event => { if (MONTH_KEY_RE.test(event.target.value)) setStatementMonth(event.target.value); }} />
+          </label>
           {/* ยอดหมุนเวียนเป็นภาระหลักของบัตร จึงอยู่เหนือรายการแผนผ่อนซึ่งเป็นรายละเอียดย่อย (UX_SPEC §9) */}
           <RevolvingBalanceSection
+            key={`${card.id}-${statementMonth}-${spendRefreshKey}`}
             card={card}
+            month={statementMonth}
             isMobileView={isMobileView}
             onConfirmMinimum={onConfirmMinimum}
-            onChanged={onRevolvingChanged}
+            onChanged={changedMonth => {
+              if (changedMonth) setStatementMonth(changedMonth);
+              onRevolvingChanged?.();
+            }}
           />
 
           <div className="flex items-center justify-between gap-space-3">
             <h2 className={SECTION_TITLE}>{`แผนผ่อนชำระ (${plans.length})`}</h2>
             <button
               type="button"
+              data-add-expense-fallback
               className={`inline-flex min-h-11 items-center justify-center gap-space-2 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent transition-colors duration-fast ease-graphite hover:opacity-90 ${FOCUS_RING}`}
-              onClick={() => onAddPlanForCard?.(card)}
+              onClick={() => onAddPlanForCard?.(card, statementMonth)}
             >
-              <Icons.Plus size={16} /> เพิ่ม
+              <Icons.Plus size={16} /> เพิ่มรายจ่าย
             </button>
           </div>
 
           {orderedPlans.length === 0 ? (
-            <p className="m-0 text-sm text-tertiary">ยังไม่มีแผนผ่อนในบัตรนี้ — กด “เพิ่ม” เพื่อเริ่มต้น</p>
+            <p className="m-0 text-sm text-tertiary">ยังไม่มีแผนผ่อนในบัตรนี้ — กด “เพิ่มรายจ่าย” เพื่อเริ่มต้น</p>
           ) : (
             <div className="flex flex-col gap-space-3">
               {orderedPlans.map(plan => (

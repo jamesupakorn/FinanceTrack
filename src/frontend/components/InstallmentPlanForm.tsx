@@ -22,7 +22,7 @@ import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
 import { formatCurrency, parseAndFormat } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
-import { findOverdueInstallments, type OverdueInstallment } from '../../shared/utils/installmentBackdate';
+import { findTickableInstallments, type TickableInstallment } from '../../shared/utils/installmentBackdate';
 import { Icons } from './Icons';
 import BackdatedInstallmentsDialog from './BackdatedInstallmentsDialog';
 
@@ -36,7 +36,7 @@ export type PlanSubmitValues = ValidatedPlanValue | Pick<ValidatedPlanValue, 'it
 
 interface BackdateState {
   values: ValidatedPlanValue;
-  rows: OverdueInstallment[];
+  rows: TickableInstallment[];
   currentMonthKey: string;
 }
 
@@ -281,7 +281,6 @@ export default function InstallmentPlanForm({
   };
 
   const withComputedStartMonth = (next: PlanFormState): PlanFormState => {
-    if (plan) return next;
     const card = cards.find(item => item.id === next.cardId);
     const computed = computeStartMonthFromPurchase(next.purchaseDate, card?.statementDay);
     return computed ? { ...next, startMonth: computed } : next;
@@ -337,7 +336,7 @@ export default function InstallmentPlanForm({
         ...result.value,
         calcMethod: result.value.calcMethod ?? undefined
       });
-      const rows = findOverdueInstallments(schedule, currentMonthKey);
+      const rows = findTickableInstallments(schedule, currentMonthKey);
       if (rows.length > 0) {
         setBackdate({ values: result.value, rows, currentMonthKey });
         return;

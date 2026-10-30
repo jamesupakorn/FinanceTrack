@@ -50,6 +50,15 @@ export const MAX_ACTIVE_PLANS_PER_USER: number = 50;
 export const MAX_INSTALLMENTS_PER_PLAN: number = 60;
 export const MAX_REVOLVING_CYCLES_PER_CARD: number = 60;
 
+// รายการใช้จ่ายไม่ผ่อน (spend items)
+// เก็บใน credit_cards doc เดียวกับ cycles: เพดานต่อบัตรกันเอกสารเกิน 16 MB (20 บัตร × 1000 × ~250 B ≈ 5 MB)
+export const MAX_SPEND_ITEMS_PER_CYCLE: number = 100;
+export const MAX_SPEND_ITEMS_PER_CARD: number = 1000;
+export const MAX_SPEND_ITEM_NAME_LENGTH: number = 60;
+/** ไม่มีเพดานยอดเงินเดิมใน creditCardBasics จึงใช้ค่าตาม DATA_MODEL */
+export const MAX_SPEND_ITEM_AMOUNT: number = 9999999.99;
+export const SPEND_ITEM_ID_RE: RegExp = /^si_[0-9a-f]{12}$/;
+
 export const PLAN_STATUS = {
   ONGOING: 'ongoing',
   COMPLETED: 'completed',
@@ -84,6 +93,7 @@ export const REVOLVING_KEY_RE: RegExp = /^ccr_[0-9a-f]{12}$/;
  * ภายนอก (ไม่มีใครใช้ MONTH_KEY_RE จากภายนอกอยู่แล้ว)
  */
 export const MONTH_KEY_RE: RegExp = /^\d{4}-\d{2}$/;
+export const SPEND_MONTH_KEY_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 /**
  * รูปแบบวันที่ซื้อ 'YYYY-MM-DD' — export เพื่อให้ creditCardRevolving.ts ใช้ตรวจรูปแบบได้
@@ -152,6 +162,10 @@ export function getDaysInMonthKey(monthKey: string): number {
 /**
  * แปลง dueDay ของบัตร (1-31 หรือ EOM) เป็นวันที่จริงของเดือนนั้น
  * ใช้ resolveDueDayForMonth ตัวเดียวกับ ExpenseTable และ LINE (BR-CC-003)
+ *
+ * primitive แบบ "เดือนเดียวกัน" เท่านั้น — ไม่รู้จักวันสรุปยอด ผู้เรียกที่แปลงบัตร + รอบบิล
+ * เป็นวันครบกำหนดต้องใช้ resolveCardDueDate แทนเสมอ (XM-5)
+ * ห้ามเรียกฟังก์ชันนี้ตรง ๆ จากนอกไฟล์นี้ (AC-11)
  * @returns 'YYYY-MM-DD'
  */
 export function resolveInstallmentDueDate(dueDayValue: number | string, monthKey: string): string | null {
@@ -159,6 +173,82 @@ export function resolveInstallmentDueDate(dueDayValue: number | string, monthKey
   const daysInMonth = getDaysInMonthKey(monthKey);
   const day = resolveDueDayForMonth(dueDayValue, daysInMonth) || daysInMonth;
   return `${monthKey}-${String(day).padStart(2, '0')}`;
+}
+
+type DayLike = number | string | null | undefined;
+
+/** ค่าวันที่ตั้งไว้ของบัตรเป็นตัวเลขเพื่อเปรียบเทียบ — EOM = 31, ไม่มีค่า = EOM, ค่าเสีย = null */
+function toComparableDay(value: DayLike): number | null {
+  const day = normaliseDayValue(value, { fallbackToEom: true });
+  if (day === null) return null;
+  return day === END_OF_MONTH_DUE_DAY ? 31 : day;
+}
+
+/**
+ * จำนวนเดือนที่วันครบกำหนดเลื่อนไปจากรอบบิล (XM-2 / XM-3)
+ * 1 เมื่อ dueDay <= statementDay (EOM = 31, เท่ากันถือว่าข้ามเดือน) ไม่เช่นนั้น 0
+ * เทียบจากค่าที่ตั้งไว้ ไม่ใช่ค่าที่ clamp ต่อเดือน — บัตรหนึ่งใบจึงได้ offset เท่าเดิมทุกเดือน (รวม ก.พ.)
+ * ค่าเสีย (เช่น 'abc', 0, 45) → 0 คงพฤติกรรมเดิมของข้อมูลเสีย
+ */
+export function getCardDueMonthOffset(statementDay: DayLike, dueDay: DayLike): 0 | 1 {
+  const statement = toComparableDay(statementDay);
+  const due = toComparableDay(dueDay);
+  if (statement === null || due === null) return 0;
+  return due <= statement ? 1 : 0;
+}
+
+/**
+ * ฟังก์ชันเดียวที่แปลงบัตร + รอบบิล (YYYY-MM) เป็นวันครบกำหนดจริง (XM-5)
+ * = dueDay ในเดือน addMonths(cycleMonth, offset) — EOM/clamp ผ่าน resolveDueDayForMonth (XM-4)
+ * รอบบิลยังเป็นตัวจัดกลุ่มรายเดือนเหมือนเดิม (XM-1) เปลี่ยนเฉพาะวันที่ที่รอบบิลชี้ไป
+ * ค่าที่ได้ derive ตอนอ่านเสมอ ห้ามเก็บลงฐานข้อมูล (XM-8)
+ * @returns 'YYYY-MM-DD' หรือ null เมื่อ cycleMonth ไม่ถูกต้อง
+ */
+export function resolveCardDueDate(
+  card: { statementDay?: DayLike; dueDay?: DayLike },
+  cycleMonth: string
+): string | null {
+  if (typeof cycleMonth !== 'string' || !MONTH_KEY_RE.test(cycleMonth)) return null;
+  const offset = getCardDueMonthOffset(card?.statementDay, card?.dueDay);
+  return resolveInstallmentDueDate(card?.dueDay as number | string, addMonths(cycleMonth, offset));
+}
+
+/**
+ * วันตัดรอบ (statement cut-off) ของเดือนปฏิทิน monthKey — clamp สิ้นเดือนแบบเดียวกับ resolveCardDueDate
+ * ไม่ใช่วันครบกำหนด; ใช้แทนการเรียก resolveInstallmentDueDate จากนอกไฟล์นี้ (AC-11)
+ * @returns 'YYYY-MM-DD' หรือ null เมื่อ monthKey ไม่ถูกต้อง
+ */
+export function resolveStatementCutoffDate(statementDay: DayLike, monthKey: string): string | null {
+  return resolveInstallmentDueDate(statementDay as number | string, monthKey);
+}
+
+/**
+ * รอบบิลที่ครบกำหนดชำระในเดือนปฏิทิน calendarMonth = addMonths(calendarMonth, -offset) (XM-6)
+ * ใช้กับจุดแจ้งเตือนที่อิงวันที่ปฏิทิน (LINE card notify) — ยอดเงิน/สรุปยังอิงรอบบิลเหมือนเดิม
+ * @returns 'YYYY-MM' — calendarMonth ไม่ถูกต้อง → คืนค่าเดิม
+ */
+export function getPayableCycleMonth(
+  card: { statementDay?: DayLike; dueDay?: DayLike },
+  calendarMonth: string
+): string {
+  if (typeof calendarMonth !== 'string' || !MONTH_KEY_RE.test(calendarMonth)) return calendarMonth;
+  const offset = getCardDueMonthOffset(card?.statementDay, card?.dueDay);
+  return addMonths(calendarMonth, -offset);
+}
+
+/**
+ * เดือนตาราง (เดือนที่ชำระจริง) ของรอบบิล cycleMonth = addMonths(cycleMonth, offset) (DP-1)
+ * เป็นฟังก์ชันผกผันของ getPayableCycleMonth และเท่ากับ resolveCardDueDate(card, cycleMonth).slice(0, 7)
+ * ใช้จัดวางแถวบัตร ccr_ ในตารางรายจ่ายรายเดือน — derive ตอนอ่านเสมอ ไม่เก็บลงฐานข้อมูล (DP-3)
+ * @returns 'YYYY-MM' — cycleMonth ไม่ถูกต้อง → คืนค่าเดิม (เหมือน getPayableCycleMonth)
+ */
+export function getCardDueMonth(
+  card: { statementDay?: DayLike; dueDay?: DayLike },
+  cycleMonth: string
+): string {
+  if (typeof cycleMonth !== 'string' || !MONTH_KEY_RE.test(cycleMonth)) return cycleMonth;
+  const offset = getCardDueMonthOffset(card?.statementDay, card?.dueDay);
+  return addMonths(cycleMonth, offset);
 }
 
 /**

@@ -178,3 +178,24 @@ describe('PATCH /api/monthly_expense — derived cci_/ccr_ keys', () => {
     expect((await patch({ month: MONTH, key: 'ccr_cc_missing', paid: true })).status).toBe(404);
   });
 });
+
+// AC-12: PATCH never persists resolvedDueDate
+describe('PATCH /api/monthly_expense — resolvedDueDate is never persisted (AC-12)', () => {
+  const card = { id: 'cc_abc123abc123', name: 'Shopee', creditLimit: 50000, annualRate: 0, minPaymentPercent: 10, statementDay: 'EOM', dueDay: 10, color: '#5d5bff', bankName: '', last4: '' };
+
+  it('derived ccr_ toggle with an echoed resolvedDueDate writes only credit_cards paymentAction, nothing in monthly_expense', async () => {
+    await db.collection('credit_cards').insertOne({ userId: USER_A, cards: [card], plans: [], cycles: [{ cardId: card.id, month: MONTH, newSpend: 500, paymentAction: null }] });
+    const result = await patch({ month: MONTH, key: 'ccr_abc123abc123', paid: true, resolvedDueDate: '2026-09-10' });
+    expect([200, 400]).toContain(result.status);
+    expect(await db.collection('monthly_expense').countDocuments()).toBe(0);
+    const saved = await db.collection('credit_cards').findOne({ userId: USER_A });
+    expect(JSON.stringify(saved)).not.toContain('resolvedDueDate');
+  });
+
+  it('ordinary row init with resolvedDueDate in the row payload does not store the field', async () => {
+    const result = await patch({ month: MONTH, key: 'custom1', paid: true, row: { name: 'ค่าเช่า', actual: '1,200', account: 'ttb', dueDay: 5, resolvedDueDate: '2026-09-05' } });
+    expect([200, 400]).toContain(result.status);
+    const doc = await getDoc();
+    expect(JSON.stringify(doc ?? {})).not.toContain('resolvedDueDate');
+  });
+});
