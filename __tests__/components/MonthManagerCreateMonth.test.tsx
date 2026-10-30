@@ -55,7 +55,10 @@ async function openAddForm(user: ReturnType<typeof userEvent.setup>) {
 
 async function addCustomMonth(user: ReturnType<typeof userEvent.setup>, month: string) {
   await openAddForm(user);
-  await user.type(screen.getByLabelText('กรอกเดือนใหม่ (YYYY-MM)'), month);
+  const input = screen.getByLabelText('กรอกเดือนใหม่ (YYYY-MM)');
+  await user.type(input, month);
+  // slow CI runners can click "add" before the controlled input has committed every keystroke
+  await waitFor(() => expect(input).toHaveValue(month));
   await user.click(screen.getByLabelText('เพิ่มเดือนที่กรอกเอง'));
 }
 
