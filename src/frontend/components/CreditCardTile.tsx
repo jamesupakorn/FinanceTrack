@@ -38,6 +38,9 @@ export type TileCard = MenuCard & {
   installmentDueThisMonth?: number | string;
   revolvingDueThisMonth?: number | string;
   totalDueThisMonth?: number | string;
+  /** จำนวนงวดผ่อนในรอบนี้ / ที่ชำระแล้ว (Addendum A) — นับอย่างเดียว ไม่มีเลขเงิน */
+  installmentCount?: number;
+  installmentPaidCount?: number;
 };
 
 export type TileCardAction = (card: TileCard) => void;
@@ -168,6 +171,12 @@ export default function CreditCardTile({
     revolvingDue !== 0 ? `ไม่ผ่อน ${formatCurrency(revolvingDue)}` : null
   ].filter(Boolean) as string[];
 
+  const rawCount = Number(card.installmentCount);
+  const installmentCount = Number.isFinite(rawCount) && rawCount > 0 ? Math.floor(rawCount) : 0;
+  const rawPaid = Number(card.installmentPaidCount);
+  const installmentPaid = Math.min(installmentCount, Number.isFinite(rawPaid) && rawPaid > 0 ? Math.floor(rawPaid) : 0);
+  const installmentsComplete = installmentCount > 0 && installmentPaid === installmentCount;
+
   const creditLimit = Number(card.creditLimit) || 0;
   const utilisation = creditLimit > 0
     ? Math.min(100, round2((Number(card.remainingPrincipal) || 0) / creditLimit * 100))
@@ -230,6 +239,20 @@ export default function CreditCardTile({
           </span>
           {subParts.length > 0 && (
             <span className="text-xs" data-testid="cc-tile-subline">{subParts.join(' · ')}</span>
+          )}
+
+          {installmentCount > 0 && (
+            <span
+              className={`inline-flex w-fit max-w-full items-center gap-space-1 rounded-full px-space-2 py-[2px] text-xs font-semibold ${installmentsComplete ? '' : 'border'}`}
+              style={installmentsComplete ? inverseChipStyle : { borderColor: textColor }}
+              role="img"
+              aria-label={`ผ่อนชำระแล้ว ${installmentPaid} จาก ${installmentCount} งวด`}
+              data-testid="cc-tile-installment-badge"
+              data-complete={installmentsComplete ? 'true' : 'false'}
+            >
+              {installmentsComplete && <Icons.Check size={12} />}
+              <span aria-hidden="true">{`ผ่อนแล้ว ${installmentPaid}/${installmentCount} งวด`}</span>
+            </span>
           )}
 
           {dueSoon && (

@@ -518,6 +518,10 @@ export interface CardMonthDue {
   revolvingDueThisMonth: number;
   /** = row.actual (ยอดเต็ม แม้เลือกจ่ายขั้นต่ำ — SPEND-4) */
   totalDueThisMonth: number;
+  /** จำนวนงวดผ่อนของบัตรในรอบนี้ = row.breakdown.installments.length (Addendum A) */
+  installmentCount: number;
+  /** จำนวนงวดที่ชำระแล้ว = breakdown.installments ที่ paid === true (Addendum A) */
+  installmentPaidCount: number;
 }
 
 /**
@@ -541,9 +545,18 @@ export function buildCardMonthDueMap(
         dueMonth: month,
         installmentDueThisMonth: row.breakdown.installmentTotal,
         revolvingDueThisMonth: Math.max(0, row.breakdown.revolving.totalDue),
-        totalDueThisMonth: row.actual
+        totalDueThisMonth: row.actual,
+        installmentCount: row.breakdown.installments.length,
+        installmentPaidCount: row.breakdown.installments.filter(line => line.paid).length
       }
-      : { dueMonth: month, installmentDueThisMonth: 0, revolvingDueThisMonth: 0, totalDueThisMonth: 0 };
+      : {
+        dueMonth: month,
+        installmentDueThisMonth: 0,
+        revolvingDueThisMonth: 0,
+        totalDueThisMonth: 0,
+        installmentCount: 0,
+        installmentPaidCount: 0
+      };
   });
   return map;
 }
