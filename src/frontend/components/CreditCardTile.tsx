@@ -189,7 +189,8 @@ export default function CreditCardTile({
   const bankLine = [card.bankName, card.last4 ? `····${card.last4}` : ''].filter(Boolean).join(' · ') || 'ไม่ระบุธนาคาร';
   const amountText = formatCurrency(totalDue);
 
-  const FACE = 'flex min-h-[13rem] min-w-0 flex-col gap-space-2 rounded-md p-space-4 [backface-visibility:hidden] [grid-area:face] md:p-space-5';
+  // อัตราส่วนอยู่ที่หน้าบัตร (ไม่ใช่ rotor) เพื่อให้เป็นความสูงขั้นต่ำ — ชื่อบัตรยาว/chip หลายตัวดันให้สูงขึ้นได้ ไม่ล้นขอบล่าง
+  const FACE = 'flex aspect-[1.6/1] min-h-[13rem] min-w-0 flex-col gap-space-2 rounded-md p-space-4 [backface-visibility:hidden] [grid-area:face] md:p-space-5';
   const faceStyle = { background, color: textColor };
 
   const handleBackKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -207,7 +208,7 @@ export default function CreditCardTile({
       data-side={side}
     >
       <div
-        className={`grid aspect-[1.6/1] w-full [grid-template-areas:'face'] [transform-style:preserve-3d] transition-transform duration-slow ease-graphite motion-reduce:transition-none ${isBack ? '[transform:rotateY(180deg)]' : ''}`}
+        className={`grid w-full [grid-template-areas:'face'] [transform-style:preserve-3d] transition-transform duration-slow ease-graphite motion-reduce:transition-none ${isBack ? '[transform:rotateY(180deg)]' : ''}`}
         data-testid="cc-tile-rotor"
       >
         {/* FRONT */}
