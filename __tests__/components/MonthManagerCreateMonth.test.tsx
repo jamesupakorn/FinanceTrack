@@ -1,5 +1,5 @@
 /**
- * MonthManager — create-new-month flow + 15-month prune warning (.pipeline/spec.md §3.3, §4, §6)
+ * MonthManager — create-new-month flow + 15-month prune warning
  */
 
 import { render, screen, waitFor } from '@testing-library/react';
@@ -55,7 +55,12 @@ async function openAddForm(user: ReturnType<typeof userEvent.setup>) {
 
 async function addCustomMonth(user: ReturnType<typeof userEvent.setup>, month: string) {
   await openAddForm(user);
-  await user.type(screen.getByLabelText('กรอกเดือนใหม่ (YYYY-MM)'), month);
+  // MonthManager moves focus to the dialog's close button 40ms after it opens; on a slow runner that
+  // fires mid-typing and the remaining keystrokes land on the button. Wait for it, then type.
+  await waitFor(() => expect(screen.getByLabelText('ปิดหน้าต่าง')).toHaveFocus());
+  const input = screen.getByLabelText('กรอกเดือนใหม่ (YYYY-MM)');
+  await user.type(input, month);
+  await waitFor(() => expect(input).toHaveValue(month));
   await user.click(screen.getByLabelText('เพิ่มเดือนที่กรอกเอง'));
 }
 

@@ -2,7 +2,7 @@ import { buildInstallmentRowKey, INSTALLMENT_KEY_RE } from './creditCardUtils';
 
 const MONTH_KEY_PATTERN = /^\d{4}-\d{2}$/;
 
-export interface OverdueInstallment {
+export interface TickableInstallment {
   no: number;
   dueMonth: string;
   payment: number;
@@ -13,13 +13,14 @@ export interface SequentialPaidResult {
   failedNos: number[];
 }
 
-export function findOverdueInstallments(
+/** Rows already due (current month and earlier) that the user may confirm as paid when creating a plan; future rows excluded. */
+export function findTickableInstallments(
   schedule: ReadonlyArray<{ no: number; dueMonth: string; payment: number }>,
   currentMonthKey: string
-): OverdueInstallment[] {
+): TickableInstallment[] {
   if (!MONTH_KEY_PATTERN.test(currentMonthKey)) return [];
   return schedule
-    .filter(row => MONTH_KEY_PATTERN.test(row.dueMonth) && row.dueMonth < currentMonthKey)
+    .filter(row => MONTH_KEY_PATTERN.test(row.dueMonth) && row.dueMonth <= currentMonthKey)
     .map(({ no, dueMonth, payment }) => ({ no, dueMonth, payment }))
     .sort((a, b) => a.no - b.no);
 }

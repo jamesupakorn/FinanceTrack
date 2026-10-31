@@ -19,7 +19,7 @@ import {
   incomeAPI, expenseAPI, savingsAPI, salaryAPI, dailyExpenseAPI, taxAPI, creditCardAPI, userSettingsAPI
 } from '../src/shared/utils/frontend/apiUtils';
 import { getMonthlySummaryModel, DEFAULT_BUDGET_THRESHOLDS } from '../src/shared/utils/frontend/monthlySummary';
-import { buildMonthEvents, collectUpcomingPayments } from '../src/shared/utils/frontend/expenseEvents';
+import { buildMonthEvents, collectPaidCardPayments, collectUpcomingPayments } from '../src/shared/utils/frontend/expenseEvents';
 import { formatMonthLabelTH } from '../src/shared/utils/frontend/monthUtils';
 import { getCurrentMonthKey, addMonths, PLAN_STATUS } from '../src/shared/utils/creditCardUtils';
 import calStyles from '../src/frontend/styles/ExpenseCalendar.module.css';
@@ -271,6 +271,10 @@ export default function DashboardPage() {
     () => buildMonthEvents({ monthKey: selectedMonth as string, monthsMap, cards, plans }),
     [selectedMonth, monthsMap, cards, plans]
   );
+  const paidCardEvents = useMemo(
+    () => collectPaidCardPayments(calendarData.eventsByDay, selectedMonth as string),
+    [calendarData, selectedMonth]
+  );
   const upcoming: UpcomingData = useMemo(() => collectUpcomingPayments({ monthsMap, cards, plans, horizonDays: 7 }), [monthsMap, cards, plans]);
 
   const hasAnyDocumentThisMonth = model.totalIncome > 0 || model.generalExpense > 0 || model.creditCard > 0 || model.savings > 0 || model.taxAccumulated > 0;
@@ -338,7 +342,7 @@ export default function DashboardPage() {
     if (!event.card || !selectedMonth) return;
     setBusy(event.key, true);
     try {
-      await creditCardAPI.setRevolvingAction(event.card.id, selectedMonth, 'full');
+      await creditCardAPI.setRevolvingAction(event.card.id, event.cycleMonth ?? selectedMonth, 'full');
       showToast('บันทึกการชำระแล้ว');
       await refreshData();
     } catch (error) {
@@ -352,7 +356,7 @@ export default function DashboardPage() {
     if (!event.card || !selectedMonth) return;
     setBusy(event.key, true);
     try {
-      await creditCardAPI.setRevolvingAction(event.card.id, selectedMonth, null);
+      await creditCardAPI.setRevolvingAction(event.card.id, event.cycleMonth ?? selectedMonth, null);
       showToast('ยกเลิกการชำระแล้ว');
       await refreshData();
     } catch (error) {
@@ -364,10 +368,12 @@ export default function DashboardPage() {
 
   const handleRevolvingMinimumClick = useCallback(async (event: CalendarEvent) => {
     if (!event.card || !selectedMonth) return;
+    // รอบบิลของ event (วันครบกำหนดข้ามเดือน / รายการเดือนถัดไปใน upcoming) — ไม่ใช่ selectedMonth เสมอไป (RR-1)
+    const cycleMonth = event.cycleMonth ?? selectedMonth;
     setBusy(event.key, true);
     try {
-      const response = await creditCardAPI.getRevolving({ cardId: event.card.id, month: selectedMonth });
-      const cycle = (response?.cycles || []).find((item: { month?: string }) => item.month === selectedMonth);
+      const response = await creditCardAPI.getRevolving({ cardId: event.card.id, month: cycleMonth });
+      const cycle = (response?.cycles || []).find((item: { month?: string }) => item.month === cycleMonth);
       setConfirmState({ event, minPaymentDue: cycle?.minPaymentDue ?? 0, preview: cycle?.minimumPreview || { remaining: 0, interest: 0, closingBalance: 0 } });
     } catch (error) {
       showToast((error as { message?: string } | null)?.message || 'โหลดข้อมูลยอดหมุนเวียนไม่สำเร็จ', 'error');
@@ -384,7 +390,7 @@ export default function DashboardPage() {
     }
     setConfirmBusy(true);
     try {
-      await creditCardAPI.setRevolvingAction(event.card.id, selectedMonth, 'minimum');
+      await creditCardAPI.setRevolvingAction(event.card.id, event.cycleMonth ?? selectedMonth, 'minimum');
       showToast('บันทึกการชำระขั้นต่ำแล้ว');
       setConfirmState(null);
       await refreshData();
@@ -442,7 +448,7 @@ export default function DashboardPage() {
             <div className={CARD}><div className="mb-space-4 h-[31px] w-2/3 animate-pulse rounded-sm bg-surface-2" /><div className="mx-auto mb-space-4 h-[220px] w-[220px] animate-pulse rounded-full bg-surface-2" /><div className="flex flex-col gap-space-1">{Array.from({ length: 5 }).map((_, index) => <div key={index} className="h-[79px] animate-pulse rounded-sm bg-surface-2 md:h-11" />)}</div></div>
           </div>
           <div className={`${GRID_ITEM} flex flex-col gap-space-4 lg:col-span-7 lg:gap-space-5`}>
-            <div className={CARD}><div className="h-11 animate-pulse rounded-sm bg-surface-2 lg:hidden" /><div className="hidden lg:block"><div className="mb-space-4 h-[31px] w-1/3 animate-pulse rounded-sm bg-surface-2" /><div className={calStyles.calendarWrap}><div className={calStyles.calendarNav}><div className="h-11 w-11 animate-pulse rounded-md bg-surface-2" /><div className="h-6 w-[140px] animate-pulse rounded-sm bg-surface-2" /><div className="h-11 w-11 animate-pulse rounded-md bg-surface-2" /></div><div className={calStyles.calendarLayout}><div><div className="grid grid-cols-7 gap-[2px]">{Array.from({ length: 42 }).map((_, index) => <div key={index} className="h-[47px] animate-pulse rounded-sm bg-surface-2" />)}</div><div className={calStyles.calendarLegend}><div className="h-4 w-[220px] animate-pulse rounded-sm bg-surface-2" /></div><div className={calStyles.calendarFooter}><div className="h-5 w-[160px] animate-pulse rounded-sm bg-surface-2" /><div className="mt-1 h-4 w-[200px] animate-pulse rounded-sm bg-surface-2" /></div></div><div className="h-[111px] animate-pulse rounded-md bg-surface-2" /></div></div></div></div>
+            <div className={CARD}><div className="h-11 animate-pulse rounded-sm bg-surface-2 lg:hidden" /><div className="hidden lg:block"><div className="mb-space-4 h-[31px] w-1/3 animate-pulse rounded-sm bg-surface-2" /><div className={calStyles.calendarWrap}><div className={calStyles.calendarNav}><div className="h-11 w-11 animate-pulse rounded-md bg-surface-2" /><div className="h-6 w-[140px] animate-pulse rounded-sm bg-surface-2" /><div className="h-11 w-11 animate-pulse rounded-md bg-surface-2" /></div><div className={calStyles.calendarLayout}><div><div className="grid grid-cols-7 gap-[2px]">{Array.from({ length: 42 }).map((_, index) => <div key={index} className="h-[48px] animate-pulse rounded-sm bg-surface-2" />)}</div><div className={calStyles.calendarLegend}><div className="h-[22px] w-full animate-pulse rounded-sm bg-surface-2" /><div className="h-[22px] w-2/3 animate-pulse rounded-sm bg-surface-2" /></div><div className={calStyles.calendarFooter}><div className="h-6 w-[160px] animate-pulse rounded-sm bg-surface-2" /><div className="mt-1 h-5 w-[200px] animate-pulse rounded-sm bg-surface-2" /></div></div></div></div></div></div>
             <div className={CARD}><div className="h-11 animate-pulse rounded-sm bg-surface-2" /><div className="h-[121px] animate-pulse rounded-md bg-surface-2 md:h-[66px]" /></div>
           </div>
           <div className={`${GRID_ITEM} lg:col-span-12`}><div className={CARD}><div className="mb-space-4 h-[31px] w-1/3 animate-pulse rounded-sm bg-surface-2" /><div className="grid grid-cols-2 gap-space-3 md:grid-cols-3 lg:grid-cols-6">{QUICK_ACTIONS.map(item => <div key={item.id} className={`animate-pulse rounded-md bg-surface-2 lg:h-[115px] ${item.id === 'open-workspace' ? 'h-[115px] md:h-[90px]' : 'h-[90px]'}`} />)}</div></div></div>
@@ -458,7 +464,7 @@ export default function DashboardPage() {
       {partialErrorFields.length > 0 && !noticeDismissed && <div role="alert" className="mb-space-4 flex flex-wrap items-center justify-between gap-space-3 rounded-md border border-neg bg-neg/10 p-space-4 text-primary"><span>{`โหลดข้อมูลบางส่วนไม่สำเร็จ: ${partialErrorFields.join(', ')}`}</span><div className="flex items-center gap-space-2"><button type="button" className={`min-h-11 rounded-full border border-neg bg-transparent px-space-4 font-semibold text-primary ${FOCUS_RING}`} onClick={() => void refreshData()}>ลองอีกครั้ง</button><button type="button" className={`min-h-11 min-w-11 rounded-full border-none bg-transparent text-secondary ${FOCUS_RING}`} onClick={() => setNoticeDismissed(true)} aria-label="ปิดข้อความแจ้งเตือน"><Icons.X size={16} /></button></div></div>}
       <div className="flex flex-col gap-space-4 lg:grid lg:grid-cols-12 lg:items-start lg:gap-space-5">
         <div className={`${GRID_ITEM} flex flex-col gap-space-4 lg:col-span-5 lg:gap-space-5`}>
-          <UpcomingPayments upcoming={upcoming} filter={ringFilter} onClearFilter={() => setRingFilter(null)} onViewCalendar={scrollToCalendar} pendingKeys={pendingKeys} onToggleInstallment={handleToggleInstallment} onRevolvingFull={handleRevolvingFull} onRevolvingMinimum={handleRevolvingMinimumClick} highlightedKey={highlightedKey} />
+          <UpcomingPayments upcoming={upcoming} filter={ringFilter} onClearFilter={() => setRingFilter(null)} onViewCalendar={scrollToCalendar} pendingKeys={pendingKeys} onToggleInstallment={handleToggleInstallment} onRevolvingFull={handleRevolvingFull} onRevolvingMinimum={handleRevolvingMinimumClick} highlightedKey={highlightedKey} paidEvents={paidCardEvents} onRevolvingCancel={handleRevolvingCancel} />
           {isCarryoverOnly ? <div className="rounded-md border border-dashed border-border-default bg-surface-1 p-space-4 text-center text-secondary">ยังไม่มีข้อมูลรายรับ/รายจ่ายอื่นสำหรับเดือนนี้</div> : <CashFlowRing model={model} selected={ringFilter} onSelect={setRingFilter} monthLabel={monthLabel} />}
         </div>
         <div className={`${GRID_ITEM} flex flex-col gap-space-4 lg:col-span-7 lg:gap-space-5`}>

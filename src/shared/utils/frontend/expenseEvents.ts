@@ -15,9 +15,11 @@ import {
   isRevolvingRowKey,
   isInstallmentRowKey,
   parseRevolvingRowKey,
-  parseInstallmentRowKey
+  parseInstallmentRowKey,
+  isValidPurchaseDate
 } from '../creditCardUtils';
 import { parseToNumber } from './numberUtils';
+import type { CardTotalExpenseRow } from '../backend/creditCardSync';
 
 /** ค่าที่ diffDaysFromBase/buildMonthEvents ต้องการจาก card เท่านั้น (id, name, statementDay, dueDay) */
 interface ExpenseEventCard {
@@ -41,6 +43,11 @@ interface ExpenseEventRow {
   account?: string;
   paid?: boolean | string;
   dueDay?: unknown;
+  breakdown?: CardTotalExpenseRow['breakdown'];
+  /** วันครบกำหนดจริงของแถวบัตร (ccr_/cci_) จาก GET monthly_expense — derive อ่านอย่างเดียว */
+  resolvedDueDate?: unknown;
+  /** รอบบิลที่แถวบัตร ccr_ แสดง ('YYYY-MM') จาก GET monthly_expense — derive อ่านอย่างเดียว */
+  cycleMonth?: unknown;
   [key: string]: unknown;
 }
 
@@ -58,7 +65,14 @@ interface ExpenseEvent {
   card: ExpenseEventCard | null;
   plan?: ExpenseEventPlan | null;
   installmentNo?: number | null;
+  /** เดือนต้นทางของแถว (รอบบิล) — action ของยอดหมุนเวียนต้องเขียนลงเดือนนี้ ไม่ใช่เดือนที่กำลังดู */
+  cycleMonth?: string;
 }
+
+// 'YYYY-MM-DD' → [, 'YYYY-MM', 'DD']
+const RESOLVED_DUE_DATE_RE = /^(\d{4}-(?:0[1-9]|1[0-2]))-(0[1-9]|[12]\d|3[01])$/;
+// 'YYYY-MM' — รอบบิลของแถวบัตร (row.cycleMonth จาก GET monthly_expense)
+const CYCLE_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 // ฟิลด์ระบบที่ไม่ใช่แถวค่าใช้จ่าย — ชุดเดียวกับ EXPENSE_IGNORED_FIELDS ของ line_due_notify.js:51-58
 export const IGNORED_ROW_KEYS: Set<string> = new Set([
@@ -68,7 +82,7 @@ export const IGNORED_ROW_KEYS: Set<string> = new Set([
 /**
  * สร้างแผนที่เหตุการณ์ของเดือนหนึ่งจาก monthly_expense + cards (วันสรุปยอด)
  * ย้ายมาจาก ExpenseCalendarModal.js:263-355 แบบคำต่อคำ — cardById/planById ถูกสร้างขึ้นภายในแทนที่จะรับ
- * เป็นพารามิเตอร์ เพราะที่นี่รับ cards/plans ดิบตาม §Interfaces ของ spec-dashboard.md
+ * เป็นพารามิเตอร์ เพราะที่นี่รับ cards/plans ดิบ
  * @returns {{eventsByDay: Map<number, object[]>, unscheduledEvents: object[], windowState: string, monthTotals: {total:number, paid:number, remaining:number}}}
  */
 export function buildMonthEvents({
@@ -105,8 +119,38 @@ export function buildMonthEvents({
     windowState = monthKey < monthKeys[0] ? 'pruned' : 'future';
   }
 
-  const rows = (monthsMap[monthKey] && typeof monthsMap[monthKey] === 'object') ? monthsMap[monthKey] : {};
-  Object.entries(rows).forEach(([key, row]) => {
+  // แหล่งแถว: เดือน M เท่านั้น (spec-credit-card-due-month-placement DP-7) — server วางแถวบัตรไว้ในเดือนที่ครบกำหนดแล้ว
+  // จึงไม่ดึงเดือน M-1 อีก (ไม่มีทางซ้ำ: แต่ละ (บัตร, รอบบิล) อยู่ใน monthsMap เดือนเดียว)
+  // ทูเพิล [key, row, cycleMonth] — cycleMonth = รอบบิลที่แถวบัตรแสดง (row.cycleMonth) ไม่เช่นนั้น = M
+  const sourceMonths = [monthKey];
+  const eventRows: [string, ExpenseEventRow, string][] = sourceMonths.flatMap(viewMonth => {
+    const rows = (monthsMap[viewMonth] && typeof monthsMap[viewMonth] === 'object') ? monthsMap[viewMonth] : {};
+    return Object.entries(rows as Record<string, ExpenseEventRow>)
+      .map(([key, row]): [string, ExpenseEventRow, string] => [
+        key,
+        row,
+        (isRevolvingRowKey(key) || isInstallmentRowKey(key)) && typeof row?.cycleMonth === 'string' && CYCLE_MONTH_RE.test(row.cycleMonth)
+          ? row.cycleMonth
+          : viewMonth
+      ]);
+  });
+  const expandedRows: [string, ExpenseEventRow, string][] = eventRows.flatMap(([key, row, cycleMonth]) => {
+    if (!isRevolvingRowKey(key) || !row?.breakdown) return [[key, row, cycleMonth]];
+    const breakdown = row.breakdown;
+    // บรรทัด cci_ ที่แตกออกมาสืบ resolvedDueDate + cycleMonth จากแถว ccr_ แม่ — ห้ามคำนวณใหม่
+    const installments: [string, ExpenseEventRow, string][] = breakdown.installments.map(line => [
+      line.key,
+      { name: line.name, actual: line.amount, paid: line.paid, dueDay: row.dueDay, account: row.account, resolvedDueDate: row.resolvedDueDate },
+      cycleMonth
+    ]);
+    const revolving: [string, ExpenseEventRow, string][] = (breakdown.revolving.totalDue !== 0 || breakdown.revolving.newSpend !== 0) ? [[key, {
+      ...row,
+      actual: Math.max(0, breakdown.revolving.totalDue),
+      paid: breakdown.revolving.paymentAction !== null || breakdown.revolving.totalDue <= 0
+    }, cycleMonth]] : [];
+    return [...installments, ...revolving];
+  });
+  expandedRows.forEach(([key, row, cycleMonth]) => {
     if (IGNORED_ROW_KEYS.has(key)) return;
     if (!row || typeof row !== 'object') return;
 
@@ -127,8 +171,16 @@ export function buildMonthEvents({
       }
     }
 
+    // วันครบกำหนดจริงของแถวบัตร (derive ฝั่งเซิร์ฟเวอร์ ไม่เก็บ) — วางเฉพาะเมื่อตกในเดือน M ที่กำลังดู
+    // isValidPurchaseDate ตัดวันที่เป็นไปไม่ได้ (เช่น 2026-02-30) — validator เดียวกับ ExpenseTable.rowDueDate
+    const resolvedMatch = source !== 'plain' && isValidPurchaseDate(row.resolvedDueDate)
+      ? RESOLVED_DUE_DATE_RE.exec(row.resolvedDueDate)
+      : null;
+    // resolvedDueDate นอกเดือน M (payload เก่า/ปนกัน) → ข้าม ไม่มีทางซ้ำ · ไม่มี resolvedDueDate → ใช้ dueDay ของ M
+    if (resolvedMatch && resolvedMatch[1] !== monthKey) return;
+
     const event: ExpenseEvent = {
-      id: `${monthKey}_${key}`,
+      id: `${cycleMonth}_${key}`,
       type: 'expense',
       source,
       key,
@@ -139,11 +191,12 @@ export function buildMonthEvents({
       dueDay: row.dueDay,
       card,
       plan,
-      installmentNo
+      installmentNo,
+      cycleMonth
     };
 
     // dueDay แก้ไม่ได้/แก้ไม่ออก → ไม่ทิ้ง แต่ไปอยู่ถาดด้านล่างแทน (BR-003, edge case 22)
-    const day = resolveDueDayForMonth(row.dueDay, daysInMonth);
+    const day = resolvedMatch ? Number(resolvedMatch[2]) : resolveDueDayForMonth(row.dueDay, daysInMonth);
     if (!day) {
       unscheduledEvents.push(event);
       return;
@@ -160,7 +213,8 @@ export function buildMonthEvents({
         type: 'statement',
         source: 'statement',
         key: `st_${card.id}`,
-        card
+        card,
+        cycleMonth: monthKey
       });
     }
   });
@@ -192,6 +246,26 @@ function diffDaysFromBase(isoDate: string, today: Date): number {
   const base = new Date(today);
   base.setHours(0, 0, 0, 0);
   return Math.round((target.getTime() - base.getTime()) / 86400000);
+}
+
+/**
+ * รายการบัตรเครดิต (ผ่อนชำระ/ยอดหมุนเวียน) ที่ "ชำระแล้ว" ของเดือนที่ให้มา — อ่านจาก eventsByDay ที่
+ * buildMonthEvents() สร้างไว้แล้ว (ไม่ derive ซ้ำ) เรียงตามวันที่ครบกำหนด · ไม่รวมรายจ่ายทั่วไป/วันสรุปยอด
+ * ไม่แตะสัญญาของ collectUpcomingPayments (ซึ่งข้ามรายการที่ชำระแล้วตาม AC-DB-15)
+ */
+export function collectPaidCardPayments(
+  eventsByDay: Map<number, ExpenseEvent[]>,
+  monthKey: string
+): (ExpenseEvent & { isoDate: string })[] {
+  const result: (ExpenseEvent & { isoDate: string })[] = [];
+  Array.from(eventsByDay.keys()).sort((a, b) => a - b).forEach(day => {
+    (eventsByDay.get(day) ?? []).forEach(event => {
+      if (event.type !== 'expense' || !event.paid) return;
+      if (event.source !== 'revolving' && event.source !== 'installment') return;
+      result.push({ ...event, isoDate: `${monthKey}-${String(day).padStart(2, '0')}` });
+    });
+  });
+  return result;
 }
 
 /**

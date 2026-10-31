@@ -12,7 +12,7 @@
  * ปุ่มที่ปลอดภัย ("กลับไปบันทึก") เป็นปุ่มเด่น (.primaryButton) ได้ focus แรกและอยู่ท้ายสุด — สลับกับ
  * RevolvingConfirmDialog ที่ปุ่มยืนยัน (ทำลาย/สร้างหนี้) เป็นปุ่มเด่น เพราะที่นี่ปุ่มทำลาย
  * ("ออกโดยไม่บันทึก") แค่ทิ้งค่าที่พิมพ์ซ้ำได้ ไม่ใช่การกระทำที่ย้อนกลับไม่ได้แบบสร้างหนี้จริง
- * (spec-monthly-workspace.md §Amendment A5 §The unsaved-changes dialog)
+ * (Amendment A5, unsaved-changes dialog)
  */
 
 import { useEffect, useRef } from 'react';

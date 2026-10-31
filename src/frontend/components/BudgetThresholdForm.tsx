@@ -325,7 +325,7 @@ export default function BudgetThresholdForm({
   // ระหว่างโหลด: เดิมฟอร์มโชว์ DEFAULT_BUDGET_THRESHOLDS ทั้ง AllocationBar, ช่องกรอกทั้ง 3 และเงินออม
   // ที่ derive มา — ผู้ใช้เห็น "ค่าเริ่มต้น" ราวกับเป็นค่าที่ตัวเองบันทึกไว้จนกว่า request จะกลับ
   // (อาการตรงตามที่ TD-M05 เขียนไว้ว่า "renders stale state while fetching") แทนที่ด้วยโครงร่างที่ไม่มี
-  // ตัวเลขใด ๆ จนกว่าจะเป็นตัวเลขของผู้ใช้จริง — UX_SPEC-td-m05-pattern-c.md §2.2
+  // ตัวเลขใด ๆ จนกว่าจะเป็นตัวเลขของผู้ใช้จริง
   // loadFailed กับ loading เป็นจริงพร้อมกันไม่ได้ (settings.js:47-56 ตั้ง loadFailed ใน catch แล้วปิด
   // loading ใน finally) แบนเนอร์ error จึงไม่ถูกบังโดย early return นี้
   if (loading) {

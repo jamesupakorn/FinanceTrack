@@ -1,21 +1,33 @@
-import { applyPaidSequentially, findOverdueInstallments } from '../../../src/shared/utils/installmentBackdate';
+import { applyPaidSequentially, findTickableInstallments } from '../../../src/shared/utils/installmentBackdate';
 import { buildInstallmentRowKey } from '../../../src/shared/utils/creditCardUtils';
 
-describe('findOverdueInstallments', () => {
-  it('returns only earlier valid months in installment order', () => {
-    expect(findOverdueInstallments([
+describe('findTickableInstallments', () => {
+  it('returns current and earlier valid months in installment order, excluding future', () => {
+    expect(findTickableInstallments([
       { no: 4, dueMonth: '2026-09', payment: 400 },
       { no: 1, dueMonth: '2026-06', payment: 100 },
       { no: 5, dueMonth: '2026-10', payment: 500 },
-      { no: 6, dueMonth: 'invalid', payment: 600 }
+      { no: 6, dueMonth: '2026-11', payment: 600 },
+      { no: 7, dueMonth: 'invalid', payment: 700 }
     ], '2026-10')).toEqual([
       { no: 1, dueMonth: '2026-06', payment: 100 },
-      { no: 4, dueMonth: '2026-09', payment: 400 }
+      { no: 4, dueMonth: '2026-09', payment: 400 },
+      { no: 5, dueMonth: '2026-10', payment: 500 }
     ]);
   });
 
+  it('handles the year boundary', () => {
+    const schedule = [
+      { no: 1, dueMonth: '2026-12', payment: 1 },
+      { no: 2, dueMonth: '2027-01', payment: 1 },
+      { no: 3, dueMonth: '2027-02', payment: 1 }
+    ];
+    expect(findTickableInstallments(schedule, '2027-01').map(r => r.no)).toEqual([1, 2]);
+    expect(findTickableInstallments(schedule, '2026-12').map(r => r.no)).toEqual([1]);
+  });
+
   it('returns an empty list for an invalid current month key', () => {
-    expect(findOverdueInstallments([{ no: 1, dueMonth: '2026-01', payment: 1 }], 'not-a-month')).toEqual([]);
+    expect(findTickableInstallments([{ no: 1, dueMonth: '2026-01', payment: 1 }], 'not-a-month')).toEqual([]);
   });
 });
 

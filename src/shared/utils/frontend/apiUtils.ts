@@ -182,8 +182,16 @@ async function jsonFetch(url: string, options: RequestInit = {}): Promise<any> {
 		if (response.status === 400 && Array.isArray(data?.issues) && data.issues.length > 0) {
 			throw new ApiValidationError(data.issues);
 		}
-		const message = data?.error || 'ไม่สามารถเชื่อมต่อ API ได้';
-		throw new Error(message);
+		const message = (typeof data?.message === 'string' && data.message) || data?.error || 'ไม่สามารถเชื่อมต่อ API ได้';
+		const error = new Error(message) as Error & { status?: number; code?: string };
+		// แนบ HTTP status + error code (เช่น 409 'cycle_mismatch') ให้ caller แยกกรณีได้ — additive เท่านั้น
+		error.status = response.status;
+		if (typeof data?.error === 'string' && data.error) error.code = data.error;
+		// แนบ field errors ของ API (เช่น spend-items 400 {error, errors:{amount:'...'}}) — additive เท่านั้น
+		if (data?.errors && typeof data.errors === 'object' && !Array.isArray(data.errors)) {
+			(error as Error & { errors?: Record<string, unknown> }).errors = data.errors;
+		}
+		throw error;
 	}
 	return data;
 }
@@ -217,11 +225,21 @@ export const expenseAPI = {
 		month: string,
 		key: string,
 		paid: boolean,
-		row?: { name: string; actual: string; account: string; dueDay: unknown }
+		row?: { name: string; actual: string; account: string; dueDay: unknown },
+		paymentAction?: 'full' | 'minimum',
+		// DP-4: staleness guard for `ccr_` rows only (billing cycle the row showed). Never money data.
+		cycleMonth?: string
 	): Promise<any> => jsonFetch(API_URLS.EXPENSE, {
 		method: 'PATCH',
 		headers: { 'Content-Type': 'application/json' },
-		body: withUserPayload({ month, key, paid, ...(row ? { row } : {}) })
+		body: withUserPayload({
+			month,
+			key,
+			paid,
+			...(row ? { row } : {}),
+			...(paymentAction ? { paymentAction } : {}),
+			...(cycleMonth ? { cycleMonth } : {})
+		})
 	})
 };
 
@@ -418,7 +436,22 @@ export const userSettingsAPI = {
 const CREDIT_CARDS_URL: string = '/api/credit-cards';
 const CREDIT_CARD_PLANS_URL: string = '/api/credit-cards/plans';
 const CREDIT_CARD_REVOLVING_URL: string = '/api/credit-cards/revolving';
+const CREDIT_CARD_SPEND_ITEMS_URL = '/api/credit-cards/spend-items';
 const JSON_HEADERS: Record<string, string> = { 'Content-Type': 'application/json' };
+
+export interface CreditSpendItem {
+	id: string;
+	cardId: string;
+	month: string;
+	purchaseDate?: string;
+	name: string;
+	amount: number;
+}
+
+export interface CreditSpendItemsResponse {
+	items: CreditSpendItem[];
+	totals: Record<string, number>;
+}
 
 /**
  * บัตรเครดิต & แผนผ่อนชำระ
@@ -462,12 +495,23 @@ export const creditCardAPI = {
 		headers: JSON_HEADERS,
 		body: withUserPayload({ planId, mode: 'delete' })
 	}),
-	// ยอดใช้จ่ายหมุนเวียน — ตัวเลขทั้งหมด server คำนวณให้ client ส่งได้แค่ newSpend / paymentAction / cashbackAmount
+	// ยอดใช้จ่ายหมุนเวียนคำนวณจากรายการไม่ผ่อนฝั่ง server เท่านั้น
 	getRevolving: async (filters: Record<string, string | number | undefined | null> = {}): Promise<any> => jsonFetch(buildUrl(CREDIT_CARD_REVOLVING_URL, filters)),
-	saveRevolvingSpend: async (cardId: string, month: string, newSpend: number | string): Promise<any> => jsonFetch(CREDIT_CARD_REVOLVING_URL, {
+	listSpendItems: async (month: string, cardId?: string): Promise<CreditSpendItemsResponse> => jsonFetch(buildUrl(CREDIT_CARD_SPEND_ITEMS_URL, { month, cardId })),
+	createSpendItem: async (item: { cardId: string; purchaseDate: string; name: string; amount: string | number }): Promise<{ item: CreditSpendItem }> => jsonFetch(CREDIT_CARD_SPEND_ITEMS_URL, {
 		method: 'POST',
 		headers: JSON_HEADERS,
-		body: withUserPayload({ cycle: { cardId, month, newSpend } })
+		body: withUserPayload({ item })
+	}),
+	updateSpendItem: async (item: { id: string; name?: string; amount?: string | number; purchaseDate?: string }): Promise<{ item: CreditSpendItem }> => jsonFetch(CREDIT_CARD_SPEND_ITEMS_URL, {
+		method: 'PUT',
+		headers: JSON_HEADERS,
+		body: withUserPayload({ item })
+	}),
+	deleteSpendItem: async (id: string): Promise<{ deletedId: string; cycle: unknown }> => jsonFetch(CREDIT_CARD_SPEND_ITEMS_URL, {
+		method: 'DELETE',
+		headers: JSON_HEADERS,
+		body: withUserPayload({ id })
 	}),
 	setRevolvingAction: async (cardId: string, month: string, paymentAction: string | null): Promise<any> => jsonFetch(CREDIT_CARD_REVOLVING_URL, {
 		method: 'PATCH',

@@ -1,6 +1,6 @@
 /** @jest-environment node */
 // Focused regression test for the `assertUserScope(userId)` call added to
-// `getUserLastMonthlySummarySent` in .pipeline/spec-line-monthly-summary-hardening.md, matching
+// `getUserLastMonthlySummarySent` for the monthly-summary hardening, matching
 // the existing convention of its siblings (`getUserMonthlySummaryEnabled`,
 // `updateUserMonthlySummaryEnabled`, `markUserMonthlySummarySent`) in the same file.
 // The guard throws before any DB access, so no Mongo/JSON fixture setup is needed here.
@@ -17,5 +17,13 @@ describe('getUserLastMonthlySummarySent — userId scope guard', () => {
 
   it('throws on undefined userId', async () => {
     await expect(getUserLastMonthlySummarySent(undefined as never)).rejects.toThrow('userStore: userId is required');
+  });
+});
+
+describe('generateUserId', () => {
+  it('returns u001 for an empty list and increments past the highest numeric suffix', () => {
+    const { generateUserId } = require('../../lib/userStore');
+    expect(generateUserId([])).toBe('u001');
+    expect(generateUserId([{ id: 'u001' }, { id: 'u009' }, { id: 'custom' }])).toBe('u010');
   });
 });

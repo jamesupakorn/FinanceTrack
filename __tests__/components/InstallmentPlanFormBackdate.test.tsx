@@ -32,14 +32,15 @@ describe('InstallmentPlanForm backdated confirmation', () => {
     fillBackdatedPlan();
 
     expect(onSubmit).not.toHaveBeenCalled();
-    expect(screen.getByRole('dialog', { name: 'มีงวดที่ผ่านมาแล้ว 4 งวด' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'มีงวดที่ถึงกำหนดแล้ว 5 งวด' })).toBeInTheDocument();
     expect(screen.getByText('งวด 1/10 · มิ.ย. 2569 · 4,500.00 บาท')).toBeInTheDocument();
     expect(screen.getByText('งวด 4/10 · ก.ย. 2569 · 4,500.00 บาท')).toBeInTheDocument();
-    expect(screen.queryByText(/งวด 5\/10/)).not.toBeInTheDocument();
+    expect(screen.getByText('งวด 5/10 · ต.ค. 2569 · 4,500.00 บาท')).toBeInTheDocument();
+    expect(screen.queryByText(/งวด 6\/10/)).not.toBeInTheDocument();
 
-    const dialog = screen.getByRole('dialog', { name: 'มีงวดที่ผ่านมาแล้ว 4 งวด' });
+    const dialog = screen.getByRole('dialog', { name: 'มีงวดที่ถึงกำหนดแล้ว 5 งวด' });
     const pills = within(dialog).getAllByRole('button', { name: 'ยังไม่ชำระ — แตะเพื่อยืนยัน' });
-    expect(pills).toHaveLength(4);
+    expect(pills).toHaveLength(5);
     expect(pills[0]).toHaveAttribute('aria-pressed', 'false');
     expect(pills[0].className).toBe(`${PAID_PILL_CLASS} `);
     fireEvent.click(pills[1]);
@@ -72,16 +73,16 @@ describe('InstallmentPlanForm backdated confirmation', () => {
     render(<InstallmentPlanForm open cards={[CARD]} onClose={jest.fn()} onSubmit={onSubmit} />);
     fillBackdatedPlan();
 
-    const dialog = screen.getByRole('dialog', { name: 'มีงวดที่ผ่านมาแล้ว 4 งวด' });
+    const dialog = screen.getByRole('dialog', { name: 'มีงวดที่ถึงกำหนดแล้ว 5 งวด' });
     fireEvent.click(within(dialog).getAllByRole('button', { name: 'ยังไม่ชำระ — แตะเพื่อยืนยัน' })[0]);
     fireEvent.click(within(dialog).getByRole('button', { name: 'ยกเลิก' }));
-    expect(screen.queryByRole('dialog', { name: 'มีงวดที่ผ่านมาแล้ว 4 งวด' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'มีงวดที่ถึงกำหนดแล้ว 5 งวด' })).not.toBeInTheDocument();
     expect((document.querySelector<HTMLInputElement>('[name="itemName"]'))?.value).toBe('โทรศัพท์');
     expect(onSubmit).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'บันทึกแผนผ่อน' }));
-    const reopened = screen.getByRole('dialog', { name: 'มีงวดที่ผ่านมาแล้ว 4 งวด' });
-    expect(within(reopened).getAllByRole('button', { name: 'ยังไม่ชำระ — แตะเพื่อยืนยัน' })).toHaveLength(4);
+    const reopened = screen.getByRole('dialog', { name: 'มีงวดที่ถึงกำหนดแล้ว 5 งวด' });
+    expect(within(reopened).getAllByRole('button', { name: 'ยังไม่ชำระ — แตะเพื่อยืนยัน' })).toHaveLength(5);
     expect(within(reopened).queryByRole('button', { name: '✓ ชำระแล้ว' })).not.toBeInTheDocument();
   });
 
@@ -90,7 +91,7 @@ describe('InstallmentPlanForm backdated confirmation', () => {
     const onSubmit = jest.fn();
     render(<InstallmentPlanForm open cards={[CARD]} onClose={onClose} onSubmit={onSubmit} />);
     fillBackdatedPlan();
-    const dialog = screen.getByRole('dialog', { name: 'มีงวดที่ผ่านมาแล้ว 4 งวด' });
+    const dialog = screen.getByRole('dialog', { name: 'มีงวดที่ถึงกำหนดแล้ว 5 งวด' });
 
     if (method === 'escape') {
       fireEvent.keyDown(document, { key: 'Escape' });
@@ -100,11 +101,46 @@ describe('InstallmentPlanForm backdated confirmation', () => {
       fireEvent.mouseDown(dialog.parentElement!, { target: dialog.parentElement });
     }
 
-    expect(screen.queryByRole('dialog', { name: 'มีงวดที่ผ่านมาแล้ว 4 งวด' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'มีงวดที่ถึงกำหนดแล้ว 5 งวด' })).not.toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'เพิ่มแผนผ่อนชำระ' })).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'บันทึกแผนผ่อน' }));
+  });
+
+  function fillCurrentMonthPlan() {
+    fireEvent.change(document.querySelector<HTMLInputElement>('[name="itemName"]')!, { target: { value: 'โทรศัพท์' } });
+    fireEvent.change(document.querySelector<HTMLInputElement>('[name="totalPrice"]')!, { target: { value: '45000' } });
+    fireEvent.change(document.querySelector<HTMLSelectElement>('[name="startMonth"]')!, { target: { value: '2026-10' } });
+    fireEvent.change(document.querySelector<HTMLInputElement>('[name="annualRate"]')!, { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึกแผนผ่อน' }));
+  }
+
+  it('lists the current-month installment only and submits it when ticked', () => {
+    const onSubmit = jest.fn();
+    render(<InstallmentPlanForm open cards={[CARD]} onClose={jest.fn()} onSubmit={onSubmit} />);
+    fillCurrentMonthPlan();
+
+    const dialog = screen.getByRole('dialog', { name: 'มีงวดที่ถึงกำหนดแล้ว 1 งวด' });
+    const pills = within(dialog).getAllByRole('button', { name: 'ยังไม่ชำระ — แตะเพื่อยืนยัน' });
+    expect(pills).toHaveLength(1);
+    fireEvent.click(pills[0]);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'ยืนยัน' }));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][1]).toEqual({ paidInstallmentNos: [1] });
+  });
+
+  it('confirms the current-month dialog with nothing ticked', () => {
+    const onSubmit = jest.fn();
+    render(<InstallmentPlanForm open cards={[CARD]} onClose={jest.fn()} onSubmit={onSubmit} />);
+    fillCurrentMonthPlan();
+
+    const dialog = screen.getByRole('dialog', { name: 'มีงวดที่ถึงกำหนดแล้ว 1 งวด' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'ยืนยัน' }));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][1]).toEqual({ paidInstallmentNos: [] });
   });
 
   it('keeps the no-overdue path unchanged and calls onSubmit with one argument', () => {
@@ -118,7 +154,7 @@ describe('InstallmentPlanForm backdated confirmation', () => {
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit.mock.calls[0]).toHaveLength(1);
-    expect(screen.queryByRole('dialog', { name: /มีงวดที่ผ่านมาแล้ว/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /มีงวดที่ถึงกำหนดแล้ว/ })).not.toBeInTheDocument();
   });
 
   it('locks all dialog actions and ignores cancel keys while submitting', () => {
@@ -127,7 +163,7 @@ describe('InstallmentPlanForm backdated confirmation', () => {
     fillBackdatedPlan();
     rerender(<InstallmentPlanForm {...props} submitting />);
 
-    const dialog = screen.getByRole('dialog', { name: 'มีงวดที่ผ่านมาแล้ว 4 งวด' });
+    const dialog = screen.getByRole('dialog', { name: 'มีงวดที่ถึงกำหนดแล้ว 5 งวด' });
     expect(within(dialog).getByRole('button', { name: 'กำลังบันทึก...' })).toBeDisabled();
     expect(within(dialog).getByRole('button', { name: 'ยกเลิก' })).toBeDisabled();
     expect(within(dialog).getByRole('button', { name: 'ปิด' })).toBeDisabled();
@@ -135,7 +171,7 @@ describe('InstallmentPlanForm backdated confirmation', () => {
 
     fireEvent.keyDown(document, { key: 'Escape' });
     fireEvent.mouseDown(dialog.parentElement!, { target: dialog.parentElement });
-    expect(screen.getByRole('dialog', { name: 'มีงวดที่ผ่านมาแล้ว 4 งวด' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'มีงวดที่ถึงกำหนดแล้ว 5 งวด' })).toBeInTheDocument();
     expect(props.onClose).not.toHaveBeenCalled();
     expect(props.onSubmit).not.toHaveBeenCalled();
   });

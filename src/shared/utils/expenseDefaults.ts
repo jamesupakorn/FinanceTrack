@@ -3,16 +3,15 @@
  */
 import { END_OF_MONTH_DUE_DAY } from './dateUtils';
 
+// แถว credit_<bank> แบบกรอกเองถูกเลิกใช้ (spec-credit-card-spend §6) — ยอดบัตรมาจากแถว ccr_ ยอดรวมบัตร
+// map นี้ใช้เติมบัญชีให้แถวค่าเริ่มต้นตอน seed เท่านั้น จึงไม่มีคีย์ credit_* อีก
+// (แถว credit_* เก่าที่เก็บไว้ยัง render ได้ตามเดิม — fallback บัญชีของมันอยู่ใน commonUtils/numberUtils)
 export const LEGACY_ITEM_ACCOUNT_MAP: Record<string, string> = {
-  credit_kungsri: 'กรุงศรี',
   house: 'ttb',
-  credit_ttb: 'ttb',
-  credit_kbank: 'กสิกร',
   shopee: 'กสิกร',
   netflix: 'กสิกร',
   youtube: 'กสิกร',
-  youtube_membership: 'กสิกร',
-  credit_uob: 'UOB'
+  youtube_membership: 'กสิกร'
 };
 
 export const DEFAULT_EXPENSE_ITEMS: { key: string; label: string }[] = [

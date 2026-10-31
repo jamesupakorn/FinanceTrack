@@ -1,6 +1,5 @@
 /** @jest-environment node */
-// Integration test against a real (ephemeral, in-process) MongoDB instance — see
-// .pipeline/spec-test-suite-foundation.md §3 for why mongodb-memory-server was chosen over mocks.
+// Integration test against a real (ephemeral, in-process) MongoDB instance — Rationale: mongodb-memory-server was chosen over mocks.
 //
 // `lib/dataMode.config.js` / `lib/userStore.js` read process.env.DATA_MODE / process.env.MONGODB_URI
 // once, at first-import time (module-level `const`). This test therefore sets those env vars first,

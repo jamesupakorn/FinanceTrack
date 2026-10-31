@@ -7,11 +7,8 @@
 
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
-import {
-  loadUsers,
-  generateUserId,
-  resolveDataPath,
-} from '../src/backend/data/userUtils.js';
+import { loadUsersJson, generateUserId } from '../lib/userStore';
+import { resolveDataPath } from '../src/backend/data/userUtils.js';
 
 const args = process.argv.slice(2);
 
@@ -35,9 +32,9 @@ if (!displayName) {
   process.exit(1);
 }
 
-const users = loadUsers();
+const users = loadUsersJson();
 const normalizedName = displayName.toLowerCase();
-const nameExists = users.some(user => (user.displayName as string).toLowerCase() === normalizedName);
+const nameExists = users.some(user => (user.displayName).toLowerCase() === normalizedName);
 if (nameExists) {
   console.error(`Error: Display name "${displayName}" already exists.`);
   process.exit(1);

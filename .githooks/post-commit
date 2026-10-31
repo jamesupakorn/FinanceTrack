@@ -55,13 +55,17 @@ case "$old_version" in
   *-*)
     stable_base_version=${old_version%%-*}
     if [ -n "$stable_base_version" ]; then
-      npm version "$stable_base_version" --no-git-tag-version >/dev/null
+      npm version "$stable_base_version" --no-git-tag-version --ignore-scripts >/dev/null
       old_version=$(node -p "require('./package.json').version")
     fi
     ;;
 esac
 
-npm version patch --no-git-tag-version >/dev/null
+# --ignore-scripts: package.json's `postversion` runs `git push && git push --tags`
+# (meant for `npm run release:*`). Without this flag every post-commit bump fired a push,
+# which fails on a branch with no upstream and, under `set -e`, aborted the hook before
+# the bump was folded into the commit — leaving package*.json modified and unstaged.
+npm version patch --no-git-tag-version --ignore-scripts >/dev/null
 new_version=$(node -p "require('./package.json').version")
 
 if [ "$old_version" != "$new_version" ]; then

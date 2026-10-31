@@ -1,5 +1,5 @@
 /** @jest-environment node */
-// sharedMonthWindow far-future guard (.pipeline/spec.md §3.4, §6 i-viii + predicate parity).
+// sharedMonthWindow far-future guard (spec §3.4, §6 i-viii + predicate parity).
 // Fully mocked: an in-memory fake Mongo collection (no real/ephemeral Mongo) and an in-memory
 // JSON bucket store standing in for userUtils.getUserData/setUserData (no disk writes).
 

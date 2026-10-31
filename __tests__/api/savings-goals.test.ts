@@ -1,6 +1,5 @@
 /** @jest-environment node */
-// Integration test against a real (ephemeral, in-process) MongoDB instance — see
-// .pipeline/spec-td-c01-api-coverage-5.md for why mongodb-memory-server (not mocks) was chosen: this
+// Integration test against a real (ephemeral, in-process) MongoDB instance — Rationale: mongodb-memory-server (not mocks) was chosen: this
 // route's `{ _id: goalId, userId }`-filter isolation shape, `computeCurrentAmounts`'s cross-collection
 // (`savingsGoals` + `savings`) read-side aggregation, and the PUT dual-shape `bulkWrite` dispatch are
 // all real multi-document Mongo behaviors that a mocked collection could never prove.

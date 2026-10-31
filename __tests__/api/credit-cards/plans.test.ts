@@ -2,7 +2,7 @@
 // Integration test against a real (ephemeral, in-process) MongoDB instance for every test case
 // except the isolated getUserCreditData()/updateUserCreditData()-throw -> 500 case at the bottom
 // of this file (see that describe block for why jest.mock('.../creditCardStore') is the one
-// sanctioned exception here, per .pipeline/spec-td-c01-api-coverage-10.md and CODING_STANDARD.md's
+// sanctioned exception here, per CODING_STANDARD.md's
 // "mock a collaborator, not the DB" carve-out — same pattern slice #9 already used for
 // credit-cards/index.js).
 //
@@ -16,8 +16,7 @@
 // throwaway jest test (deleted after verification) importing creditCardUtils.js directly and
 // console.logging its output for each of the four inputs this file hard-codes assertions for
 // (manual/flat/effective create cases, plus the PUT-financial-edit-recompute case) — every value
-// below matches that live output digit-for-digit. See .pipeline/changes-td-c01-api-coverage-10.md
-// for the verification transcript.
+// below matches that live output digit-for-digit.
 import { MongoMemoryServer } from '../../helpers/mongoReplSet';
 import { createMocks } from 'node-mocks-http';
 import { MAX_ACTIVE_PLANS_PER_USER } from '../../../src/shared/utils/creditCardUtils';

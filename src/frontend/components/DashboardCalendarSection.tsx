@@ -1,7 +1,7 @@
 /**
  * คอมโพเนนต์: DashboardCalendarSection
  * ห่อ ExpenseCalendar แบบฝังตรงในหน้าภาพรวม (ไม่ผ่าน ExpenseCalendarModal — ตามมติ ADR-012)
- * เป็น thin wrapper ตาม §Files ของ spec-dashboard.md: ไม่ fetch เอง ไม่มี state ของ handler เอง —
+ * เป็น thin wrapper: ไม่ fetch เอง ไม่มี state ของ handler เอง —
  * รับ calendarData (จาก buildMonthEvents ตัวเดียวกับปฏิทิน/รายการครบกำหนด) และ handler ทั้งสี่ตัวมาจาก
  * pages/index.js ซึ่งเป็นเจ้าของ "แหล่งข้อมูลเดียว" ของทั้งหน้า (tiles/ring/budget/ปฏิทิน/รายการครบกำหนด
  * ต้องขยับพร้อมกันหลังทำรายการสำเร็จ — "One refresh function, one source" ตาม spec §4) เดียวกับที่
@@ -11,9 +11,9 @@
  *
  * เดือนของปฏิทินผูกกับ selectedMonth ของทั้งหน้า — ลูกศรในปฏิทินกับลูกศรบน header จึงขยับพร้อมกันเสมอ
  *
- * Graphite redesign (Dashboard pass) — Tailwind wrapper chrome เท่านั้น ExpenseCalendar.js/
- * ExpenseCalendar.module.css เองยังคง CSS Modules ตามเดิม (นอก scope, เป็น pass แยกในอนาคต — §8 shared
- * overlay carve-out) ส่วน collapse toggle เป็นของใหม่ตาม UX_SPEC §6.3/§6.4: พับเป็นค่าเริ่มต้นที่ base
+ * Graphite redesign (Dashboard pass) — Tailwind wrapper chrome ส่วน ExpenseCalendar.tsx ย้ายมาใช้
+ * Graphite tokens แล้ว (expense-calendar-graphite) โดย ExpenseCalendar.module.css เหลือเฉพาะเลย์เอาต์กริด/
+ * container query ที่ Tailwind ทำไม่ได้ ส่วน collapse toggle เป็นของใหม่ตาม UX_SPEC §6.3/§6.4: พับเป็นค่าเริ่มต้นที่ base
  * tier เท่านั้น (7×6 grid ไม่พอใช้ที่ 375px — การ์ด "ครบกำหนด" ที่ขึ้นก่อนแล้วให้ข้อมูลเดียวกันอยู่แล้ว)
  * และขยายเสมอที่ lg โดยไม่มี toggle chrome เลย (สลับด้วย CSS responsive class ล้วน ๆ ผ่าน
  * CollapsibleHeading's toggleHiddenAtLg — ไม่มี JS matchMedia ใหม่, N7) เป็น state client-only ล้วน ๆ
@@ -130,6 +130,7 @@ export default function DashboardCalendarSection({
               onRevolvingFull={onRevolvingFull}
               onRevolvingMinimum={onRevolvingMinimum}
               onRevolvingCancel={onRevolvingCancel}
+              showDayDetail={false}
             />
           </div>
         )}

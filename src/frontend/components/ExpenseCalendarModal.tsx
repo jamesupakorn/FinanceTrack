@@ -28,9 +28,24 @@ import {
   getCurrentMonthKey,
   PLAN_STATUS
 } from '../../shared/utils/creditCardUtils';
-import cardStyles from '../styles/CreditCard.module.css';
-import formStyles from '../styles/CreditCardForm.module.css';
-import calStyles from '../styles/ExpenseCalendar.module.css';
+// Graphite class constants (ไฟล์นี้ถือของตัวเอง — รูปแบบเดียวกับ DashboardCalendarSection.tsx)
+const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
+const MOTION = 'transition-colors duration-fast ease-graphite motion-reduce:transition-none';
+// z-[110]/z-[120] อยู่เหนือ bottom nav (z-[100]) ตาม overlay ladder ของแอป (D-8) และไม่มี backdrop-filter
+const BACKDROP_BASE = 'fixed inset-0 flex items-stretch justify-center overflow-y-auto bg-[rgba(10,10,11,0.72)] p-0 md:items-center md:p-space-5';
+const CAL_BACKDROP = `${BACKDROP_BASE} z-[110]`;
+const CONFIRM_BACKDROP = `${BACKDROP_BASE} z-[120]`;
+const PANEL_BASE = 'flex w-full flex-col border border-border-default shadow-elev-3 h-dvh max-h-dvh rounded-none md:h-auto md:max-h-[calc(100dvh-40px)] md:rounded-lg';
+const CAL_PANEL = `${PANEL_BASE} bg-surface-1 md:max-w-[960px]`;
+const CONFIRM_PANEL = `${PANEL_BASE} bg-surface-3 md:max-w-[440px]`;
+const MODAL_HEADER = 'flex shrink-0 items-center justify-between gap-space-3 border-b border-border-default px-space-5 py-space-4';
+const MODAL_TITLE = 'm-0 inline-flex items-center gap-space-2 text-lg font-semibold text-primary';
+const MODAL_BODY = 'flex min-h-0 flex-1 flex-col gap-space-4 overflow-y-auto p-space-3 pb-[calc(var(--space-3)+env(safe-area-inset-bottom,0px))] md:p-space-4';
+const MODAL_FOOTER = 'flex shrink-0 flex-col-reverse gap-space-2 border-t border-border-default px-space-5 py-space-4 pb-[calc(var(--space-4)+env(safe-area-inset-bottom,0px))] md:flex-row md:items-center md:justify-end md:pb-space-4';
+const CLOSE_BUTTON = `inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border border-border-interactive bg-transparent p-0 text-secondary hover:bg-surface-2 ${MOTION} ${FOCUS_RING}`;
+const BTN_SECONDARY = `min-h-11 w-full rounded-full border border-border-interactive bg-transparent px-space-5 font-semibold text-primary hover:bg-surface-2 md:w-auto ${MOTION} ${FOCUS_RING}`;
+const BTN_DANGER = `min-h-11 w-full rounded-full border border-neg bg-neg/10 px-space-5 font-semibold text-neg disabled:cursor-not-allowed disabled:opacity-60 md:w-auto ${MOTION} ${FOCUS_RING}`;
+const RETRY_BUTTON = `min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-semibold text-primary ${MOTION} ${FOCUS_RING}`;
 
 type CalendarData = ReturnType<typeof buildMonthEvents>;
 type CalendarEvent = CalendarData['unscheduledEvents'][number];
@@ -68,7 +83,7 @@ interface ExpenseCalendarModalProps {
 
 /**
  * กล่องยืนยัน "จ่ายขั้นต่ำ" — เพราะมันสร้างหนี้ยกไปเดือนหน้าพร้อมดอกเบี้ย (BR-CC-015)
- * รูปแบบเดียวกับ ConfirmDialog ใน pages/credit-cards.js ใช้คลาสร่วมจาก CreditCardForm.module.css
+ * รูปแบบเดียวกับ ConfirmDialog ใน pages/credit-cards.js ใช้ Tailwind + Graphite tokens (ไม่พึ่งโมดูล CSS ร่วม)
  * ตัวเลขทุกตัวมาจาก minimumPreview ที่ server คำนวณให้ — ไม่คำนวณเงินเอง (ADR-011)
  */
 export function RevolvingConfirmDialog({
@@ -113,28 +128,28 @@ export function RevolvingConfirmDialog({
     + `จะถูกยกไปเดือนหน้าพร้อมดอกเบี้ย ${formatCurrency(preview?.interest ?? 0)} ฿ (รวม ${formatCurrency(preview?.closingBalance ?? 0)} ฿)`;
 
   return (
-    <div className={formStyles.backdrop} role="presentation" onMouseDown={(event) => {
+    <div className={CONFIRM_BACKDROP} role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onCancel?.();
     }}>
       <div
         ref={dialogRef}
-        className={`${formStyles.modal} ${formStyles.modalNarrow}`}
+        className={CONFIRM_PANEL}
         role="alertdialog"
         aria-modal="true"
         aria-label={`จ่ายขั้นต่ำ · ${cardName || ''}`}
       >
-        <div className={formStyles.modalHeader}>
-          <h2 className={formStyles.modalTitle}>{`จ่ายขั้นต่ำ · ${cardName || ''}`}</h2>
-          <button type="button" className={formStyles.closeButton} onClick={onCancel} aria-label="ปิด">
+        <div className={MODAL_HEADER}>
+          <h2 className={MODAL_TITLE}>{`จ่ายขั้นต่ำ · ${cardName || ''}`}</h2>
+          <button type="button" className={CLOSE_BUTTON} onClick={onCancel} aria-label="ปิด">
             <Icons.X size={18} />
           </button>
         </div>
-        <div className={formStyles.modalBody}>
-          <p className={formStyles.confirmText}>{message}</p>
+        <div className={MODAL_BODY}>
+          <p className="m-0 text-sm text-secondary">{message}</p>
         </div>
-        <div className={formStyles.modalFooter}>
-          <button ref={cancelButtonRef} type="button" className={formStyles.secondaryButton} onClick={onCancel}>ยกเลิก</button>
-          <button type="button" className={formStyles.dangerButton} onClick={onConfirm} disabled={busy}>
+        <div className={MODAL_FOOTER}>
+          <button ref={cancelButtonRef} type="button" className={BTN_SECONDARY} onClick={onCancel}>ยกเลิก</button>
+          <button type="button" className={BTN_DANGER} onClick={onConfirm} disabled={busy}>
             {busy ? 'กำลังดำเนินการ...' : 'ยืนยันจ่ายขั้นต่ำ'}
           </button>
         </div>
@@ -266,28 +281,18 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     setPendingKeys(keys => (busy ? [...keys, key] : keys.filter(item => item !== key)));
   };
 
-  const updateRow = (key: string, patch: Record<string, unknown>) => {
-    setMonthsMap(prev => {
-      const monthRows = prev[monthKey] as Record<string, Record<string, unknown>> | undefined;
-      if (!monthRows || !monthRows[key]) return prev;
-      return {
-        ...prev,
-        [monthKey]: { ...monthRows, [key]: { ...monthRows[key], ...patch } }
-      };
-    });
-  };
-
   const handleToggleInstallment = async (event: CalendarEvent): Promise<void> => {
     if (!event.plan || event.installmentNo == null || pendingKeys.includes(event.key)) return;
     const nextPaid = !event.paid;
     setBusy(event.key, true);
-    updateRow(event.key, { paid: nextPaid });
     try {
       const response = await creditCardAPI.setInstallmentPaid(event.plan.id, event.installmentNo, nextPaid);
       changedRef.current = true;
-      showToast(response?.plan?.status === PLAN_STATUS.COMPLETED ? 'ผ่อนครบแล้ว 🎉' : 'อัปเดตสถานะงวดแล้ว');
+      notifyWriteSaved(
+        response?.plan?.status === PLAN_STATUS.COMPLETED ? 'ผ่อนครบแล้ว 🎉' : 'อัปเดตสถานะงวดแล้ว',
+        await refreshExpenseRows()
+      );
     } catch (error) {
-      updateRow(event.key, { paid: event.paid });
       const message = (error as { message?: string } | null)?.message;
       showToast(message || 'อัปเดตสถานะงวดไม่สำเร็จ', 'error');
     } finally {
@@ -295,24 +300,32 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     }
   };
 
-  /** ใช้ผลลัพธ์ cycle จาก server เขียนทับแถว ccr_ ในเดือนนี้ — ตรงตามกติกาการ inject ของ Feature 1 */
-  const applyCycleToRow = (event: CalendarEvent, cycle: { amountDue?: unknown; paymentAction?: string | null } | undefined) => {
-    if (!cycle) return;
-    updateRow(event.key, {
-      actual: cycle.amountDue,
-      paid: cycle.paymentAction !== null,
-      name: `ยอดใช้จ่ายบัตร ${event.card?.name || ''}${cycle.paymentAction === 'minimum' ? ' (ขั้นต่ำ)' : ''}`
-    });
-  };
+  // เขียนสำเร็จแล้วค่อยโหลดแถวใหม่ — การโหลดใหม่ล้มเหลวต้องไม่ถูกรายงานว่า "บันทึกไม่สำเร็จ" (F6)
+  // คืน false แทนการ throw เพื่อให้ผู้เรียกแยกผลของการเขียนออกจากผลของการโหลดใหม่ได้
+  async function refreshExpenseRows(): Promise<boolean> {
+    try {
+      const response = await expenseAPI.getAll();
+      setMonthsMap(response?.months && typeof response.months === 'object' ? response.months : {});
+      return true;
+    } catch (refreshError) {
+      console.error('Error refreshing calendar rows after a successful write:', refreshError);
+      return false;
+    }
+  }
+
+  // การเขียนสำเร็จเสมอได้ข้อความสำเร็จ · โหลดใหม่ไม่ได้ = แจ้งแบบ info (ไม่ใช่ error) ให้เปิดปฏิทินใหม่
+  function notifyWriteSaved(successMessage: string, refreshed: boolean): void {
+    if (refreshed) showToast(successMessage);
+    else showToast(`${successMessage} (โหลดข้อมูลล่าสุดไม่สำเร็จ — ปิดแล้วเปิดปฏิทินใหม่เพื่ออัปเดต)`, 'info');
+  }
 
   const handleRevolvingFull = async (event: CalendarEvent): Promise<void> => {
     if (!event.card) return;
     setBusy(event.key, true);
     try {
-      const response = await creditCardAPI.setRevolvingAction(event.card.id, monthKey, 'full');
-      applyCycleToRow(event, (response?.cycles || []).find((cycle: { month: string }) => cycle.month === monthKey));
+      await creditCardAPI.setRevolvingAction(event.card.id, event.cycleMonth ?? monthKey, 'full');
       changedRef.current = true;
-      showToast('บันทึกการชำระแล้ว');
+      notifyWriteSaved('บันทึกการชำระแล้ว', await refreshExpenseRows());
     } catch (error) {
       const message = (error as { message?: string } | null)?.message;
       showToast(message || 'บันทึกไม่สำเร็จ', 'error');
@@ -325,10 +338,9 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     if (!event.card) return;
     setBusy(event.key, true);
     try {
-      const response = await creditCardAPI.setRevolvingAction(event.card.id, monthKey, null);
-      applyCycleToRow(event, (response?.cycles || []).find((cycle: { month: string }) => cycle.month === monthKey));
+      await creditCardAPI.setRevolvingAction(event.card.id, event.cycleMonth ?? monthKey, null);
       changedRef.current = true;
-      showToast('ยกเลิกการชำระแล้ว');
+      notifyWriteSaved('ยกเลิกการชำระแล้ว', await refreshExpenseRows());
     } catch (error) {
       const message = (error as { message?: string } | null)?.message;
       showToast(message || 'ยกเลิกการชำระไม่สำเร็จ', 'error');
@@ -340,10 +352,12 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
   // จ่ายขั้นต่ำต้องยืนยันก่อน เพราะมันสร้างหนี้ยกไปเดือนหน้าพร้อมดอกเบี้ย (เหมือน credit-cards.js)
   const handleRevolvingMinimumClick = async (event: CalendarEvent): Promise<void> => {
     if (!event.card) return;
+    // รอบบิลของ event (อาจเป็นเดือนก่อนหน้าเมื่อวันครบกำหนดข้ามเดือน) — ไม่ใช่เดือนที่กำลังดู
+    const cycleMonth = event.cycleMonth ?? monthKey;
     setBusy(event.key, true);
     try {
-      const response = await creditCardAPI.getRevolving({ cardId: event.card.id, month: monthKey });
-      const cycle = (response?.cycles || []).find((item: { month: string }) => item.month === monthKey);
+      const response = await creditCardAPI.getRevolving({ cardId: event.card.id, month: cycleMonth });
+      const cycle = (response?.cycles || []).find((item: { month: string }) => item.month === cycleMonth);
       setConfirmState({
         event,
         minPaymentDue: cycle?.minPaymentDue ?? 0,
@@ -362,10 +376,9 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
     if (!event?.card) { setConfirmState(null); return; }
     setConfirmBusy(true);
     try {
-      const response = await creditCardAPI.setRevolvingAction(event.card.id, monthKey, 'minimum');
-      applyCycleToRow(event, (response?.cycles || []).find((cycle: { month: string }) => cycle.month === monthKey));
+      await creditCardAPI.setRevolvingAction(event.card.id, event.cycleMonth ?? monthKey, 'minimum');
       changedRef.current = true;
-      showToast('บันทึกการชำระขั้นต่ำแล้ว');
+      notifyWriteSaved('บันทึกการชำระขั้นต่ำแล้ว', await refreshExpenseRows());
       setConfirmState(null);
     } catch (error) {
       const message = (error as { message?: string } | null)?.message;
@@ -380,43 +393,43 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
   if (!open) return null;
 
   return (
-    <div className={formStyles.backdrop} role="presentation" onMouseDown={(event) => {
+    <div className={CAL_BACKDROP} role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) handleClose();
     }}>
       <div
         ref={dialogRef}
-        className={`${formStyles.modal} ${calStyles.calendarModal}`}
+        className={CAL_PANEL}
         role="dialog"
         aria-modal="true"
         aria-label="ปฏิทินค่าใช้จ่าย"
       >
-        <div className={formStyles.modalHeader}>
-          <h2 className={formStyles.modalTitle}>
+        <div className={MODAL_HEADER}>
+          <h2 className={MODAL_TITLE}>
             <Icons.Calendar size={18} /> ปฏิทินค่าใช้จ่าย
           </h2>
-          <button ref={closeButtonRef} type="button" className={formStyles.closeButton} onClick={handleClose} aria-label="ปิด">
+          <button ref={closeButtonRef} type="button" className={CLOSE_BUTTON} onClick={handleClose} aria-label="ปิด">
             <Icons.X size={18} />
           </button>
         </div>
 
-        <div className={`${formStyles.modalBody} ${calStyles.calendarModalBody}`}>
+        <div className={MODAL_BODY}>
           {loading && (
             <div role="status" aria-busy="true">
-              <span className={cardStyles.srOnly}>กำลังโหลดปฏิทิน...</span>
-              <p className={cardStyles.hint}>กำลังโหลดปฏิทิน...</p>
-              <div className={calStyles.calendarSkeletonGrid}>
+              <span className="sr-only">กำลังโหลดปฏิทิน...</span>
+              <p className="m-0 text-sm text-tertiary">กำลังโหลดปฏิทิน...</p>
+              <div className="mt-space-2 grid grid-cols-7 gap-1">
                 {Array.from({ length: 42 }).map((_, index) => (
                   // eslint-disable-next-line react/no-array-index-key
-                  <div key={index} className={cardStyles.skeleton} />
+                  <div key={index} className="h-16 animate-pulse rounded-sm bg-surface-2 motion-reduce:animate-none" />
                 ))}
               </div>
             </div>
           )}
 
           {!loading && error && (
-            <div className={cardStyles.errorState} role="alert">
+            <div className="flex flex-wrap items-center justify-between gap-space-3 rounded-md border border-neg/35 bg-neg/10 p-space-4 text-neg" role="alert">
               <span>{error}</span>
-              <button type="button" className={cardStyles.ghostButton} onClick={loadData}>ลองอีกครั้ง</button>
+              <button type="button" className={RETRY_BUTTON} onClick={loadData}>ลองอีกครั้ง</button>
             </div>
           )}
 

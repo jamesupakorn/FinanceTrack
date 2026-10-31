@@ -10,7 +10,6 @@ let store: typeof import('../../lib/auditJsonStore');
 let audited: typeof import('../../lib/auditedMutation');
 
 const root = path.resolve(__dirname, '../..');
-const tsx = path.join(root, 'node_modules', '.bin', 'tsx');
 const worker = path.join(root, '__tests__', 'helpers', 'auditJsonWorker.ts');
 
 const read = (name: string) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
@@ -54,12 +53,13 @@ const run = () => audited.withAudit(async (_q, res) => {
 
 function runWorker(iterations: number): Promise<{ ok: number; errors: string[] }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(tsx, [worker, String(iterations)], {
+    const child = spawn(process.execPath, ['--import', 'tsx', worker, String(iterations)], {
       cwd: root,
       env: { ...process.env, AUDIT_DATA_DIR: dir, DATA_MODE: 'json', SESSION_SECRET: 'test-secret', MONGODB_URI: '' }
     });
     let out = '';
     let err = '';
+    child.on('error', reject);
     child.stdout.on('data', d => { out += d; });
     child.stderr.on('data', d => { err += d; });
     child.on('close', code => {

@@ -54,6 +54,7 @@ const USER_A = 'test-user-a';
 let mongod: MongoMemoryServer;
 let cardsHandler: NextApiHandler;
 let revolvingHandler: NextApiHandler;
+let spendItemsHandler: NextApiHandler;
 let getDbPromise: typeof import('../../../lib/mongodb').getDbPromise;
 let db: Db;
 let sessionCookie: typeof import('../../../src/shared/utils/backend/sessionCookie');
@@ -66,6 +67,7 @@ beforeAll(async () => {
   jest.resetModules();
   cardsHandler = require('../../../pages/api/credit-cards/index').default;
   revolvingHandler = require('../../../pages/api/credit-cards/revolving').default;
+  spendItemsHandler = require('../../../pages/api/credit-cards/spend-items').default;
   sessionCookie = require('../../../src/shared/utils/backend/sessionCookie');
   ({ getDbPromise } = require('../../../lib/mongodb'));
   db = await getDbPromise();
@@ -236,7 +238,8 @@ describe('PATCH cashback round trips', () => {
     expect((await readDoc()).cycles[0]).toMatchObject({ paymentAction: 'full', paidAt: 'P', paidSource: 'credit_card', cashbackAmount: 1200 });
 
     // 2) next month spend absorbs the carried credit
-    res = await call(revolvingHandler, { method: 'POST', body: { cycle: { cardId: 'cc_cb', month: '2099-02', newSpend: 500 } } });
+    expect((await call(spendItemsHandler, { method: 'POST', body: { item: { cardId: 'cc_cb', purchaseDate: '2099-02-01', name: 'รายการใหม่', amount: 500 } } })).status).toBe(201);
+    res = await call(revolvingHandler, { query: { cardId: 'cc_cb', month: '2099-02' } });
     expect(res.status).toBe(200);
     expect(res.body.cycles.find((cycle: IntegrationCycle) => cycle.month === '2099-02')).toMatchObject({ carriedBalance: -200, totalDue: 300, amountDue: 300 });
 
@@ -267,11 +270,11 @@ describe('creditCardSync consumers (ExpenseTable ccr_ row, months list, LINE) se
     expect(rows).toEqual({});
   });
 
-  it('implicit month carrying a credit emits no row, and the months list skips credit months', () => {
+  it('legacy revolving-only builder emits no credit row, while the card-total month list includes credit months (R2)', () => {
     const cycles = [{ cardId: 'cc_cb', month: PREV, newSpend: 0, cashbackAmount: 400, paymentAction: null }];
     expect(buildRevolvingExpenseRows(data(cycles), MONTH)).toEqual({});
     const months = getCreditCardMonths(data(cycles));
-    expect(months).not.toContain(PREV);
-    expect(months).not.toContain(MONTH);
+    expect(months).toContain(PREV);
+    expect(months).toContain(MONTH);
   });
 });
