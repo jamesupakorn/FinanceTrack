@@ -1,49 +1,23 @@
 /*
  * ExpenseCalendar.module.css
- * ปฏิทินรวมค่าใช้จ่าย (ExpenseCalendar.js) + เชลล์โมดัล (ExpenseCalendarModal.js)
+ * เลย์เอาต์ของปฏิทินรวมค่าใช้จ่าย (ExpenseCalendar.tsx) — เฉพาะส่วนที่ต้องใช้ container query / box-shadow
+ * ซึ่ง Tailwind ในโปรเจกต์นี้ทำไม่ได้ (plugins: []) สีทุกตัวเป็น token ของ Graphite (var(--...)) เท่านั้น
  *
- * คลาสตาราง/ปฏิทินย้ายมาจาก CreditCard.module.css ทั้งก้อน (ก่อนหน้านี้เคยเป็นของ
- * ปฏิทินบัตรเครดิตเดิมที่ผูกอยู่กับ /credit-cards เพียงที่เดียว — ตอนนี้ทั้งแอปใช้ผ่านโมดัลนี้ที่เดียว)
- * ส่วน .backdrop / .modal / .modalHeader / .modalBody / .modalFooter / .closeButton /
- * .primaryButton / .secondaryButton / .dangerButton ยังคงมาจาก CreditCardForm.module.css เดิม
- * (reuse ไม่ duplicate — ดู UX_SPEC §Breakpoint & reuse checklist)
+ * chrome ของโมดัล, การ์ดเหตุการณ์, ปุ่ม, skeleton และ notice อยู่ใน Tailwind utilities ของ
+ * ExpenseCalendar.tsx / ExpenseCalendarModal.tsx แล้ว (ไม่พึ่งโมดูล CSS ร่วมของบัตรเครดิตอีกต่อไป)
  *
- * breakpoint เดียวคือ 768px เท่านั้น (AC-75) — ห้ามเพิ่ม breakpoint ที่สอง
+ * คลาส calendarWrap / calendarNav / calendarLayout / calendarLegend / calendarFooter ถูก pages/index.tsx
+ * ใช้เป็นสเกเลตันของ dashboard — ห้ามเปลี่ยนชื่อหรือลบ (AC-DB-26)
+ *
+ * breakpoint เดียวคือ 768px เท่านั้น (AC-75 / AC-27) — ห้ามเพิ่ม breakpoint ที่สอง
  */
-
-/* ---------------------------------------------------------------- modal chrome */
-
-/*
- * ".calendarModal.calendarModal" ตั้งใจซ้ำคลาส — เพิ่ม specificity ให้ชนะ .modal ของ
- * CreditCardForm.module.css เสมอ โดยไม่ต้องพึ่งลำดับการรวมไฟล์ CSS ของ bundler (ไม่ใช้ !important)
- */
-.calendarModal.calendarModal {
-  max-width: 960px;
-}
-
-.calendarModalBody.calendarModalBody {
-  padding: 16px;
-}
-
-.calendarSkeletonGrid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-  margin-top: 8px;
-}
-
-.calendarSkeletonGrid > div {
-  height: 64px;
-  border-radius: 10px;
-}
 
 /* ------------------------------------------------------------------- calendar */
 
 .calendarWrap {
-  background: rgba(9, 12, 32, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 22px;
-  padding: 18px;
+  /* ไม่มีกรอบของตัวเอง — host (dashboard section / โมดัล) เป็นกรอบอยู่แล้ว */
+  background: transparent;
+  padding: 0;
   container-type: inline-size;
 }
 
@@ -63,7 +37,7 @@
 
 /*
  * แก้ไข bug-log-dashboard.md (AC-DB-23/26 root cause ร่วม + related finding เรื่องปฏิทินล้นขอบเดสก์ท็อป):
- * เดิม "1fr 320px" ถูกออกแบบมาสำหรับเชลล์ modal กว้างคงที่ (.calendarModal { max-width: 960px }) เท่านั้น
+ * เดิม "1fr 320px" ถูกออกแบบมาสำหรับเชลล์ modal กว้างคงที่ (max-width 960px) เท่านั้น
  * ตอนนี้ ExpenseCalendar ถูกฝังตรงใน DashboardCalendarSection ด้วย (ไม่ผ่าน modal — ADR-012) ซึ่งความกว้าง
  * ที่ได้รับมาจาก .dashboardGrid เป็นแบบยืดหยุ่น (1fr) — คอลัมน์ "1fr" เดิมมี min-width อัตโนมัติ = min-content
  * ของ .calendarGrid ข้างใน (7 คอลัมน์ ไม่มี min-width:0 เหมือนกัน ดูด้านล่าง) ทำให้คอลัมน์นี้ปฏิเสธที่จะแคบกว่า
@@ -95,7 +69,7 @@
 .calendarWeekday {
   text-align: center;
   font-size: 0.75rem;
-  color: var(--text-light);
+  color: var(--text-tertiary);
   padding: 6px 0;
 }
 
@@ -103,9 +77,9 @@
   min-height: 64px;
   min-width: 0; /* grid item ของ repeat(7, 1fr) — .calendarChip ข้างในเป็น white-space:nowrap ถ้าไม่ตัดตรงนี้
                    min-content ของมันจะดันคอลัมน์กว้างเกิน 1fr ที่ได้รับ (เหมือน AC-DB-23 ของ tileGrid) */
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
   color: var(--text-primary);
   font-family: inherit;
   padding: 6px;
@@ -124,12 +98,12 @@
 }
 
 .calendarCellToday {
-  box-shadow: inset 0 0 0 2px rgba(93, 91, 255, 0.7);
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .calendarCellSelected {
-  background: rgba(93, 91, 255, 0.16);
-  border-color: rgba(93, 91, 255, 0.5);
+  background: var(--accent-muted);
+  border-color: var(--accent);
 }
 
 .calendarDayNum {
@@ -138,7 +112,7 @@
 }
 
 .calendarDayOverdue {
-  color: #eb5757;
+  color: var(--neg);
 }
 
 .calendarDots {
@@ -147,20 +121,24 @@
   gap: 3px;
 }
 
-.dotDue {
-  width: 8px;
-  height: 8px;
+/* เส้นขอบกลาง ๆ 1px (--text-tertiary) ให้จุดยังเห็นรูปทรงแม้สีบัตรกลืนกับพื้น (D-7) */
+.dotDue,
+.dotStatement {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: var(--dot-color, #5d5bff);
+  box-sizing: border-box;
+  box-shadow: 0 0 0 1px var(--text-tertiary);
+}
+
+.dotDue {
+  background: var(--dot-color, var(--accent));
 }
 
 .dotStatement {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  border: 2px solid var(--dot-color, #5d5bff);
+  border: 2px solid var(--dot-color, var(--accent));
   background: transparent;
-  box-sizing: border-box;
+  box-shadow: 0 0 0 1px var(--text-tertiary), inset 0 0 0 1px var(--text-tertiary);
 }
 
 .calendarChip {
@@ -213,14 +191,14 @@
 
 .dayDetailTitle span {
   font-weight: 400;
-  color: var(--text-light);
+  color: var(--text-tertiary);
   font-size: 0.82rem;
 }
 
 .calendarFooter {
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-default);
   font-size: 0.85rem;
   color: var(--text-secondary);
 }
@@ -231,17 +209,7 @@
   color: var(--text-primary);
 }
 
-/* ------------------------------------------------------------ event cards (new) */
-
-/* แถวที่ชำระแล้วยังแสดงอยู่เสมอ แต่ลดความเด่นลง — แยกด้วย ✓ ไม่ใช่แค่สี (ADR-006) */
-.calendarEventPaid {
-  opacity: 0.55;
-}
-
-.calendarEventPaid .dotDue,
-.calendarEventPaid .dotStatement {
-  opacity: 0.45;
-}
+/* ------------------------------------------------------------ event cards */
 
 .revolvingEventActions {
   display: flex;
@@ -260,9 +228,9 @@
   gap: 10px;
   padding: 12px 14px;
   margin-bottom: 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
 }
 
 .outOfWindowNotice p {
@@ -299,6 +267,10 @@
   min-height: 44px;
 }
 
+.unscheduledToggle:hover {
+  color: var(--text-primary);
+}
+
 /* The embedded dashboard column can be narrow even when the viewport is not mobile. */
 @container (max-width: 700px) {
   .calendarLayout {
@@ -327,22 +299,24 @@
   }
 
   /*
-   * bug-log-dashboard.md — Pass 2, AC-DB-23 regression: ลด padding มือถือลงจาก 12px → 8px คู่กับการตัด
+   * bug-log-dashboard.md — Pass 2, AC-DB-23 regression: ลด padding มือถือลงจาก 12px → 8px → 4px (CG-AC-14 fix) คู่กับการตัด
    * padding ซ้าย-ขวาของ .calendarSection ออกใน Dashboard.module.css เพื่อคืนงบความกว้างให้กริด 7 คอลัมน์
    * ของ .calendarGrid (ปุ่มวันที่ต้อง ≥44px) เปลี่ยนที่นี่กระทบทั้งสองบริบทที่ใช้ .calendarWrap ร่วมกัน
-   * (ฝังใน DashboardCalendarSection และใน ExpenseCalendarModal) แต่ฝั่ง modal มีงบกว้างเหลือเฟือ
-   * อยู่แล้ว (backdrop padding: 0 ที่มือถือ) จึงแค่ได้พื้นที่เพิ่มขึ้นอีกเล็กน้อย ไม่มีผลเสีย
+   * (ฝังใน DashboardCalendarSection และใน ExpenseCalendarModal) ฝั่ง modal ก็แคบเช่นกัน
+   * (วัดได้ 43.71px ที่ 375px ก่อนแก้ เพราะมี body padding 12px) จึงได้พื้นที่เพิ่มเหมือนกัน ไม่มีผลเสีย
    */
   .calendarWrap {
-    padding: 8px;
+    padding: var(--space-1);
   }
 
   /*
-   * ที่ 375px เซลล์วันบางเดือนเหลือ ~42.7px (ต่ำกว่า touch target 44px) เพราะช่องว่างรวม 6 จุดของกริด
-   * กินพื้นที่มากเกินไปสำหรับคอลัมน์ 7 ช่อง จึงลด gap เฉพาะมือถือเพื่อเพิ่มความกว้างปุ่มโดยไม่แตะ breakpoint ใหม่
+   * ที่ 375px พร้อม scrollbar คลาสสิก 17px เซลล์วันเคยเหลือ 42.57px (dashboard) / 43.71px (modal) ต่ำกว่า
+   * touch target 44px จึงลด wrap padding เหลือ 4px และ gap เหลือ 1px (เส้นขอบเซลล์ 1px ยังคงเห็นช่องไฟ 2px+)
+   * คำนวณ: dashboard (326 - 8 - 6x1) / 7 = 44.57px · modal (334 - 8 - 6) / 7 = 45.71px
+   * ไม่เพิ่ม breakpoint ใหม่ — fallback ถ้าวัดแล้วต่ำกว่า 44: wrap padding 2px (ห้าม 0)
    */
   .calendarGrid {
-    gap: 2px;
+    gap: 1px;
   }
 
   .calendarCell {
@@ -352,10 +326,6 @@
 
   .calendarChip {
     display: none;
-  }
-
-  .calendarModalBody {
-    padding: 12px;
   }
 
   .revolvingEventActions {
