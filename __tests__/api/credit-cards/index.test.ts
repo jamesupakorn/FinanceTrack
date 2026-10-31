@@ -807,7 +807,10 @@ describe('/api/credit-cards tile fields (spec-credit-card-tiles, mocked store, i
   // document can be inspected for persisted tile fields (AC-T5).
   const utils = require('../../../src/shared/utils/creditCardUtils');
   const { buildCardTotalExpenseRows } = require('../../../src/shared/utils/backend/creditCardSync');
-  const TILE_KEYS = ['dueMonth', 'installmentDueThisMonth', 'revolvingDueThisMonth', 'totalDueThisMonth'];
+  const TILE_KEYS = [
+    'dueMonth', 'installmentDueThisMonth', 'revolvingDueThisMonth', 'totalDueThisMonth',
+    'installmentCount', 'installmentPaidCount'
+  ];
   const A = { id: 'cc_aaaaaaaaaaaa', name: 'A', bankIssuer: 'kbank', annualRate: 0, minPaymentPercent: 10, statementDay: 10, dueDay: 20, creditLimit: 50000 };
   const B = { id: 'cc_bbbbbbbbbbbb', name: 'B', bankIssuer: 'scb', annualRate: 0, minPaymentPercent: 10, statementDay: 2, dueDay: 5, creditLimit: 10000 };
   type Fixture = {
@@ -878,6 +881,12 @@ describe('/api/credit-cards tile fields (spec-credit-card-tiles, mocked store, i
     expect(rowA.breakdown.revolving.carriedBalance).toBeGreaterThan(0);
     expect(cardA.totalDueThisMonth).toBe(rowA.actual);
     expect(cardA.installmentDueThisMonth).toBe(550); // includes the PAID installment
+    // Addendum A (TP-AC-1/TP-AC-6): counts == the ccr_ row's breakdown.installments
+    expect(cardA.installmentCount).toBe(rowA.breakdown.installments.length);
+    expect(cardA.installmentCount).toBe(2);
+    expect(cardA.installmentPaidCount).toBe(1);
+    expect(cardB.installmentCount).toBe(0);
+    expect(cardB.installmentPaidCount).toBe(0);
     expect(cardA.revolvingDueThisMonth).toBe(Math.max(0, rowA.breakdown.revolving.totalDue));
     // negative totalDue (credit balance) -> 0, total == row.actual
     expect(rowB.breakdown.revolving.totalDue).toBeLessThan(0);
@@ -931,7 +940,7 @@ describe('/api/credit-cards tile fields (spec-credit-card-tiles, mocked store, i
     await h(req, res);
     expect(res._getStatusCode()).toBe(200);
     const card = JSON.parse(res._getData()).card;
-    expect(card).toMatchObject({ dueMonth: utils.getCurrentMonthKey(), installmentDueThisMonth: 0, revolvingDueThisMonth: 0, totalDueThisMonth: 0 });
+    expect(card).toMatchObject({ dueMonth: utils.getCurrentMonthKey(), installmentDueThisMonth: 0, revolvingDueThisMonth: 0, totalDueThisMonth: 0, installmentCount: 0, installmentPaidCount: 0 });
     expect(store.doc.cards).toHaveLength(3);
     store.doc.cards.forEach(saved => TILE_KEYS.forEach(key => expect(saved).not.toHaveProperty(key)));
   });

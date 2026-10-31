@@ -189,7 +189,7 @@ export default function ListToolbar({
           aria-expanded={expanded} aria-controls={`${id}-filters`} onClick={() => setExpanded(value => !value)}>
           ตัวกรอง{activeFilters.length ? ` (${activeFilters.length})` : ''}
         </button>}
-        {orders.length > 0 && <label className="flex min-w-0 flex-1 flex-col gap-space-1">
+        {orders.length > 0 && <label className="flex min-w-0 flex-1 basis-40 flex-col gap-space-1">
           <span className="text-sm text-secondary">เรียงตาม — {label}</span>
           <select className={`${CONTROL} w-full`} value={criteria.order}
             onChange={event => onChange({ ...criteria, order: event.target.value })}>
