@@ -844,10 +844,23 @@ describe('/api/credit-cards tile fields (spec-credit-card-tiles, mocked store, i
 
   const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
+  // Each isolateModules registry gets its own lib/mongodb, and mutating requests reach it through
+  // withAudit -> getDbPromise, opening a MongoClient the top-level afterAll never sees. Track them
+  // so Jest can exit without --forceExit.
+  const isolatedMongoModules: Array<typeof import('../../../lib/mongodb')> = [];
+
+  afterAll(async () => {
+    for (const mongoModule of isolatedMongoModules) {
+      const isolatedDb = await mongoModule.getDbPromise();
+      await isolatedDb.client.close();
+    }
+  });
+
   function loadWithStore(initial: Fixture) {
     const store = { doc: clone(initial) };
     let isolated: NextApiHandler | undefined;
     jest.isolateModules(() => {
+      isolatedMongoModules.push(require('../../../lib/mongodb'));
       jest.doMock('../../../src/shared/utils/backend/creditCardStore', () => ({
         getUserCreditData: jest.fn(async () => clone(store.doc)),
         updateUserCreditData: jest.fn(async (_userId: unknown, updater: (data: Fixture) => Fixture) => {
