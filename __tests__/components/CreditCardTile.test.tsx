@@ -149,6 +149,52 @@ describe('CreditCardTile', () => {
     expect(container.querySelector('[data-side]')).toHaveAttribute('data-side', 'back');
   });
 
+  test('Addendum A: installment badge shows paid/count on the front only (TP-AC-1, TP-AC-5)', () => {
+    const { container } = render(<CreditCardTile card={{ ...baseCard, installmentCount: 3, installmentPaidCount: 2 }} />);
+    const badge = within(face(container, 'front')).getByTestId('cc-tile-installment-badge');
+    expect(badge).toHaveTextContent('ผ่อนแล้ว 2/3 งวด');
+    expect(badge).toHaveAttribute('aria-label', 'ผ่อนชำระแล้ว 2 จาก 3 งวด');
+    expect(badge).toHaveAttribute('data-complete', 'false');
+    expect(badge.querySelector('svg')).toBeNull();
+    expect(badge.closest('button, a, [tabindex]')).toBeNull();
+    expect(within(face(container, 'back')).queryByTestId('cc-tile-installment-badge')).toBeNull();
+    expect(face(container, 'back')).not.toHaveTextContent('ผ่อนแล้ว');
+    expect(within(face(container, 'front')).getByTestId('cc-tile-amount')).toHaveTextContent('5,929.33');
+  });
+
+  test('Addendum A: complete style + check icon when all paid; 0/N is neutral (TP-AC-2)', () => {
+    const { rerender } = render(<CreditCardTile card={{ ...baseCard, installmentCount: 3, installmentPaidCount: 3 }} />);
+    let badge = screen.getByTestId('cc-tile-installment-badge');
+    expect(badge).toHaveTextContent('ผ่อนแล้ว 3/3 งวด');
+    expect(badge).toHaveAttribute('data-complete', 'true');
+    expect(badge.querySelector('svg')).not.toBeNull();
+    rerender(<CreditCardTile card={{ ...baseCard, installmentCount: 3, installmentPaidCount: 0 }} />);
+    badge = screen.getByTestId('cc-tile-installment-badge');
+    expect(badge).toHaveTextContent('ผ่อนแล้ว 0/3 งวด');
+    expect(badge).toHaveAttribute('data-complete', 'false');
+  });
+
+  test('Addendum A: no badge when count is 0 or missing; amounts unchanged (TP-AC-3, TP-AC-4)', () => {
+    const { rerender } = render(<CreditCardTile card={baseCard} />);
+    expect(screen.queryByTestId('cc-tile-installment-badge')).toBeNull();
+    rerender(<CreditCardTile card={{ ...baseCard, installmentCount: 0, installmentPaidCount: 0 }} />);
+    expect(screen.queryByTestId('cc-tile-installment-badge')).toBeNull();
+    expect(screen.getByTestId('cc-tile-amount')).toHaveTextContent('5,929.33');
+    expect(screen.getByTestId('cc-tile-subline')).toHaveTextContent('ผ่อน 4,534.00 · ไม่ผ่อน 1,395.33');
+  });
+
+  test('Addendum A: badge does not block tap-to-flip and uses the pickTileTextColor pair', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<CreditCardTile card={{ ...baseCard, installmentCount: 3, installmentPaidCount: 3 }} />);
+    const badge = screen.getByTestId('cc-tile-installment-badge');
+    const text = pickTileTextColor(baseCard.color as string).color;
+    expect(badge.style.background).toBe(hexToRgb(text));
+    expect(badge.style.color).toBe(hexToRgb(baseCard.color as string));
+    expect(contrastRatio(baseCard.color as string, text)).toBeGreaterThanOrEqual(4.5);
+    await user.click(badge);
+    expect(container.querySelector('[data-side]')).toHaveAttribute('data-side', 'back');
+  });
+
   test('text colour from pickTileTextColor reaches >= 4.5:1, incl. mid-luminance (T19b)', () => {
     const colours = [...Object.values(BANK_ISSUERS).map(i => i.color), '#F5A623', '#ffcc00', '#ff8800', '#111111', '#fafafa'];
     colours.forEach(colour => {

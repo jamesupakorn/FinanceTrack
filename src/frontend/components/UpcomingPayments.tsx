@@ -14,21 +14,25 @@
  * pages/index.js ไม่ใช่ที่นี่
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useListCriteria } from '../contexts/ListViewContext';
 import { compareListValues, matchesListQuery } from '../../shared/utils/frontend/listView';
 import { useListProjection } from '../../shared/utils/frontend/useListProjection';
 import ListToolbar from './ListToolbar';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { formatIsoDateTH, describeDueDistance } from '../../shared/utils/creditCardUtils';
-import { collectUpcomingPayments } from '../../shared/utils/frontend/expenseEvents';
+import { collectUpcomingPayments, collectPaidCardPayments } from '../../shared/utils/frontend/expenseEvents';
+import { cardGroupKey, groupUpcomingByCard, isCardGroup } from '../../shared/utils/frontend/upcomingCardGroups';
+import type { UpcomingCardGroup, UpcomingRow } from '../../shared/utils/frontend/upcomingCardGroups';
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 const PAID_PILL = `w-full min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-3 py-space-2 text-center text-sm font-semibold text-secondary tabular-nums ${FOCUS_RING}`;
 
 type UpcomingEvent = ReturnType<typeof collectUpcomingPayments>['overdue'][number];
 type UpcomingFilter = 'generalExpense' | 'creditCard' | 'dailyExpense' | 'savings';
+type PaidEvent = ReturnType<typeof collectPaidCardPayments>[number];
 type EventAction = (event: UpcomingEvent) => void | Promise<void>;
+type PaidEventAction = (event: PaidEvent) => void | Promise<void>;
 
 interface FilterEmptyCopy {
   text: string;
@@ -48,10 +52,13 @@ interface UpcomingPaymentsProps {
   onClearFilter?: () => void;
   onViewCalendar?: () => void;
   pendingKeys?: string[];
-  onToggleInstallment?: EventAction;
+  onToggleInstallment?: EventAction & PaidEventAction;
   onRevolvingFull?: EventAction;
   onRevolvingMinimum?: EventAction;
   highlightedKey?: string | null;
+  /** รายการบัตรเครดิตที่ชำระแล้วของเดือนที่เลือก (collectPaidCardPayments) — ไม่ผ่าน ListToolbar */
+  paidEvents?: PaidEvent[];
+  onRevolvingCancel?: PaidEventAction;
 }
 
 interface UpcomingItemProps {
@@ -61,22 +68,34 @@ interface UpcomingItemProps {
   onRevolvingFull?: EventAction;
   onRevolvingMinimum?: EventAction;
   highlighted: boolean;
+  /** อยู่ในการ์ดบัตร: ไม่ซ้ำบรรทัดวันที่ (อยู่ที่หัวการ์ดแล้ว) */
+  compact?: boolean;
 }
+
+type UpcomingLine = UpcomingEvent & { urgency: string };
+type Row = UpcomingRow<UpcomingLine>;
 
 interface GroupProps extends Omit<UpcomingItemProps, 'event' | 'highlighted'> {
   title: string;
-  events: UpcomingEvent[];
+  events: Row[];
   highlightedKey?: string | null;
+  expanded: Set<string>;
+  onToggleExpanded: (groupKey: string) => void;
+  paidCounts: Map<string, number>;
 }
 
-function matchesFilter(event: UpcomingEvent, filter?: UpcomingFilter | null): boolean {
+function groupTypeMatches(row: Row, type: string): boolean {
+  return isCardGroup(row) ? row.lines.some(line => line.source === type) : row.source === type;
+}
+
+function matchesFilter(event: Pick<UpcomingEvent, 'source'>, filter?: UpcomingFilter | null): boolean {
   if (!filter) return true;
   if (filter === 'generalExpense') return event.source === 'plain';
   if (filter === 'creditCard') return event.source === 'installment' || event.source === 'revolving';
   return false; // dailyExpense / เงินออม ไม่มีเหตุการณ์ครบกำหนดโดยออกแบบ
 }
 
-function UpcomingItem({ event, pendingKeys, onToggleInstallment, onRevolvingFull, onRevolvingMinimum, highlighted }: UpcomingItemProps) {
+function UpcomingItem({ event, pendingKeys, onToggleInstallment, onRevolvingFull, onRevolvingMinimum, highlighted, compact }: UpcomingItemProps) {
   const busy = pendingKeys.includes(event.key);
   const typeLabel = event.source === 'installment' ? 'ผ่อนชำระ' : (event.source === 'revolving' ? 'ยอดหมุนเวียน' : 'รายจ่าย');
   const isOverdue = event.daysDiff < 0;
@@ -110,9 +129,11 @@ function UpcomingItem({ event, pendingKeys, onToggleInstallment, onRevolvingFull
       <span className="text-sm text-secondary">
         {[event.account, typeLabel].filter(Boolean).join(' · ')}
       </span>
-      <span className="text-sm text-secondary">
-        {`${formatIsoDateTH(event.isoDate)} · ${describeDueDistance(event.daysDiff)}`}
-      </span>
+      {!compact && (
+        <span className="text-sm text-secondary">
+          {`${formatIsoDateTH(event.isoDate)} · ${describeDueDistance(event.daysDiff)}`}
+        </span>
+      )}
 
       {event.source === 'installment' && (
         <button
@@ -149,14 +170,182 @@ function UpcomingItem({ event, pendingKeys, onToggleInstallment, onRevolvingFull
   );
 }
 
-function Group({ title, events, highlightedKey, ...itemProps }: GroupProps) {
+interface UpcomingCardProps extends Omit<UpcomingItemProps, 'event' | 'highlighted'> {
+  group: UpcomingCardGroup<UpcomingLine>;
+  open: boolean;
+  /** เปิดค้างเพราะมีบรรทัดกำลังบันทึก: ปุ่มซ่อนใช้ไม่ได้ */
+  forcedOpen?: boolean;
+  onToggle: () => void;
+  paidCount: number;
+  highlightedKey?: string | null;
+}
+
+/** การ์ดบัตรเครดิต 1 ใบต่อรอบบิล: ยอดรวม + ปุ่มกางดูรายการ (ปุ่มของตัวเอง ไม่ซ้อนในปุ่มอื่น) */
+function UpcomingCard({ group, open, forcedOpen, onToggle, paidCount, highlightedKey, ...itemProps }: UpcomingCardProps) {
+  const isOverdue = group.daysDiff < 0;
+  const cardColor = group.card.color as string | undefined;
+  const panelId = `upcoming-card-panel-${group.groupKey}`;
+  const total = group.lines.length;
+  return (
+    <div
+      id={`upcoming-card-${group.groupKey}`}
+      className={`flex min-w-0 flex-col gap-space-2 rounded-md border border-border-default border-l-4 bg-surface-2 p-space-4 ${
+        isOverdue && !cardColor ? 'border-l-neg' : 'border-l-border-default'
+      }`}
+      style={cardColor ? { borderLeftColor: cardColor } : undefined}
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-space-3">
+        <span className="inline-flex min-w-0 items-center gap-space-2 break-words font-semibold text-primary">
+          {isOverdue && <span aria-hidden="true">⚠ </span>}
+          <span className="h-3 w-3 shrink-0 rounded-xs" style={{ backgroundColor: cardColor }} aria-hidden="true" />
+          <span className="min-w-0 break-words">{group.name}</span>
+        </span>
+        <span className="flex flex-col items-end">
+          <span className="text-xs text-secondary">ยอดที่ต้องชำระ</span>
+          <span className="whitespace-nowrap text-lg font-bold text-primary tabular-nums">{`${formatCurrency(group.amount)} บาท`}</span>
+        </span>
+      </div>
+      <span className="text-sm text-secondary">
+        {[group.account, group.cycleMonth ? `รอบบิล ${group.cycleMonth}` : ''].filter(Boolean).join(' · ')}
+      </span>
+      <span className="text-sm text-secondary">
+        {`${formatIsoDateTH(group.isoDate)} · ${describeDueDistance(group.daysDiff)}`}
+      </span>
+      {paidCount > 0 && (
+        <span className="text-sm text-tertiary">{`ชำระแล้ว ${paidCount}/${total + paidCount} รายการ`}</span>
+      )}
+      <button
+        type="button"
+        className={`flex min-h-11 w-full items-center gap-space-2 rounded-sm border border-border-interactive bg-transparent px-space-3 text-left text-sm font-semibold text-primary ${forcedOpen ? 'opacity-60' : ''} ${FOCUS_RING}`}
+        aria-expanded={open}
+        aria-controls={panelId}
+        disabled={forcedOpen}
+        onClick={onToggle}
+      >
+        <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+        {open ? 'ซ่อนรายการ' : `กางดูรายการ (${total})`}
+      </button>
+      <div id={panelId} hidden={!open} className="flex flex-col gap-space-3">
+        {open && group.lines.map(line => (
+          <UpcomingItem key={`${line.id ?? ''}${line.key}`} event={line} highlighted={highlightedKey === line.key} compact {...itemProps} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Group({ title, events, highlightedKey, expanded, onToggleExpanded, paidCounts, ...itemProps }: GroupProps) {
   if (!events.length) return null;
   return (
     <div>
       <h3 className="mb-space-2 text-sm font-bold text-secondary">{`${title} (${events.length})`}</h3>
       <div className="flex flex-col gap-space-3">
-        {events.map((event) => (
-          <UpcomingItem key={event.key} event={event} highlighted={highlightedKey === event.key} {...itemProps} />
+        {events.map((row) => {
+          if (!isCardGroup(row)) {
+            return <UpcomingItem key={row.id ?? row.key} event={row} highlighted={highlightedKey === row.key} {...itemProps} />;
+          }
+          // เปิดอยู่เสมอเมื่อมีบรรทัดที่กำลังบันทึก (การกางจาก NotificationBell เพิ่มเข้า expanded แทน จึงไม่หุบเมื่อไฮไลต์หมดเวลา)
+          const forcedOpen = row.lines.some(line => itemProps.pendingKeys.includes(line.key));
+          return (
+            <UpcomingCard
+              key={row.groupKey}
+              group={row}
+              open={forcedOpen || expanded.has(row.groupKey)}
+              forcedOpen={forcedOpen}
+              onToggle={() => onToggleExpanded(row.groupKey)}
+              paidCount={paidCounts.get(row.groupKey) ?? 0}
+              highlightedKey={highlightedKey}
+              {...itemProps}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PaidItem({ event, busy, onToggleInstallment, onRevolvingCancel }: {
+  event: PaidEvent;
+  busy: boolean;
+  onToggleInstallment?: PaidEventAction;
+  onRevolvingCancel?: PaidEventAction;
+}) {
+  const typeLabel = event.source === 'installment' ? 'ผ่อนชำระ' : 'ยอดหมุนเวียน';
+  const cardColor = event.card?.color as string | undefined;
+  return (
+    <div
+      id={`paid-item-${event.key}`}
+      className="flex flex-col gap-space-2 rounded-md border border-border-default border-l-4 border-l-border-default bg-surface-2 p-space-4"
+      style={cardColor ? { borderLeftColor: cardColor } : undefined}
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-space-3">
+        <span className="inline-flex items-center gap-space-2 font-semibold text-secondary">
+          ✓
+          {event.card && (
+            <span className="h-3 w-3 shrink-0 rounded-xs" style={{ backgroundColor: cardColor }} aria-hidden="true" />
+          )}
+          {event.name}
+        </span>
+        <span className="whitespace-nowrap text-lg font-bold text-secondary tabular-nums">{`${formatCurrency(event.amount ?? 0)} บาท`}</span>
+      </div>
+      <span className="text-sm text-tertiary">
+        {[event.account, typeLabel, formatIsoDateTH(event.isoDate)].filter(Boolean).join(' · ')}
+      </span>
+      {event.source === 'installment' ? (
+        <button
+          type="button"
+          className={`${PAID_PILL} ${busy ? 'opacity-60' : ''}`}
+          disabled={busy || !onToggleInstallment}
+          onClick={() => onToggleInstallment?.(event)}
+        >
+          {busy ? 'กำลังบันทึก...' : '✓ ชำระแล้ว — แตะเพื่อยกเลิก'}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={`${PAID_PILL} ${busy ? 'opacity-60' : ''}`}
+          disabled={busy || !onRevolvingCancel}
+          onClick={() => onRevolvingCancel?.(event)}
+        >
+          {busy ? 'กำลังบันทึก...' : 'ยกเลิกการชำระ'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+interface PaidGroupProps {
+  events: PaidEvent[];
+  pendingKeys: string[];
+  onToggleInstallment?: PaidEventAction;
+  onRevolvingCancel?: PaidEventAction;
+}
+
+function PaidGroup({ events, pendingKeys, onToggleInstallment, onRevolvingCancel }: PaidGroupProps) {
+  const [open, setOpen] = useState(false);
+  if (!events.length) return null;
+  const panelId = 'upcoming-paid-panel';
+  return (
+    <div>
+      <button
+        type="button"
+        className={`flex min-h-11 w-full items-center gap-space-2 rounded-sm border-none bg-transparent px-0 text-left text-sm font-bold text-secondary ${FOCUS_RING}`}
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen(value => !value)}
+      >
+        <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+        {`ชำระแล้วเดือนนี้ (${events.length})`}
+      </button>
+      <div id={panelId} hidden={!open} className="mt-space-2 flex flex-col gap-space-3">
+        {open && events.map(event => (
+          <PaidItem
+            key={event.key}
+            event={event}
+            busy={pendingKeys.includes(event.key)}
+            onToggleInstallment={onToggleInstallment}
+            onRevolvingCancel={onRevolvingCancel}
+          />
         ))}
       </div>
     </div>
@@ -172,7 +361,9 @@ export default function UpcomingPayments({
   onToggleInstallment,
   onRevolvingFull,
   onRevolvingMinimum,
-  highlightedKey
+  highlightedKey,
+  paidEvents,
+  onRevolvingCancel
 }: UpcomingPaymentsProps) {
   const [criteria, setCriteria] = useListCriteria('dashboard-upcoming');
   // Escape ล้างตัวกรองเมื่อมีตัวกรองใช้งานอยู่ (spec §5)
@@ -194,26 +385,55 @@ export default function UpcomingPayments({
   const pendingRows = retained.current.filter(event => pendingKeys.includes(event.key) && !sourceRows.some(row => row.key === event.key));
   const allRows = [...sourceRows, ...pendingRows];
   retained.current = allRows;
-  const ringRows = allRows.filter(event => matchesFilter(event, filter));
+  // ringFilter ก่อนจัดกลุ่ม (กลุ่มเป็นบัตรล้วน จึงไม่มีกลุ่มปนกับรายจ่ายทั่วไป) แล้วจัดเป็น 1 แถวต่อ (บัตร, รอบบิล)
+  const ringRows: Row[] = groupUpcomingByCard<UpcomingLine>(allRows.filter(event => matchesFilter(event, filter)));
+  const rowId = (row: Row) => (isCardGroup(row) ? row.groupKey : row.key);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggleExpanded = (groupKey: string) => setExpanded(previous => {
+    const next = new Set(previous);
+    if (next.has(groupKey)) next.delete(groupKey); else next.add(groupKey);
+    return next;
+  });
+  // เลือกจาก NotificationBell: กางการ์ดเจ้าของบรรทัดเข้า expanded (ถาวร) เพื่อให้บรรทัดอยู่ใน DOM ก่อน scrollIntoView
+  // และไม่หุบเมื่อ highlightedKey ถูกล้าง
+  useEffect(() => {
+    if (!highlightedKey) return;
+    const owner = ringRows.find(row => isCardGroup(row) && row.lines.some(line => line.key === highlightedKey));
+    if (!owner || !isCardGroup(owner)) return;
+    setExpanded(previous => (previous.has(owner.groupKey) ? previous : new Set(previous).add(owner.groupKey)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightedKey]);
+  // จำนวนรายการที่ชำระแล้วต่อ (รอบบิล, บัตร) สำหรับข้อความ "ชำระแล้ว k/n" (แสดงผลอย่างเดียว)
+  const paidCounts = new Map<string, number>();
+  (paidEvents ?? []).forEach(event => {
+    if (!event.card?.id || !((event.amount ?? 0) > 0)) return;
+    const groupKey = cardGroupKey(event.cycleMonth, event.card.id);
+    paidCounts.set(groupKey, (paidCounts.get(groupKey) ?? 0) + 1);
+  });
   const [field, direction] = criteria.order.split(':');
-  const projection = useListProjection({
-    rows: ringRows, getId: event => event.key,
-    matches: event => matchesListQuery(`${event.name ?? ''} ${event.card?.name ?? ''}`, criteria.query) &&
-      (!criteria.filters.type || event.source === criteria.filters.type) &&
-      (!criteria.filters.account || (event.account || '__unassigned') === criteria.filters.account),
+  const projection = useListProjection<Row>({
+    rows: ringRows, getId: rowId,
+    matches: row => matchesListQuery(
+      isCardGroup(row)
+        ? `${row.name} ${row.lines.map(line => line.name ?? '').join(' ')}`
+        : `${row.name ?? ''} ${row.card?.name ?? ''}`,
+      criteria.query) &&
+      (!criteria.filters.type || groupTypeMatches(row, criteria.filters.type)) &&
+      (!criteria.filters.account || (row.account || '__unassigned') === criteria.filters.account),
     compare: field ? (a, b) => compareListValues(
       field === 'name' ? a.name : field === 'amount' ? a.amount : a.isoDate,
       field === 'name' ? b.name : field === 'amount' ? b.amount : b.isoDate,
       direction === 'desc') : undefined,
-    group: event => event.urgency, editable: true,
+    group: row => row.urgency, editable: true,
     criteriaKey: JSON.stringify([criteria, filter]),
     datasetKey: `${new Date().toISOString().slice(0, 10)}:${Boolean(upcoming)}`
   });
   const overdue = projection.items.filter(event => event.urgency === 'overdue');
   const dueToday = projection.items.filter(event => event.urgency === 'today');
   const dueSoon = projection.items.filter(event => event.urgency === 'soon');
-  const itemProps = { pendingKeys, onToggleInstallment, onRevolvingFull, onRevolvingMinimum };
+  const itemProps = { pendingKeys, onToggleInstallment, onRevolvingFull, onRevolvingMinimum, expanded, onToggleExpanded: toggleExpanded, paidCounts };
 
+  const paidGroupEvents = (paidEvents ?? []).filter(event => matchesFilter(event, filter));
   const totalAfterFilter = overdue.length + dueToday.length + dueSoon.length;
   const filterCopy = filter ? FILTER_EMPTY_COPY[filter] : null;
 
@@ -241,7 +461,7 @@ export default function UpcomingPayments({
         groupNote="เรียงภายในแต่ละกลุ่ม"
         filters={[
           { key: 'type', label: 'ประเภท', options: [
-            { value: 'plain', label: 'รายจ่ายทั่วไป' }, { value: 'installment', label: 'ผ่อนชำระ' }, { value: 'revolving', label: 'ยอดหมุนเวียน' }
+            { value: 'plain', label: 'รายจ่ายทั่วไป' }, { value: 'installment', label: 'บัตรที่มีรายการผ่อนชำระ' }, { value: 'revolving', label: 'บัตรที่มียอดหมุนเวียน' }
           ] },
           { key: 'account', label: 'บัญชี', options: [
             { value: '__unassigned', label: 'ไม่ระบุบัญชี' },
@@ -289,6 +509,18 @@ export default function UpcomingPayments({
           <Group title="เกินกำหนด" events={overdue} highlightedKey={highlightedKey} {...itemProps} />
           <Group title="ครบกำหนดวันนี้" events={dueToday} highlightedKey={highlightedKey} {...itemProps} />
           <Group title="ครบกำหนดใน 7 วัน" events={dueSoon} highlightedKey={highlightedKey} {...itemProps} />
+        </div>
+      )}
+
+      {/* กลุ่มชำระแล้ว: ตามวงแหวน (matchesFilter) แต่ไม่ผ่าน ListToolbar/useListProjection และไม่ใช่หน้าต่าง 7 วัน */}
+      {paidGroupEvents.length > 0 && (
+        <div className="mt-space-5">
+          <PaidGroup
+            events={paidGroupEvents}
+            pendingKeys={pendingKeys}
+            onToggleInstallment={onToggleInstallment}
+            onRevolvingCancel={onRevolvingCancel}
+          />
         </div>
       )}
     </section>

@@ -54,8 +54,13 @@ describe('buildCardMonthDueMap', () => {
       dueMonth: MONTH,
       installmentDueThisMonth: row.breakdown.installmentTotal,
       revolvingDueThisMonth: Math.max(0, row.breakdown.revolving.totalDue),
-      totalDueThisMonth: row.actual
+      totalDueThisMonth: row.actual,
+      installmentCount: 2,
+      installmentPaidCount: 1
     });
+    // TP-AC-1/TP-AC-6: counts equal the ccr_ row's breakdown.installments
+    expect(map[A.id].installmentCount).toBe(row.breakdown.installments.length);
+    expect(map[A.id].installmentPaidCount).toBe(row.breakdown.installments.filter(line => line.paid).length);
     expect(map[A.id].totalDueThisMonth).toBeCloseTo(map[A.id].installmentDueThisMonth + map[A.id].revolvingDueThisMonth, 2);
   });
 
@@ -64,7 +69,8 @@ describe('buildCardMonthDueMap', () => {
     const row = buildCardTotalExpenseRows(data, MONTH)[buildRevolvingRowKey(B.id)];
     expect(row.breakdown.revolving.totalDue).toBeLessThan(0);
     expect(buildCardMonthDueMap(data, MONTH)[B.id]).toEqual({
-      dueMonth: MONTH, installmentDueThisMonth: 0, revolvingDueThisMonth: 0, totalDueThisMonth: row.actual
+      dueMonth: MONTH, installmentDueThisMonth: 0, revolvingDueThisMonth: 0, totalDueThisMonth: row.actual,
+      installmentCount: 0, installmentPaidCount: 0
     });
     expect(row.actual).toBe(0);
   });
@@ -73,9 +79,28 @@ describe('buildCardMonthDueMap', () => {
     const data = fixture();
     expect(buildCardTotalExpenseRows(data, MONTH)[buildRevolvingRowKey(C.id)]).toBeUndefined();
     expect(buildCardMonthDueMap(data, MONTH)[C.id]).toEqual({
-      dueMonth: MONTH, installmentDueThisMonth: 0, revolvingDueThisMonth: 0, totalDueThisMonth: 0
+      dueMonth: MONTH, installmentDueThisMonth: 0, revolvingDueThisMonth: 0, totalDueThisMonth: 0,
+      installmentCount: 0, installmentPaidCount: 0
     });
     expect(Object.keys(buildCardMonthDueMap(data, MONTH)).sort()).toEqual([A.id, B.id, C.id].sort());
+  });
+
+  it('TP-AC-2: all paid -> paid == count; none paid -> 0/count; amounts stay full', () => {
+    const allPaid = fixture();
+    allPaid.plans[1].schedule[0].paid = true;
+    const a = buildCardMonthDueMap(allPaid, MONTH)[A.id];
+    expect([a.installmentCount, a.installmentPaidCount]).toEqual([2, 2]);
+    const nonePaid = fixture();
+    nonePaid.plans[0].schedule[1].paid = false;
+    const n = buildCardMonthDueMap(nonePaid, MONTH)[A.id];
+    expect([n.installmentCount, n.installmentPaidCount]).toEqual([2, 0]);
+    expect(n.installmentDueThisMonth).toBe(550.5);
+  });
+
+  it('TP-AC-3: revolving-only card (row but no installments) -> 0/0', () => {
+    const entry = buildCardMonthDueMap(fixture(), MONTH)[B.id];
+    expect(entry.installmentCount).toBe(0);
+    expect(entry.installmentPaidCount).toBe(0);
   });
 
   it('AC-T6: choosing minimum payment still reports the full amount', () => {

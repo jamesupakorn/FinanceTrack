@@ -249,6 +249,26 @@ function diffDaysFromBase(isoDate: string, today: Date): number {
 }
 
 /**
+ * รายการบัตรเครดิต (ผ่อนชำระ/ยอดหมุนเวียน) ที่ "ชำระแล้ว" ของเดือนที่ให้มา — อ่านจาก eventsByDay ที่
+ * buildMonthEvents() สร้างไว้แล้ว (ไม่ derive ซ้ำ) เรียงตามวันที่ครบกำหนด · ไม่รวมรายจ่ายทั่วไป/วันสรุปยอด
+ * ไม่แตะสัญญาของ collectUpcomingPayments (ซึ่งข้ามรายการที่ชำระแล้วตาม AC-DB-15)
+ */
+export function collectPaidCardPayments(
+  eventsByDay: Map<number, ExpenseEvent[]>,
+  monthKey: string
+): (ExpenseEvent & { isoDate: string })[] {
+  const result: (ExpenseEvent & { isoDate: string })[] = [];
+  Array.from(eventsByDay.keys()).sort((a, b) => a - b).forEach(day => {
+    (eventsByDay.get(day) ?? []).forEach(event => {
+      if (event.type !== 'expense' || !event.paid) return;
+      if (event.source !== 'revolving' && event.source !== 'installment') return;
+      result.push({ ...event, isoDate: `${monthKey}-${String(day).padStart(2, '0')}` });
+    });
+  });
+  return result;
+}
+
+/**
  * รายการ "ครบกำหนด" ที่ยังไม่ชำระ — เกินกำหนดแล้ว หรือครบกำหนดภายใน horizonDays วันข้างหน้า
  * สแกนเดือนที่มี today อยู่ + เดือนถัดไป เพื่อให้ช่วงที่คาบเกี่ยวรอยต่อเดือนถูกครอบคลุม (BR-DASH-011/012)
  * ไม่ derive จาก plans/cycles ตรง ๆ — ใช้ buildMonthEvents() ตัวเดียวกับปฏิทินเสมอ (single source)

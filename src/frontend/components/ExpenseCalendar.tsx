@@ -25,7 +25,6 @@ import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { buildMonthEvents } from '../../shared/utils/frontend/expenseEvents';
 import { Icons } from './Icons';
-import cardStyles from '../styles/CreditCard.module.css';
 import styles from '../styles/ExpenseCalendar.module.css';
 
 type CalendarData = ReturnType<typeof buildMonthEvents>;
@@ -47,6 +46,8 @@ interface ExpenseCalendarProps {
   onRevolvingFull?: CalendarAction;
   onRevolvingMinimum?: CalendarAction;
   onRevolvingCancel?: CalendarAction;
+  /** false = ไม่แสดงรายการของวันที่เลือก (หน้าภาพรวมมี UpcomingPayments แสดงรายการเดียวกันอยู่แล้ว) */
+  showDayDetail?: boolean;
 }
 
 interface CalendarPlan extends NonNullable<CalendarEvent['plan']> {
@@ -57,6 +58,27 @@ interface CalendarPlan extends NonNullable<CalendarEvent['plan']> {
 
 const WEEKDAY_LABELS = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
 const MAX_INLINE_CHIPS = 2;
+
+// Graphite class constants (ไฟล์นี้ถือของตัวเอง — รูปแบบเดียวกับ UpcomingPayments.tsx)
+const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
+const MOTION = 'transition-colors duration-fast ease-graphite motion-reduce:transition-none';
+const NAV_BUTTON = `inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border border-border-interactive bg-transparent p-0 text-secondary hover:bg-surface-2 ${MOTION} ${FOCUS_RING}`;
+// ring-tertiary = เส้นขอบกลาง ๆ 1px กันสีบัตรเข้มกลืนพื้น (D-7)
+const CHIP = 'h-3 w-3 shrink-0 rounded-xs ring-1 ring-tertiary';
+const EVENT_CARD = 'flex flex-col gap-space-2 rounded-md border border-border-default border-l-4 bg-surface-2 p-space-4';
+const PILL_BASE = `w-full min-h-11 rounded-sm border px-space-3 py-space-2 text-center text-sm font-semibold tabular-nums disabled:cursor-not-allowed ${MOTION} ${FOCUS_RING}`;
+// สองสตริงแยกกัน ไม่ต่อท้ายกัน: utility สีที่ชนกันตัดสินด้วยลำดับ stylesheet ไม่ใช่ลำดับในสตริง
+const PAID_PILL = `${PILL_BASE} border-border-interactive bg-surface-2 text-secondary`;
+const PAID_PILL_ON = `${PILL_BASE} border-pos/60 bg-pos/10 text-pos`;
+const BUSY = 'opacity-60';
+
+function eventCardClass(color: string | undefined): string {
+  return color ? EVENT_CARD : `${EVENT_CARD} border-l-border-default`;
+}
+
+function pillClass(on: boolean, busy: boolean): string {
+  return `${on ? PAID_PILL_ON : PAID_PILL} ${busy ? BUSY : ''}`;
+}
 
 /** unpaid ก่อน paid แล้วค่อยเรียง revolving → installment → plain (สิ่งที่ต้องทำก่อนอยู่บนสุดเสมอ) */
 const SOURCE_ORDER: Record<CalendarEvent['source'], number> = { revolving: 0, installment: 1, plain: 2, statement: 3 };
@@ -91,7 +113,8 @@ export default function ExpenseCalendar({
   onToggleInstallment,
   onRevolvingFull,
   onRevolvingMinimum,
-  onRevolvingCancel
+  onRevolvingCancel,
+  showDayDetail = true
 }: ExpenseCalendarProps) {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [unscheduledOpen, setUnscheduledOpen] = useState(false);
@@ -189,7 +212,7 @@ export default function ExpenseCalendar({
       <div className={styles.calendarNav}>
         <button
           type="button"
-          className={cardStyles.iconButton}
+          className={NAV_BUTTON}
           onClick={() => onNavigateMonth(-1)}
           aria-label="เดือนก่อนหน้า"
         >
@@ -198,7 +221,7 @@ export default function ExpenseCalendar({
         <span className={styles.calendarMonth}>{formatMonthKeyTH(monthKey)}</span>
         <button
           type="button"
-          className={cardStyles.iconButton}
+          className={NAV_BUTTON}
           onClick={() => onNavigateMonth(1)}
           aria-label="เดือนถัดไป"
         >
@@ -208,7 +231,7 @@ export default function ExpenseCalendar({
 
       {outOfWindowCopy && (
         <div className={styles.outOfWindowNotice} role="status">
-          <Icons.AlertTriangle size={16} color="var(--text-light)" />
+          <span aria-hidden="true"><Icons.AlertTriangle size={16} color="var(--info)" /></span>
           <div>
             <p>{outOfWindowCopy.title}</p>
             <p>{outOfWindowCopy.detail}</p>
@@ -258,7 +281,7 @@ export default function ExpenseCalendar({
                   tabIndex={isSelected ? 0 : -1}
                   aria-current={isSelected ? 'date' : undefined}
                   aria-label={buildCellLabel(day)}
-                  className={`${styles.calendarCell} ${isToday ? styles.calendarCellToday : ''} ${isSelected ? styles.calendarCellSelected : ''}`}
+                  className={`${styles.calendarCell} ${isToday ? styles.calendarCellToday : ''} ${isSelected ? styles.calendarCellSelected : ''} ${FOCUS_RING}`}
                   onClick={() => setSelectedDay(day)}
                 >
                   <span className={`${styles.calendarDayNum} ${hasOverdueUnpaid ? styles.calendarDayOverdue : ''}`}>
@@ -269,7 +292,7 @@ export default function ExpenseCalendar({
                       <span
                         key={event.key}
                         className={event.type === 'expense' ? styles.dotDue : styles.dotStatement}
-                        style={{ '--dot-color': String(event.card?.color || 'var(--color-primary)') } as CSSProperties}
+                        style={{ '--dot-color': String(event.card?.color || 'var(--accent)') } as CSSProperties}
                       />
                     ))}
                   </span>
@@ -288,14 +311,14 @@ export default function ExpenseCalendar({
 
           <div className={styles.calendarLegend}>
             <span className={styles.legendItem}>
-              <span className={styles.dotDue} style={{ '--dot-color': 'var(--color-primary)' } as CSSProperties} /> ครบกำหนดชำระ
+              <span className={styles.dotDue} style={{ '--dot-color': 'var(--accent)' } as CSSProperties} /> ครบกำหนดชำระ
             </span>
             <span className={styles.legendItem}>
-              <span className={styles.dotStatement} style={{ '--dot-color': 'var(--color-primary)' } as CSSProperties} /> วันสรุปยอด
+              <span className={styles.dotStatement} style={{ '--dot-color': 'var(--accent)' } as CSSProperties} /> วันสรุปยอด
             </span>
             {cards.map(card => (
               <span key={card.id} className={styles.legendItem}>
-                <span className={cardStyles.colorChip} style={{ '--card-accent': String(card.color || '') } as CSSProperties} /> {card.name}
+                <span className={CHIP} style={{ backgroundColor: String(card.color || 'var(--accent)') }} aria-hidden="true" /> {card.name}
               </span>
             ))}
           </div>
@@ -306,15 +329,16 @@ export default function ExpenseCalendar({
           </div>
         </div>
 
+        {(showDayDetail || unscheduledEvents.length > 0) && (
         <div className={styles.dayDetail}>
-          {selectedIsoDate && (
+          {showDayDetail && selectedIsoDate && (
             <h3 className={styles.dayDetailTitle}>
               {formatIsoDateTH(selectedIsoDate)}
               {selectedEvents.length > 0 && <span> ({selectedEvents.length} รายการ)</span>}
             </h3>
           )}
-          {selectedEvents.length === 0 ? (
-            <p className={cardStyles.hint}>
+          {!showDayDetail ? null : selectedEvents.length === 0 ? (
+            <p className="m-0 mt-space-2 text-sm text-tertiary">
               {eventsByDay.size === 0 ? 'ไม่มีรายการครบกำหนดในเดือนนี้' : 'ไม่มีรายการในวันที่เลือก'}
             </p>
           ) : (
@@ -326,45 +350,48 @@ export default function ExpenseCalendar({
 
               if (event.type === 'statement') {
                 return (
-                  <div key={event.key} className={cardStyles.upcomingItem} style={{ borderLeftColor: eventCardColor }}>
-                    <span className={cardStyles.upcomingName}>
-                      <span className={cardStyles.colorChip} style={{ '--card-accent': eventCardColor || '' } as CSSProperties} aria-hidden="true" />
+                  <div key={event.key} className={eventCardClass(eventCardColor)} style={eventCardColor ? { borderLeftColor: eventCardColor } : undefined}>
+                    <span className="inline-flex items-center gap-space-2 font-semibold text-primary">
+                      <span className={CHIP} style={{ backgroundColor: eventCardColor || 'var(--accent)' }} aria-hidden="true" />
                       {event.card?.name}
                     </span>
-                    <span className={cardStyles.upcomingMeta}>วันสรุปยอด</span>
+                    <span className="text-sm text-secondary">วันสรุปยอด</span>
                   </div>
                 );
               }
 
               const diffDays = diffDaysFromToday(selectedIsoDate);
-              const wrapperClass = `${cardStyles.upcomingItem} ${event.paid ? styles.calendarEventPaid : ''}`;
+              const wrapperClass = eventCardClass(eventCardColor);
+              // ชำระแล้ว: ลดความเด่นด้วย text token ไม่ใช้ opacity (opacity ทำ contrast ต่ำกว่า AA) — ยังมี ✓ กำกับ (ADR-006)
+              const strongText = event.paid ? 'text-secondary' : 'text-primary';
+              const metaText = `text-sm ${event.paid ? 'text-tertiary' : 'text-secondary'}`;
 
               return (
-                <div key={event.key} className={wrapperClass} style={{ borderLeftColor: eventCardColor || 'var(--color-primary)' }}>
-                  <div className={cardStyles.upcomingTopRow}>
-                    <span className={cardStyles.upcomingName}>
+                <div key={event.key} className={wrapperClass} style={eventCardColor ? { borderLeftColor: eventCardColor } : undefined}>
+                  <div className="flex flex-wrap items-baseline justify-between gap-space-3">
+                    <span className={`inline-flex items-center gap-space-2 font-semibold ${strongText}`}>
                       {event.paid && '✓ '}
                       {event.card && (
-                        <span className={cardStyles.colorChip} style={{ '--card-accent': eventCardColor || '' } as CSSProperties} aria-hidden="true" />
+                        <span className={CHIP} style={{ backgroundColor: eventCardColor || 'var(--accent)' }} aria-hidden="true" />
                       )}
                       {event.name}
                     </span>
-                    <span className={cardStyles.upcomingAmount}>{`${formatCurrency(event.amount ?? 0)} บาท`}</span>
+                    <span className={`whitespace-nowrap text-lg font-bold tabular-nums ${strongText}`}>{`${formatCurrency(event.amount ?? 0)} บาท`}</span>
                   </div>
                   {event.account && (
-                    <span className={cardStyles.upcomingMeta}>{event.account}</span>
+                    <span className={metaText}>{event.account}</span>
                   )}
                   {event.source === 'installment' && event.plan && (
-                    <span className={cardStyles.upcomingMeta}>
+                    <span className={metaText}>
                       {`${plan?.itemName} · งวด ${event.installmentNo}/${plan?.months}`}
                     </span>
                   )}
-                  {!event.paid && <span className={cardStyles.upcomingMeta}>{describeDueDistance(diffDays)}</span>}
+                  {!event.paid && <span className={metaText}>{describeDueDistance(diffDays)}</span>}
 
                   {event.source === 'installment' && (
                     <button
                       type="button"
-                      className={`${cardStyles.paidPill} ${event.paid ? cardStyles.paidPillOn : ''} ${busy ? cardStyles.paidPillBusy : ''}`}
+                      className={pillClass(Boolean(event.paid), busy)}
                       disabled={busy || plan?.status === PLAN_STATUS.CANCELLED}
                       onClick={() => onToggleInstallment?.(event)}
                     >
@@ -376,7 +403,7 @@ export default function ExpenseCalendar({
                     <div className={styles.revolvingEventActions}>
                       <button
                         type="button"
-                        className={`${cardStyles.paidPill} ${busy ? cardStyles.paidPillBusy : ''}`}
+                        className={pillClass(false, busy)}
                         disabled={busy}
                         onClick={() => onRevolvingFull?.(event)}
                       >
@@ -384,7 +411,7 @@ export default function ExpenseCalendar({
                       </button>
                       <button
                         type="button"
-                        className={`${cardStyles.paidPill} ${busy ? cardStyles.paidPillBusy : ''}`}
+                        className={pillClass(false, busy)}
                         disabled={busy}
                         onClick={() => onRevolvingMinimum?.(event)}
                       >
@@ -396,7 +423,7 @@ export default function ExpenseCalendar({
                   {event.source === 'revolving' && event.paid && (
                     <button
                       type="button"
-                      className={`${cardStyles.paidPill} ${cardStyles.paidPillOn} ${busy ? cardStyles.paidPillBusy : ''}`}
+                      className={pillClass(true, busy)}
                       disabled={busy}
                       onClick={() => onRevolvingCancel?.(event)}
                     >
@@ -412,23 +439,24 @@ export default function ExpenseCalendar({
             <div className={styles.unscheduledTray}>
               <button
                 type="button"
-                className={styles.unscheduledToggle}
+                className={`${styles.unscheduledToggle} ${FOCUS_RING}`}
                 onClick={() => setUnscheduledOpen(open => !open)}
                 aria-expanded={unscheduledOpen}
               >
                 {`${unscheduledOpen ? '▾' : '▸'} ไม่ระบุวันครบกำหนด (${unscheduledEvents.length})`}
               </button>
               {unscheduledOpen && unscheduledEvents.map(event => (
-                <div key={event.key} className={cardStyles.upcomingItem} style={{ borderLeftColor: event.card?.color as string || 'var(--color-primary)' }}>
-                  <div className={cardStyles.upcomingTopRow}>
-                    <span className={cardStyles.upcomingName}>{event.name}</span>
-                    <span className={cardStyles.upcomingAmount}>{`${formatCurrency(event.amount ?? 0)} บาท`}</span>
+                <div key={event.key} className={eventCardClass(event.card?.color as string | undefined)} style={event.card?.color ? { borderLeftColor: event.card.color as string } : undefined}>
+                  <div className="flex flex-wrap items-baseline justify-between gap-space-3">
+                    <span className="inline-flex items-center gap-space-2 font-semibold text-primary">{event.name}</span>
+                    <span className="whitespace-nowrap text-lg font-bold tabular-nums text-primary">{`${formatCurrency(event.amount ?? 0)} บาท`}</span>
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );

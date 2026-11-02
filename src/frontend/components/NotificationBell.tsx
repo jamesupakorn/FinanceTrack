@@ -88,7 +88,7 @@ export default function NotificationBell({ upcoming, onSelectItem }: Notificatio
       {open && (
         <div
           role="menu"
-          className="fixed left-3 right-3 top-16 z-[120] max-h-[70vh] w-auto overflow-y-auto rounded-lg border border-border-default bg-surface-3 p-space-2 shadow-elev-2 md:absolute md:left-auto md:right-0 md:top-[calc(100%+8px)] md:max-h-[360px] md:w-[300px]"
+          className="fixed left-3 right-3 top-16 z-[120] max-h-[70vh] w-auto overflow-y-auto rounded-lg border border-border-default bg-surface-3 p-space-2 shadow-elev-2 md:absolute md:left-0 md:right-auto md:top-[calc(100%+8px)] md:max-h-[360px] md:w-[300px]"
         >
           <p className="mx-space-2 mb-space-2 mt-space-1 font-bold text-primary">การแจ้งเตือน</p>
           {items.length === 0 ? (
