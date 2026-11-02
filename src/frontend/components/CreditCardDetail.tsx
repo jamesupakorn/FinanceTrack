@@ -1,31 +1,43 @@
 /**
  * คอมโพเนนต์: CreditCardDetail (หน้าจอ 2)
- * รายละเอียดบัตร 1 ใบ: สรุปวงเงิน/หนี้ + แผนผ่อนทั้งหมดของบัตรนั้น พร้อมตารางผ่อนรายงวด
+ * รายละเอียดบัตร 1 ใบ — redesign ตาม spec-credit-card-detail-redesign (.pipeline, local)
  *
- * ตารางผ่อน: กางไว้บน desktop, พับไว้บนมือถือ (window.innerWidth < BP.md ตอน init)
- * แผน 60 งวดจะไม่ถูกเทลงจอมือถือทั้งก้อน — แสดง 6 งวดถัดไปที่ยังไม่ชำระ + งวดที่ชำระแล้ว
+ * ลำดับบนทุก viewport: identity header → ชำระรอบบิลนี้ (พร้อมตัวสลับเดือน) → รายการไม่ผ่อน → แผนผ่อนชำระ →
+ * แคชแบค → ประวัติยอดหมุนเวียน; ปุ่ม "เพิ่มรายจ่าย" มีตัวเดียว (แถบติดล่างบนมือถือ / ปุ่มหัวหน้าบน desktop)
  *
- * Graphite redesign (credit-cards-graphite pass):
- * - Tailwind แทน CreditCard.module.css แล้ว
- * - breakpoint import BP.md แทนตัวเลข literal (ADR-019 rule 4)
+ * ⚠ ไม่คำนวณเงินเอง: ตัวเลขทุกตัวมาจาก server (card, plans, useRevolvingCycle) เป็นการ "ย้าย" ตำแหน่งเท่านั้น
+ *   นอกจาก utilisation (เปอร์เซ็นต์แสดงผลเดิม) — BR-CC-013, SPEND-2/SPEND-4
+ *
+ * เดือนเริ่มต้นของรอบบิล = รอบที่ครบกำหนดในเดือนนี้ (getPayableCycleMonth, OQ-4) ตั้งเมื่อ card.id เปลี่ยน
+ * (รวม undefined → id เพราะหน้า cards เริ่มเป็น []) ไม่ตั้งใหม่เมื่อข้อมูลบัตรเดิม refresh
+ *
+ * breakpoint มีตัวเดียว: 768px (`md:` + BP.md) — ตัวควบคุมเพิ่มรายจ่ายเลือกใน JS จาก isMobileView (DD-2)
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type FocusEvent } from 'react';
 import {
   formatDayLabel,
   formatIsoDateTH,
+  getCurrentMonthKey,
+  getPayableCycleMonth,
   resolveCardDueDate,
   round2,
-  PLAN_STATUS,
-  getCurrentMonthKey
+  PLAN_STATUS
 } from '../../shared/utils/creditCardUtils';
 import { MONTH_KEY_RE } from '../../shared/utils/creditCardBasics';
 import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
+import type { CreditSpendItem } from '../../shared/utils/frontend/apiUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { BP } from '../../shared/utils/frontend/breakpoints';
+import { useRevolvingCycle, type ConfirmMinimumHandler } from '../../shared/utils/frontend/useRevolvingCycle';
 import { Icons } from './Icons';
-import RevolvingBalanceSection, { type CurrentCycle, type RevolvingCard } from './RevolvingBalanceSection';
+import RevolvingBalanceSection from './RevolvingBalanceSection';
+import CardPayNextSummary from './CardPayNextSummary';
+import BillingMonthSwitcher from './BillingMonthSwitcher';
+import CreditSpendItems from './CreditSpendItems';
+import RowActionMenu, { type RowActionMenuItem } from './RowActionMenu';
 import BankIssuerMark from './BankIssuerMark';
+import { ADD_BAR_HEIGHT_PX } from './addBarLayout';
 import {
   PAID_PILL_CLASS,
   PAID_PILL_ON_CLASS,
@@ -94,29 +106,37 @@ interface CreditCardDetailProps {
   onBack?: () => void;
   onEditCard?: (card: CreditCardDetailData) => void;
   onDeleteCard?: (card: CreditCardDetailData) => void;
+  /** เปิด sheet เพิ่มรายจ่ายที่ขั้นเลือกประเภท; month = เดือนที่ใช้คำนวณวันที่เริ่มต้น (DD-7) */
   onAddPlanForCard?: (card: CreditCardDetailData, month?: string) => void;
+  /** เปิด sheet ที่ขั้นรายจ่ายธรรมดาตรง ๆ (empty state ของรายการไม่ผ่อน) */
+  onAddSpendForCard?: (card: CreditCardDetailData, month?: string) => void;
+  /** แก้ไขรายการไม่ผ่อนจากเมนู ⋯ ของแถว — หน้าเปิด AddCardExpenseSheet โหมด edit */
+  onEditSpendItem?: (item: CreditSpendItem, card: CreditCardDetailData) => void;
   onRenamePlan?: PlanAction;
   onEditPlan?: PlanAction;
   onCancelPlan?: PlanAction;
   onDeletePlan?: PlanAction;
   onToggleInstallment?: InstallmentAction;
-  onConfirmMinimum?: (params: { card: RevolvingCard; cycle: CurrentCycle; onConfirm: () => void | Promise<void> }) => void;
+  onConfirmMinimum?: ConfirmMinimumHandler;
   onRevolvingChanged?: () => void;
+  /** เพิ่มทุกครั้งที่บันทึกรายจ่ายธรรมดาสำเร็จ — ให้โหลดยอด/รายการจากเซิร์ฟเวอร์ใหม่ (ไม่คำนวณฝั่ง client) */
+  spendRefreshKey?: number;
+  /** เดือนรอบบิลที่เซิร์ฟเวอร์ตอบกลับของรายการที่เพิ่งบันทึก — สลับ statementMonth ไปเดือนนั้น */
+  spendSavedMonth?: string | null;
+  /** id ของรายการที่เพิ่งบันทึก — ใช้ focus ปุ่ม ⋯ ของแถวนั้นเมื่อย้ายไปเดือนอื่น (I-9/I-34) */
+  spendSavedItemId?: string | null;
 }
 
-interface PlanMenuProps {
+interface PlanRowProps {
   plan: CreditPlanDetail;
-  onRename?: PlanAction;
-  onEdit?: PlanAction;
-  onCancel?: PlanAction;
-  onDelete?: PlanAction;
-}
-
-interface PlanCardProps extends PlanMenuProps {
   card: CreditCardDetailData;
   isMobileView: boolean;
   pendingKeys: string[];
   onToggleInstallment?: InstallmentAction;
+  onRename?: PlanAction;
+  onEdit?: PlanAction;
+  onCancel?: PlanAction;
+  onDelete?: PlanAction;
 }
 
 const COLLAPSED_UNPAID_PREVIEW = 6;
@@ -125,98 +145,9 @@ const LONG_PLAN_THRESHOLD = 12;
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 const CARD = 'rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5';
 const BTN_GHOST = `inline-flex min-h-11 items-center justify-center gap-space-2 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING}`;
-const ICON_BTN = `flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border border-border-default bg-surface-2 text-secondary transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING}`;
+const BTN_ADD = `inline-flex min-h-11 items-center justify-center gap-space-2 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent transition-colors duration-fast ease-graphite hover:opacity-90 ${FOCUS_RING}`;
 const SECTION_TITLE = 'm-0 text-lg font-semibold text-primary';
 const BADGE = 'inline-flex w-fit items-center gap-space-1 rounded-full border border-border-default bg-surface-2 px-space-2 py-[2px] text-xs font-medium text-secondary';
-
-function PlanMenu({ plan, onRename, onEdit, onCancel, onDelete }: PlanMenuProps) {
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const editable = plan.installmentsPaid === 0 && plan.status !== PLAN_STATUS.CANCELLED;
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) setOpen(false);
-    };
-    const handleEsc = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEsc);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEsc);
-    };
-  }, [open]);
-
-  const run = (action?: PlanAction) => {
-    setOpen(false);
-    action?.(plan);
-  };
-
-  return (
-    <div className="relative shrink-0" ref={wrapperRef}>
-      <button
-        type="button"
-        className={ICON_BTN}
-        aria-haspopup="true"
-        aria-expanded={open}
-        aria-label={`ตัวเลือกของแผน ${plan.itemName}`}
-        onClick={() => setOpen(value => !value)}
-      >
-        <Icons.Settings size={16} />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-[calc(100%+6px)] z-30 flex min-w-[240px] flex-col gap-[2px] rounded-md border border-border-default bg-surface-3 p-space-2 shadow-elev-3" role="menu">
-          <button
-            type="button"
-            role="menuitem"
-            className={`flex min-h-11 items-center gap-space-2 rounded-sm px-space-3 text-left text-sm text-primary hover:bg-surface-2 ${FOCUS_RING}`}
-            onClick={() => run(onRename)}
-          >
-            <Icons.Edit size={16} /> แก้ไขชื่อรายการ
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className={`flex min-h-11 items-center gap-space-2 rounded-sm px-space-3 text-left text-sm text-primary hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent ${FOCUS_RING}`}
-            disabled={!editable}
-            title={editable ? undefined : `แก้ไขไม่ได้เพราะชำระไปแล้ว ${plan.installmentsPaid} งวด`}
-            onClick={() => run(onEdit)}
-          >
-            <Icons.Settings size={16} /> แก้ไขแผน
-          </button>
-          {!editable && plan.status !== PLAN_STATUS.CANCELLED && (
-            <p className="m-0 px-space-3 pb-space-2 text-xs leading-relaxed text-tertiary">
-              {`แก้ไขไม่ได้เพราะชำระไปแล้ว ${plan.installmentsPaid} งวด — ให้ยกเลิกแผนแล้วสร้างใหม่`}
-            </p>
-          )}
-          {plan.status !== PLAN_STATUS.CANCELLED && (
-            <button
-              type="button"
-              role="menuitem"
-              className={`flex min-h-11 items-center gap-space-2 rounded-sm px-space-3 text-left text-sm text-neg hover:bg-neg/10 ${FOCUS_RING}`}
-              onClick={() => run(onCancel)}
-            >
-              <Icons.X size={16} /> ยกเลิกแผน
-            </button>
-          )}
-          <button
-            type="button"
-            role="menuitem"
-            className={`flex min-h-11 items-center gap-space-2 rounded-sm px-space-3 text-left text-sm text-neg hover:bg-neg/10 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent ${FOCUS_RING}`}
-            disabled={plan.installmentsPaid > 0}
-            title={plan.installmentsPaid > 0 ? 'ลบไม่ได้เพราะมีงวดที่ชำระแล้ว — ให้ยกเลิกแผนแทน' : undefined}
-            onClick={() => run(onDelete)}
-          >
-            <Icons.Trash size={16} /> ลบแผน
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function describePlanInterest(plan: CreditPlanDetail): string {
   if (plan.interestMode === 'manual') {
@@ -226,7 +157,11 @@ function describePlanInterest(plan: CreditPlanDetail): string {
   return `${methodLabel} ${plan.annualRate}%/ปี`;
 }
 
-function PlanCard({
+function isTextField(target: EventTarget | null): boolean {
+  return target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement;
+}
+
+function PlanRow({
   plan,
   card,
   isMobileView,
@@ -236,18 +171,23 @@ function PlanCard({
   onEdit,
   onCancel,
   onDelete
-}: PlanCardProps) {
-  const [scheduleOpen, setScheduleOpen] = useState(!isMobileView);
+}: PlanRowProps) {
+  // R-D: มือถือพับ / desktop กาง; ข้าม 768px แล้วรีเซ็ตตามเดิม
+  const [open, setOpen] = useState(!isMobileView);
   const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
-    setScheduleOpen(!isMobileView);
+    setOpen(!isMobileView);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobileView]);
 
   const schedule = Array.isArray(plan.schedule) ? plan.schedule : [];
   const nextUnpaidNo = plan.nextUnpaid?.no ?? null;
   const isLongPlan = plan.months > LONG_PLAN_THRESHOLD;
+  const detailId = `plan-detail-${plan.id}`;
+  const cancelled = plan.status === PLAN_STATUS.CANCELLED;
+  const editable = plan.installmentsPaid === 0 && !cancelled;
+  const settled = plan.status === PLAN_STATUS.COMPLETED || cancelled;
 
   const visibleRows = useMemo(() => {
     if (!isLongPlan || showAll) return schedule;
@@ -262,12 +202,10 @@ function PlanCard({
     });
   }, [schedule, isLongPlan, showAll]);
 
-  const settled = plan.status === PLAN_STATUS.COMPLETED || plan.status === PLAN_STATUS.CANCELLED;
-
   const renderPaidPill = (row: InstallmentScheduleRow) => {
     const key = `${plan.id}_${row.no}`;
     const busy = pendingKeys.includes(key);
-    const disabled = busy || plan.status === PLAN_STATUS.CANCELLED;
+    const disabled = busy || cancelled;
     return (
       <button
         type="button"
@@ -280,47 +218,74 @@ function PlanCard({
     );
   };
 
+  const menuItems: RowActionMenuItem[] = [
+    { key: 'rename', label: 'แก้ไขชื่อรายการ', icon: <Icons.Edit size={16} />, onSelect: () => onRename?.(plan) },
+    {
+      key: 'edit',
+      label: 'แก้ไขแผน',
+      icon: <Icons.Settings size={16} />,
+      disabled: !editable,
+      disabledReason: editable
+        ? undefined
+        : cancelled
+          ? 'แก้ไขไม่ได้เพราะแผนถูกยกเลิกแล้ว'
+          : `แก้ไขไม่ได้เพราะชำระไปแล้ว ${plan.installmentsPaid} งวด — ให้ยกเลิกแผนแล้วสร้างใหม่`,
+      onSelect: () => onEdit?.(plan)
+    },
+    ...(cancelled ? [] : [{ key: 'cancel', label: 'ยกเลิกแผน', icon: <Icons.X size={16} />, danger: true, onSelect: () => onCancel?.(plan) }]),
+    {
+      key: 'delete',
+      label: 'ลบแผน',
+      icon: <Icons.Trash size={16} />,
+      danger: true,
+      disabled: plan.installmentsPaid > 0,
+      disabledReason: plan.installmentsPaid > 0 ? 'ลบไม่ได้เพราะมีงวดที่ชำระแล้ว — ให้ยกเลิกแผนแทน' : undefined,
+      onSelect: () => onDelete?.(plan)
+    }
+  ];
+
   return (
-    <div className={`${CARD} flex flex-col gap-space-2 ${settled ? 'opacity-70' : ''}`}>
-      <div className="flex items-start justify-between gap-space-3">
-        <h3 className="m-0 line-clamp-2 text-base font-bold text-primary" title={plan.itemName}>{plan.itemName}</h3>
-        <PlanMenu
-          plan={plan}
-          onRename={onRename}
-          onEdit={onEdit}
-          onCancel={onCancel}
-          onDelete={onDelete}
+    <div className="rounded-sm border border-border-default bg-surface-2 p-space-3">
+      <div className="flex items-start gap-space-2">
+        <button
+          type="button"
+          className={`flex min-h-11 min-w-0 flex-1 flex-col gap-space-1 rounded-sm text-left ${FOCUS_RING}`}
+          aria-expanded={open}
+          aria-controls={detailId}
+          onClick={() => setOpen(value => !value)}
+        >
+          <span className="flex items-start justify-between gap-space-2">
+            <span className="block line-clamp-2 text-base font-bold text-primary" title={plan.itemName}>{plan.itemName}</span>
+            <span className={`mt-[2px] shrink-0 text-secondary transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}>
+              <Icons.ChevronDown size={16} />
+            </span>
+          </span>
+          <span className="block text-sm font-medium text-primary">{`งวดละ ${formatCurrency(plan.monthlyPayment)} ฿ · ชำระแล้ว ${plan.installmentsPaid}/${plan.months} งวด`}</span>
+          <span aria-hidden="true" className="block h-2 overflow-hidden rounded-full bg-surface-3">
+            <span className="block h-full rounded-full bg-accent transition-[width] duration-slow ease-graphite" style={{ width: `${plan.progressPercent}%` }} />
+          </span>
+          {plan.status === PLAN_STATUS.COMPLETED && <span className={`${BADGE} border-pos/40 bg-pos/16 text-pos`}>✓ ผ่อนครบแล้ว</span>}
+          {cancelled && <span className={`${BADGE} border-neg/35 bg-neg/14 text-neg`}>ยกเลิกแผนแล้ว</span>}
+          {!settled && plan.nextUnpaid && (
+            <span className="block text-xs text-secondary">
+              {`งวดถัดไป ${plan.nextUnpaid.no}/${plan.months} · ${formatIsoDateTH(resolveCardDueDate(card, plan.nextUnpaid.dueMonth) || '')}`}
+            </span>
+          )}
+        </button>
+        <RowActionMenu
+          triggerLabel={`ตัวเลือกของแผน ${plan.itemName}`}
+          items={menuItems}
+          bottomInset={isMobileView ? ADD_BAR_HEIGHT_PX : 0}
         />
       </div>
 
-      {plan.status === PLAN_STATUS.COMPLETED && <span className={`${BADGE} border-pos/40 bg-pos/16 text-pos`}>✓ ผ่อนครบแล้ว</span>}
-      {plan.status === PLAN_STATUS.CANCELLED && <span className={`${BADGE} border-neg/35 bg-neg/14 text-neg`}>ยกเลิกแผนแล้ว</span>}
+      {open && (
+        <div id={detailId} className="mt-space-2 flex flex-col gap-space-1">
+          <span className="text-xs text-secondary">{`ราคารวม ${formatCurrency(plan.totalPrice)} ฿ · ${plan.months} งวด`}</span>
+          <span className="text-xs text-secondary">{`คงเหลือ ${formatCurrency(plan.remainingPayable)} ฿`}</span>
+          <span className="text-xs text-secondary">{`ชำระแล้ว ${plan.progressPercent}%`}</span>
+          <span className="text-xs text-secondary">{describePlanInterest(plan)}</span>
 
-      <span className="text-xs text-secondary">{`${formatCurrency(plan.totalPrice)} บาท · ${plan.months} งวด`}</span>
-      <div className="h-2 overflow-hidden rounded-full bg-surface-3">
-        <div className="h-full rounded-full bg-accent transition-[width] duration-slow ease-graphite" style={{ width: `${plan.progressPercent}%` }} />
-      </div>
-      <span className="text-xs text-secondary">{`${plan.installmentsPaid}/${plan.months} งวด · ชำระแล้ว ${plan.progressPercent}%`}</span>
-      <span className="text-xs text-secondary">{`งวดละ ${formatCurrency(plan.monthlyPayment)} บาท · คงเหลือ ${formatCurrency(plan.remainingPayable)} บาท`}</span>
-      <span className="text-xs text-secondary">{describePlanInterest(plan)}</span>
-      {plan.nextUnpaid && (
-        <span className="text-xs text-secondary">
-          {`งวดถัดไป ${plan.nextUnpaid.no}/${plan.months} · ${formatIsoDateTH(resolveCardDueDate(card, plan.nextUnpaid.dueMonth) || '')}`}
-        </span>
-      )}
-
-      <button
-        type="button"
-        className={`mt-space-1 flex min-h-11 w-full items-center justify-center gap-space-2 rounded-sm border border-border-default bg-surface-2 text-sm font-medium text-secondary ${FOCUS_RING}`}
-        aria-expanded={scheduleOpen}
-        onClick={() => setScheduleOpen(value => !value)}
-      >
-        {scheduleOpen ? 'ซ่อนตารางผ่อน' : 'ดูตารางผ่อน'}
-        <Icons.ChevronDown size={16} />
-      </button>
-
-      {scheduleOpen && (
-        <>
           {/* C5 table — md+ */}
           <div className="mt-space-2 hidden overflow-x-auto md:block">
             <table className="w-full border-collapse text-sm">
@@ -357,7 +322,7 @@ function PlanCard({
             {visibleRows.map(row => (
               <div
                 key={row.no}
-                className={`flex flex-col gap-space-1 rounded-sm border border-border-subtle bg-surface-2 p-space-3 ${row.paid ? 'opacity-65' : ''} ${row.no === nextUnpaidNo ? 'border-l-2 border-l-accent' : ''}`}
+                className={`flex flex-col gap-space-1 rounded-sm border border-border-subtle bg-surface-1 p-space-3 ${row.paid ? 'opacity-65' : ''} ${row.no === nextUnpaidNo ? 'border-l-2 border-l-accent' : ''}`}
               >
                 <div className="flex items-baseline justify-between gap-space-2 text-sm text-secondary">
                   <span>{`งวด ${row.no}`}</span>
@@ -381,31 +346,10 @@ function PlanCard({
               {`แสดงทั้งหมด (${plan.months} งวด)`}
             </button>
           )}
-        </>
+        </div>
       )}
     </div>
   );
-}
-
-interface CreditCardDetailProps {
-  card: CreditCardDetailData | null;
-  plans?: CreditPlanDetail[];
-  pendingKeys?: string[];
-  onBack?: () => void;
-  onEditCard?: (card: CreditCardDetailData) => void;
-  onDeleteCard?: (card: CreditCardDetailData) => void;
-  onAddPlanForCard?: (card: CreditCardDetailData, month?: string) => void;
-  onRenamePlan?: PlanAction;
-  onEditPlan?: PlanAction;
-  onCancelPlan?: PlanAction;
-  onDeletePlan?: PlanAction;
-  onToggleInstallment?: InstallmentAction;
-  onConfirmMinimum?: (params: { card: RevolvingCard; cycle: CurrentCycle; onConfirm: () => void | Promise<void> }) => void;
-  onRevolvingChanged?: () => void;
-  /** เพิ่มทุกครั้งที่บันทึกรายจ่ายธรรมดาสำเร็จ — ให้โหลดยอด/รายการจากเซิร์ฟเวอร์ใหม่ (ไม่คำนวณฝั่ง client) */
-  spendRefreshKey?: number;
-  /** เดือนรอบบิลที่เซิร์ฟเวอร์ตอบกลับของรายการที่เพิ่งบันทึก — สลับ statementMonth ไปเดือนนั้น */
-  spendSavedMonth?: string | null;
 }
 
 export default function CreditCardDetail({
@@ -416,6 +360,8 @@ export default function CreditCardDetail({
   onEditCard,
   onDeleteCard,
   onAddPlanForCard,
+  onAddSpendForCard,
+  onEditSpendItem,
   onRenamePlan,
   onEditPlan,
   onCancelPlan,
@@ -424,19 +370,55 @@ export default function CreditCardDetail({
   onConfirmMinimum,
   onRevolvingChanged,
   spendRefreshKey = 0,
-  spendSavedMonth = null
+  spendSavedMonth = null,
+  spendSavedItemId = null
 }: CreditCardDetailProps) {
-  const [statementMonth, setStatementMonth] = useState(getCurrentMonthKey);
+  const payableCycle = useMemo(
+    () => (card ? getPayableCycleMonth(card, getCurrentMonthKey()) : ''),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [card?.statementDay, card?.dueDay]
+  );
+
+  const [statementMonth, setStatementMonth] = useState(() => (card ? getPayableCycleMonth(card, getCurrentMonthKey()) : getCurrentMonthKey()));
+  // DD-7: false = ผู้ใช้ยังไม่ได้ขยับเดือนในรอบการเข้าชมนี้ → เพิ่มรายจ่ายใช้เดือนปฏิทินปัจจุบัน
+  const [monthTouched, setMonthTouched] = useState(false);
+  const [trackedCardId, setTrackedCardId] = useState<string | undefined>(card?.id);
+  // เริ่ม/รีเซ็ตเดือนตอน card.id เปลี่ยน (รวม undefined → id) ระหว่าง render เพื่อไม่ให้ fetch เดือนเก่าก่อนหนึ่งรอบ;
+  // undefined → id ไม่แย่งเดือนที่ผู้ใช้ขยับไปแล้ว แต่ id → id อื่นรีเซ็ตเสมอ (DD-8) และ monthTouched รีเซ็ตด้วย
+  // s-1: id A → ไม่มีบัตร → id B ต้องรีเซ็ตเหมือน A → B (ไม่แย่งเดือนเฉพาะกรณียังไม่เคยมีบัตรเลย)
+  const [hadCard, setHadCard] = useState(Boolean(card?.id));
+  if (card?.id !== trackedCardId) {
+    setTrackedCardId(card?.id);
+    if (card && !hadCard) setHadCard(true);
+    if (card && !(!hadCard && monthTouched)) {
+      setStatementMonth(getPayableCycleMonth(card, getCurrentMonthKey()));
+      setMonthTouched(false);
+    }
+  }
+
+  const [localTick, setLocalTick] = useState(0);
+  const [focusItemId, setFocusItemId] = useState<string | null>(null);
   // เปลี่ยนเดือนเฉพาะเมื่อ key เปลี่ยนหลัง mount; ค่า key ที่ค้างจากการบันทึกก่อนหน้าต้องไม่ดึงเดือนตอนเปิดหน้า
   const seenSpendKeyRef = useRef(spendRefreshKey);
+  const statementMonthRef = useRef(statementMonth);
+  statementMonthRef.current = statementMonth;
   useEffect(() => {
     if (seenSpendKeyRef.current === spendRefreshKey) return;
     seenSpendKeyRef.current = spendRefreshKey;
-    if (spendRefreshKey > 0 && spendSavedMonth && MONTH_KEY_RE.test(spendSavedMonth)) setStatementMonth(spendSavedMonth);
-  }, [spendRefreshKey, spendSavedMonth]);
+    // M-1: monthTouched และ focus แถวใหม่เกิดเฉพาะเมื่อบันทึกแล้ว "สลับเดือน" จริง;
+    // เดือนเดิมให้ list refetch เงียบ ๆ และคง focus ที่ปุ่มเปิดไว้ (§6.5, I-35)
+    if (spendRefreshKey > 0 && spendSavedMonth && MONTH_KEY_RE.test(spendSavedMonth) && spendSavedMonth !== statementMonthRef.current) {
+      setStatementMonth(spendSavedMonth);
+      setMonthTouched(true);
+      if (spendSavedItemId) setFocusItemId(spendSavedItemId);
+    }
+  }, [spendRefreshKey, spendSavedMonth, spendSavedItemId]);
+
   const [isMobileView, setIsMobileView] = useState(
     () => typeof window !== 'undefined' && window.innerWidth < BP.md
   );
+  // I-38: ซ่อนแถบเพิ่มรายจ่ายขณะ focus อยู่ที่ช่องกรอก เพื่อไม่ให้ลอยเหนือคีย์บอร์ดมือถือ
+  const [fieldFocused, setFieldFocused] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -451,10 +433,22 @@ export default function CreditCardDetail({
     return () => media.removeListener(update);
   }, []);
 
+  const handleRevolvingChanged = () => { onRevolvingChanged?.(); };
+  const rev = useRevolvingCycle({
+    card,
+    month: statementMonth,
+    refreshKey: spendRefreshKey + localTick,
+    onChanged: handleRevolvingChanged,
+    onConfirmMinimum
+  });
+
   const orderedPlans = useMemo(() => {
     const rank = (plan: CreditPlanDetail) => (plan.status === PLAN_STATUS.ONGOING ? 0 : 1);
     return [...plans].sort((a, b) => rank(a) - rank(b) || String(a.createdAt).localeCompare(String(b.createdAt)));
   }, [plans]);
+  const ongoingPlans = orderedPlans.filter(plan => plan.status === PLAN_STATUS.ONGOING);
+  const settledPlans = orderedPlans.filter(plan => plan.status !== PLAN_STATUS.ONGOING);
+  const [settledOpen, setSettledOpen] = useState(false);
 
   if (!card) {
     return (
@@ -471,67 +465,98 @@ export default function CreditCardDetail({
     ? Math.min(100, round2((Number(card.remainingPrincipal) || 0) / creditLimit * 100))
     : 0;
 
+  // DD-7: ผู้ใช้ยังไม่ขยับเดือน → ใช้เดือนปฏิทินเพื่อให้วันที่เริ่มต้นของ sheet เหมือนเดิม; ขยับแล้ว → ใช้เดือนที่ดูอยู่
+  const addMonth = monthTouched ? statementMonth : getCurrentMonthKey();
+  const bottomInset = isMobileView ? ADD_BAR_HEIGHT_PX : 0;
+
+  const blurCashbackIfFocused = () => {
+    const active = document.activeElement;
+    if (active instanceof HTMLInputElement && active.id === 'revolving-cashback') active.blur();
+  };
+
+  // เปลี่ยนเดือนด้วยตัวสลับ: blur ช่องแคชแบคก่อนเพื่อให้บันทึกของเดือนเดิมเสร็จ/ถูกส่งก่อน (I-26)
+  const handleMonthChange = (next: string) => {
+    if (!MONTH_KEY_RE.test(next)) return;
+    blurCashbackIfFocused();
+    setStatementMonth(next);
+    setMonthTouched(true);
+  };
+
+  const handleResetToPayable = () => {
+    blurCashbackIfFocused();
+    setStatementMonth(payableCycle);
+    setMonthTouched(false);
+  };
+
+  // รายการไม่ผ่อนเปลี่ยน (ลบ): โหลดสรุป/ยอดรวมบัตรใหม่จาก server; เดือนอื่น → สลับไปเดือนนั้น (เหมือน onChanged เดิม)
+  const handleSpendItemsChanged = (changedMonth: string) => {
+    if (changedMonth && changedMonth !== statementMonth && MONTH_KEY_RE.test(changedMonth)) {
+      setStatementMonth(changedMonth);
+      setMonthTouched(true);
+    }
+    setLocalTick(value => value + 1);
+    onRevolvingChanged?.();
+  };
+
+  const handleFocusIn = (event: FocusEvent<HTMLDivElement>) => setFieldFocused(isTextField(event.target));
+  const handleFocusOut = () => setFieldFocused(false);
+
+  const cardMenuItems: RowActionMenuItem[] = [
+    { key: 'edit-card', label: 'แก้ไขบัตร', icon: <Icons.Edit size={16} />, onSelect: () => onEditCard?.(card) },
+    { key: 'delete-card', label: 'ลบบัตร', icon: <Icons.Trash size={16} />, danger: true, onSelect: () => onDeleteCard?.(card) }
+  ];
+
+  const renderPlanRow = (plan: CreditPlanDetail) => (
+    <PlanRow
+      key={plan.id}
+      plan={plan}
+      card={card}
+      isMobileView={isMobileView}
+      pendingKeys={pendingKeys}
+      onToggleInstallment={onToggleInstallment}
+      onRename={onRenamePlan}
+      onEdit={onEditPlan}
+      onCancel={onCancelPlan}
+      onDelete={onDeletePlan}
+    />
+  );
+
   return (
-    <div className="flex flex-col gap-space-5">
+    <div
+      className="flex flex-col gap-space-4"
+      style={isMobileView ? { paddingBottom: ADD_BAR_HEIGHT_PX } : undefined}
+      onFocus={handleFocusIn}
+      onBlur={handleFocusOut}
+    >
       <div className="flex items-center gap-space-3">
         <button type="button" className={BTN_GHOST} onClick={onBack} aria-label="กลับหน้าภาพรวม">
           <Icons.ChevronLeft size={16} /> กลับ
         </button>
-        <h2 className={SECTION_TITLE}>{card.name}</h2>
+        <div className="ml-auto flex items-center gap-space-2">
+          {!isMobileView && (
+            <button type="button" data-add-expense-fallback className={BTN_ADD} onClick={() => onAddPlanForCard?.(card, addMonth)}>
+              <span aria-hidden="true"><Icons.Plus size={16} /></span> เพิ่มรายจ่าย
+            </button>
+          )}
+          <RowActionMenu triggerLabel={`ตัวเลือกของบัตร ${card.name}`} items={cardMenuItems} bottomInset={bottomInset} />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-space-4 md:grid-cols-[320px_1fr]">
-        {/* header stat block (C3) */}
-        <div className="overflow-hidden rounded-md border border-border-default bg-surface-1 md:sticky md:top-[90px]">
-          <div className="h-[10px]" style={{ background: card.color || 'var(--color-accent, #D4A857)' }} />
-          <div className="flex flex-col gap-space-2 p-space-4">
-            <span className="inline-flex items-center gap-space-2 text-base font-bold text-primary">
-              <BankIssuerMark card={card} size={32} />
-              {card.name}
-            </span>
+      <div className="grid grid-cols-1 items-start gap-space-4 md:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="flex flex-col gap-space-4 md:sticky md:top-[90px]">
+          {/* identity header (CD-A): เบากว่าการ์ดอื่น — ไม่มีเงา */}
+          <header className="flex flex-col gap-space-1 rounded-md border border-border-default border-l-4 bg-surface-1 p-space-4" style={{ borderLeftColor: card.color || 'var(--color-accent, #D4A857)' }}>
+            <div className="flex items-center gap-space-2">
+              <BankIssuerMark card={card} size={28} />
+              <h2 className={`${SECTION_TITLE} min-w-0 break-words`}>{card.name}</h2>
+            </div>
             <span className="text-xs text-tertiary">
               {[card.bankName, card.last4 ? `····${card.last4}` : ''].filter(Boolean).join(' · ') || 'ไม่ระบุธนาคาร'}
             </span>
-
-            <span className="mt-space-1 text-xs text-tertiary">หนี้คงเหลือ</span>
-            <span className="font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums text-primary">{`${formatCurrency(card.remainingPayable)} บาท`}</span>
-
-            {/* แยกที่มาให้ชัด มิฉะนั้นตัวเลขรวมจะอธิบายไม่ได้เมื่อมีสองแหล่งป้อนเข้ามา */}
-            {Number(card.revolvingDue) > 0 && (
-              <>
-                <div className="flex items-center justify-between gap-space-3 py-[2px] text-sm">
-                  <span className="text-tertiary">ผ่อนชำระ</span>
-                  <span className="font-semibold text-primary">{formatCurrency(card.installmentPayable || 0)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-space-3 py-[2px] text-sm">
-                  <span className="text-tertiary">ยอดหมุนเวียน</span>
-                  <span className="font-semibold text-primary">{formatCurrency(card.revolvingDue || 0)}</span>
-                </div>
-              </>
-            )}
-
-            {/* เครดิตแคชแบคแสดงแยก ไม่หักจากหนี้คงเหลือ/วงเงิน (N-1, BR-CC-031) */}
-            {Number(card.revolvingCredit) > 0 && (
-              <div className="flex items-center justify-between gap-space-3 py-[2px] text-sm">
-                <span className="text-tertiary">เครดิตแคชแบค</span>
-                <span className="font-semibold text-pos">{formatCurrency(card.revolvingCredit || 0)}</span>
-              </div>
-            )}
-
+            <span className="text-xs text-tertiary">{`สรุปยอด ${formatDayLabel(card.statementDay as number | string)} · ครบกำหนด ${formatDayLabel(card.dueDay as number | string)}`}</span>
             {creditLimit > 0 && (
               <>
-                <div className="flex items-center justify-between gap-space-3 py-[2px] text-sm">
-                  <span className="min-w-0 text-tertiary">วงเงิน</span>
-                  <span className="whitespace-nowrap font-semibold text-primary">{formatCurrency(creditLimit)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-space-3 py-[2px] text-sm">
-                  <span className="min-w-0 text-tertiary">ใช้ไป</span>
-                  <span className="whitespace-nowrap font-semibold text-primary">{formatCurrency(card.remainingPrincipal || 0)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-space-3 py-[2px] text-sm">
-                  <span className="min-w-0 text-tertiary">คงเหลือ</span>
-                  <span className="whitespace-nowrap font-semibold text-primary">{formatCurrency(card.availableCredit || 0)}</span>
-                </div>
+                <span className="mt-space-1 text-sm text-secondary">{`ใช้ไป ${formatCurrency(card.remainingPrincipal || 0)} / ${formatCurrency(creditLimit)} ฿`}</span>
                 <div className="h-2 overflow-hidden rounded-full bg-surface-3">
                   <div
                     className={`h-full rounded-full transition-[width] duration-slow ease-graphite ${utilisation >= 80 ? 'bg-neg' : 'bg-accent'}`}
@@ -539,84 +564,108 @@ export default function CreditCardDetail({
                   />
                 </div>
                 <span className="text-xs text-secondary">{`${utilisation.toFixed(1)}%`}</span>
+                <span className="text-sm text-secondary">{`คงเหลือ ${formatCurrency(card.availableCredit || 0)} ฿`}</span>
               </>
             )}
+            <span className="text-sm text-secondary">{`หนี้คงเหลือรวม ${formatCurrency(card.remainingPayable)} ฿`}</span>
+            {/* แยกที่มาให้ชัด มิฉะนั้นตัวเลขรวมจะอธิบายไม่ได้เมื่อมีสองแหล่งป้อนเข้ามา */}
+            {Number(card.revolvingDue) > 0 && (
+              <span className="text-xs text-tertiary">{`ผ่อนชำระ ${formatCurrency(card.installmentPayable || 0)} · ยอดหมุนเวียน ${formatCurrency(card.revolvingDue || 0)}`}</span>
+            )}
+            {/* เครดิตแคชแบคแสดงแยก ไม่หักจากหนี้คงเหลือ/วงเงิน (N-1, BR-CC-031) */}
+            {Number(card.revolvingCredit) > 0 && (
+              <span className="text-xs text-pos">{`เครดิตแคชแบค ${formatCurrency(card.revolvingCredit || 0)}`}</span>
+            )}
+          </header>
 
-            {/* แถวข้อมูลกำหนดการ (วันสรุปยอด/วันครบกำหนด) เบาลงเล็กน้อยจากแถวการเงินด้านบน — ตัวเลขที่
-                เกี่ยวกับการตัดสินใจจริงไม่ควรโดดเท่า metadata (critique 2026-08-29 P3, carried forward
-                จาก CreditCard.module.css .detailRowMeta เดิม) */}
-            <div className="flex items-center justify-between gap-space-3 py-[2px] text-xs font-medium text-tertiary">
-              <span>สรุปยอด</span>
-              <span>{formatDayLabel(card.statementDay as number | string)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-space-3 py-[2px] text-xs font-medium text-tertiary">
-              <span>ครบกำหนด</span>
-              <span>{formatDayLabel(card.dueDay as number | string)}</span>
-            </div>
-
-            <div className="mt-space-2 flex flex-col gap-space-2">
-              <button type="button" className={`${BTN_GHOST} w-full`} onClick={() => onEditCard?.(card)}>
-                <Icons.Edit size={16} /> แก้ไขบัตร
-              </button>
-              <button type="button" className={`${BTN_GHOST} w-full text-neg`} onClick={() => onDeleteCard?.(card)}>
-                <Icons.Trash size={16} /> ลบบัตร
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-space-4">
-          <label className="text-sm text-secondary">เดือนรอบบิล
-            <input type="month" className="ml-space-3 min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-primary"
-              value={statementMonth} onChange={event => { if (MONTH_KEY_RE.test(event.target.value)) setStatementMonth(event.target.value); }} />
-          </label>
-          {/* ยอดหมุนเวียนเป็นภาระหลักของบัตร จึงอยู่เหนือรายการแผนผ่อนซึ่งเป็นรายละเอียดย่อย (UX_SPEC §9) */}
-          <RevolvingBalanceSection
-            key={`${card.id}-${statementMonth}-${spendRefreshKey}`}
+          <CardPayNextSummary
             card={card}
             month={statementMonth}
+            status={rev.status}
+            currentCycle={rev.currentCycle}
+            previousMonthCycle={rev.previousMonthCycle}
+            cardTotal={rev.cardTotal}
+            busy={rev.busy}
+            onPayFull={() => { void rev.payFull(); }}
+            onPayMinimum={rev.payMinimum}
+            onUndo={() => { void rev.undoPayment(); }}
+            onRetry={rev.retry}
+            switcher={(
+              <BillingMonthSwitcher
+                month={statementMonth}
+                payableCycle={payableCycle}
+                onChange={handleMonthChange}
+                onReset={handleResetToPayable}
+              />
+            )}
+          />
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-space-4">
+          <CreditSpendItems
+            key={`${card.id}-${statementMonth}`}
+            cardId={card.id}
+            month={statementMonth}
+            refreshKey={spendRefreshKey}
+            focusItemId={focusItemId}
             isMobileView={isMobileView}
-            onConfirmMinimum={onConfirmMinimum}
-            onChanged={changedMonth => {
-              if (changedMonth) setStatementMonth(changedMonth);
-              onRevolvingChanged?.();
-            }}
+            menuBottomInset={bottomInset}
+            onEdit={item => onEditSpendItem?.(item, card)}
+            onAddSimple={() => onAddSpendForCard?.(card, addMonth)}
+            onFocusHandled={() => setFocusItemId(null)}
+            onChanged={handleSpendItemsChanged}
           />
 
-          <div className="flex items-center justify-between gap-space-3">
-            <h2 className={SECTION_TITLE}>{`แผนผ่อนชำระ (${plans.length})`}</h2>
-            <button
-              type="button"
-              data-add-expense-fallback
-              className={`inline-flex min-h-11 items-center justify-center gap-space-2 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent transition-colors duration-fast ease-graphite hover:opacity-90 ${FOCUS_RING}`}
-              onClick={() => onAddPlanForCard?.(card, statementMonth)}
-            >
-              <Icons.Plus size={16} /> เพิ่มรายจ่าย
-            </button>
-          </div>
+          <section className={`${CARD} flex flex-col gap-space-3`}>
+            <h3 className={SECTION_TITLE}>{`แผนผ่อนชำระ (${plans.length})`}</h3>
+            {orderedPlans.length === 0 ? (
+              <p className="m-0 text-sm text-tertiary">ยังไม่มีแผนผ่อนในบัตรนี้ — กด “เพิ่มรายจ่าย” เพื่อเริ่มต้น</p>
+            ) : (
+              <div className="flex flex-col gap-space-3">
+                {ongoingPlans.map(renderPlanRow)}
+                {settledPlans.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      className={`flex min-h-11 w-full items-center justify-between gap-space-2 rounded-sm border border-border-default bg-surface-2 px-space-3 text-left text-sm font-medium text-secondary ${FOCUS_RING}`}
+                      aria-expanded={settledOpen}
+                      aria-controls="settled-plans-panel"
+                      onClick={() => setSettledOpen(value => !value)}
+                    >
+                      {`แผนที่จบแล้ว (${settledPlans.length})`}
+                      <span className={`transition-transform motion-reduce:transition-none ${settledOpen ? 'rotate-180' : ''}`}><Icons.ChevronDown size={16} /></span>
+                    </button>
+                    {settledOpen && (
+                      <div id="settled-plans-panel" className="flex flex-col gap-space-3 text-secondary">
+                        {settledPlans.map(renderPlanRow)}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </section>
 
-          {orderedPlans.length === 0 ? (
-            <p className="m-0 text-sm text-tertiary">ยังไม่มีแผนผ่อนในบัตรนี้ — กด “เพิ่มรายจ่าย” เพื่อเริ่มต้น</p>
-          ) : (
-            <div className="flex flex-col gap-space-3">
-              {orderedPlans.map(plan => (
-                <PlanCard
-                  key={plan.id}
-                  plan={plan}
-                  card={card}
-                  isMobileView={isMobileView}
-                  pendingKeys={pendingKeys}
-                  onToggleInstallment={onToggleInstallment}
-                  onRename={onRenamePlan}
-                  onEdit={onEditPlan}
-                  onCancel={onCancelPlan}
-                  onDelete={onDeletePlan}
-                />
-              ))}
-            </div>
-          )}
+          <RevolvingBalanceSection month={statementMonth} isMobileView={isMobileView} rev={rev} />
         </div>
       </div>
+
+      {isMobileView && (
+        <div
+          hidden={fieldFocused}
+          className="fixed inset-x-0 z-[90] border-t border-border-subtle bg-surface-1 px-space-4 py-space-3"
+          style={{ bottom: 'var(--nav-safe-bottom, 56px)' }}
+        >
+          <button
+            type="button"
+            data-add-expense-fallback
+            className={`flex min-h-12 w-full items-center justify-center gap-space-2 rounded-sm bg-accent px-space-4 text-sm font-semibold text-on-accent transition-colors duration-fast ease-graphite hover:opacity-90 ${FOCUS_RING}`}
+            onClick={() => onAddPlanForCard?.(card, addMonth)}
+          >
+            <span aria-hidden="true"><Icons.Plus size={16} /></span> เพิ่มรายจ่าย
+          </button>
+        </div>
+      )}
     </div>
   );
 }
