@@ -1,17 +1,22 @@
+// RevolvingBalanceSection is now the cashback disclosure + history disclosure fed by useRevolvingCycle.
+// AC-CB-60 to AC-CB-64 and AC-CB-69 are kept here against a small hook harness; AC-CB-65 to AC-CB-68 moved to
+// CardPayNextSummary.test.tsx and the card-total refresh case moved to useRevolvingCycle.test.ts.
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import RevolvingBalanceSection from '../../src/frontend/components/RevolvingBalanceSection';
-import { creditCardAPI, expenseAPI } from '../../src/shared/utils/frontend/apiUtils';
+import { useRevolvingCycle } from '../../src/shared/utils/frontend/useRevolvingCycle';
+import { creditCardAPI } from '../../src/shared/utils/frontend/apiUtils';
 import { buildRevolvingCycles } from '../../src/shared/utils/creditCardUtils';
 
 jest.mock('../../src/shared/utils/frontend/apiUtils', () => ({
   expenseAPI: { getByMonth: jest.fn().mockResolvedValue({}) },
   creditCardAPI: {
     getRevolving: jest.fn(),
-    listSpendItems: jest.fn().mockResolvedValue({ items: [], totals: {} }),
     saveRevolvingCashback: jest.fn(),
     setRevolvingAction: jest.fn()
   }
 }));
+jest.mock('../../src/shared/utils/frontend/toast', () => ({ showToast: jest.fn() }));
 
 const mockedCreditCardAPI = creditCardAPI as jest.Mocked<typeof creditCardAPI>;
 const CARD = { id: 'cc_x', name: 'บัตร X', annualRate: 12, minPaymentPercent: 10, dueDay: 20 };
@@ -25,33 +30,34 @@ const chainResponse = (stored: StoredCycleInput[], throughMonth = JAN) => ({
   truncated: false
 });
 
+function Harness({ month, isMobileView }: { month: string; isMobileView: boolean }) {
+  const rev = useRevolvingCycle({ card: CARD, month });
+  return (
+    <>
+      <button type="button">outside</button>
+      <RevolvingBalanceSection month={month} isMobileView={isMobileView} rev={rev} />
+    </>
+  );
+}
+
 async function renderWith(
   stored: StoredCycleInput[],
   { month = JAN, throughMonth = month, isMobileView = false }: { month?: string; throughMonth?: string; isMobileView?: boolean } = {}
 ) {
   mockedCreditCardAPI.getRevolving.mockResolvedValue(chainResponse(stored, throughMonth));
-  const utils = render(<RevolvingBalanceSection card={CARD} month={month} isMobileView={isMobileView} />);
-  await waitFor(() => expect(screen.getByLabelText('แคชแบคที่ได้รับเดือนนี้ (บาท)')).toBeInTheDocument());
+  const utils = render(<Harness month={month} isMobileView={isMobileView} />);
+  await waitFor(() => expect(screen.getByLabelText('แคชแบคที่ได้รับเดือนนี้ (บาท)')).not.toBeDisabled());
   return utils;
 }
 
 afterEach(() => jest.clearAllMocks());
 
 describe('RevolvingBalanceSection cashback input', () => {
-  it('refreshes the selected-month card total when the parent reloads the card after an installment change', async () => {
-    const expense = expenseAPI.getByMonth as jest.Mock;
-    expense.mockResolvedValue({ ccr_x: { actual: 1000, breakdown: { installmentTotal: 0 } } });
-    const { rerender } = await renderWith([{ month: JAN, newSpend: 1000, paymentAction: null }]);
-    expect(await screen.findByText(/งวดผ่อนเดือนนี้ 0\.00 ฿ · ยอดรวมบัตร 1,000\.00 ฿/)).toBeInTheDocument();
-    expense.mockResolvedValue({ ccr_x: { actual: 1300, breakdown: { installmentTotal: 300 } } });
-    rerender(<RevolvingBalanceSection card={{ ...CARD }} month={JAN} />);
-    expect(await screen.findByText(/งวดผ่อนเดือนนี้ 300\.00 ฿ · ยอดรวมบัตร 1,300\.00 ฿/)).toBeInTheDocument();
-    expense.mockResolvedValue({});
-  });
-
   it('AC-CB-60 structure: text input, inputMode decimal, described by the helper, placeholder 0.00', async () => {
     await renderWith([{ month: JAN, newSpend: 1000, paymentAction: null }]);
     const input = screen.getByLabelText('แคชแบคที่ได้รับเดือนนี้ (บาท)');
+    expect(input).toHaveAttribute('id', 'revolving-cashback');
+    expect(input).toHaveAttribute('name', 'cashbackAmount');
     expect(input).toHaveAttribute('type', 'text');
     expect(input).toHaveAttribute('inputMode', 'decimal');
     expect(input).toHaveAttribute('placeholder', '0.00');
@@ -92,57 +98,39 @@ describe('RevolvingBalanceSection cashback input', () => {
   });
 });
 
-describe('RevolvingBalanceSection cashback states', () => {
-  it('AC-CB-65 positive month: net total, cashback line and pay buttons', async () => {
-    await renderWith([{ month: JAN, newSpend: 1000, cashbackAmount: 100, paymentAction: null }]);
-    expect(screen.getByText('900.00 ฿')).toBeInTheDocument();
-    expect(screen.getByText('หักแคชแบคแล้ว 100.00 ฿')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /จ่ายเต็มจำนวน 900\.00/ })).toBeInTheDocument();
+describe('AC-CD25 cashback disclosure', () => {
+  it('is collapsed below 768px (hidden, not unmounted) and expanded at or above it', async () => {
+    const { unmount } = await renderWith([{ month: JAN, newSpend: 1000, cashbackAmount: 100, paymentAction: null }], { isMobileView: true });
+    const toggle = screen.getByRole('button', { name: /แคชแบค · ม\.ค\. 2642/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveTextContent('100.00 ฿');
+    expect(screen.getByLabelText('แคชแบคที่ได้รับเดือนนี้ (บาท)')).toBeInTheDocument();
+    expect(document.getElementById('revolving-cashback-panel')).toHaveAttribute('hidden');
+    unmount();
+    await renderWith([{ month: JAN, newSpend: 1000, paymentAction: null }], { isMobileView: false });
+    expect(screen.getByRole('button', { name: /แคชแบค · ม\.ค\. 2642/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /แคชแบค · ม\.ค\. 2642/ })).toHaveTextContent('ยังไม่ได้กรอก');
+    expect(document.getElementById('revolving-cashback-panel')).not.toHaveAttribute('hidden');
   });
 
-  it('paid full then cashback on a still-positive month shows the settled panel with the net amount', async () => {
-    await renderWith([{ month: JAN, newSpend: 1000, cashbackAmount: 100, paymentAction: 'full' }]);
-    expect(screen.getByText('✓ จ่ายเต็มจำนวนแล้ว 900.00 ฿')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'ยกเลิกการชำระ' })).toBeInTheDocument();
+  it('collapsing while a changed value is focused saves it once', async () => {
+    const user = userEvent.setup();
+    await renderWith([{ month: JAN, newSpend: 1000, cashbackAmount: 100, paymentAction: null }], { isMobileView: false });
+    mockedCreditCardAPI.saveRevolvingCashback.mockResolvedValue(chainResponse([{ month: JAN, newSpend: 1000, cashbackAmount: 150, paymentAction: null }]));
+    const input = screen.getByLabelText('แคชแบคที่ได้รับเดือนนี้ (บาท)');
+    await user.clear(input);
+    await user.type(input, '150');
+    expect(input).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: /แคชแบค · ม\.ค\. 2642/ }));
+    await waitFor(() => expect(mockedCreditCardAPI.saveRevolvingCashback).toHaveBeenCalledTimes(1));
+    expect(mockedCreditCardAPI.saveRevolvingCashback).toHaveBeenCalledWith('cc_x', JAN, '150.00');
+    expect(document.getElementById('revolving-cashback-panel')).toHaveAttribute('hidden');
+    await waitFor(() => expect(screen.getByRole('button', { name: /แคชแบค · ม\.ค\. 2642/ })).toHaveTextContent('150.00 ฿'));
   });
+});
 
-  it('AC-CB-66 + C-8: zero after cashback with a stored full shows only the zero line', async () => {
-    await renderWith([{ month: JAN, newSpend: 1000, cashbackAmount: 1000, paymentAction: 'full' }]);
-    expect(screen.getByText('แคชแบคหักยอดเดือนนี้หมดพอดี · ไม่มียอดต้องชำระ')).toBeInTheDocument();
-    expect(screen.queryByText(/จ่ายเต็มจำนวนแล้ว/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'ยกเลิกการชำระ' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /จ่ายเต็มจำนวน/ })).not.toBeInTheDocument();
-    expect(screen.queryByText(/เครดิตคงเหลือ/)).not.toBeInTheDocument();
-  });
-
-  it('a zero month without cashback and a stored full still shows the settled panel as before', async () => {
-    await renderWith([{ month: JAN, newSpend: 0, paymentAction: 'full' }]);
-    expect(screen.getByText('✓ จ่ายเต็มจำนวนแล้ว 0.00 ฿')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'ยกเลิกการชำระ' })).toBeInTheDocument();
-    expect(screen.queryByText(/แคชแบคหักยอดเดือนนี้หมดพอดี/)).not.toBeInTheDocument();
-  });
-
-  it.each<'full' | 'minimum' | null>([null, 'full', 'minimum'])('AC-CB-67 credit month (stored %p): credit panel only', async (action) => {
-    await renderWith([{ month: JAN, newSpend: 300, cashbackAmount: 500, paymentAction: action }]);
-    expect(screen.getByText('เครดิตคงเหลือ 200.00 ฿')).toBeInTheDocument();
-    expect(screen.getByText('ไม่มียอดต้องชำระเดือนนี้')).toBeInTheDocument();
-    expect(screen.queryByText(/จ่ายเต็มจำนวนแล้ว|จ่ายขั้นต่ำแล้ว/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'ยกเลิกการชำระ' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /จ่ายเต็มจำนวน|จ่ายขั้นต่ำ/ })).not.toBeInTheDocument();
-    expect(screen.queryByText('ยอดที่ต้องชำระทั้งหมด')).not.toBeInTheDocument();
-  });
-
-  it('AC-CB-68 next month with a carried credit shows its source line without interest', async () => {
-    await renderWith([{ month: JAN, newSpend: 300, cashbackAmount: 500, paymentAction: null }], { month: FEB, throughMonth: FEB });
-    expect(screen.getByText('เครดิตยกมา')).toBeInTheDocument();
-    expect(screen.queryByText('ยอดยกมา')).not.toBeInTheDocument();
-    expect(screen.getByText(/· คำนวณจากเดือนก่อนหน้าโดยอัตโนมัติ/)).toBeInTheDocument();
-    expect(screen.queryByText(/รวมดอกเบี้ย/)).not.toBeInTheDocument();
-    expect(screen.getByText('เครดิตคงเหลือ 200.00 ฿')).toBeInTheDocument();
-    expect(screen.queryByText('ยังไม่ได้บันทึกยอดใช้จ่ายของเดือนนี้')).not.toBeInTheDocument();
-  });
-
-  it('AC-CB-69 + C-10 (md+ table): cashback column, credit status, and signed carry amounts', async () => {
+describe('history (AC-CB-69 / AC-CD26)', () => {
+  it('AC-CB-69 + C-10 (md+ table): cashback column, credit status, signed carry amounts, selected month marked', async () => {
     const { container } = await renderWith([
       { month: JAN, newSpend: 300, cashbackAmount: 500, paymentAction: 'full' },
       { month: FEB, newSpend: 1000, paymentAction: null }
@@ -151,7 +139,8 @@ describe('RevolvingBalanceSection cashback states', () => {
     expect(table).not.toBeNull();
     const headers = Array.from(table!.querySelectorAll('th')).map(header => header.textContent);
     expect(headers).toEqual(['เดือน', 'ยกมา', 'ใช้จ่าย', 'แคชแบค', 'ชำระ', 'ยกไป']);
-    const rows = Array.from(table!.querySelectorAll('tbody tr')).map(tableRow => Array.from(tableRow.querySelectorAll('td')).map(cell => cell.textContent));
+    const bodyRows = Array.from(table!.querySelectorAll('tbody tr'));
+    const rows = bodyRows.map(tableRow => Array.from(tableRow.querySelectorAll('td')).map(cell => cell.textContent));
     const [feb, jan] = rows;
     expect(jan[3]).toBe('500.00');
     expect(jan[4]).toBe('มีเครดิต');
@@ -161,11 +150,17 @@ describe('RevolvingBalanceSection cashback states', () => {
     expect(feb[4]).toBe('ยังไม่ชำระ');
     expect(feb[5]).toBe('800.00');
     expect(table!.textContent).not.toMatch(/-200/);
+    expect(bodyRows[0]).toHaveAttribute('aria-current', 'true');
+    expect(bodyRows[1]).not.toHaveAttribute('aria-current');
   });
 
-  it('AC-CB-69 + C-10 (mobile stack): credit wording, status, and cashback detail line', async () => {
+  it('AC-CB-69 + C-10 (mobile stack): the history toggle (targeted by name) expands credit wording, status and cashback detail', async () => {
     const { container } = await renderWith([{ month: JAN, newSpend: 300, cashbackAmount: 500, paymentAction: 'full' }], { isMobileView: true });
-    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    // several aria-expanded:false disclosures exist now, so target the history one by its name
+    const historyToggle = screen.getByRole('button', { name: /ประวัติยอดหมุนเวียน/ });
+    expect(historyToggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(historyToggle);
+    expect(screen.getByRole('button', { name: 'ซ่อนประวัติยอดหมุนเวียน' })).toHaveAttribute('aria-expanded', 'true');
     const text = container.textContent || '';
     expect(text).toContain('มีเครดิต');
     expect(text).toContain('ยกมา 0.00 · ใช้จ่าย 300.00 · แคชแบค 500.00');

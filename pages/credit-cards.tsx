@@ -36,10 +36,13 @@ import { formatCurrency } from '../src/shared/utils/frontend/numberUtils';
 import { formatMonthKeyTH } from '../src/shared/utils/dateUtils';
 import { addMonths, buildSchedule, getCardDueMonth, getCurrentMonthKey, PLAN_STATUS } from '../src/shared/utils/creditCardUtils';
 import { getTabbableElements } from '../src/shared/utils/frontend/focusTrap';
-import AddCardExpenseTypeDialog, { type AddExpenseType } from '../src/frontend/components/AddCardExpenseTypeDialog';
-import CardSpendItemDialog, { type SpendDialogCard } from '../src/frontend/components/CardSpendItemDialog';
+import AddCardExpenseSheet, {
+  type AddExpenseSheetMode,
+  type AddExpenseSheetStep,
+  type SpendDialogCard
+} from '../src/frontend/components/AddCardExpenseSheet';
 import type { CreditSpendItem } from '../src/shared/utils/frontend/apiUtils';
-import type { CurrentCycle } from '../src/frontend/components/RevolvingBalanceSection';
+import type { CurrentCycle } from '../src/shared/utils/frontend/useRevolvingCycle';
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 
@@ -228,11 +231,16 @@ export default function CreditCardsPage() {
   const [planFormOpen, setPlanFormOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<CreditPlanRecord | null>(null);
   const [lockedCardId, setLockedCardId] = useState<string | null>(null);
-  const [expenseFlow, setExpenseFlow] = useState<{ step: 'closed' | 'type' | 'spend'; card: SpendDialogCard | null; month: string }>(
-    { step: 'closed', card: null, month: '' }
-  );
+  const [expenseFlow, setExpenseFlow] = useState<{
+    step: 'closed' | 'open';
+    mode: AddExpenseSheetMode;
+    card: SpendDialogCard | null;
+    month: string;
+    initialStep: AddExpenseSheetStep;
+    item: CreditSpendItem | null;
+  }>({ step: 'closed', mode: 'create', card: null, month: '', initialStep: 'type', item: null });
   const expenseOpenerRef = useRef<HTMLElement | null>(null);
-  const [spendSaved, setSpendSaved] = useState<{ key: number; month: string | null }>({ key: 0, month: null });
+  const [spendSaved, setSpendSaved] = useState<{ key: number; month: string | null; itemId: string | null }>({ key: 0, month: null, itemId: null });
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
   const [backdateFailure, setBackdateFailure] = useState<BackdateFailureState | null>(null);
 
@@ -360,23 +368,33 @@ export default function CreditCardsPage() {
 
   // ------------------------------------------------------------- plan actions
 
-  // "เพิ่มรายจ่าย": เลือกประเภทก่อน แล้วไปฟอร์มผ่อนเดิม หรือไดอะล็อกรายจ่ายธรรมดา (spec-credit-card-add-expense §5.4)
-  const handleOpenAddExpense = (card: SpendDialogCard | null = null, month?: string) => {
+  // "เพิ่มรายจ่าย": sheet เดียว — ขั้นเลือกประเภทก่อน แล้วไปฟอร์มผ่อนเดิม หรือขั้นรายจ่ายธรรมดาใน sheet เดียวกัน
+  // (spec-credit-card-detail-redesign §6; เดิม spec-credit-card-add-expense §5.4)
+  const handleOpenAddExpense = (card: SpendDialogCard | null = null, month?: string, initialStep: AddExpenseSheetStep = 'type') => {
     if (!cards.length) {
       showToast('กรุณาเพิ่มบัตรก่อนเพิ่มรายจ่าย', 'error');
       return;
     }
     const active = document.activeElement;
     expenseOpenerRef.current = active instanceof HTMLElement ? active : null;
-    setExpenseFlow({ step: 'type', card, month: month || getCurrentMonthKey() });
+    setExpenseFlow({ step: 'open', mode: 'create', card, month: month || getCurrentMonthKey(), initialStep, item: null });
+  };
+
+  // แก้ไขรายการไม่ผ่อนจากเมนู ⋯ ของแถว: เปิด sheet โหมด edit (ไม่มีฟอร์ม inline อีกแล้ว)
+  const handleOpenEditSpendItem = (item: CreditSpendItem, card: SpendDialogCard) => {
+    const active = document.activeElement;
+    expenseOpenerRef.current = active instanceof HTMLElement ? active : null;
+    setExpenseFlow({ step: 'open', mode: 'edit', card, month: item.month, initialStep: 'spend', item });
   };
 
   const restoreExpenseOpener = () => {
     const opener = expenseOpenerRef.current;
     expenseOpenerRef.current = null;
     if (opener && opener.isConnected) { opener.focus(); return; }
-    // opener หายไปแล้ว → ปุ่ม "เพิ่มรายจ่าย" หลักของหน้า (dashboard / detail) (§5.5)
-    document.querySelector<HTMLElement>('[data-add-expense-fallback]')?.focus();
+    // opener หายไปแล้ว → ปุ่ม "เพิ่มรายจ่าย" หลักของหน้า (dashboard / detail) ตัวที่มองเห็นอยู่ (§5.5, S-13)
+    const fallback = Array.from(document.querySelectorAll<HTMLElement>('[data-add-expense-fallback]'))
+      .find(element => element.getClientRects().length > 0);
+    fallback?.focus();
   };
 
   const handleCancelExpenseFlow = () => {
@@ -384,29 +402,32 @@ export default function CreditCardsPage() {
     restoreExpenseOpener();
   };
 
-  const handleChooseExpenseType = (type: AddExpenseType) => {
-    if (type === 'installment') {
-      // คืน focus ให้ opener ก่อนเปิดฟอร์ม เพื่อให้ฟอร์มจับ activeElement ที่ถูกต้อง (V6)
-      restoreExpenseOpener();
-      setEditingPlan(null);
-      setLockedCardId(expenseFlow.card?.id || null);
-      setPlanFormOpen(true);
-      setExpenseFlow(prev => ({ ...prev, step: 'closed' }));
-      return;
-    }
-    setExpenseFlow(prev => ({ ...prev, step: 'spend' }));
+  const handleChooseInstallment = () => {
+    // คืน focus ให้ opener ก่อนเปิดฟอร์ม เพื่อให้ฟอร์มจับ activeElement ที่ถูกต้อง (V6)
+    restoreExpenseOpener();
+    setEditingPlan(null);
+    setLockedCardId(expenseFlow.card?.id || null);
+    setPlanFormOpen(true);
+    setExpenseFlow(prev => ({ ...prev, step: 'closed' }));
   };
 
   const handleSpendSaved = async (item: CreditSpendItem): Promise<void> => {
+    const savedMode = expenseFlow.mode;
     setExpenseFlow(prev => ({ ...prev, step: 'closed' }));
     restoreExpenseOpener();
     // ยอดรวม/รายการมาจากเซิร์ฟเวอร์เท่านั้น — refetch หลังบันทึก ไม่มี optimistic UI
     await loadData({ silent: true });
-    setPlanCreatedNote(`เพิ่มรายการ ${item.name} เข้ารอบบิล ${formatMonthKeyTH(item.month)} แล้ว`);
-    setSpendSaved(prev => ({ key: prev.key + 1, month: item.month }));
-    showToast(selectedCardId
-      ? `เพิ่มรายจ่ายแล้ว · รอบบิล ${formatMonthKeyTH(item.month)}`
-      : 'เพิ่มรายจ่ายแล้ว');
+    if (savedMode === 'create') {
+      setPlanCreatedNote(`เพิ่มรายการ ${item.name} เข้ารอบบิล ${formatMonthKeyTH(item.month)} แล้ว`);
+    }
+    setSpendSaved(prev => ({ key: prev.key + 1, month: item.month, itemId: item.id }));
+    if (savedMode === 'edit') {
+      showToast(`บันทึกรายการแล้ว · รอบบิล ${formatMonthKeyTH(item.month)}`);
+    } else {
+      showToast(selectedCardId
+        ? `เพิ่มรายจ่ายแล้ว · รอบบิล ${formatMonthKeyTH(item.month)}`
+        : 'เพิ่มรายจ่ายแล้ว');
+    }
   };
 
   const handleOpenEditPlan = (plan: CreditPlanRecord) => {
@@ -647,9 +668,12 @@ export default function CreditCardsPage() {
             onBack={() => goTo({})}
             onEditCard={handleOpenEditCard}
             onDeleteCard={handleDeleteCard}
-            onAddPlanForCard={handleOpenAddExpense}
+            onAddPlanForCard={(card, month) => handleOpenAddExpense(card, month)}
+            onAddSpendForCard={(card, month) => handleOpenAddExpense(card, month, 'spend')}
+            onEditSpendItem={handleOpenEditSpendItem}
             spendRefreshKey={spendSaved.key}
             spendSavedMonth={spendSaved.month}
+            spendSavedItemId={spendSaved.itemId}
             onRenamePlan={handleOpenEditPlan}
             onEditPlan={handleOpenEditPlan}
             onCancelPlan={handleCancelPlan}
@@ -671,7 +695,7 @@ export default function CreditCardsPage() {
             onEditCard={handleOpenEditCard}
             onDeleteCard={handleDeleteCard}
             onAddPlan={() => handleOpenAddExpense(null)}
-            onAddPlanForCard={handleOpenAddExpense}
+            onAddPlanForCard={(card) => handleOpenAddExpense(card)}
             onOpenCard={(cardId: string) => goTo({ card: cardId })}
           />
         )}
@@ -686,21 +710,18 @@ export default function CreditCardsPage() {
           onSubmit={handleSubmitCard}
         />
 
-        <AddCardExpenseTypeDialog
-          open={expenseFlow.step === 'type'}
-          cardName={expenseFlow.card?.name}
-          onChoose={handleChooseExpenseType}
+        <AddCardExpenseSheet
+          open={expenseFlow.step === 'open'}
+          mode={expenseFlow.mode}
+          cards={cards as Array<CreditCardRecord & Pick<SpendDialogCard, 'statementDay'>>}
+          card={expenseFlow.card}
+          month={expenseFlow.month}
+          item={expenseFlow.item}
+          initialStep={expenseFlow.initialStep}
+          onChooseInstallment={handleChooseInstallment}
           onCancel={handleCancelExpenseFlow}
+          onSaved={handleSpendSaved}
         />
-        {expenseFlow.step === 'spend' && (
-          <CardSpendItemDialog
-            cards={cards as Array<CreditCardRecord & Pick<SpendDialogCard, "statementDay">>}
-            card={expenseFlow.card}
-            month={expenseFlow.month}
-            onCancel={handleCancelExpenseFlow}
-            onSaved={handleSpendSaved}
-          />
-        )}
 
         <InstallmentPlanForm
           open={planFormOpen}
