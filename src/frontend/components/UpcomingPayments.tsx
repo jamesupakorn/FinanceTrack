@@ -16,7 +16,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useListCriteria } from '../contexts/ListViewContext';
-import { compareListValues, matchesListQuery } from '../../shared/utils/frontend/listView';
+import { compareListValues, matchesListQuery, emptyListCriteria } from '../../shared/utils/frontend/listView';
 import { useListProjection } from '../../shared/utils/frontend/useListProjection';
 import ListToolbar from './ListToolbar';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
@@ -59,6 +59,9 @@ interface UpcomingPaymentsProps {
   /** รายการบัตรเครดิตที่ชำระแล้วของเดือนที่เลือก (collectPaidCardPayments) — ไม่ผ่าน ListToolbar */
   paidEvents?: PaidEvent[];
   onRevolvingCancel?: PaidEventAction;
+  /** ข้อมูลบางส่วนของหน้าโหลดไม่สำเร็จ — ห้ามอ้างว่า "ไม่มีรายการ" จากข้อมูลที่ไม่ครบ */
+  incomplete?: boolean;
+  onRetry?: () => void;
 }
 
 interface UpcomingItemProps {
@@ -363,7 +366,9 @@ export default function UpcomingPayments({
   onRevolvingMinimum,
   highlightedKey,
   paidEvents,
-  onRevolvingCancel
+  onRevolvingCancel,
+  incomplete = false,
+  onRetry
 }: UpcomingPaymentsProps) {
   const [criteria, setCriteria] = useListCriteria('dashboard-upcoming');
   // Escape ล้างตัวกรองเมื่อมีตัวกรองใช้งานอยู่ (spec §5)
@@ -437,12 +442,28 @@ export default function UpcomingPayments({
   const totalAfterFilter = overdue.length + dueToday.length + dueSoon.length;
   const filterCopy = filter ? FILTER_EMPTY_COPY[filter] : null;
 
+  // แยกสถานะว่าง: กำลังโหลด (upcoming ยังไม่มา) / ข้อมูลโหลดไม่ครบ / ว่างจริง (compact) /
+  // ว่างเพราะวงแหวน / ว่างเพราะตัวกรองในรายการ — "ว่างจริง" ต้องไม่มีแถวเลย (รวมแถวค้างระหว่างบันทึก)
+  // และไม่มีเงื่อนไขที่ผู้ใช้ต้องล้าง ไม่เช่นนั้น toolbar ต้องอยู่เพื่อให้ล้างเงื่อนไขที่บันทึกค้างได้
+  const hasLocalCriteria = Boolean(criteria.query || criteria.filters.type || criteria.filters.account);
+  type EmptyKind = 'loading' | 'incomplete' | 'compact' | 'ring' | 'filtered';
+  let emptyKind: EmptyKind | null = null;
+  if (upcoming == null) emptyKind = 'loading';
+  else if (totalAfterFilter === 0) {
+    if (filter && ringRows.length === 0) emptyKind = 'ring';
+    else if (hasLocalCriteria || ringRows.length > 0) emptyKind = 'filtered';
+    else emptyKind = incomplete ? 'incomplete' : 'compact';
+  }
+  const bareEmpty = emptyKind === 'loading' || emptyKind === 'incomplete' || emptyKind === 'compact';
+  const clearLocalCriteria = () => setCriteria({ ...emptyListCriteria(), order: criteria.order });
+  const LINK_BTN = `mt-space-2 min-h-11 cursor-pointer border-none bg-transparent px-space-2 font-semibold text-accent underline ${FOCUS_RING}`;
+
   return (
     <section className="rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5">
       <div className="mb-space-4 flex flex-wrap items-center justify-between gap-space-3">
         <div>
           <h2 className="text-xl font-semibold text-primary">รายการที่จะครบกำหนด</h2>
-          <p className="mt-space-1 text-xs text-tertiary">แสดงเฉพาะรายการที่ยังไม่ชำระภายใน 7 วันนับจากวันนี้</p>
+          {emptyKind !== 'compact' && <p className="mt-space-1 text-xs text-tertiary">แสดงเฉพาะรายการที่ยังไม่ชำระภายใน 7 วันนับจากวันนี้</p>}
         </div>
         {filter && (
           <button
@@ -455,60 +476,66 @@ export default function UpcomingPayments({
         )}
       </div>
       {filter && <p className="text-sm text-secondary">จากวงแหวน: {({ generalExpense: 'รายจ่ายทั่วไป', creditCard: 'บัตรเครดิต', dailyExpense: 'รายจ่ายประจำวัน', savings: 'เงินออม' })[filter]}</p>}
-      <ListToolbar label="รายการที่จะครบกำหนด" criteria={criteria} onChange={setCriteria}
-        visible={projection.items.length} total={ringRows.length}
-        changed={projection.changed} onRefresh={projection.refresh}
-        groupNote="เรียงภายในแต่ละกลุ่ม"
-        filters={[
-          { key: 'type', label: 'ประเภท', options: [
-            { value: 'plain', label: 'รายจ่ายทั่วไป' }, { value: 'installment', label: 'บัตรที่มีรายการผ่อนชำระ' }, { value: 'revolving', label: 'บัตรที่มียอดหมุนเวียน' }
-          ] },
-          { key: 'account', label: 'บัญชี', options: [
-            { value: '__unassigned', label: 'ไม่ระบุบัญชี' },
-            ...Array.from(new Set(allRows.flatMap(event => event.account ? [event.account] : []))).map(value => ({ value, label: value }))
-          ] }
-        ]}
-        orders={Object.entries({ name: 'ชื่อ', amount: 'จำนวนเงิน', due: 'วันครบกำหนด' }).flatMap(([value, label]) => [
-          { value: `${value}:asc`, label: `${label}: น้อยไปมาก` }, { value: `${value}:desc`, label: `${label}: มากไปน้อย` }
-        ])} />
+      {!bareEmpty && (
+        <ListToolbar label="รายการที่จะครบกำหนด" criteria={criteria} onChange={setCriteria}
+          visible={projection.items.length} total={ringRows.length}
+          changed={projection.changed} onRefresh={projection.refresh}
+          groupNote="เรียงภายในแต่ละกลุ่ม"
+          filters={[
+            { key: 'type', label: 'ประเภท', options: [
+              { value: 'plain', label: 'รายจ่ายทั่วไป' }, { value: 'installment', label: 'บัตรที่มีรายการผ่อนชำระ' }, { value: 'revolving', label: 'บัตรที่มียอดหมุนเวียน' }
+            ] },
+            { key: 'account', label: 'บัญชี', options: [
+              { value: '__unassigned', label: 'ไม่ระบุบัญชี' },
+              ...Array.from(new Set(allRows.flatMap(event => event.account ? [event.account] : []))).map(value => ({ value, label: value }))
+            ] }
+          ]}
+          orders={Object.entries({ name: 'ชื่อ', amount: 'จำนวนเงิน', due: 'วันครบกำหนด' }).flatMap(([value, label]) => [
+            { value: `${value}:asc`, label: `${label}: น้อยไปมาก` }, { value: `${value}:desc`, label: `${label}: มากไปน้อย` }
+          ])} />
+      )}
 
       {/* ประกาศให้ screen reader ทราบทุกครั้งที่ตัวกรองเปลี่ยนผลลัพธ์ (ข้อเสนอแนะจาก UX Review, ต้นทุนต่ำ) */}
       <div aria-live="polite" className="sr-only">
         {filter ? `กรองแล้ว พบ ${totalAfterFilter} รายการ` : ''}
       </div>
 
-      {totalAfterFilter === 0 && ringRows.length === 0 ? (
-        <div className="py-space-5 text-center text-secondary">
-          {filterCopy ? (
-            <>
-              <p>{filterCopy.text}</p>
-              {filterCopy.href && (
-                <a
-                  href={filterCopy.href}
-                  className={`mt-space-3 inline-flex min-h-11 items-center rounded-full bg-accent px-space-4 font-semibold text-on-accent no-underline ${FOCUS_RING}`}
-                >
-                  เปิดบันทึกรายเดือน
-                </a>
-              )}
-            </>
-          ) : (
-            <>
-              <p>ไม่มีรายการที่ครบกำหนดใน 7 วันข้างหน้า</p>
-              <button
-                type="button"
-                className={`mt-space-2 min-h-11 cursor-pointer border-none bg-transparent px-space-2 font-semibold text-accent underline ${FOCUS_RING}`}
-                onClick={onViewCalendar}
-              >
-                ดูทั้งเดือนในปฏิทิน
-              </button>
-            </>
-          )}
-        </div>
-      ) : (
+      {emptyKind === null ? (
         <div className="flex flex-col gap-space-5">
           <Group title="เกินกำหนด" events={overdue} highlightedKey={highlightedKey} {...itemProps} />
           <Group title="ครบกำหนดวันนี้" events={dueToday} highlightedKey={highlightedKey} {...itemProps} />
           <Group title="ครบกำหนดใน 7 วัน" events={dueSoon} highlightedKey={highlightedKey} {...itemProps} />
+        </div>
+      ) : emptyKind === 'loading' ? (
+        // การโหลดเป็นของหน้า (skeleton ที่ pages/index) — ที่นี่แค่ไม่ประกาศว่า "ว่าง" ตอนที่ยังไม่มีข้อมูล
+        <p role="status" className="py-space-5 text-center text-secondary">กำลังโหลดรายการที่จะครบกำหนด...</p>
+      ) : emptyKind === 'incomplete' ? (
+        <div className="py-space-5 text-center text-secondary">
+          <p role="alert">โหลดข้อมูลบางส่วนไม่สำเร็จ จึงยังยืนยันไม่ได้ว่าไม่มีรายการที่ครบกำหนด</p>
+          {onRetry && <button type="button" className={LINK_BTN} onClick={onRetry}>ลองอีกครั้ง</button>}
+        </div>
+      ) : emptyKind === 'filtered' ? (
+        <div className="py-space-5 text-center text-secondary">
+          {/* ListToolbar ประกาศ "ไม่พบรายการที่ตรงกับตัวกรอง" เองเมื่อมีแถวแต่ถูกกรองหมด (total > 0) — ซ้ำที่นี่เฉพาะตอนชุดข้อมูลว่างแต่ตัวกรองที่ค้างอยู่ ซึ่ง toolbar เงียบ */}
+          {ringRows.length === 0 && <p>ไม่พบรายการที่ตรงกับตัวกรอง</p>}
+          {hasLocalCriteria && <button type="button" className={LINK_BTN} onClick={clearLocalCriteria}>ล้างตัวกรองรายการ</button>}
+        </div>
+      ) : emptyKind === 'ring' && filterCopy ? (
+        <div className="py-space-5 text-center text-secondary">
+          <p>{filterCopy.text}</p>
+          {filterCopy.href && (
+            <a
+              href={filterCopy.href}
+              className={`mt-space-3 inline-flex min-h-11 items-center rounded-full bg-accent px-space-4 font-semibold text-on-accent no-underline ${FOCUS_RING}`}
+            >
+              เปิดบันทึกรายเดือน
+            </a>
+          )}
+        </div>
+      ) : (
+        <div className="py-space-5 text-center text-secondary">
+          <p>ไม่มีรายการที่ครบกำหนดใน 7 วันข้างหน้า</p>
+          <button type="button" className={LINK_BTN} onClick={onViewCalendar}>ดูทั้งเดือนในปฏิทิน</button>
         </div>
       )}
 

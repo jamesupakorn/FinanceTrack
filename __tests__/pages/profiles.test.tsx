@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ProfileGalleryPage from '../../pages/profiles';
 
 jest.mock('next/router', () => ({
@@ -42,4 +42,17 @@ test('fetchUsers() dedupes the server-returned demo row so only the special DEMO
   expect(screen.queryByText('demo')).not.toBeInTheDocument();
   expect(screen.getByText('ผู้ใช้หนึ่ง')).toBeInTheDocument();
   expect(screen.getByText('ผู้ใช้สอง')).toBeInTheDocument();
+});
+test('password visibility toggle is a 44x44 target that does not overlap the typed text', async () => {
+  render(<ProfileGalleryPage initialProfiles={[{ id: 'u001', displayName: 'ผู้ใช้หนึ่ง', avatar: '' }] as never} />);
+  fireEvent.click(await screen.findByText('ผู้ใช้หนึ่ง'));
+  const input = await screen.findByLabelText('รหัสผ่าน');
+  const toggle = screen.getByRole('button', { name: 'แสดงรหัสผ่าน' });
+  expect(toggle).toHaveClass('h-11', 'w-11');
+  // input padding clears the 44px button so text never sits under it
+  expect(input).toHaveClass('pr-12');
+  expect(input).toHaveAttribute('type', 'password');
+  fireEvent.click(toggle);
+  expect(input).toHaveAttribute('type', 'text');
+  expect(screen.getByRole('button', { name: 'ซ่อนรหัสผ่าน' })).toBeInTheDocument();
 });

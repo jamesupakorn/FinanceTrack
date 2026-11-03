@@ -27,6 +27,7 @@ import ListToolbar from './ListToolbar';
 import { useListCriteria } from '../contexts/ListViewContext';
 import { compareListValues, matchesListQuery } from '../../shared/utils/frontend/listView';
 import { useListProjection } from '../../shared/utils/frontend/useListProjection';
+import { buildRowContexts, financialFieldLabel } from '../../shared/utils/frontend/fieldLabels';
 
 interface IncomeTableProps {
   selectedMonth: MonthKey | null | undefined;
@@ -202,6 +203,13 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, onOpen
     datasetKey: JSON.stringify([selectedMonth, isLoading, salaryUpdateTrigger]),
     editable: true
   });
+
+  // บริบทแถวคำนวณจากทุกแถว (ไม่ใช่เฉพาะที่ผ่าน filter) ลำดับ "รายการที่ N" จึงไม่เปลี่ยนตาม filter/เรียงลำดับ
+  const rowContextByKey = useMemo(() => {
+    const contexts = buildRowContexts(sortedIncomeKeys.map(getDisplayLabel));
+    return new Map(sortedIncomeKeys.map((key, index) => [key, contexts[index]]));
+  }, [sortedIncomeKeys, incomeLabels]);
+  const amountLabel = (key: string) => financialFieldLabel('จำนวนเงินรายรับ', rowContextByKey.get(key) ?? getDisplayLabel(key));
 
   const handleIncomeNameChange = (key: string, value: string) => {
     setIncomeLabels(prev => ({ ...prev, [key]: value }));
@@ -413,6 +421,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, onOpen
                             onChange={event => updateIncomeInput(event.target.value, setEditIncome, itemKey)}
                             onBlur={event => blurIncomeInput(event.target.value, setEditIncome, itemKey)}
                             onFocus={handleAmountInputFocus}
+                            aria-label={amountLabel(itemKey)}
                             className={`${INPUT} text-right font-[family-name:var(--font-numeric)] tabular-nums`}
                           />
                         )}
@@ -493,6 +502,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, onOpen
                         onChange={event => updateIncomeInput(event.target.value, setEditIncome, itemKey)}
                         onBlur={event => blurIncomeInput(event.target.value, setEditIncome, itemKey)}
                         onFocus={handleAmountInputFocus}
+                        aria-label={amountLabel(itemKey)}
                         className={`${INPUT} text-right font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums`}
                         placeholder="0.00"
                       />

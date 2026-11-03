@@ -304,7 +304,7 @@ export default function Layout({
           <div className="flex min-h-9 items-center justify-between gap-space-4">
             <h1 className="truncate text-2xl font-semibold text-primary">{title}</h1>
             <div className="relative shrink-0" ref={userMenuRef}>
-              <button type="button" className={`flex items-center gap-space-2 rounded-full border border-border-default bg-surface-2 px-space-4 py-space-2 text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING} [&[data-open=true]_svg]:rotate-180 [&_svg]:transition-transform [&_svg]:duration-fast`} onClick={() => setUserMenuOpen(prev => !prev)} aria-haspopup="true" aria-expanded={userMenuOpen} data-open={userMenuOpen}>
+              <button type="button" className={`flex min-h-11 min-w-11 items-center justify-center gap-space-2 rounded-full border border-border-default bg-surface-2 px-space-4 py-space-2 text-sm font-medium text-primary transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING} [&[data-open=true]_svg]:rotate-180 [&_svg]:transition-transform [&_svg]:duration-fast`} onClick={() => setUserMenuOpen(prev => !prev)} aria-haspopup="true" aria-expanded={userMenuOpen} data-open={userMenuOpen}>
                 ผู้ใช้<Icons.ChevronDown size={16} />
               </button>
               {userMenuOpen && (

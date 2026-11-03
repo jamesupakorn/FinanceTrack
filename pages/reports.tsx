@@ -456,7 +456,7 @@ export default function ReportsPage() {
         disabled={isExporting || months.length === 0}
       >
         <Icons.Save size={16} />
-        {isDownloadingReport ? 'กำลังสร้าง PDF...' : 'Download Report PDF'}
+        {isDownloadingReport ? 'กำลังสร้าง PDF...' : 'ดาวน์โหลด PDF'}
       </button>
       <button
         type="button"

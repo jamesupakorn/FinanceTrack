@@ -394,7 +394,7 @@ export default function WorkspaceShell({ section, overlay, children }: Workspace
           <nav className="mb-space-4 flex flex-wrap gap-space-2" aria-label="ส่วนย่อยของเงินออม">
             {SUB_NAV.map(item => {
               const active = item.id === section;
-              return <Link key={item.id} href={sectionHref(item.id, selectedMonth || undefined)} className={`rounded-full bg-surface-2 px-space-3 py-space-2 text-sm ${FOCUS_RING} ${active ? 'font-semibold text-primary' : 'text-secondary hover:text-primary'}`} aria-current={active ? 'page' : undefined} onClick={event => handleNavLinkClick(event, item.id, active)}>{item.label}</Link>;
+              return <Link key={item.id} href={sectionHref(item.id, selectedMonth || undefined)} className={`inline-flex min-h-11 items-center rounded-full bg-surface-2 px-space-3 py-space-2 text-sm ${FOCUS_RING} ${active ? 'font-semibold text-primary' : 'text-secondary hover:text-primary'}`} aria-current={active ? 'page' : undefined} onClick={event => handleNavLinkClick(event, item.id, active)}>{item.label}</Link>;
             })}
           </nav>
         )}

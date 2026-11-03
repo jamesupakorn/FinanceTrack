@@ -64,39 +64,39 @@ describe('CardPayNextSummary cashback states (moved from RevolvingBalanceSection
     renderSummary([{ month: JAN, newSpend: 1000, cashbackAmount: 100, paymentAction: null }]);
     expect(screen.getByText('900.00 ฿')).toBeInTheDocument();
     expect(screen.getByText('หักแคชแบคแล้ว 100.00 ฿')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /จ่ายเต็มจำนวน 900\.00/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /บันทึกชำระยอดหมุนเวียนเต็มจำนวน 900.00/ })).toBeInTheDocument();
   });
 
   it('paid full then cashback on a still-positive month shows the settled panel with the net amount', () => {
     renderSummary([{ month: JAN, newSpend: 1000, cashbackAmount: 100, paymentAction: 'full' }]);
-    expect(screen.getByText('✓ จ่ายเต็มจำนวนแล้ว 900.00 ฿')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'ยกเลิกการชำระ' })).toBeInTheDocument();
+    expect(screen.getByText('✓ จ่ายยอดหมุนเวียนเต็มจำนวนแล้ว 900.00 ฿')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ยกเลิกการชำระยอดหมุนเวียน' })).toBeInTheDocument();
   });
 
   it('AC-CB-66 + C-8: zero after cashback with a stored full shows only the zero line', () => {
     renderSummary([{ month: JAN, newSpend: 1000, cashbackAmount: 1000, paymentAction: 'full' }]);
-    expect(screen.getByText('แคชแบคหักยอดเดือนนี้หมดพอดี · ไม่มียอดต้องชำระ')).toBeInTheDocument();
-    expect(screen.queryByText(/จ่ายเต็มจำนวนแล้ว/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'ยกเลิกการชำระ' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /จ่ายเต็มจำนวน/ })).not.toBeInTheDocument();
+    expect(screen.getByText('แคชแบคหักยอดหมุนเวียนเดือนนี้หมดพอดี · ไม่มียอดหมุนเวียนต้องชำระ')).toBeInTheDocument();
+    expect(screen.queryByText(/จ่ายยอดหมุนเวียนเต็มจำนวนแล้ว/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ยกเลิกการชำระยอดหมุนเวียน' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /ชำระยอดหมุนเวียนเต็มจำนวน/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/เครดิตคงเหลือ/)).not.toBeInTheDocument();
   });
 
   it('a zero month without cashback and a stored full still shows the settled panel as before', () => {
     renderSummary([{ month: JAN, newSpend: 0, paymentAction: 'full' }]);
-    expect(screen.getByText('✓ จ่ายเต็มจำนวนแล้ว 0.00 ฿')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'ยกเลิกการชำระ' })).toBeInTheDocument();
-    expect(screen.queryByText(/แคชแบคหักยอดเดือนนี้หมดพอดี/)).not.toBeInTheDocument();
+    expect(screen.getByText('✓ จ่ายยอดหมุนเวียนเต็มจำนวนแล้ว 0.00 ฿')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ยกเลิกการชำระยอดหมุนเวียน' })).toBeInTheDocument();
+    expect(screen.queryByText(/แคชแบคหักยอดหมุนเวียนเดือนนี้หมดพอดี/)).not.toBeInTheDocument();
   });
 
   it.each<'full' | 'minimum' | null>([null, 'full', 'minimum'])('AC-CB-67 credit month (stored %p): credit panel only', (action) => {
     renderSummary([{ month: JAN, newSpend: 300, cashbackAmount: 500, paymentAction: action }]);
     expect(screen.getByText('เครดิตคงเหลือ 200.00 ฿')).toBeInTheDocument();
-    expect(screen.getByText('ไม่มียอดต้องชำระเดือนนี้')).toBeInTheDocument();
-    expect(screen.queryByText(/จ่ายเต็มจำนวนแล้ว|จ่ายขั้นต่ำแล้ว/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'ยกเลิกการชำระ' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /จ่ายเต็มจำนวน|จ่ายขั้นต่ำ/ })).not.toBeInTheDocument();
-    expect(screen.queryByText('ยอดที่ต้องชำระทั้งหมด')).not.toBeInTheDocument();
+    expect(screen.getByText('ไม่มียอดหมุนเวียนต้องชำระเดือนนี้')).toBeInTheDocument();
+    expect(screen.queryByText(/จ่ายยอดหมุนเวียนเต็มจำนวนแล้ว|จ่ายขั้นต่ำยอดหมุนเวียนแล้ว/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ยกเลิกการชำระยอดหมุนเวียน' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /ชำระยอดหมุนเวียนเต็มจำนวน|ชำระขั้นต่ำยอดหมุนเวียน/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('ยอดหมุนเวียนที่ต้องชำระ')).not.toBeInTheDocument();
   });
 
   it('AC-CB-68 next month with a carried credit shows its source line without interest (inside "รายละเอียดยอด")', () => {
@@ -116,9 +116,9 @@ describe('CardPayNextSummary hero and states', () => {
   it('AC-CD2 hero shows currentCycle.totalDue and the minimum; the "รายละเอียดยอด" disclosure is collapsed by default', () => {
     renderSummary([{ month: JAN, newSpend: 1000, paymentAction: null }]);
     expect(screen.getByRole('heading', { name: 'ชำระรอบบิลนี้' })).toBeInTheDocument();
-    expect(screen.getByText('ยอดที่ต้องชำระทั้งหมด')).toBeInTheDocument();
+    expect(screen.getByText('ยอดหมุนเวียนที่ต้องชำระ')).toBeInTheDocument();
     expect(screen.getByText('1,000.00 ฿').className).toContain('text-3xl');
-    expect(screen.getByText('ขั้นต่ำ 10% = 100.00 ฿')).toBeInTheDocument();
+    expect(screen.getByText('ขั้นต่ำ 10% ของยอดหมุนเวียน = 100.00 ฿')).toBeInTheDocument();
     const toggle = screen.getByRole('button', { name: 'รายละเอียดยอด' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText(/ยอดใช้จ่ายใหม่/)).not.toBeInTheDocument();
@@ -126,9 +126,80 @@ describe('CardPayNextSummary hero and states', () => {
     expect(screen.getByText('ยอดใช้จ่ายใหม่ 1,000.00 ฿')).toBeInTheDocument();
   });
 
-  it('keeps the card-total line verbatim under the minimum', () => {
+  it('mixed cycle: the dominant number is the supplied cardTotal.actual, with installment and revolving rows beneath', () => {
     renderSummary([{ month: JAN, newSpend: 1000, paymentAction: null }], { cardTotal: { actual: 1300, installmentTotal: 300 } });
-    expect(screen.getByText(/งวดผ่อนเดือนนี้ 300\.00 ฿ · ยอดรวมบัตร 1,300\.00 ฿/)).toBeInTheDocument();
+    expect(screen.getByText('ยอดรวมบัตรที่ต้องเตรียมจ่าย')).toBeInTheDocument();
+    const headline = screen.getByText('1,300.00 ฿');
+    expect(headline.className).toContain('text-3xl');
+    expect(screen.getByText('ยอดรวมของรอบนี้ ไม่ใช่ยอดคงเหลือหลังชำระ')).toBeInTheDocument();
+    expect(screen.getByText('งวดผ่อน').nextSibling).toHaveTextContent('300.00 ฿');
+    expect(screen.getByText('ยอดหมุนเวียน').nextSibling).toHaveTextContent('1,000.00 ฿');
+    // the revolving amount is not promoted to a second headline
+    expect(screen.queryByText('ยอดหมุนเวียนที่ต้องชำระ')).not.toBeInTheDocument();
+  });
+
+  it('payment actions are scoped to revolving only and keep their amounts and callbacks', () => {
+    const { onPayFull, onPayMinimum } = renderSummary(
+      [{ month: JAN, newSpend: 1000, paymentAction: null }],
+      { cardTotal: { actual: 1300, installmentTotal: 300 } }
+    );
+    expect(screen.getByRole('group', { name: 'ชำระยอดหมุนเวียน' })).toBeInTheDocument();
+    expect(screen.getByText('บันทึกเฉพาะยอดหมุนเวียน · งวดผ่อนจัดการแยกต่างหาก')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึกชำระยอดหมุนเวียนเต็มจำนวน 1,000.00 ฿' }));
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึกชำระขั้นต่ำยอดหมุนเวียน 100.00 ฿' }));
+    expect(onPayFull).toHaveBeenCalledTimes(1);
+    expect(onPayMinimum).toHaveBeenCalledTimes(1);
+    // no button pays the overall card amount
+    expect(screen.queryByRole('button', { name: /1,300\.00/ })).not.toBeInTheDocument();
+  });
+
+  it('after a recorded payment the total keeps cycle-total wording and the settled text names the revolving scope', () => {
+    renderSummary([{ month: JAN, newSpend: 1000, paymentAction: 'full' }], { cardTotal: { actual: 1300, installmentTotal: 300 } });
+    expect(screen.getByText('ยอดรวมบัตรรอบนี้')).toBeInTheDocument();
+    expect(screen.queryByText('ยอดรวมบัตรที่ต้องเตรียมจ่าย')).not.toBeInTheDocument();
+    expect(screen.getByText('1,300.00 ฿')).toBeInTheDocument();
+    expect(screen.getByText('ยอดรวมของรอบนี้ ไม่ใช่ยอดคงเหลือหลังชำระ')).toBeInTheDocument();
+    expect(screen.getByText('✓ จ่ายยอดหมุนเวียนเต็มจำนวนแล้ว 1,000.00 ฿')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ยกเลิกการชำระยอดหมุนเวียน' })).toBeInTheDocument();
+  });
+
+  it('installment-only cycle: the total and installments stay visible and no revolving action or "nothing due" overall claim appears', () => {
+    renderSummary([], { cardTotal: { actual: 300, installmentTotal: 300 } });
+    expect(screen.getByText('300.00 ฿', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.getByText('ยอดรวมบัตรที่ต้องเตรียมจ่าย')).toBeInTheDocument();
+    expect(screen.getByText('งวดผ่อน').nextSibling).toHaveTextContent('300.00 ฿');
+    expect(screen.getByText('ยอดหมุนเวียน').nextSibling).toHaveTextContent('0.00 ฿');
+    expect(screen.getByText('ไม่มียอดใช้จ่ายหมุนเวียนต้องชำระในรอบนี้')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /ชำระยอดหมุนเวียน|ชำระขั้นต่ำยอดหมุนเวียน/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^ไม่มียอดต้องชำระ/)).not.toBeInTheDocument();
+  });
+
+  it('cashback-zero keeps installments independent and scopes the zero to revolving debt', () => {
+    renderSummary([{ month: JAN, newSpend: 1000, cashbackAmount: 1000, paymentAction: null }], { cardTotal: { actual: 300, installmentTotal: 300 } });
+    expect(screen.getByText('แคชแบคหักยอดหมุนเวียนเดือนนี้หมดพอดี · ไม่มียอดหมุนเวียนต้องชำระ')).toBeInTheDocument();
+    expect(screen.getByText('งวดผ่อน').nextSibling).toHaveTextContent('300.00 ฿');
+    expect(screen.getByText('ยอดหมุนเวียน').nextSibling).toHaveTextContent('0.00 ฿');
+  });
+
+  it('credit cycle: the credit is described separately and is not netted against installments', () => {
+    renderSummary([{ month: JAN, newSpend: 300, cashbackAmount: 500, paymentAction: null }], { cardTotal: { actual: 300, installmentTotal: 300 } });
+    expect(screen.getByText('เครดิตคงเหลือ 200.00 ฿')).toBeInTheDocument();
+    expect(screen.getByText('ไม่มียอดหมุนเวียนต้องชำระเดือนนี้')).toBeInTheDocument();
+    expect(screen.getByText('งวดผ่อน').nextSibling).toHaveTextContent('300.00 ฿');
+    expect(screen.getByText('ยอดหมุนเวียน').nextSibling).toHaveTextContent('0.00 ฿');
+    expect(screen.getByText('300.00 ฿', { selector: 'span.text-3xl' })).toBeInTheDocument();
+  });
+
+  it('null cardTotal never labels the revolving amount as the card total', () => {
+    renderSummary([{ month: JAN, newSpend: 1000, paymentAction: null }], { cardTotal: null });
+    expect(screen.queryByText(/ยอดรวมบัตร/)).not.toBeInTheDocument();
+    expect(screen.getByText('ยอดหมุนเวียนที่ต้องชำระ')).toBeInTheDocument();
+  });
+
+  it.each(['loading', 'error'] as const)('%s state shows no fabricated aggregate amount', (status) => {
+    renderSummary([{ month: JAN, newSpend: 1000, paymentAction: null }], { status, cardTotal: { actual: 1300, installmentTotal: 300 } });
+    expect(screen.queryByText(/1,300\.00/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ยอดรวมบัตร/)).not.toBeInTheDocument();
   });
 
   it('AC-CD3 due line is the full due date: EOM/10 card cycle 2026-10 -> 10 พ.ย. 2569; 5/25 card -> 25 ต.ค. 2569', () => {
@@ -147,13 +218,13 @@ describe('CardPayNextSummary hero and states', () => {
     renderSummary([]);
     expect(screen.getByText('ไม่มียอดใช้จ่ายหมุนเวียนต้องชำระในรอบนี้')).toBeInTheDocument();
     expect(screen.getByText('ยังไม่ได้บันทึกยอดใช้จ่ายของเดือนนี้')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /จ่ายเต็มจำนวน|จ่ายขั้นต่ำ/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /ชำระยอดหมุนเวียนเต็มจำนวน|ชำระขั้นต่ำยอดหมุนเวียน/ })).not.toBeInTheDocument();
   });
 
   it('AC-CD8 error: alert + retry, and no pay buttons', () => {
     const { onRetry } = renderSummary([{ month: JAN, newSpend: 1000, paymentAction: null }], { status: 'error' });
     expect(screen.getByRole('alert')).toHaveTextContent('โหลดยอดใช้จ่ายหมุนเวียนไม่สำเร็จ');
-    expect(screen.queryByRole('button', { name: /จ่ายเต็มจำนวน|จ่ายขั้นต่ำ/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /ชำระยอดหมุนเวียนเต็มจำนวน|ชำระขั้นต่ำยอดหมุนเวียน/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'ลองใหม่' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
@@ -161,13 +232,13 @@ describe('CardPayNextSummary hero and states', () => {
   it('loading shows the status skeleton and no controls', () => {
     renderSummary([{ month: JAN, newSpend: 1000, paymentAction: null }], { status: 'loading' });
     expect(screen.getByRole('status')).toHaveTextContent('กำลังโหลดยอดใช้จ่ายหมุนเวียน');
-    expect(screen.queryByRole('button', { name: /จ่ายเต็มจำนวน/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /ชำระยอดหมุนเวียนเต็มจำนวน/ })).not.toBeInTheDocument();
   });
 
   it('the action buttons call the handlers', () => {
     const { onPayFull, onPayMinimum } = renderSummary([{ month: JAN, newSpend: 1000, paymentAction: null }]);
-    fireEvent.click(screen.getByRole('button', { name: /จ่ายเต็มจำนวน 1,000\.00/ }));
-    fireEvent.click(screen.getByRole('button', { name: /จ่ายขั้นต่ำ 100\.00/ }));
+    fireEvent.click(screen.getByRole('button', { name: /บันทึกชำระยอดหมุนเวียนเต็มจำนวน 1,000.00/ }));
+    fireEvent.click(screen.getByRole('button', { name: /บันทึกชำระขั้นต่ำยอดหมุนเวียน 100.00/ }));
     expect(onPayFull).toHaveBeenCalledTimes(1);
     expect(onPayMinimum).toHaveBeenCalledTimes(1);
   });
@@ -206,23 +277,23 @@ describe('AC-CD9 focus handling and R2 silent refresh', () => {
   it('after "จ่ายเต็มจำนวน" focus is on "ยกเลิกการชำระ"; after undo it is back on "จ่ายเต็มจำนวน"', async () => {
     const user = userEvent.setup();
     render(<Harness />);
-    const payFull = await screen.findByRole('button', { name: /จ่ายเต็มจำนวน 1,000\.00/ });
+    const payFull = await screen.findByRole('button', { name: /บันทึกชำระยอดหมุนเวียนเต็มจำนวน 1,000.00/ });
     api.setRevolvingAction.mockResolvedValueOnce({ success: true, cycles: cyclesFor([{ month: JAN, newSpend: 1000, paymentAction: 'full' }]), truncated: false });
     await user.click(payFull);
-    const undo = await screen.findByRole('button', { name: 'ยกเลิกการชำระ' });
+    const undo = await screen.findByRole('button', { name: 'ยกเลิกการชำระยอดหมุนเวียน' });
     await waitFor(() => expect(undo).toHaveFocus());
 
     api.setRevolvingAction.mockResolvedValueOnce({ success: true, cycles: cyclesFor([{ month: JAN, newSpend: 1000, paymentAction: null }]), truncated: false });
     await user.click(undo);
-    await waitFor(() => expect(screen.getByRole('button', { name: /จ่ายเต็มจำนวน 1,000\.00/ })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole('button', { name: /บันทึกชำระยอดหมุนเวียนเต็มจำนวน 1,000.00/ })).toHaveFocus());
   });
 
   it('R2: pay -> page refresh (new card object, same id): the focused control stays in the document and focused', async () => {
     const user = userEvent.setup();
     render(<Harness />);
     api.setRevolvingAction.mockResolvedValueOnce({ success: true, cycles: cyclesFor([{ month: JAN, newSpend: 1000, paymentAction: 'full' }]), truncated: false });
-    await user.click(await screen.findByRole('button', { name: /จ่ายเต็มจำนวน 1,000\.00/ }));
-    const undo = await screen.findByRole('button', { name: 'ยกเลิกการชำระ' });
+    await user.click(await screen.findByRole('button', { name: /บันทึกชำระยอดหมุนเวียนเต็มจำนวน 1,000.00/ }));
+    const undo = await screen.findByRole('button', { name: 'ยกเลิกการชำระยอดหมุนเวียน' });
     await waitFor(() => expect(undo).toHaveFocus());
 
     api.getRevolving.mockClear();
@@ -232,7 +303,7 @@ describe('AC-CD9 focus handling and R2 silent refresh', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     await waitFor(() => expect(api.getRevolving).toHaveBeenCalledTimes(1));
     expect(undo.isConnected).toBe(true);
-    expect(screen.getByRole('button', { name: 'ยกเลิกการชำระ' })).toBe(undo);
+    expect(screen.getByRole('button', { name: 'ยกเลิกการชำระยอดหมุนเวียน' })).toBe(undo);
     expect(undo).toHaveFocus();
   });
 
@@ -253,11 +324,11 @@ describe('AC-CD9 focus handling and R2 silent refresh', () => {
       onPayFull: jest.fn(), onPayMinimum: jest.fn(), onUndo: jest.fn(), onRetry: jest.fn()
     });
     const { rerender } = render(<><button type="button">other</button><CardPayNextSummary {...at(JAN)} /></>);
-    fireEvent.click(screen.getByRole('button', { name: /จ่ายขั้นต่ำ/ }));
+    fireEvent.click(screen.getByRole('button', { name: /ชำระขั้นต่ำยอดหมุนเวียน/ }));
     const other = screen.getByRole('button', { name: 'other' });
     other.focus();
     rerender(<><button type="button">other</button><CardPayNextSummary {...at(FEB)} /></>);
-    expect(screen.getByRole('button', { name: 'ยกเลิกการชำระ' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ยกเลิกการชำระยอดหมุนเวียน' })).toBeInTheDocument();
     expect(other).toHaveFocus();
   });
 });
