@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { Collection, Document } from 'mongodb';
 import { mapInvestmentDoc } from '../../src/shared/utils/backend/apiUtils';
-import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { assertUserId, asPlainString } from '../../src/shared/utils/backend/userRequest';
 import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import {
   isJsonMode,
@@ -76,7 +76,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   const userFilter = { userId };
 
   if (req.method === 'GET') {
-    const month = Array.isArray(req.query.month) ? req.query.month[0] : req.query.month;
+    const month = asPlainString(Array.isArray(req.query.month) ? req.query.month[0] : req.query.month);
     if (month) {
       const doc = await collection.findOne({ month, ...userFilter });
       return res.status(200).json(mapInvestmentDoc(doc ? { investments: doc.investments as unknown[] } : null));

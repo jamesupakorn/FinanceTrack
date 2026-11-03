@@ -19,7 +19,7 @@ import type { Collection, Document } from 'mongodb';
 import { mapDocToFlatItemObjectWithTotals, stripKnownTotalFields } from '../../src/shared/utils/backend/apiUtils';
 import type { z } from 'zod';
 import { parseRequestBody, monthlyExpensePostBodySchema, monthlyExpensePatchBodySchema } from '../../src/shared/utils/backend/pilotRequestSchemas';
-import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { assertUserId, asPlainString } from '../../src/shared/utils/backend/userRequest';
 import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import { getAccountSummary, getExpenseTotals, extractRemovalKeys } from '../../src/shared/utils/commonUtils';
 import {
@@ -422,7 +422,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     try {
       const queryMonth = req.query.month;
-      const month = Array.isArray(queryMonth) ? queryMonth.join(',') : queryMonth;
+      const month = asPlainString(Array.isArray(queryMonth) ? queryMonth.join(",") : queryMonth);
       const context = await loadCreditCardSyncContext(userId);
 
       if (month) {

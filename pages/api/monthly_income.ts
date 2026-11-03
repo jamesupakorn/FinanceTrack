@@ -11,7 +11,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { Collection, Document } from 'mongodb';
 import { sumValues, stripKnownTotalFields } from '../../src/shared/utils/backend/apiUtils';
-import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { assertUserId, asPlainString } from '../../src/shared/utils/backend/userRequest';
 import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import { extractRemovalKeys } from '../../src/shared/utils/commonUtils';
 import {
@@ -201,7 +201,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   if (req.method === 'GET') {
     const queryMonth = req.query.month;
-    const month = Array.isArray(queryMonth) ? queryMonth.join(',') : queryMonth;
+    const month = asPlainString(Array.isArray(queryMonth) ? queryMonth.join(",") : queryMonth);
     if (month) {
       let doc = await collection.findOne({ month, ...userFilter });
       if (!doc) {

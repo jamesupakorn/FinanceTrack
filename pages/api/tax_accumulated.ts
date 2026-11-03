@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { Collection, Document } from 'mongodb';
 import { ensureMonthlyProvident } from '../../src/shared/utils/backend/apiUtils';
-import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { assertUserId, asPlainString } from '../../src/shared/utils/backend/userRequest';
 import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import {
 	isJsonMode,
@@ -117,7 +117,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 	const userFilter = { userId };
 
 	if (req.method === 'GET') {
-		const year = Array.isArray(req.query.year) ? req.query.year[0] : req.query.year;
+		const year = asPlainString(Array.isArray(req.query.year) ? req.query.year[0] : req.query.year);
 		if (year) {
 			const doc = await collection.findOne({ year, ...userFilter });
 			if (!doc) {

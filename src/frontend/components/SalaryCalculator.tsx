@@ -19,6 +19,7 @@ import {
   normaliseOvertimeRows
 } from '../../shared/utils/overtimeUtils';
 import type { OvertimeMultiplier } from '../../shared/utils/overtimeUtils';
+import { randomBase36 } from '../../shared/utils/randomId';
 
 type ItemType = 'income' | 'deduction';
 type SalaryItem = { id: string; key: string; label: string; value: string; locked?: boolean };
@@ -91,7 +92,7 @@ const buildPresetItems = (keys: string[]): SalaryItem[] => keys.map(key => ({
 }));
 
 const generateItemId = (prefix: string): string => {
-  const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+  const stamp = `${Date.now().toString(36)}${randomBase36(5)}`;
   return `${prefix}_${stamp}`;
 };
 

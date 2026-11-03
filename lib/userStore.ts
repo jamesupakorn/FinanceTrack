@@ -98,13 +98,13 @@ export async function loadUsers(): Promise<UserRecord[]> {
 }
 
 export async function getUserById(userId: string): Promise<UserRecord | null> {
-  assertUserScope(userId);
+  const scopedUserId = assertUserScope(userId);
   if (DATA_MODE === 'mongo') {
     const db = await getDbPromise();
-    return wrapCollection(db.collection<UserRecord>('users'), 'users').findOne({ id: userId });
+    return wrapCollection(db.collection<UserRecord>('users'), 'users').findOne({ id: scopedUserId });
   }
   const users = await readUsersJson();
-  return users.find(u => u.id === userId) || null;
+  return users.find(u => u.id === scopedUserId) || null;
 }
 
 export async function checkUserPassword(userId: string, password: string): Promise<boolean> {

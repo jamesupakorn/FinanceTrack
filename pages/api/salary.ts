@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { Collection, Document } from 'mongodb';
 import { calculateSalarySummary } from '../../src/shared/utils/backend/apiUtils';
-import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { assertUserId, asPlainString } from '../../src/shared/utils/backend/userRequest';
 import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import {
 	isJsonMode,
@@ -204,7 +204,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
 	try {
 		if (req.method === 'GET') {
-			const month = Array.isArray(req.query.month) ? req.query.month[0] : req.query.month;
+			const month = asPlainString(Array.isArray(req.query.month) ? req.query.month[0] : req.query.month);
 			if (month) {
 				let doc = await collection.findOne({ month, ...userFilter }) as SalaryDoc | null;
 				if (!doc) {
@@ -284,7 +284,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 			await enforceSharedMonthWindowMongo(userId, { extraMonth: month });
 			return res.status(201).json({ success: true });
 		} else if (req.method === 'DELETE') {
-			const month = Array.isArray(req.query.month) ? req.query.month[0] : req.query.month;
+			const month = asPlainString(Array.isArray(req.query.month) ? req.query.month[0] : req.query.month);
 			if (!month) {
 				return res.status(400).json({ error: 'กรุณาระบุเดือนที่ต้องการลบ' });
 			}

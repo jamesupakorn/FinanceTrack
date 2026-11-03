@@ -9,7 +9,7 @@ import {
   markUserMonthlySummarySent
 } from '../../lib/userStore';
 import { sendLineFlexMessage, sendLineMessage } from '../../src/shared/utils/sendLineMessage';
-import { assertScopedUserId } from '../../src/shared/utils/backend/userRequest';
+import { assertScopedUserId, parseBearerToken } from '../../src/shared/utils/backend/userRequest';
 import { withLineRetry } from '../../src/shared/utils/backend/lineRetry';
 import { getCurrentDateInfo, formatMonthKeyTH } from '../../src/shared/utils/dateUtils';
 import {
@@ -73,8 +73,8 @@ function secretsMatch(provided: unknown, expected: unknown): boolean {
 function extractCronSecret(req: NextApiRequest): string {
   const authHeader = req?.headers?.authorization;
   if (typeof authHeader === 'string') {
-    const match = authHeader.match(/^Bearer\s+(.+)$/i);
-    if (match) return match[1].trim();
+    const bearer = parseBearerToken(authHeader);
+    if (bearer !== null) return bearer;
   }
   const headerSecret = req?.headers?.['x-cron-secret'];
   if (typeof headerSecret === 'string' && headerSecret.trim()) return headerSecret.trim();

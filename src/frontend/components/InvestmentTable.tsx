@@ -20,6 +20,7 @@ import LoadingNotice from './LoadingNotice';
 import ListToolbar from './ListToolbar';
 import { useListCriteria } from '../contexts/ListViewContext';
 import { buildRowContexts, financialFieldLabel } from '../../shared/utils/frontend/fieldLabels';
+import { randomBase36 } from '../../shared/utils/randomId';
 
 interface InvestmentItem {
   id: string;
@@ -39,7 +40,7 @@ interface InvestmentTableProps {
 type InvestmentField = 'name' | 'percent';
 
 function genId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  return `${Date.now()}-${randomBase36(5)}`;
 }
 
 const NAME_FALLBACK = 'การลงทุนใหม่';
