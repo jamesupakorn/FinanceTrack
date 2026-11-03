@@ -19,6 +19,7 @@ import { Icons } from './Icons';
 import LoadingNotice from './LoadingNotice';
 import ListToolbar from './ListToolbar';
 import { useListCriteria } from '../contexts/ListViewContext';
+import { buildRowContexts, financialFieldLabel } from '../../shared/utils/frontend/fieldLabels';
 
 interface InvestmentItem {
   id: string;
@@ -53,8 +54,11 @@ const BTN_SECONDARY = `min-h-11 rounded-sm border border-border-interactive bg-s
 export default function InvestmentTable({ selectedMonth, onDataChange, onRegisterSave, onSaved, markDirty }: InvestmentTableProps) {
   const [baseAmount, setBaseAmount] = useState('');
   const [investments, setInvestments] = useState<InvestmentItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  // เริ่มเป็น loading เมื่อมีเดือนให้โหลด — ไม่งั้น render แรกก่อน effect จะวาดสถานะ "ว่างตั้งต้น" ทับไปหนึ่งเฟรม
+  const [loading, setLoading] = useState(Boolean(selectedMonth));
   const [loadRevision, setLoadRevision] = useState(0);
+  const [loadError, setLoadError] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
   const [criteria, setCriteria] = useListCriteria('investment-entries');
 
@@ -156,10 +160,12 @@ export default function InvestmentTable({ selectedMonth, onDataChange, onRegiste
     if (!selectedMonth) {
       setInvestments([]);
       setLoading(false);
+      setLoadError(false);
       return undefined;
     }
     let cancelled = false;
     setLoading(true);
+    setLoadError(false);
     setInvestments([]);
     const load = async () => {
       try {
@@ -186,7 +192,11 @@ export default function InvestmentTable({ selectedMonth, onDataChange, onRegiste
         }
       } catch (error) {
         console.error('Error loading investment data:', error);
-        if (!cancelled) setInvestments([]);
+        if (!cancelled) {
+          setInvestments([]);
+          // โหลดล้มเหลวไม่ใช่ "ยังไม่มีรายการ" — แจ้งผู้ใช้และให้ลองใหม่ ไม่แสดงสถานะว่างสำเร็จ
+          setLoadError(true);
+        }
       } finally {
         if (!cancelled) {
           setLoadRevision(revision => revision + 1);
@@ -196,7 +206,7 @@ export default function InvestmentTable({ selectedMonth, onDataChange, onRegiste
     };
     void load();
     return () => { cancelled = true; };
-  }, [selectedMonth]);
+  }, [selectedMonth, retryTick]);
 
   // เพิ่มฟังก์ชันแก้ไขฟิลด์ในแต่ละรายการ
   const updateField = (id: string, field: InvestmentField, value: string) => {
@@ -222,6 +232,11 @@ export default function InvestmentTable({ selectedMonth, onDataChange, onRegiste
   const totalPercent = investments.reduce((sum, item) => sum + (parseFloat(item.percent) || 0), 0);
   const hasRows = investments.length > 0;
   const visibleInvestments = projection.items;
+  // ว่างตั้งต้น = โหลดสำเร็จ ไม่มีแถว และยังไม่มียอดฐาน — ยังไม่มีงานจัดสัดส่วนให้ตรวจ 100%
+  const pristine = !loading && !loadError && !hasRows && !(parseToNumber(baseAmount) > 0);
+  // ชื่อ accessible ของช่องเปอร์เซ็นต์ระบุรายการ; ชื่อว่าง/ซ้ำเติมลำดับ (ลำดับคิดจากทุกแถว ไม่เปลี่ยนตาม filter)
+  const rowContexts = buildRowContexts(investments.map(item => item.name || NAME_FALLBACK));
+  const percentLabel = (id: string) => financialFieldLabel('เปอร์เซ็นการลงทุน', rowContexts[investments.findIndex(item => item.id === id)] ?? NAME_FALLBACK);
 
   return (
     <div>
@@ -247,7 +262,13 @@ export default function InvestmentTable({ selectedMonth, onDataChange, onRegiste
       </div>
 
       {loading && <LoadingNotice className="mb-space-4" />}
-      {!loading && (
+      {!loading && loadError && (
+        <div role="alert" className="mb-space-4 flex flex-wrap items-center justify-between gap-space-3 rounded-md border border-neg/35 bg-neg/10 p-space-4 text-neg">
+          <span>โหลดรายการลงทุนไม่สำเร็จ</span>
+          <button type="button" className={`min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-semibold text-primary ${FOCUS_RING}`} onClick={() => setRetryTick(tick => tick + 1)}>ลองอีกครั้ง</button>
+        </div>
+      )}
+      {!loading && !loadError && hasRows && (
         <ListToolbar
           label="รายการลงทุน"
           criteria={criteria}
@@ -292,6 +313,7 @@ export default function InvestmentTable({ selectedMonth, onDataChange, onRegiste
                         value={item.percent}
                         onChange={event => updateField(item.id, 'percent', event.target.value)}
                         onFocus={handleAmountInputFocus}
+                        aria-label={percentLabel(item.id)}
                         className={`${INPUT} text-right font-[family-name:var(--font-numeric)] tabular-nums`}
                       />
                     </td>
@@ -342,6 +364,7 @@ export default function InvestmentTable({ selectedMonth, onDataChange, onRegiste
                     value={item.percent}
                     onChange={event => updateField(item.id, 'percent', event.target.value)}
                     onFocus={handleAmountInputFocus}
+                    aria-label={percentLabel(item.id)}
                     className={`${INPUT} flex-1 text-right font-[family-name:var(--font-numeric)] tabular-nums`}
                     placeholder="0%"
                   />
@@ -354,9 +377,24 @@ export default function InvestmentTable({ selectedMonth, onDataChange, onRegiste
           </div>
         </>
       ) : (
-        !loading && !hasRows && <div className="rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">
-          ไม่มีรายการลงทุน
-        </div>
+        <>
+          {pristine && (
+            <div className="rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">
+              เพิ่มรายการเพื่อจัดสัดส่วน
+            </div>
+          )}
+          {!loading && !loadError && !hasRows && !pristine && (
+            <div className="rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">
+              ไม่มีรายการลงทุน
+            </div>
+          )}
+          {!loading && !loadError && hasRows && visibleInvestments.length === 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-space-3 rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">
+              <span>ไม่พบรายการที่ตรงกับคำค้นหา</span>
+              <button type="button" className={BTN_SECONDARY} onClick={() => setCriteria({ ...criteria, query: '' })}>ล้างคำค้นหา</button>
+            </div>
+          )}
+        </>
       )}
 
       <div className="mt-space-4 flex flex-wrap items-center gap-space-3">
@@ -381,12 +419,14 @@ export default function InvestmentTable({ selectedMonth, onDataChange, onRegiste
         </button>
       </div>
 
-      <div className={`${CARD} mt-space-4 flex items-center justify-between ${totalPercent !== 100 ? 'border-warn/40' : 'border-pos/40'}`}>
-        <span className="text-sm text-secondary">รวมเปอร์เซ็น</span>
-        <span className={`font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums ${totalPercent !== 100 ? 'text-warn' : 'text-pos'}`}>
-          {totalPercent}% {totalPercent > 100 && '(เกิน 100%)'}{totalPercent < 100 && '(ต้องครบ 100%)'}
-        </span>
-      </div>
+      {!loading && !pristine && !loadError && (
+        <div className={`${CARD} mt-space-4 flex items-center justify-between ${totalPercent !== 100 ? 'border-warn/40' : 'border-pos/40'}`}>
+          <span className="text-sm text-secondary">รวมเปอร์เซ็น</span>
+          <span className={`font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums ${totalPercent !== 100 ? 'text-warn' : 'text-pos'}`}>
+            {totalPercent}% {totalPercent > 100 && '(เกิน 100%)'}{totalPercent < 100 && '(ต้องครบ 100%)'}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

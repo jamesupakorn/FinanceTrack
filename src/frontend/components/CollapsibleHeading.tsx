@@ -58,7 +58,9 @@ export default function CollapsibleHeading({
             font-size; text-lg here was a leftover from before the fontSize scale existed (the previous
             fix pass unified the *weight* to font-semibold but missed the *size*) (Stage 4 round-2
             finding A-2). 700 (font-bold) stays reserved for the hero money figure only (§3.2). */}
-        <span className="flex shrink-0 items-center gap-space-2 text-xl font-semibold">
+        {/* ไม่มี trailing: หัวข้อต้องหดและขึ้นบรรทัดใหม่ได้ ไม่งั้นหัวข้อยาว (เช่น "เปรียบเทียบรายเดือน (6 เดือนล่าสุด)"
+            ที่ /reports) ดันความกว้างเกินจอที่ ≤375px · มี trailing: คง shrink-0 เดิมให้ trailing เป็นฝ่ายตัดข้อความ */}
+        <span className={`flex ${trailing ? 'shrink-0' : 'min-w-0 break-words'} items-center gap-space-2 text-xl font-semibold`}>
           {Icon && <Icon size={18} />}
           {title}
         </span>

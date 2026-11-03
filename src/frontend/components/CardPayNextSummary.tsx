@@ -121,13 +121,39 @@ export default function CardPayNextSummary({
 
       {status === 'ready' && (
         <>
+          {/* ยอดรวมบัตรมาจาก server (cardTotal.actual) เท่านั้น — ถ้ายังไม่มี ห้ามเอายอดหมุนเวียนมาแสดงใต้ป้าย "ยอดรวมบัตร" */}
+          {cardTotal && (
+            <>
+              <span className="text-sm font-semibold text-secondary">
+                {settled && !isCredit && !isZeroAfterCashback ? 'ยอดรวมบัตรรอบนี้' : 'ยอดรวมบัตรที่ต้องเตรียมจ่าย'}
+              </span>
+              <span className="font-[family-name:var(--font-numeric)] text-3xl font-bold tabular-nums text-primary">{`${formatCurrency(cardTotal.actual)} ฿`}</span>
+              <span className="text-xs text-tertiary">{dueLabel}</span>
+              <span className="text-xs text-tertiary">ยอดรวมของรอบนี้ ไม่ใช่ยอดคงเหลือหลังชำระ</span>
+              <dl className="m-0 flex flex-col gap-space-1 rounded-sm border border-border-subtle bg-surface-2 px-space-3 py-space-2 text-sm">
+                <div className="flex items-baseline justify-between gap-space-3">
+                  <dt className="text-tertiary">งวดผ่อน</dt>
+                  <dd className="m-0 font-semibold tabular-nums text-primary">{`${formatCurrency(cardTotal.installmentTotal)} ฿`}</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-space-3">
+                  <dt className="text-tertiary">ยอดหมุนเวียน</dt>
+                  <dd className="m-0 font-semibold tabular-nums text-primary">{`${formatCurrency(Math.max(currentCycle.totalDue, 0))} ฿`}</dd>
+                </div>
+              </dl>
+            </>
+          )}
+
           {hasSomethingDue && (
             <>
-              <span className="text-sm font-semibold text-secondary">ยอดที่ต้องชำระทั้งหมด</span>
-              <span className="font-[family-name:var(--font-numeric)] text-3xl font-bold tabular-nums text-primary">{`${formatCurrency(currentCycle.totalDue)} ฿`}</span>
-              <span className="text-xs text-tertiary">{dueLabel}</span>
+              {!cardTotal && (
+                <>
+                  <span className="text-sm font-semibold text-secondary">ยอดหมุนเวียนที่ต้องชำระ</span>
+                  <span className="font-[family-name:var(--font-numeric)] text-3xl font-bold tabular-nums text-primary">{`${formatCurrency(currentCycle.totalDue)} ฿`}</span>
+                  <span className="text-xs text-tertiary">{dueLabel}</span>
+                </>
+              )}
               <span className="text-xs text-tertiary">
-                {`ขั้นต่ำ ${card.minPaymentPercent ?? 10}% = ${formatCurrency(currentCycle.minPaymentDue)} ฿`}
+                {`ขั้นต่ำ ${card.minPaymentPercent ?? 10}% ของยอดหมุนเวียน = ${formatCurrency(currentCycle.minPaymentDue)} ฿`}
               </span>
               {cashbackAmount > 0 && (
                 <span className="text-xs text-pos">{`หักแคชแบคแล้ว ${formatCurrency(cashbackAmount)} ฿`}</span>
@@ -136,7 +162,7 @@ export default function CardPayNextSummary({
           )}
 
           {isZeroAfterCashback && (
-            <p className="m-0 text-sm text-tertiary">แคชแบคหักยอดเดือนนี้หมดพอดี · ไม่มียอดต้องชำระ</p>
+            <p className="m-0 text-sm text-tertiary">แคชแบคหักยอดหมุนเวียนเดือนนี้หมดพอดี · ไม่มียอดหมุนเวียนต้องชำระ</p>
           )}
 
           {isCredit && (
@@ -144,8 +170,8 @@ export default function CardPayNextSummary({
               <span className="text-sm font-bold text-pos">
                 {`เครดิตคงเหลือ ${formatCurrency(currentCycle.creditBalance)} ฿`}
               </span>
-              <span className="text-xs text-tertiary">ไม่มียอดต้องชำระเดือนนี้</span>
-              <span className="text-xs text-tertiary">เครดิตจะยกไปหักยอดเดือนหน้าโดยอัตโนมัติ</span>
+              <span className="text-xs text-tertiary">ไม่มียอดหมุนเวียนต้องชำระเดือนนี้</span>
+              <span className="text-xs text-tertiary">เครดิตจะยกไปหักยอดหมุนเวียนเดือนหน้าโดยอัตโนมัติ</span>
             </div>
           )}
 
@@ -157,8 +183,6 @@ export default function CardPayNextSummary({
               )}
             </>
           )}
-
-          {cardTotal && <p className="m-0 text-sm text-secondary">งวดผ่อนเดือนนี้ {formatCurrency(cardTotal.installmentTotal)} ฿ · ยอดรวมบัตร {formatCurrency(cardTotal.actual)} ฿</p>}
 
           {hasBreakdown && (
             <>
@@ -205,7 +229,8 @@ export default function CardPayNextSummary({
           )}
 
           {showPayActions && (
-            <div className="mt-space-2 flex flex-col gap-space-2">
+            <div role="group" aria-labelledby="pay-revolving-title" className="mt-space-2 flex flex-col gap-space-2">
+              <span id="pay-revolving-title" className="text-sm font-semibold text-secondary">ชำระยอดหมุนเวียน</span>
               <button
                 ref={payFullRef}
                 type="button"
@@ -213,7 +238,7 @@ export default function CardPayNextSummary({
                 disabled={busy}
                 onClick={() => { pendingFocusRef.current = 'undo'; onPayFull(); }}
               >
-                {`จ่ายเต็มจำนวน ${formatCurrency(currentCycle.totalDue)} ฿`}
+                {`บันทึกชำระยอดหมุนเวียนเต็มจำนวน ${formatCurrency(currentCycle.totalDue)} ฿`}
               </button>
               <button
                 type="button"
@@ -221,8 +246,9 @@ export default function CardPayNextSummary({
                 disabled={busy}
                 onClick={() => { pendingFocusRef.current = 'undo'; onPayMinimum(); }}
               >
-                {`จ่ายขั้นต่ำ ${formatCurrency(currentCycle.minPaymentDue)} ฿`}
+                {`บันทึกชำระขั้นต่ำยอดหมุนเวียน ${formatCurrency(currentCycle.minPaymentDue)} ฿`}
               </button>
+              <span className="text-xs text-tertiary">บันทึกเฉพาะยอดหมุนเวียน · งวดผ่อนจัดการแยกต่างหาก</span>
             </div>
           )}
 
@@ -231,8 +257,8 @@ export default function CardPayNextSummary({
               <div className="flex flex-col gap-space-1 rounded-sm border border-pos/40 border-l-[3px] border-l-pos bg-pos/10 p-space-3 opacity-90">
                 <span className="text-sm font-bold text-pos">
                   {currentCycle.paymentAction === 'minimum'
-                    ? `✓ จ่ายขั้นต่ำแล้ว ${formatCurrency(currentCycle.paidAmount)} ฿`
-                    : `✓ จ่ายเต็มจำนวนแล้ว ${formatCurrency(currentCycle.paidAmount)} ฿`}
+                    ? `✓ จ่ายขั้นต่ำยอดหมุนเวียนแล้ว ${formatCurrency(currentCycle.paidAmount)} ฿`
+                    : `✓ จ่ายยอดหมุนเวียนเต็มจำนวนแล้ว ${formatCurrency(currentCycle.paidAmount)} ฿`}
                 </span>
                 {currentCycle.paymentAction === 'minimum' ? (
                   <>
@@ -254,7 +280,7 @@ export default function CardPayNextSummary({
                 disabled={busy}
                 onClick={() => { pendingFocusRef.current = 'pay'; onUndo(); }}
               >
-                ยกเลิกการชำระ
+                ยกเลิกการชำระยอดหมุนเวียน
               </button>
             </>
           )}

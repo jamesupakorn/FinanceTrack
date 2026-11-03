@@ -74,3 +74,15 @@ test('allows the notification dropdown to escape the wrapping header actions', a
   expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   expect(bell).toHaveFocus();
 });
+
+test('the user-menu trigger has a 44px minimum target at every width (not only via a mobile rule)', async () => {
+  render(<Layout activeNav="dashboard" title="Dashboard" />);
+  const trigger = screen.getByRole('button', { name: /ผู้ใช้/ });
+  expect(trigger).toHaveClass('min-h-11', 'min-w-11');
+  expect(trigger).toHaveAttribute('aria-haspopup', 'true');
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  const user = userEvent.setup();
+  await user.click(trigger);
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByRole('menu')).toBeInTheDocument();
+});

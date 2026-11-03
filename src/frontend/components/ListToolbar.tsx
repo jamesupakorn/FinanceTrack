@@ -185,7 +185,7 @@ export default function ListToolbar({
             </span>
           </label>
         )}
-        {filters.length > 0 && <button type="button" className={`${CONTROL} flex-1 md:flex-none`}
+        {filters.length > 0 && <button type="button" className={`${CONTROL} !min-w-max whitespace-nowrap flex-1 md:flex-none`}
           aria-expanded={expanded} aria-controls={`${id}-filters`} onClick={() => setExpanded(value => !value)}>
           ตัวกรอง{activeFilters.length ? ` (${activeFilters.length})` : ''}
         </button>}

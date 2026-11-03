@@ -39,7 +39,7 @@ jest.mock('../../src/shared/utils/frontend/apiUtils', () => ({
 }));
 
 const monthlySources = [incomeAPI, expenseAPI, savingsAPI, salaryAPI, dailyExpenseAPI];
-const pdfButton = () => screen.getByRole('button', { name: 'Download Report PDF' });
+const pdfButton = () => screen.getByRole('button', { name: 'ดาวน์โหลด PDF' });
 const csvButton = () => screen.getByRole('button', { name: 'ดาวน์โหลด CSV' });
 const error = new Error('source unavailable');
 
