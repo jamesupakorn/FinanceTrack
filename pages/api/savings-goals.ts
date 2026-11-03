@@ -7,7 +7,7 @@
  * DELETE - ลบเป้าหมาย
  */
 
-import { assertUserId } from '../../src/shared/utils/backend/userRequest';
+import { assertUserId, asPlainString } from '../../src/shared/utils/backend/userRequest';
 import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -332,7 +332,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       });
     }
 
-    const goalId = req.body?.goalId || req.body?.id;
+    const goalId = asPlainString(req.body?.goalId || req.body?.id);
     const { goalName, description, targetAmount, category, priority, status, endDate, notes, allocationPercent } = req.body;
 
     if (!goalId) {
@@ -364,7 +364,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   // ------- DELETE -------
   if (req.method === 'DELETE') {
-    const goalId = req.body?.goalId || req.body?.id || req.query?.goalId || req.query?.id;
+    const goalId = asPlainString(req.body?.goalId || req.body?.id || req.query?.goalId || req.query?.id);
     if (!goalId) {
       return res.status(400).json({ error: 'goalId required' });
     }

@@ -28,6 +28,7 @@ import { useListCriteria } from '../contexts/ListViewContext';
 import { compareListValues, matchesListQuery } from '../../shared/utils/frontend/listView';
 import { useListProjection } from '../../shared/utils/frontend/useListProjection';
 import { buildRowContexts, financialFieldLabel } from '../../shared/utils/frontend/fieldLabels';
+import { randomInt } from '../../shared/utils/randomId';
 
 interface IncomeTableProps {
   selectedMonth: MonthKey | null | undefined;
@@ -238,7 +239,7 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, onOpen
   const handleAddIncomeItem = () => {
     markDirty?.(); // K17 — คำสั่งแรกเสมอ: ปุ่มนี้เป็น onClick ไม่ใช่ input/change จึงไม่ bubble ไปโดน
                     // ตัวจับ isDirty ของ WorkspaceShell.js เอง (spec.md §Files "The C11 dirty signal")
-    const uniqueKey = `custom_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const uniqueKey = `custom_${Date.now()}_${randomInt(1000)}`;
     setEditIncome(prev => ({
       ...prev,
       [uniqueKey]: parseAndFormat(0)

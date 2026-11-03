@@ -17,6 +17,7 @@ import { formatCurrency, parseToNumber } from '../../shared/utils/frontend/numbe
 import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
 import LoadingNotice from './LoadingNotice';
+import { randomBase36 } from '../../shared/utils/randomId';
 
 type DailyExpenseCategory = 'fixed' | 'misc';
 
@@ -45,7 +46,7 @@ interface ItemRowProps {
 }
 
 function genId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  return `${Date.now()}-${randomBase36(5)}`;
 }
 
 const FIXED_NAME_FALLBACK = 'รายวันใหม่';
