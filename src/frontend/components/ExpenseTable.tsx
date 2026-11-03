@@ -42,6 +42,7 @@ import { Icons } from './Icons';
 import CardTotalPaymentDialog from './CardTotalPaymentDialog';
 import CardExpenseDetailsDialog from './CardExpenseDetailsDialog';
 import type { CardTotalExpenseRow } from '../../shared/utils/backend/creditCardSync';
+import { randomInt } from '../../shared/utils/randomId';
 
 type ExpenseRow = ExpenseItem & { [field: string]: unknown; dueDate?: unknown; breakdown?: CardTotalExpenseRow['breakdown'] };
 type ExpenseValues = Record<string, ExpenseRow>;
@@ -402,7 +403,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
 
   const handleAddExpenseItem = () => {
     markDirty?.();
-    const uniqueKey = `custom_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const uniqueKey = `custom_${Date.now()}_${randomInt(1000)}`;
     setEditExpense(previous => ({
       ...previous,
       [uniqueKey]: { name: 'รายการใหม่', actual: '0.00', account: bankAccounts[0] || 'ไม่ระบุบัญชี', paid: false, dueDay: END_OF_MONTH_DUE_DAY }

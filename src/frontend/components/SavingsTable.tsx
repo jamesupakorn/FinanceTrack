@@ -21,6 +21,7 @@ import { Icons } from './Icons';
 import LoadingNotice from './LoadingNotice';
 import ListToolbar from './ListToolbar';
 import { useListCriteria } from '../contexts/ListViewContext';
+import { randomBase36 } from '../../shared/utils/randomId';
 
 interface SavingsRow extends Record<string, unknown> {
   id: string;
@@ -44,7 +45,7 @@ interface SavingsTableProps {
 type SavingsNameField = 'savings_type' | 'รายการ';
 
 function genId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  return `${Date.now()}-${randomBase36(5)}`;
 }
 
 const NAME_FALLBACK = 'เงินออมใหม่';

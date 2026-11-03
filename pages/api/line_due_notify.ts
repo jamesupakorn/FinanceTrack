@@ -17,6 +17,7 @@
 import { sendLineMessage, sendLineFlexMessage } from '../../src/shared/utils/sendLineMessage';
 import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import { isJsonMode, getMongoCollection } from '../../lib/dataSource';
+import { asPlainString, parseBearerToken } from '../../src/shared/utils/backend/userRequest';
 import { isPaidFlag } from '../../src/shared/utils/commonUtils';
 import crypto from 'crypto';
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -415,7 +416,8 @@ async function getUsersForNotify(targetUserId: unknown): Promise<LineUser[]> {
     );
   }
   const collection = await getMongoCollection('users');
-  const filter = targetUserId ? { id: targetUserId } : {};
+  const scopedUserId = asPlainString(targetUserId);
+  const filter = scopedUserId ? { id: scopedUserId } : {};
   const docs = await collection.find(filter).toArray();
   return docs.filter((doc): doc is typeof doc & LineUser => isLineUser(doc));
 }
@@ -707,8 +709,8 @@ function secretsMatch(provided: unknown, expected: unknown): boolean {
 function extractCronSecret(req: NextApiRequest): string {
   const authHeader = req?.headers?.authorization;
   if (typeof authHeader === 'string') {
-    const match = authHeader.match(/^Bearer\s+(.+)$/i);
-    if (match) return match[1].trim();
+    const bearer = parseBearerToken(authHeader);
+    if (bearer !== null) return bearer;
   }
   const headerSecret = req?.headers?.['x-cron-secret'];
   if (typeof headerSecret === 'string' && headerSecret.trim()) return headerSecret.trim();

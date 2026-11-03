@@ -73,3 +73,21 @@ export function assertScopedUserId(userId: unknown, label: string): string {
   }
   return normalised;
 }
+
+/**
+ * คืนค่าเดิมเมื่อเป็น string เท่านั้น ไม่เช่นนั้น undefined — ใช้กับค่าจาก req.query/req.body ก่อนนำไปใส่ใน Mongo filter
+ * กัน operator object (เช่น { "$ne": null }) หลุดเข้าไปเป็นเงื่อนไข query (CodeQL js/sql-injection)
+ */
+export function asPlainString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+/**
+ * ดึง token จาก header `Authorization: Bearer <token>` โดยไม่ใช้ regex ที่ซ้อนกัน (`\s+(.+)` ทำให้ backtrack แบบ polynomial —
+ * CodeQL js/polynomial-redos) พฤติกรรมเท่าเดิม: ต้องมีช่องว่าง 1 ตัวหลัง "Bearer" และมีอักขระต่อท้ายอย่างน้อย 1 ตัว
+ * @returns token ที่ trim แล้ว หรือ null ถ้ารูปแบบไม่ตรง
+ */
+export function parseBearerToken(header: string): string | null {
+  if (header.length > 7 && /^Bearer\s/i.test(header)) return header.slice(7).trim();
+  return null;
+}

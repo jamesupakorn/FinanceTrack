@@ -1,3 +1,4 @@
+import { randomBase36 } from './randomId';
 // overtimeUtils.ts
 // คณิตศาสตร์ของรายการ OT ทั้งหมด (BR-OT-001 … BR-OT-009) — โมดูลบริสุทธิ์ ไม่มี I/O
 // ใช้ร่วมกันระหว่าง SalaryCalculator.js (พรีวิว) และ pages/api/salary.js (ค่าที่บันทึกจริง)
@@ -83,7 +84,7 @@ function toNumber(value: unknown): number {
 
 /** สร้าง id ให้แถวที่ client ส่งมาโดยไม่มี id — ใช้เป็น React key เท่านั้น ไม่มีความหมายทางธุรกิจ */
 function generateOvertimeId(): string {
-  return `${ID_PREFIX}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+  return `${ID_PREFIX}${Date.now().toString(36)}${randomBase36(5)}`;
 }
 
 /** ลบ -0 ทิ้ง เพื่อไม่ให้ `-0` หลุดไปถึง summary (AC-OT-08) */
