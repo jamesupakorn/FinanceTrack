@@ -22,9 +22,11 @@ full read order. This file only states the rules; it doesn't repeat the content.
   `npm run check:no-js`) fails the build if any `.js/.jsx/.mjs/.cjs` file exists outside
   `node_modules`/build output. Every new file is `.ts`/`.tsx`. `next.config.ts` also sets
   `pageExtensions: ['ts','tsx']`.
-- **One breakpoint: 768px.** Don't add a second responsive breakpoint anywhere — multiple
-  CSS files call a second breakpoint a defect (AC-27/AC-75). `tailwind.config.ts`'s
-  `screens` and `src/shared/utils/frontend/breakpoints.ts` must stay in sync.
+- **Responsive tiers: 640/768/1024px.** User-confirmed 2026-11-02: preserve the existing
+  `sm`/`md`/`lg` tiers. `tailwind.config.ts`'s `screens` and
+  `src/shared/utils/frontend/breakpoints.ts` must stay in sync. Do not add a fourth
+  tier. Existing component-specific transitions at 768px remain unchanged; older
+  single-breakpoint claims do not override this project-wide policy.
 - **`src/shared/utils/frontend/workspaceRoutes.ts`'s `WORKSPACE_SECTIONS` table must have
   exactly one copy.** It's the single source of truth for `/workspace/*` routing; a
   second copy anywhere fails review per its own header comment.
