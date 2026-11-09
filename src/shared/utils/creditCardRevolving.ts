@@ -10,6 +10,7 @@
 import {
   CARD_COLORS,
   MAX_INSTALLMENTS_PER_PLAN,
+  MAX_LOAN_INSTALLMENTS_PER_PLAN,
   MAX_REVOLVING_CYCLES_PER_CARD,
   MAX_SPEND_ITEM_NAME_LENGTH,
   MAX_SPEND_ITEM_AMOUNT,
@@ -29,7 +30,11 @@ import {
   resolveCardDueDate,
   getPayableCycleMonth,
   normaliseDayValue,
-  isValidPurchaseDate
+  isValidPurchaseDate,
+  DEFAULT_CARD_TYPE,
+  isCardType,
+  isLoanCardType,
+  type CardType
 } from './creditCardBasics';
 import { END_OF_MONTH_DUE_DAY } from './dateUtils';
 import { isBankIssuerKey, type BankIssuerKey } from './creditCardBankCatalog';
@@ -175,11 +180,15 @@ function clampPercent(value: number | string, min: number, max: number, fallback
  * @param {object} card
  * @returns {object}
  */
-export function normaliseCardDefaults(card: CardLike = {}): CardLike & { annualRate: number; minPaymentPercent: number } {
+export function normaliseCardDefaults(
+  card: CardLike = {}
+): CardLike & { annualRate: number; minPaymentPercent: number; cardType: CardType } {
   return {
     ...card,
     annualRate: clampPercent(card.annualRate ?? '', 0, 100, DEFAULT_ANNUAL_RATE),
-    minPaymentPercent: clampPercent(card.minPaymentPercent ?? '', 1, 100, DEFAULT_MIN_PAYMENT_PERCENT)
+    minPaymentPercent: clampPercent(card.minPaymentPercent ?? '', 1, 100, DEFAULT_MIN_PAYMENT_PERCENT),
+    // บัตรก่อนมีฟิลด์นี้ / ค่าเสีย → บัตรเครดิต (BR-CC-033)
+    cardType: isCardType(card.cardType) ? card.cardType : DEFAULT_CARD_TYPE
   };
 }
 
@@ -522,8 +531,12 @@ export function summarisePlan(plan: PlanLike = {}): PlanLike & {
   nextUnpaid: { no?: number; dueMonth?: string; payment?: number | string } | null;
   remainingPayable: number;
   remainingPrincipal: number;
+  currentRate: unknown;
+  rateRevisionCount: number;
 } {
   const schedule = Array.isArray(plan.schedule) ? plan.schedule : [];
+  // rateRevisions ยังไม่มีผู้เขียน (S4) — อ่านแบบป้องกันไว้ จึงเป็น 0 เสมอในตอนนี้
+  const rateRevisions = (plan as { rateRevisions?: unknown }).rateRevisions;
   const total = schedule.length;
   const installmentsPaid = schedule.filter(row => row?.paid === true).length;
   const installmentsRemaining = Math.max(0, total - installmentsPaid);
@@ -540,7 +553,10 @@ export function summarisePlan(plan: PlanLike = {}): PlanLike & {
       ? { no: nextUnpaidRow.no, dueMonth: nextUnpaidRow.dueMonth, payment: nextUnpaidRow.payment }
       : null,
     remainingPayable: round2(unpaidRows.reduce((sum, row) => sum + (Number(row?.payment) || 0), 0)),
-    remainingPrincipal: round2(unpaidRows.reduce((sum, row) => sum + (Number(row?.principal) || 0), 0))
+    remainingPrincipal: round2(unpaidRows.reduce((sum, row) => sum + (Number(row?.principal) || 0), 0)),
+    // annualRate ที่เก็บไว้คืออัตราปัจจุบันเสมอ — echo เพื่อให้ UI อ่านชื่อเดียว (derived ไม่เก็บ)
+    currentRate: plan.annualRate,
+    rateRevisionCount: Array.isArray(rateRevisions) ? rateRevisions.length : 0
   };
 }
 
@@ -729,13 +745,20 @@ type CardInputLike = {
   dueDay?: number | string | null;
   color?: unknown;
   bankIssuer?: unknown;
+  cardType?: unknown;
 };
 
 /**
  * ตรวจข้อมูลบัตร
+ * @param options.mode 'create' (ค่าเริ่มต้น): cardType ว่าง → 'credit_card', ค่าเสีย → errors.cardType,
+ *   สินเชื่อบังคับ creditLimit = 0 · 'edit': value ไม่มีคีย์ cardType เลย เพื่อไม่ให้ merge ทับค่าที่เก็บไว้
+ *   (การเทียบกับค่าเดิมและ 409 อยู่ที่ API เพราะฟังก์ชันนี้ไม่รู้จักบัตรที่เก็บไว้ — BR-CC-033)
  * @returns {{valid: boolean, errors: object, value: object}}
  */
-export function validateCardInput(input: CardInputLike = {}): {
+export function validateCardInput(
+  input: CardInputLike = {},
+  { mode = 'create' }: { mode?: 'create' | 'edit' } = {}
+): {
   valid: boolean;
   errors: Record<string, string>;
   value: {
@@ -745,6 +768,7 @@ export function validateCardInput(input: CardInputLike = {}): {
     last4: string;
     color: string;
     bankIssuer?: BankIssuerKey;
+    cardType?: CardType;
     creditLimit: number;
     annualRate: number;
     minPaymentPercent: number;
@@ -796,6 +820,12 @@ export function validateCardInput(input: CardInputLike = {}): {
 
   const color = typeof input.color === 'string' && CARD_COLORS.includes(input.color) ? input.color : CARD_COLORS[0];
 
+  const isCreate = mode !== 'edit';
+  const hasCardType = input.cardType !== undefined && input.cardType !== null && input.cardType !== '';
+  if (isCreate && hasCardType && !isCardType(input.cardType)) errors.cardType = 'ประเภทไม่ถูกต้อง';
+  const cardType: CardType = isCardType(input.cardType) ? input.cardType : DEFAULT_CARD_TYPE;
+  const creditLimit = Number.isFinite(rawLimit) && rawLimit >= 0 ? round2(rawLimit) : 0;
+
   return {
     valid: Object.keys(errors).length === 0,
     errors,
@@ -806,7 +836,9 @@ export function validateCardInput(input: CardInputLike = {}): {
       last4,
       color,
       ...(isBankIssuerKey(input.bankIssuer) ? { bankIssuer: input.bankIssuer } : {}),
-      creditLimit: Number.isFinite(rawLimit) && rawLimit >= 0 ? round2(rawLimit) : 0,
+      ...(isCreate ? { cardType } : {}),
+      // สินเชื่อไม่มีวงเงิน — ไม่เชื่อค่าที่ client ส่งมา (BR-CC-033)
+      creditLimit: isCreate && isLoanCardType(cardType) ? 0 : creditLimit,
       annualRate: Number.isFinite(rawAnnualRate) ? round2(rawAnnualRate) : DEFAULT_ANNUAL_RATE,
       minPaymentPercent: Number.isFinite(rawMinPercent) ? round2(rawMinPercent) : DEFAULT_MIN_PAYMENT_PERCENT,
       statementDay: statementDay === null ? END_OF_MONTH_DUE_DAY : statementDay,
@@ -958,11 +990,13 @@ type PlanInputLike = {
  * ตรวจข้อมูลแผนผ่อน
  * @param options.requirePurchaseDate บังคับให้ต้องมี purchaseDate หรือไม่ (ค่าเริ่มต้น false —
  *   caller-scoped per D-1: plan ใหม่ (POST) บังคับ, plan เก่า (legacy PUT) ไม่บังคับ)
+ * @param options.cardType ประเภทของบัตรที่ resolve แล้วโดย caller (ค่าเริ่มต้น 'credit_card') —
+ *   สินเชื่อ: เพดาน 480 งวด และต้องเป็น calculated + effective เท่านั้น (BR-CC-035)
  * @returns {{valid: boolean, errors: object, value: object}}
  */
 export function validatePlanInput(
   input: PlanInputLike = {},
-  { requirePurchaseDate = false }: { requirePurchaseDate?: boolean } = {}
+  { requirePurchaseDate = false, cardType = DEFAULT_CARD_TYPE }: { requirePurchaseDate?: boolean; cardType?: unknown } = {}
 ): {
   valid: boolean;
   errors: Record<string, string>;
@@ -980,6 +1014,7 @@ export function validatePlanInput(
   };
 } {
   const errors: Record<string, string> = {};
+  const isLoan = isLoanCardType(cardType);
 
   const cardId = String(input.cardId ?? '').trim();
   if (!cardId) errors.cardId = 'กรุณาเลือกบัตร';
@@ -993,8 +1028,9 @@ export function validatePlanInput(
 
   const monthsValue = Number(input.months);
   const months = Number.isFinite(monthsValue) ? Math.floor(monthsValue) : NaN;
-  if (!Number.isFinite(months) || months < 1 || months > MAX_INSTALLMENTS_PER_PLAN) {
-    errors.months = `จำนวนงวดต้องอยู่ระหว่าง 1–${MAX_INSTALLMENTS_PER_PLAN}`;
+  const maxMonths = isLoan ? MAX_LOAN_INSTALLMENTS_PER_PLAN : MAX_INSTALLMENTS_PER_PLAN;
+  if (!Number.isFinite(months) || months < 1 || months > maxMonths) {
+    errors.months = `จำนวนงวดต้องอยู่ระหว่าง 1–${maxMonths}`;
   }
 
   const startMonth = String(input.startMonth ?? '').trim();
@@ -1042,6 +1078,13 @@ export function validatePlanInput(
     } else {
       errors.calcMethod = 'กรุณาเลือกวิธีคำนวณ';
     }
+  }
+
+  // ตรวจเพิ่มบนผลของบล็อกด้านบน ไม่ coerce ค่า — สินเชื่อคำนวณแบบลดต้นลดดอกเท่านั้น (BR-CC-035)
+  if (isLoan) {
+    const loanOnlyMessage = 'สินเชื่อคำนวณแบบลดต้นลดดอกเท่านั้น';
+    if (interestMode !== 'calculated') errors.interestMode = loanOnlyMessage;
+    if (calcMethod !== 'effective') errors.calcMethod = loanOnlyMessage;
   }
 
   return {

@@ -36,6 +36,7 @@ import {
   getCurrentMonthKey,
   round2,
   toAmount,
+  isLoanCardType,
   MAX_REVOLVING_CYCLES_PER_CARD
 } from '../../../src/shared/utils/creditCardUtils';
 import { buildRevolvingCyclesForData } from '../../../src/shared/utils/creditCardRevolving';
@@ -143,10 +144,11 @@ function summariseAll(data: CreditData, asOfMonth: string, cardChains: ReturnTyp
  * updateUserCreditData() bump `updatedAt` ทุกครั้งที่ถูกเรียก แม้ updater จะคืนค่าเดิม
  * การเช็คสิทธิ์ก่อนจึงทำให้ cardId ของผู้ใช้อื่นได้ 404 โดยไม่แตะเอกสารของใครเลย (AC-36)
  * ตัว updater ยังเช็คซ้ำภายใน transaction อยู่ดี ความถูกต้องจึงไม่ได้พึ่งการเช็คนี้เพียงลำพัง
+ * คืนบัตรที่พบ (หรือ null) เพื่อให้ผู้เรียกตรวจประเภทบัตรได้โดยไม่ต้องอ่านเอกสารซ้ำ
  */
-async function ownsCard(userId: string, cardId: string) {
+async function findOwnedCard(userId: string, cardId: string) {
   const data = await getUserCreditData(userId);
-  return data.cards.some(card => card?.id === cardId);
+  return data.cards.find(card => card?.id === cardId) ?? null;
 }
 
 /** สายของบัตรใบเดียวหลังการเขียน — ใช้เป็น response ของ POST/PATCH/DELETE */
@@ -219,8 +221,13 @@ async function handlePatch(req: NextApiRequest, res: NextApiResponse, userId: st
     const message = 'แคชแบคต้องเป็นตัวเลขไม่ติดลบ';
     return res.status(400).json({ error: message, errors: { cashbackAmount: message } });
   }
-  if (!(await ownsCard(userId, cardId))) {
+  const ownedCard = await findOwnedCard(userId, cardId);
+  if (!ownedCard) {
     return res.status(404).json({ error: 'card not found' });
+  }
+  // สินเชื่อไม่มียอดหมุนเวียน — ประเภทบัตรแก้ไม่ได้ การเช็คก่อนเขียนจึงเพียงพอ (BR-CC-038)
+  if (isLoanCardType(ownedCard.cardType)) {
+    return res.status(409).json({ error: 'loan cards have no revolving balance' });
   }
   // ไม่มีอะไรให้เขียน (เช่น ส่ง cashbackAmount ว่างมาอย่างเดียว) → ไม่แตะเอกสาร ไม่ bump updatedAt (D-5)
   if (!applyAction && !applyCashback) {
@@ -296,7 +303,7 @@ async function handleDelete(req: NextApiRequest, res: NextApiResponse, userId: s
   if (!cardId || !MONTH_KEY_RE.test(month)) {
     return res.status(400).json({ error: 'cardId and month required' });
   }
-  if (!(await ownsCard(userId, cardId))) {
+  if (!(await findOwnedCard(userId, cardId))) {
     return res.status(404).json({ error: 'card not found' });
   }
 

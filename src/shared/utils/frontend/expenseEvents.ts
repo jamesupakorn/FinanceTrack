@@ -16,7 +16,8 @@ import {
   isInstallmentRowKey,
   parseRevolvingRowKey,
   parseInstallmentRowKey,
-  isValidPurchaseDate
+  isValidPurchaseDate,
+  isLoanCardType
 } from '../creditCardUtils';
 import { parseToNumber } from './numberUtils';
 import type { CardTotalExpenseRow } from '../backend/creditCardSync';
@@ -206,6 +207,8 @@ export function buildMonthEvents({
 
   // วันสรุปยอด — สิ่งเดียวของบัตรที่ไม่มีแถวใน monthly_expense เลย มีทุกเดือนแม้ไม่มีรายจ่าย
   cards.forEach(card => {
+    // สินเชื่อไม่มีรอบบิล จึงไม่มีวันสรุปยอด (BR-CC-037)
+    if (isLoanCardType(card.cardType)) return;
     const statementDay = resolveDueDayForMonth(card.statementDay, daysInMonth);
     if (statementDay) {
       pushDay(statementDay, {

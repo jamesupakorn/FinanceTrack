@@ -25,7 +25,8 @@ import {
   resolvePlanStatus,
   buildInstallmentRowKey,
   MAX_ACTIVE_PLANS_PER_USER,
-  PLAN_STATUS
+  PLAN_STATUS,
+  isLoanCardType
 } from '../../../src/shared/utils/creditCardUtils';
 import { withAudit } from '../../../lib/auditedMutation';
 
@@ -51,6 +52,10 @@ function countPaidInstallments(plan: CreditPlan) {
 
 function countActivePlans(plans: CreditData['plans']) {
   return plans.filter(plan => plan?.status !== PLAN_STATUS.COMPLETED).length;
+}
+
+function validationFailure(errors: Record<string, string>) {
+  return { status: 400, body: { error: 'ข้อมูลแผนผ่อนไม่ถูกต้อง', errors } };
 }
 
 /** สร้างเอกสารแผนจากค่าที่ผ่าน validation แล้ว — ตารางผ่อนคำนวณที่ server เท่านั้น */
@@ -155,19 +160,30 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse, userId: str
     return res.status(400).json({ error: 'plan payload required' });
   }
 
-  // แผนใหม่ต้องมีวันที่ซื้อเสมอ (BR-CC-024) — แผนเก่าที่ไม่มีค่านี้แก้ไขได้โดยไม่บังคับ (ดู handlePut)
-  const { valid, errors, value } = validatePlanInput(input, { requirePurchaseDate: true });
-  if (!valid) {
-    return res.status(400).json({ error: 'ข้อมูลแผนผ่อนไม่ถูกต้อง', errors });
-  }
-
   let savedPlan: CreditPlan | null = null;
   let failure: { status: number; body: Record<string, unknown> } | null = null;
 
   await updateUserCreditData(userId, (data) => {
-    const card = data.cards.find(item => item?.id === value.cardId);
+    // หาบัตรก่อน validate เพราะเพดานงวด/วิธีคำนวณขึ้นกับประเภทบัตร (BR-CC-035)
+    // ผลข้างเคียงที่ตั้งใจ: payload เสีย + cardId ไม่มีอยู่จริง ได้ 404 แทน 400 (N-1)
+    const rawCardId = String(input.cardId ?? '').trim();
+    const card = rawCardId ? data.cards.find(item => item?.id === rawCardId) : undefined;
     if (!card) {
-      failure = { status: 404, body: { error: 'card not found' } };
+      failure = rawCardId
+        ? { status: 404, body: { error: 'card not found' } }
+        : validationFailure(validatePlanInput(input, { requirePurchaseDate: true }).errors);
+      return data;
+    }
+    // สินเชื่อหนึ่งก้อนมีตารางเดียว ไม่ว่าสถานะใด — ลบถาวรแผนที่ยังไม่ชำระแล้วจึงสร้างใหม่ได้ (BR-CC-034)
+    if (isLoanCardType(card.cardType) && data.plans.some(plan => plan?.cardId === card.id)) {
+      failure = { status: 409, body: { error: 'loan already has a schedule' } };
+      return data;
+    }
+
+    // แผนใหม่ต้องมีวันที่ซื้อเสมอ (BR-CC-024) — แผนเก่าที่ไม่มีค่านี้แก้ไขได้โดยไม่บังคับ (ดู handlePut)
+    const { valid, errors, value } = validatePlanInput(input, { requirePurchaseDate: true, cardType: card.cardType });
+    if (!valid) {
+      failure = validationFailure(errors);
       return data;
     }
     if (countActivePlans(data.plans) >= MAX_ACTIVE_PLANS_PER_USER) {
@@ -228,17 +244,27 @@ async function handlePut(req: NextApiRequest, res: NextApiResponse, userId: stri
     }
 
     const merged = { ...existing, ...patch };
-    // บังคับ purchaseDate เฉพาะแผนที่มีค่านี้อยู่แล้ว — แผนเก่า (legacy, ไม่มี purchaseDate) แก้ไขได้โดยไม่ต้องกรอกย้อนหลัง (D-1, AC-PD-13/23)
-    const { valid, errors, value } = validatePlanInput(merged, {
-      requirePurchaseDate: Boolean(existing?.purchaseDate)
-    });
-    if (!valid) {
-      failure = { status: 400, body: { error: 'ข้อมูลแผนผ่อนไม่ถูกต้อง', errors } };
+    // หาบัตรปลายทาง (patch ย้าย cardId ได้) ก่อน validate เพื่อส่งประเภทบัตรต่อ (BR-CC-035)
+    const targetCardId = String(merged.cardId ?? '').trim();
+    const card = targetCardId ? data.cards.find(item => item?.id === targetCardId) : undefined;
+    if (!card) {
+      failure = targetCardId
+        ? { status: 404, body: { error: 'card not found' } }
+        : validationFailure(validatePlanInput(merged, { requirePurchaseDate: Boolean(existing?.purchaseDate) }).errors);
       return data;
     }
-    const card = data.cards.find(item => item?.id === value.cardId);
-    if (!card) {
-      failure = { status: 404, body: { error: 'card not found' } };
+    // ย้ายแผนไปสินเชื่อที่มีตารางอยู่แล้วไม่ได้ — สินเชื่อหนึ่งก้อนมีตารางเดียว (BR-CC-034)
+    if (isLoanCardType(card.cardType) && data.plans.some(plan => plan?.cardId === card.id && plan?.id !== existing.id)) {
+      failure = { status: 409, body: { error: 'loan already has a schedule' } };
+      return data;
+    }
+    // บังคับ purchaseDate เฉพาะแผนที่มีค่านี้อยู่แล้ว — แผนเก่า (legacy, ไม่มี purchaseDate) แก้ไขได้โดยไม่ต้องกรอกย้อนหลัง (D-1, AC-PD-13/23)
+    const { valid, errors, value } = validatePlanInput(merged, {
+      requirePurchaseDate: Boolean(existing?.purchaseDate),
+      cardType: card.cardType
+    });
+    if (!valid) {
+      failure = validationFailure(errors);
       return data;
     }
 

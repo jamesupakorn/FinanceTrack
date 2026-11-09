@@ -7,7 +7,15 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { CARD_COLORS, validateCardInput } from '../../shared/utils/creditCardUtils';
+import {
+  CARD_COLORS,
+  CARD_TYPES,
+  CARD_TYPE_LABELS,
+  DEFAULT_CARD_TYPE,
+  isCardType,
+  validateCardInput,
+  type CardType
+} from '../../shared/utils/creditCardUtils';
 import { BASE_CARD_COLORS } from '../../shared/utils/creditCardBasics';
 import { BANK_ISSUERS, BANK_ISSUER_KEYS, isBankIssuerKey } from '../../shared/utils/creditCardBankCatalog';
 import { END_OF_MONTH_DUE_DAY } from '../../shared/utils/dateUtils';
@@ -31,6 +39,7 @@ interface CreditCardFormRecord {
   minPaymentPercent?: number | string | null;
   statementDay?: number | string | null;
   dueDay?: number | string | null;
+  cardType?: unknown;
 }
 
 interface ExistingCardColor {
@@ -50,6 +59,7 @@ interface CreditCardFormState {
   minPaymentPercent: string;
   statementDay: number | string;
   dueDay: number | string;
+  cardType: CardType;
 }
 
 interface CreditCardFormProps {
@@ -70,6 +80,10 @@ const LABEL = 'text-sm font-medium text-secondary';
 const HELPER = 'text-xs leading-relaxed text-tertiary';
 const ERROR_TEXT = 'text-xs text-neg';
 const GROUP_TITLE = 'text-xs font-semibold uppercase tracking-[0.02em] text-tertiary';
+// Same class strings as InstallmentPlanForm's radio/read-only patterns, defined locally like the rest above.
+const RADIO_OPTION = `flex min-h-11 flex-col items-center justify-center gap-[2px] rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-center text-sm font-medium text-secondary transition-colors duration-fast ease-graphite ${FOCUS_RING}`;
+const RADIO_OPTION_ACTIVE = 'border-accent bg-accent-muted text-primary';
+const READONLY_FIELD = 'flex min-h-11 items-center gap-space-2 rounded-sm border border-dashed border-border-default bg-surface-1 px-space-3 text-secondary';
 
 const emptyForm: CreditCardFormState = {
   name: '',
@@ -82,7 +96,8 @@ const emptyForm: CreditCardFormState = {
   annualRate: '',
   minPaymentPercent: '10',
   statementDay: END_OF_MONTH_DUE_DAY,
-  dueDay: END_OF_MONTH_DUE_DAY
+  dueDay: END_OF_MONTH_DUE_DAY,
+  cardType: DEFAULT_CARD_TYPE
 };
 
 export default function CreditCardForm({
@@ -123,7 +138,9 @@ export default function CreditCardForm({
           ? '10'
           : String(card.minPaymentPercent),
         statementDay: card.statementDay ?? END_OF_MONTH_DUE_DAY,
-        dueDay: card.dueDay ?? END_OF_MONTH_DUE_DAY
+        dueDay: card.dueDay ?? END_OF_MONTH_DUE_DAY,
+        // Type is immutable after create (BR-CC-033); stored-less legacy cards read as credit cards.
+        cardType: isCardType(card.cardType) ? card.cardType : DEFAULT_CARD_TYPE
       }
       : emptyForm);
     const timer = setTimeout(() => firstFieldRef.current?.focus(), 40);
@@ -188,7 +205,8 @@ export default function CreditCardForm({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const result = validateCardInput(form);
+    // Edit mode omits cardType from the payload so the server never sees a type change (F-1).
+    const result = validateCardInput(form, { mode: card ? 'edit' : 'create' });
     if (!result.valid) {
       setErrors(result.errors);
       showToast('กรุณาตรวจสอบข้อมูลบัตรอีกครั้ง', 'error');
@@ -201,6 +219,12 @@ export default function CreditCardForm({
   };
 
   const describedBy = (field: string) => (errors[field] ? `card-${field}-error` : undefined);
+
+  const isLoan = form.cardType !== 'credit_card';
+  const typeLabel = CARD_TYPE_LABELS[form.cardType].label;
+  const title = card
+    ? `แก้ไข${typeLabel}`
+    : (isLoan ? 'เพิ่มสินเชื่อ · ขั้นที่ 1/2' : 'เพิ่มบัตรเครดิต');
 
   return (
     <div
@@ -215,17 +239,42 @@ export default function CreditCardForm({
         className="flex max-h-[95vh] w-full flex-col overflow-hidden rounded-t-lg bg-surface-3 shadow-elev-3 md:max-h-[85vh] md:max-w-lg md:rounded-lg"
         role="dialog"
         aria-modal="true"
-        aria-label={card ? 'แก้ไขบัตรเครดิต' : 'เพิ่มบัตรเครดิต'}
+        aria-label={title}
         onSubmit={handleSubmit}
       >
         <div className="flex shrink-0 items-center justify-between gap-space-3 border-b border-border-subtle px-space-5 py-space-4">
-          <h2 className="m-0 text-lg font-semibold text-primary">{card ? 'แก้ไขบัตรเครดิต' : 'เพิ่มบัตรเครดิต'}</h2>
+          <h2 className="m-0 text-lg font-semibold text-primary">{title}</h2>
           <button type="button" className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-sm text-secondary hover:bg-surface-2 ${FOCUS_RING}`} onClick={onClose} aria-label="ปิด">
             <Icons.X size={18} />
           </button>
         </div>
 
         <div className="flex flex-1 min-h-0 flex-col gap-space-4 overflow-y-auto px-space-5 py-space-4">
+          {card ? (
+            <div className={READONLY_FIELD}>{`ประเภท: ${typeLabel} (เปลี่ยนไม่ได้)`}</div>
+          ) : (
+            <fieldset className="m-0 flex flex-col gap-space-2 border-0 p-0">
+              <legend className={GROUP_TITLE}>ประเภท</legend>
+              <div className="grid grid-cols-1 gap-space-2 md:grid-cols-3" role="radiogroup" aria-label="ประเภท">
+                {CARD_TYPES.map(type => {
+                  const selected = form.cardType === type;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      className={`${RADIO_OPTION} ${selected ? RADIO_OPTION_ACTIVE : ''}`}
+                      onClick={() => setForm(prev => ({ ...prev, cardType: type }))}
+                    >
+                      {CARD_TYPE_LABELS[type].label}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+          )}
+
           <fieldset className="m-0 flex flex-col gap-space-3 border-0 p-0">
             <legend className={GROUP_TITLE}>ข้อมูลบัตร</legend>
 
@@ -275,7 +324,7 @@ export default function CreditCardForm({
             </div>
 
             <div className="flex flex-col gap-space-1">
-              <label className={LABEL} htmlFor="cc-bank">ชื่อบัญชีที่ใช้รวมยอด / ชื่อผลิตภัณฑ์ (ไม่บังคับ)</label>
+              <label className={LABEL} htmlFor="cc-bank">ชื่อบัญชีที่ใช้รวมยอด (ไม่บังคับ)</label>
               <input id="cc-bank" name="bankName" type="text" className={INPUT} maxLength={40} value={form.bankName} onChange={(event) => setField('bankName', event.target.value)} placeholder="เช่น KTC หรือ SPayLater" aria-describedby="cc-bank-help-1 cc-bank-help-2" />
               <span id="cc-bank-help-1" className={HELPER}>ใช้รวมยอดเมื่อไม่ได้เลือก “จ่ายผ่านบัญชี” และชื่อตรงกับบัญชีธนาคารที่มีอยู่</span>
               <span id="cc-bank-help-2" className={HELPER}>ใส่ชื่อผลิตภัณฑ์เพิ่มได้ เช่น SPayLater</span>
@@ -314,14 +363,17 @@ export default function CreditCardForm({
           <div className="h-px bg-border-subtle" />
 
           <fieldset className="m-0 flex flex-col gap-space-3 border-0 p-0">
-            <legend className={GROUP_TITLE}>วงเงินและกำหนดชำระ</legend>
+            <legend className={GROUP_TITLE}>{isLoan ? 'กำหนดชำระ' : 'วงเงินและกำหนดชำระ'}</legend>
+            {!isLoan && (
             <div className="flex flex-col gap-space-1">
               <label className={LABEL} htmlFor="cc-limit">วงเงินบัตร (บาท)</label>
               <input id="cc-limit" name="creditLimit" type="text" inputMode="decimal" className={INPUT} value={form.creditLimit} onChange={(event) => setField('creditLimit', event.target.value)} onBlur={(event) => setField('creditLimit', event.target.value.trim() ? parseAndFormat(event.target.value) : '')} placeholder="100,000" aria-invalid={errors.creditLimit ? 'true' : undefined} aria-describedby={describedBy('creditLimit')} />
               <span className={HELPER}>เว้นว่างหรือใส่ 0 หากไม่ต้องการติดตามวงเงิน</span>
               {errors.creditLimit && <span id="card-creditLimit-error" className={ERROR_TEXT}>{errors.creditLimit}</span>}
             </div>
+            )}
 
+            {!isLoan && (
             <div className="flex flex-col gap-space-2 rounded-sm border border-border-subtle bg-surface-2 p-space-3">
               <span className={GROUP_TITLE}>ยอดใช้จ่ายหมุนเวียน</span>
               <div className="grid grid-cols-1 gap-space-3 md:grid-cols-2">
@@ -339,8 +391,10 @@ export default function CreditCardForm({
               <span className={HELPER}>ใช้เฉพาะตอนเลือก “จ่ายขั้นต่ำ”</span>
               <span className={HELPER}>ปกติบัตรส่วนใหญ่กำหนดขั้นต่ำไว้ที่ 5–10%</span>
             </div>
+            )}
 
             <div className="grid grid-cols-1 gap-space-3 md:grid-cols-2">
+              {!isLoan && (
               <div className="flex flex-col gap-space-1">
                 <label className={LABEL} htmlFor="cc-statement">วันสรุปยอด</label>
                 <select id="cc-statement" name="statementDay" className={INPUT} value={String(form.statementDay)} onChange={(event) => setField('statementDay', event.target.value)}>
@@ -348,6 +402,7 @@ export default function CreditCardForm({
                   {DAY_OPTIONS.map(day => <option key={day} value={day}>{day}</option>)}
                 </select>
               </div>
+              )}
               <div className="flex flex-col gap-space-1">
                 <label className={LABEL} htmlFor="cc-due">วันครบกำหนดชำระ</label>
                 <select id="cc-due" name="dueDay" className={INPUT} value={String(form.dueDay)} onChange={(event) => setField('dueDay', event.target.value)}>

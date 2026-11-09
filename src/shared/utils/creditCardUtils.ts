@@ -16,6 +16,13 @@ export {
   MAX_ACTIVE_PLANS_PER_USER,
   MAX_INSTALLMENTS_PER_PLAN,
   MAX_REVOLVING_CYCLES_PER_CARD,
+  MAX_LOAN_INSTALLMENTS_PER_PLAN,
+  MAX_RATE_REVISIONS_PER_PLAN,
+  CARD_TYPES,
+  DEFAULT_CARD_TYPE,
+  CARD_TYPE_LABELS,
+  isCardType,
+  isLoanCardType,
   PLAN_STATUS,
   INTEREST_MODES,
   CALC_METHODS,
@@ -54,6 +61,8 @@ export {
   isRevolvingRowKey,
   isCreditCardRowKey
 } from './creditCardBasics';
+
+export type { CardType } from './creditCardBasics';
 
 export {
   buildManualSchedule,

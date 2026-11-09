@@ -49,9 +49,9 @@ test('resets the main scroll position on navigation', () => {
   const { rerender } = render(<Layout activeNav="dashboard" title="Dashboard" />);
   const main = screen.getByRole('main');
   main.scrollTop = 300;
-  mockAsPath = '/credit-cards';
+  mockAsPath = '/credits';
 
-  rerender(<Layout activeNav="credit-cards" title="Cards" />);
+  rerender(<Layout activeNav="credits" title="Cards" />);
 
   expect(main.scrollTop).toBe(0);
 });

@@ -270,7 +270,7 @@ describe('CreditCardDashboard upcoming groups', () => {
 
     const onAddCard = jest.fn();
     rerender(<CreditCardDashboard onAddCard={onAddCard} />);
-    expect(screen.getByText('ยังไม่มีบัตรเครดิต')).toBeInTheDocument();
+    expect(screen.getByText('ยังไม่มีบัตรหรือสินเชื่อ')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'เพิ่มบัตร' }));
     expect(onAddCard).toHaveBeenCalledTimes(1);
 

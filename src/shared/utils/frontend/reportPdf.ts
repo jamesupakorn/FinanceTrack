@@ -464,7 +464,7 @@ export const downloadSummaryReportPdf = async (
           formatAmountForPdf(normalizedSummary.ยอดรวมค่าใช้จ่ายรายเดือน_ทั่วไป)
         ],
         [
-          'บัตรเครดิต',
+          'บัตร & สินเชื่อ',
           formatAmountForPdf(normalizedSummary.ยอดรวมค่าใช้จ่ายรายเดือน_บัตรเครดิต)
         ],
         // รายวัน — ของเดิมไม่เคยดึงข้อมูลนี้เลย จึงไม่เคยแสดงบรรทัดนี้มาก่อน (AC-RS-29)

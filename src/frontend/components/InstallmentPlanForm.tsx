@@ -13,12 +13,15 @@ import {
   getCurrentMonthKey,
   addMonths,
   MAX_INSTALLMENTS_PER_PLAN,
+  MAX_LOAN_INSTALLMENTS_PER_PLAN,
+  isLoanCardType,
   computeStartMonthFromPurchase,
   isValidPurchaseDate,
   formatIsoDateTH,
   formatDayLabel
 } from '../../shared/utils/creditCardUtils';
-import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
+import { formatMonthKeyTH, THAI_MONTH_LABELS } from '../../shared/utils/dateUtils';
+import { BANK_ISSUERS, isBankIssuerKey } from '../../shared/utils/creditCardBankCatalog';
 import { formatCurrency, parseAndFormat } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
@@ -45,6 +48,9 @@ interface InstallmentCardOption {
   name: string;
   last4?: string;
   statementDay?: number | string;
+  cardType?: unknown;
+  bankIssuer?: unknown;
+  dueDay?: number | string;
 }
 
 interface InstallmentScheduleItem {
@@ -88,9 +94,12 @@ interface InstallmentPlanFormProps {
   submitting?: boolean;
   onClose?: () => void;
   onSubmit?: (values: PlanSubmitValues, options?: PlanSubmitOptions) => void | Promise<void>;
+  /** Loan setup step 2 only: reopen the locked card for editing (the page owns the round trip). */
+  onEditLockedCard?: () => void;
 }
 
 const MONTH_PRESETS = [3, 6, 10, 12, 18, 24, 36, 48, 60];
+const LOAN_MONTH_PRESETS = [12, 24, 36, 48, 60, 84, 120, 180, 240, 300, 360];
 const CUSTOM_MONTHS = 'custom';
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
@@ -110,6 +119,16 @@ function buildStartMonthOptions(): string[] {
     options.push(addMonths(current, offset));
   }
   return options;
+}
+
+/** ปี ค.ศ. สำหรับ select งวดแรกของสินเชื่อ: ปีปัจจุบัน −40 … +1 (แสดงเป็น พ.ศ.) */
+function buildLoanStartYearOptions(selectedYear: number): number[] {
+  const currentYear = Number(getCurrentMonthKey().slice(0, 4));
+  const years: number[] = [];
+  for (let year = currentYear + 1; year >= currentYear - 40; year -= 1) years.push(year);
+  return Number.isFinite(selectedYear) && !years.includes(selectedYear)
+    ? [...years, selectedYear].sort((a, b) => b - a)
+    : years;
 }
 
 /** วันนี้แบบ local 'YYYY-MM-DD' — ห้ามใช้ toISOString() เพราะเป็นวันที่ UTC */
@@ -132,36 +151,43 @@ function createInitialForm(
   lockedCardId: string | null,
   cards: InstallmentCardOption[]
 ): PlanFormState {
+  const loan = isLoanCardType(cards.find(item => item.id === (plan?.cardId || lockedCardId))?.cardType);
+  const presets = loan ? LOAN_MONTH_PRESETS : MONTH_PRESETS;
   if (plan) {
     return {
       cardId: plan.cardId || '',
       itemName: plan.itemName || '',
       totalPrice: parseAndFormat(plan.totalPrice || 0),
-      monthsPreset: MONTH_PRESETS.includes(plan.months) ? String(plan.months) : CUSTOM_MONTHS,
+      monthsPreset: presets.includes(plan.months) ? String(plan.months) : CUSTOM_MONTHS,
       months: String(plan.months || ''),
       startMonth: plan.startMonth || getCurrentMonthKey(),
       purchaseDate: isValidPurchaseDate(plan.purchaseDate) ? plan.purchaseDate : '',
       interestMode: plan.interestMode || 'calculated',
       manualFeePerMonth: plan.interestMode === 'manual' ? parseAndFormat(plan.manualFeePerMonth || 0) : '',
       annualRate: plan.interestMode === 'calculated' ? String(plan.annualRate ?? '') : '',
-      calcMethod: plan.calcMethod || 'flat'
+      calcMethod: plan.calcMethod || 'flat',
+      // Loans are always calculated + effective (BR-CC-035); the radios are hidden so force the hidden fields.
+      ...(loan ? { interestMode: 'calculated', calcMethod: 'effective' } : {})
     };
   }
-  const cardId = lockedCardId || cards[0]?.id || '';
+  // The unlocked picker lists credit cards only — a loan's one plan is always added locked to it (BR-CC-034).
+  const cardId = lockedCardId || cards.find(item => !isLoanCardType(item.cardType))?.id || '';
   const card = cards.find(item => item.id === cardId);
   const purchaseDate = todayIsoDate();
+  const defaultMonths = loan ? String(LOAN_MONTH_PRESETS[0]) : '10';
   return {
     cardId,
     itemName: '',
     totalPrice: '',
-    monthsPreset: '10',
-    months: '10',
-    startMonth: computeStartMonthFromPurchase(purchaseDate, card?.statementDay) || getCurrentMonthKey(),
+    monthsPreset: defaultMonths,
+    months: defaultMonths,
+    // Loans have no billing cycle (BR-CC-037): the first instalment defaults to the contract month.
+    startMonth: computeStartMonthFromPurchase(purchaseDate, loan ? undefined : card?.statementDay) || getCurrentMonthKey(),
     purchaseDate,
     interestMode: 'calculated',
     manualFeePerMonth: '',
     annualRate: '',
-    calcMethod: 'flat'
+    calcMethod: loan ? 'effective' : 'flat'
   };
 }
 
@@ -172,7 +198,8 @@ export default function InstallmentPlanForm({
   lockedCardId = null,
   submitting = false,
   onClose,
-  onSubmit
+  onSubmit,
+  onEditLockedCard
 }: InstallmentPlanFormProps) {
   const [form, setForm] = useState<PlanFormState>(() => createInitialForm(null, lockedCardId, cards));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -197,6 +224,9 @@ export default function InstallmentPlanForm({
   );
   const financialsLocked = Boolean(plan) && installmentsPaid > 0;
   const requirePurchaseDate = !plan || Boolean(plan?.purchaseDate);
+  const lockedCard = cards.find(item => item.id === (lockedCardId || plan?.cardId || form.cardId));
+  const lockedCardType = lockedCard?.cardType;
+  const loanMode = isLoanCardType(lockedCardType);
 
   useEffect(() => {
     if (!open) return;
@@ -212,6 +242,17 @@ export default function InstallmentPlanForm({
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, plan, lockedCardId]);
+
+  // The page may open this form before its reloaded `cards` include a just-created loan. When loan
+  // mode resolves, re-seed loan defaults so hidden interest/calc fields never keep credit-card values.
+  useEffect(() => {
+    if (!open || !loanMode) return;
+    setForm(prev => (plan
+      ? { ...prev, interestMode: 'calculated', calcMethod: 'effective' }
+      : (prev.calcMethod === 'effective' ? prev : createInitialForm(null, lockedCardId, cards))));
+    setPreviewToken(token => token + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, loanMode]);
 
   useEffect(() => {
     if (backdate || !restoreSubmitFocusRef.current) return;
@@ -258,7 +299,7 @@ export default function InstallmentPlanForm({
   // อ่านจาก ref เพื่อให้พรีวิวอัปเดตเฉพาะตอนที่ previewToken เปลี่ยน (blur / เปลี่ยน select)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const preview = useMemo(() => {
-    const result = validatePlanInput(formRef.current, { requirePurchaseDate });
+    const result = validatePlanInput(formRef.current, { requirePurchaseDate, cardType: lockedCardType });
     if (!result.valid) return null;
     const computed = buildSchedule({ ...result.value, calcMethod: result.value.calcMethod ?? undefined });
     return {
@@ -282,7 +323,7 @@ export default function InstallmentPlanForm({
 
   const withComputedStartMonth = (next: PlanFormState): PlanFormState => {
     const card = cards.find(item => item.id === next.cardId);
-    const computed = computeStartMonthFromPurchase(next.purchaseDate, card?.statementDay);
+    const computed = computeStartMonthFromPurchase(next.purchaseDate, loanMode ? undefined : card?.statementDay);
     return computed ? { ...next, startMonth: computed } : next;
   };
 
@@ -321,7 +362,7 @@ export default function InstallmentPlanForm({
       return;
     }
 
-    const result = validatePlanInput(form, { requirePurchaseDate });
+    const result = validatePlanInput(form, { requirePurchaseDate, cardType: lockedCardType });
     if (!result.valid) {
       setErrors(result.errors);
       showToast('กรุณาตรวจสอบข้อมูลแผนผ่อนอีกครั้ง', 'error');
@@ -361,6 +402,17 @@ export default function InstallmentPlanForm({
 
   const describedBy = (field: string) => (errors[field] ? `plan-${field}-error` : undefined);
   const selectedCard = cards.find(item => item.id === form.cardId);
+  const showLoanHeader = loanMode && Boolean(lockedCardId);
+  const loanBankLabel = isBankIssuerKey(lockedCard?.bankIssuer) ? BANK_ISSUERS[lockedCard.bankIssuer].label : 'ไม่ระบุธนาคาร';
+  const monthPresets = loanMode ? LOAN_MONTH_PRESETS : MONTH_PRESETS;
+  const title = plan
+    ? (loanMode ? 'แก้ไขตารางผ่อน' : 'แก้ไขแผนผ่อนชำระ')
+    : (loanMode ? 'ตารางผ่อนสินเชื่อ · ขั้นที่ 2/2' : 'เพิ่มแผนผ่อนชำระ');
+  const startYear = Number(form.startMonth.slice(0, 4));
+  const startMonthIndex = Number(form.startMonth.slice(5, 7));
+  const setLoanStartMonth = (year: number, month: number) => {
+    setFieldAndPreview('startMonth', `${year}-${String(month).padStart(2, '0')}`);
+  };
 
   return (
     <div
@@ -375,11 +427,11 @@ export default function InstallmentPlanForm({
         className="flex max-h-[95vh] w-full flex-col overflow-hidden rounded-t-lg bg-surface-3 shadow-elev-3 md:max-h-[85vh] md:max-w-lg md:rounded-lg"
         role="dialog"
         aria-modal="true"
-        aria-label={plan ? 'แก้ไขแผนผ่อนชำระ' : 'เพิ่มแผนผ่อนชำระ'}
+        aria-label={title}
         onSubmit={handleSubmit}
       >
         <div className="flex shrink-0 items-center justify-between gap-space-3 border-b border-border-subtle px-space-5 py-space-4">
-          <h2 className="m-0 text-lg font-semibold text-primary">{plan ? 'แก้ไขแผนผ่อนชำระ' : 'เพิ่มแผนผ่อนชำระ'}</h2>
+          <h2 className="m-0 text-lg font-semibold text-primary">{title}</h2>
           <button
             type="button"
             className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-sm text-secondary hover:bg-surface-2 ${FOCUS_RING}`}
@@ -390,6 +442,22 @@ export default function InstallmentPlanForm({
           </button>
         </div>
 
+        {showLoanHeader && (
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-space-2 border-b border-border-subtle bg-surface-1 px-space-5 py-space-2 text-sm text-secondary">
+            <span className="min-w-0 break-words">{`${loanBankLabel} · ${lockedCard?.name ?? ''} · ครบกำหนดวันที่ ${formatDayLabel(lockedCard?.dueDay ?? '')}`}</span>
+            {onEditLockedCard && (
+              <button
+                type="button"
+                className={`flex min-h-11 items-center gap-space-1 rounded-sm px-space-2 text-sm font-medium text-accent hover:bg-surface-2 ${FOCUS_RING}`}
+                onClick={onEditLockedCard}
+              >
+                <span aria-hidden="true" className="flex"><Icons.ChevronLeft size={16} /></span>
+                กลับไปแก้ไขข้อมูลบัตร
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-1 min-h-0 flex-col gap-space-4 overflow-y-auto px-space-5 py-space-4">
           {financialsLocked && (
             <div className="flex items-start gap-space-2 rounded-sm border border-warn/35 bg-warn/10 px-space-3 py-space-3 text-sm leading-relaxed text-warn">
@@ -398,6 +466,7 @@ export default function InstallmentPlanForm({
             </div>
           )}
 
+          {!showLoanHeader && (
           <div className="flex flex-col gap-space-1">
             <label className={LABEL} htmlFor="ip-card">บัตรที่ใช้ผ่อน <span className="text-neg">*</span></label>
             {lockedCardId || financialsLocked ? (
@@ -413,14 +482,15 @@ export default function InstallmentPlanForm({
                 aria-describedby={describedBy('cardId')}
               >
                 <option value="">— เลือกบัตร —</option>
-                {cards.map(item => <option key={item.id} value={item.id}>{item.name}{item.last4 ? ` ····${item.last4}` : ''}</option>)}
+                {cards.filter(item => !isLoanCardType(item.cardType)).map(item => <option key={item.id} value={item.id}>{item.name}{item.last4 ? ` ····${item.last4}` : ''}</option>)}
               </select>
             )}
             {errors.cardId && <span id="plan-cardId-error" className={ERROR_TEXT}>{errors.cardId}</span>}
           </div>
+          )}
 
           <div className="flex flex-col gap-space-1">
-            <label className={LABEL} htmlFor="ip-item">ชื่อสินค้า / รายการ <span className="text-neg">*</span></label>
+            <label className={LABEL} htmlFor="ip-item">{loanMode ? 'ชื่อสัญญา / เลขที่สัญญา' : 'ชื่อสินค้า / รายการ'} <span className="text-neg">*</span></label>
             <input
               id="ip-item"
               name="itemName"
@@ -430,7 +500,7 @@ export default function InstallmentPlanForm({
               maxLength={60}
               value={form.itemName}
               onChange={(event) => setField('itemName', event.target.value)}
-              placeholder="iPhone 17 Pro"
+              placeholder={loanMode ? 'เช่น สัญญาเลขที่ 123456789' : 'iPhone 17 Pro'}
               aria-invalid={errors.itemName ? 'true' : undefined}
               aria-describedby={describedBy('itemName')}
             />
@@ -439,7 +509,7 @@ export default function InstallmentPlanForm({
 
           <div className="grid grid-cols-1 gap-space-3 md:grid-cols-2">
             <div className="flex flex-col gap-space-1">
-              <label className={LABEL} htmlFor="ip-price">ราคาสินค้า (บาท) <span className="text-neg">*</span></label>
+              <label className={LABEL} htmlFor="ip-price">{loanMode ? 'ยอดเงินกู้ (บาท)' : 'ราคาสินค้า (บาท)'} <span className="text-neg">*</span></label>
               {plan && financialsLocked ? (
                   <div className={READONLY_FIELD}><Icons.Lock size={14} className="shrink-0 opacity-70" />{formatCurrency(plan.totalPrice || 0)}</div>
               ) : (
@@ -470,7 +540,7 @@ export default function InstallmentPlanForm({
               ) : (
                 <>
                   <select id="ip-months" className={INPUT} value={form.monthsPreset} onChange={(event) => handleMonthsPreset(event.target.value)}>
-                    {MONTH_PRESETS.map(value => <option key={value} value={String(value)}>{`${value} งวด`}</option>)}
+                    {monthPresets.map(value => <option key={value} value={String(value)}>{`${value} งวด`}</option>)}
                     <option value={CUSTOM_MONTHS}>กำหนดเอง</option>
                   </select>
                   {form.monthsPreset === CUSTOM_MONTHS && (
@@ -482,7 +552,7 @@ export default function InstallmentPlanForm({
                       value={form.months}
                       onChange={(event) => setField('months', event.target.value.replace(/\D/g, ''))}
                       onBlur={refreshPreview}
-                      placeholder={`1–${MAX_INSTALLMENTS_PER_PLAN}`}
+                      placeholder={`1–${loanMode ? MAX_LOAN_INSTALLMENTS_PER_PLAN : MAX_INSTALLMENTS_PER_PLAN}`}
                       aria-invalid={errors.months ? 'true' : undefined}
                       aria-describedby={describedBy('months')}
                     />
@@ -505,7 +575,7 @@ export default function InstallmentPlanForm({
           ) : (
             <div className="grid grid-cols-2 gap-space-3">
               <div className="flex min-w-0 flex-col gap-space-1">
-                <label className={LABEL} htmlFor="ip-purchase">วันที่ซื้อ {requirePurchaseDate && <span className="text-neg">*</span>}</label>
+                <label className={LABEL} htmlFor="ip-purchase">{loanMode ? 'วันที่ทำสัญญา' : 'วันที่ซื้อ'} {requirePurchaseDate && <span className="text-neg">*</span>}</label>
                 <input
                   id="ip-purchase"
                   name="purchaseDate"
@@ -519,6 +589,37 @@ export default function InstallmentPlanForm({
                 />
                 {errors.purchaseDate && <span id="plan-purchaseDate-error" className={ERROR_TEXT}>{errors.purchaseDate}</span>}
               </div>
+              {loanMode ? (
+                <fieldset className="m-0 flex min-w-0 flex-col gap-space-1 border-0 p-0">
+                  <legend className={LABEL}>งวดแรกเดือน <span className="text-neg">*</span></legend>
+                  <div className="grid grid-cols-2 gap-space-2">
+                    <select
+                      id="ip-start-year"
+                      aria-label="ปี (พ.ศ.)"
+                      className={`${INPUT} min-w-0`}
+                      value={String(startYear)}
+                      onChange={(event) => setLoanStartMonth(Number(event.target.value), startMonthIndex || 1)}
+                      aria-invalid={errors.startMonth ? 'true' : undefined}
+                      aria-describedby={`ip-cycle-help${errors.startMonth ? ' plan-startMonth-error' : ''}`}
+                    >
+                      {buildLoanStartYearOptions(startYear).map(year => <option key={year} value={String(year)}>{year + 543}</option>)}
+                    </select>
+                    <select
+                      id="ip-start"
+                      name="startMonth"
+                      aria-label="เดือน"
+                      className={`${INPUT} min-w-0`}
+                      value={String(startMonthIndex)}
+                      onChange={(event) => setLoanStartMonth(startYear, Number(event.target.value))}
+                      aria-invalid={errors.startMonth ? 'true' : undefined}
+                      aria-describedby={`ip-cycle-help${errors.startMonth ? ' plan-startMonth-error' : ''}`}
+                    >
+                      {THAI_MONTH_LABELS.map((label, index) => <option key={label} value={String(index + 1)}>{label}</option>)}
+                    </select>
+                  </div>
+                  {errors.startMonth && <span id="plan-startMonth-error" className={ERROR_TEXT}>{errors.startMonth}</span>}
+                </fieldset>
+              ) : (
               <div className="flex min-w-0 flex-col gap-space-1">
                 <label className={LABEL} htmlFor="ip-start">รอบบิลเดือน <span className="text-neg">*</span></label>
                 <select id="ip-start" name="startMonth" className={INPUT} value={form.startMonth} onChange={(event) => setFieldAndPreview('startMonth', event.target.value)} aria-invalid={errors.startMonth ? 'true' : undefined} aria-describedby={`ip-cycle-help${errors.startMonth ? ' plan-startMonth-error' : ''}`}>
@@ -526,8 +627,11 @@ export default function InstallmentPlanForm({
                 </select>
                 {errors.startMonth && <span id="plan-startMonth-error" className={ERROR_TEXT}>{errors.startMonth}</span>}
               </div>
+              )}
               <span id="ip-cycle-help" className={`${HELPER} col-span-2`}>
-                {buildCycleHelperText(selectedCard)}
+                {loanMode
+                  ? 'ตั้งต้นเป็นเดือนเดียวกับวันที่ทำสัญญา — เปลี่ยนเองได้ถ้างวดแรกเริ่มเดือนอื่น'
+                  : buildCycleHelperText(selectedCard)}
                 {!requirePurchaseDate && <><br />แผนนี้สร้างก่อนมีช่องวันที่ซื้อ จะใส่หรือเว้นว่างไว้ก็ได้</>}
               </span>
             </div>
@@ -536,6 +640,20 @@ export default function InstallmentPlanForm({
           {!financialsLocked && (
             <>
               <div className="h-px bg-border-subtle" />
+              {loanMode ? (
+              <fieldset className="m-0 flex flex-col gap-space-3 border-0 p-0">
+                <legend className={GROUP_TITLE}>ดอกเบี้ย *</legend>
+                <div className="flex flex-col gap-space-1">
+                  <label className={LABEL} htmlFor="ip-rate">อัตราดอกเบี้ยต่อปี (%) <span className="text-neg">*</span></label>
+                  <input id="ip-rate" name="annualRate" type="text" inputMode="decimal" className={INPUT} value={form.annualRate} onChange={(event) => setField('annualRate', event.target.value)} onBlur={refreshPreview} placeholder="3.5" aria-invalid={errors.annualRate ? 'true' : undefined} aria-describedby={describedBy('annualRate')} />
+                  <span className={HELPER}>อัตรานี้มักอยู่ที่ 3–8% ต่อปีสำหรับสินเชื่อบ้าน/ส่วนบุคคล — ตรวจสอบจากสัญญาเงินกู้ของคุณ</span>
+                  {errors.annualRate && <span id="plan-annualRate-error" className={ERROR_TEXT}>{errors.annualRate}</span>}
+                </div>
+                <p className={`${HELPER} m-0`}>คำนวณแบบลดต้นลดดอก (Effective) ตามมาตรฐานสินเชื่อธนาคาร</p>
+                {errors.calcMethod && <span id="plan-calcMethod-error" className={ERROR_TEXT}>{errors.calcMethod}</span>}
+                {errors.interestMode && <span id="plan-interestMode-error" className={ERROR_TEXT}>{errors.interestMode}</span>}
+              </fieldset>
+              ) : (
               <fieldset className="m-0 flex flex-col gap-space-3 border-0 p-0">
                 <legend className={GROUP_TITLE}>ดอกเบี้ย / ค่าธรรมเนียม *</legend>
                 <div className="grid grid-cols-1 gap-space-2 md:grid-cols-2" role="radiogroup" aria-label="รูปแบบดอกเบี้ย">
@@ -571,6 +689,7 @@ export default function InstallmentPlanForm({
                   </div>
                 )}
               </fieldset>
+              )}
 
               <div className="h-px bg-border-subtle" />
               {preview && (
@@ -612,7 +731,7 @@ export default function InstallmentPlanForm({
 
         <div className="flex shrink-0 flex-col-reverse items-stretch gap-space-3 border-t border-border-subtle px-space-5 py-space-4 md:flex-row md:items-center md:justify-end">
           <button type="button" className={`min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary ${FOCUS_RING}`} onClick={onClose}>ยกเลิก</button>
-          <button ref={submitButtonRef} type="submit" className={`min-h-11 rounded-sm bg-accent px-space-5 text-sm font-semibold text-on-accent disabled:opacity-60 ${FOCUS_RING}`} disabled={submitting}>{submitting ? 'กำลังบันทึก...' : 'บันทึกแผนผ่อน'}</button>
+          <button ref={submitButtonRef} type="submit" className={`min-h-11 rounded-sm bg-accent px-space-5 text-sm font-semibold text-on-accent disabled:opacity-60 ${FOCUS_RING}`} disabled={submitting}>{submitting ? 'กำลังบันทึก...' : (loanMode ? 'บันทึกสินเชื่อ' : 'บันทึกแผนผ่อน')}</button>
         </div>
       </form>
       <BackdatedInstallmentsDialog

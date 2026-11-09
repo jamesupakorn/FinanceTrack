@@ -18,7 +18,8 @@ import {
   formatIsoDateTH,
   isValidPurchaseDate,
   resolveCardDueDate,
-  resolveStatementCutoffDate
+  resolveStatementCutoffDate,
+  isLoanCardType
 } from '../../shared/utils/creditCardUtils';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
 import { Icons } from './Icons';
@@ -28,6 +29,7 @@ export interface SpendDialogCard {
   name: string;
   statementDay?: number | string | null;
   dueDay?: number | string | null;
+  cardType?: unknown;
 }
 
 export type AddExpenseSheetMode = 'create' | 'edit';
@@ -328,7 +330,7 @@ function SheetBody({
                     onChange={event => handleCardChange(event.target.value)}
                   >
                     <option value="">— เลือกบัตร —</option>
-                    {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {cards.filter(c => !isLoanCardType(c.cardType)).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </label>
               )}

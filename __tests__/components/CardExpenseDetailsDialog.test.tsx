@@ -73,7 +73,7 @@ describe('CardExpenseDetailsDialog', () => {
     expect(within(dialog).getByText(`${formatCurrency(0)} ฿`)).toBeInTheDocument();
     expect(within(dialog).getByText(`${formatCurrency(1000)} ฿`)).toBeInTheDocument();
     expect(within(dialog).queryByText(/ชำระขั้นต่ำแล้ว/)).not.toBeInTheDocument();
-    expect(within(dialog).getByRole('link', { name: 'ไปหน้าจัดการบัตร' })).toHaveAttribute('href', '/credit-cards?card=card%2F123');
+    expect(within(dialog).getByRole('link', { name: 'จัดการที่หน้าบัตร & สินเชื่อ →' })).toHaveAttribute('href', '/credits?card=card%2F123');
     expect(within(dialog).queryByRole('button', { name: /แก้ไข|บันทึก|ลบ|ชำระ/ })).not.toBeInTheDocument();
   });
 
@@ -101,7 +101,7 @@ describe('CardExpenseDetailsDialog', () => {
   it('provides a responsive scrollable surface, safe-area footer, focus trap, and close behavior', () => {
     const { opener, dialog, main } = openDialog();
     const closeButton = within(dialog).getByRole('button', { name: 'ปิดรายละเอียดบัตร' });
-    const managementLink = within(dialog).getByRole('link', { name: 'ไปหน้าจัดการบัตร' });
+    const managementLink = within(dialog).getByRole('link', { name: 'จัดการที่หน้าบัตร & สินเชื่อ →' });
     const backdrop = dialog.parentElement as HTMLElement;
 
     expect(closeButton).toHaveFocus();

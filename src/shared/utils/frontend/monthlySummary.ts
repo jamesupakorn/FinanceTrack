@@ -172,7 +172,7 @@ export function normaliseBudgetThresholds(raw: unknown): BudgetThresholds {
 export const BUDGET_ROW_DEFS: BudgetRowDef[] = [
   { id: 'generalExpense', label: 'บิลและรายจ่าย', kind: 'max' },
   { id: 'dailyExpense', label: 'ค่าใช้จ่ายรายวัน', kind: 'max' },
-  { id: 'creditCard', label: 'บัตรเครดิต', kind: 'max' },
+  { id: 'creditCard', label: 'บัตร & สินเชื่อ', kind: 'max' },
   { id: 'savings', label: 'เงินออม', kind: 'min' }
 ];
 

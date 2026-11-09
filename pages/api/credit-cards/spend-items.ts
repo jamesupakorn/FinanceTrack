@@ -28,12 +28,16 @@ import {
   MAX_SPEND_ITEMS_PER_CARD,
   SPEND_MONTH_KEY_RE,
   computeStartMonthFromPurchase,
+  isLoanCardType,
   round2,
   toAmount
 } from '../../../src/shared/utils/creditCardBasics';
 import { withAudit } from '../../../lib/auditedMutation';
 
 type Failure = { status: number; body: Record<string, unknown> };
+
+/** สินเชื่อไม่มีรายการใช้จ่ายไม่ผ่อน — ข้อความเดียวกับ guard ของ revolving (BR-CC-038) */
+const LOAN_CARD_FAILURE: Failure = { status: 409, body: { error: 'loan cards have no revolving balance' } };
 
 function generateSpendItemId(): string {
   return `si_${crypto.randomBytes(6).toString('hex')}`;
@@ -110,7 +114,9 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse, userId: str
   const purchaseDate = value.purchaseDate;
 
   const getMonthFailure = (data: CreditData): { month: string } | Failure => {
-    if (!data.cards.some(card => card?.id === value.cardId)) return { status: 404, body: { error: 'card not found' } };
+    const card = data.cards.find(item => item?.id === value.cardId);
+    if (!card) return { status: 404, body: { error: 'card not found' } };
+    if (isLoanCardType(card.cardType)) return LOAN_CARD_FAILURE;
     const derivedMonth = billingMonthFor(data, value.cardId, purchaseDate);
     if (!SPEND_MONTH_KEY_RE.test(derivedMonth)) {
       return { status: 400, body: { error: 'ไม่สามารถคำนวณรอบบิลจากวันที่ซื้อและวันสรุปยอดได้' } };
@@ -192,6 +198,7 @@ async function handlePut(req: NextApiRequest, res: NextApiResponse, userId: stri
   }
   const snapshotCard = snapshot.cards.find(card => card?.id === snapshotItem.cardId);
   if (!snapshotCard) return res.status(404).json({ error: 'card not found' });
+  if (isLoanCardType(snapshotCard.cardType)) return res.status(LOAN_CARD_FAILURE.status).json(LOAN_CARD_FAILURE.body);
   const snapshotMonth = value.purchaseDate
     ? billingMonthFor(snapshot, snapshotItem.cardId ?? '', value.purchaseDate)
     : snapshotItem.month ?? '';
@@ -222,6 +229,10 @@ async function handlePut(req: NextApiRequest, res: NextApiResponse, userId: stri
     const card = current.cards.find(item => item?.id === existing.cardId);
     if (!card) {
       failure = { status: 404, body: { error: 'card not found' } };
+      return current;
+    }
+    if (isLoanCardType(card.cardType)) {
+      failure = LOAN_CARD_FAILURE;
       return current;
     }
     const month = value.purchaseDate
