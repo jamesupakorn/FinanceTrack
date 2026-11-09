@@ -10,11 +10,12 @@ import {
   formatCurrency,
   parseToNumber,
   formatExpenseData,
-  getAccountSummary,
   handleNumberInput,
   handleNumberBlur,
   DEFAULT_EXPENSE_ITEMS
 } from '../../shared/utils/frontend/numberUtils';
+import { getAccountBreakdown } from '../../shared/utils/commonUtils';
+import { formatDueDayText, getValidResolvedDueDate, formatRowDueText, type DueRowLike } from '../../shared/utils/frontend/expenseDueText';
 import { formatExpenseForSave, calculateExpenseTotal } from '../../shared/utils/expenseUtils';
 import {
   END_OF_MONTH_DUE_DAY,
@@ -140,17 +141,6 @@ const getPreviousMonthKey = (monthKey: string | null | undefined): string | null
   return `${year}-${String(month - 1).padStart(2, '0')}`;
 };
 
-const formatDueDayText = (dueDayValue: unknown): string => {
-  if (isEndOfMonthDueDay(dueDayValue)) return 'วันสิ้นเดือน';
-  return dueDayValue ? `วันที่ ${String(dueDayValue)}` : '';
-};
-
-type DueRowLike = { dueDay?: unknown; resolvedDueDate?: unknown };
-
-/** resolvedDueDate ('YYYY-MM-DD') ของแถวบัตรจาก GET monthly_expense — ไม่ถูกต้อง/ไม่มี => null */
-// validator เดียวกับ expenseEvents.buildMonthEvents (isValidPurchaseDate) — ตัดวันที่เป็นไปไม่ได้ เช่น 2026-02-30
-const getValidResolvedDueDate = (value: unknown): string | null => (isValidPurchaseDate(value) ? value : null);
-
 /**
  * รอบบิลที่แถวบัตร (ccr_) แสดง ('YYYY-MM') จาก GET monthly_expense — ไม่ถูกต้อง/ไม่มี => null
  * spec-credit-card-due-month-placement DP-4: label derive อย่างเดียว ไม่ใช่ข้อมูลเงิน
@@ -171,13 +161,6 @@ const rowDueDate = (row: DueRowLike, monthKey: MonthKey | null | undefined): Dat
     return new Date(year, month - 1, day);
   }
   return getDueDateFromDay(row.dueDay, monthKey as MonthKey);
-};
-
-/** ข้อความช่องครบกำหนด — ข้ามเดือน => วันที่เต็ม (เช่น "10 พ.ย. 2569") ไม่เช่นนั้นเหมือนเดิม */
-const formatRowDueText = (row: DueRowLike, monthKey: MonthKey | null | undefined): string => {
-  const resolved = getValidResolvedDueDate(row.resolvedDueDate);
-  if (resolved && resolved.slice(0, 7) !== monthKey) return formatIsoDateTH(resolved);
-  return formatDueDayText(row.dueDay);
 };
 
 const describeDueTiming = (
@@ -207,8 +190,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
   const [editExpense, setEditExpense] = useState<ExpenseValues>({});
   const [bankAccounts, setBankAccounts] = useState<string[]>([]);
   const [previousMonthTotal, setPreviousMonthTotal] = useState<number | null>(null);
-  const [prevMonthUnpaid, setPrevMonthUnpaid] = useState<PreviousMonthUnpaid | null>(null);
-  const [prevAccountSummary, setPrevAccountSummary] = useState<Record<string, number>>({});
+  const [prevExpenseValues, setPrevExpenseValues] = useState<ExpenseValues>({});
   const [isLoading, setIsLoading] = useState(false);
   const [persistedKeys, setPersistedKeys] = useState<string[]>([]);
   const [pendingScrollKey, setPendingScrollKey] = useState<string | null>(null);
@@ -328,35 +310,37 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
   }, [selectedMonth, currentUser?.id, cardCycleMonthsKey]);
 
   useEffect(() => {
+    // ล้างค่าเดือนก่อนทันทีที่เปลี่ยนเดือน เพื่อไม่ให้ยอดค้างของเดือนเก่าแสดงใต้ป้ายเดือนใหม่ระหว่างรอ response
+    setPreviousMonthTotal(null);
+    setPrevExpenseValues({});
     if (!selectedMonth) {
       setPreviousMonthTotal(null);
-      return;
+      setPrevExpenseValues({});
+      return undefined;
     }
     const previousMonthKey = getPreviousMonthKey(selectedMonth);
     if (!previousMonthKey) {
       setPreviousMonthTotal(null);
-      return;
+      setPrevExpenseValues({});
+      return undefined;
     }
+    // cancelled guard: response ของเดือนเก่าที่มาช้าต้องไม่ทับ state ของเดือนใหม่ (ทั้งแถว ยอดรวม และยอดค้าง)
+    let cancelled = false;
     expenseAPI.getByMonth(previousMonthKey)
       .then(data => {
+        if (cancelled) return;
         const previousFormatted = formatExpenseData(data || {}, previousMonthKey);
-        const previousValues = previousFormatted.values || {};
+        const previousValues = (previousFormatted.values || {}) as ExpenseValues;
         const previousTotal = calculateExpenseTotal(previousValues as unknown as Record<string, Record<string, unknown> | undefined>, 'actual', parseToNumber);
         setPreviousMonthTotal(previousTotal);
-        const unpaidItems = Object.values(previousValues).filter(row => {
-          if (!row || typeof row !== 'object') return false;
-          if (row.paid === true || row.paid === 'true') return false;
-          return parseToNumber(row.actual) > 0;
-        });
-        const unpaidTotal = unpaidItems.reduce((sum, row) => sum + parseToNumber(row.actual), 0);
-        setPrevMonthUnpaid(unpaidTotal > 0 ? { total: unpaidTotal, count: unpaidItems.length, monthKey: previousMonthKey } : null);
-        setPrevAccountSummary(getAccountSummary(previousValues, bankAccounts));
+        setPrevExpenseValues(previousValues);
       })
       .catch(() => {
+        if (cancelled) return;
         setPreviousMonthTotal(null);
-        setPrevMonthUnpaid(null);
-        setPrevAccountSummary({});
+        setPrevExpenseValues({});
       });
+    return () => { cancelled = true; };
   }, [selectedMonth]);
 
   const updateExpenseField = (item: string, field: keyof ExpenseItem, value: unknown) => {
@@ -752,7 +736,16 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
     if (paid) return sum;
     return sum + parseToNumber(row.actual);
   }, 0), [editExpense, sortedExpenseKeys]);
-  const accountSummary = useMemo(() => getAccountSummary(editExpense, bankAccounts), [editExpense, bankAccounts]);
+  const accountBreakdown = useMemo(() => getAccountBreakdown(editExpense, bankAccounts, { parseAmount: parseToNumber }), [editExpense, bankAccounts]);
+  const prevAccountBreakdown = useMemo(() => getAccountBreakdown(prevExpenseValues, bankAccounts, { parseAmount: parseToNumber }), [prevExpenseValues, bankAccounts]);
+  const prevMonthKey = useMemo(() => getPreviousMonthKey(selectedMonth) as MonthKey | null, [selectedMonth]);
+  // DD-6: ยอดค้างเดือนก่อน derive จาก breakdown เดียวกับตาราง (กฎ paid/บัญชีมีที่เดียว)
+  const prevMonthUnpaid = useMemo<PreviousMonthUnpaid | null>(() => {
+    if (!prevMonthKey) return null;
+    const unpaidItems = Object.values(prevAccountBreakdown).flatMap(bucket => bucket.items).filter(item => item.amount > 0);
+    const unpaidTotal = unpaidItems.reduce((sum, item) => sum + item.amount, 0);
+    return unpaidTotal > 0 ? { total: unpaidTotal, count: unpaidItems.length, monthKey: prevMonthKey } : null;
+  }, [prevAccountBreakdown, prevMonthKey]);
   const upcomingSummaryText = dueInsights.upcomingCount > 0 ? `${dueInsights.upcomingCount} รายการยังไม่จ่าย` : 'ยังไม่มีรายการค้างชำระ';
   // บริบทแถวคำนวณจากทุกแถว (ไม่ใช่เฉพาะที่ผ่าน filter) ลำดับ "รายการที่ N" จึงไม่เปลี่ยนตาม filter/เรียงลำดับ
   const rowContextByKey = useMemo(() => {
@@ -877,7 +870,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
           </div>
           </>}
 
-          {shouldShowAccountTable && <div className="mt-space-5"><BankAccountTable accountSummary={accountSummary} prevAccountSummary={prevAccountSummary} accounts={bankAccounts} /></div>}
+          {shouldShowAccountTable && <div className="mt-space-5"><BankAccountTable accountBreakdown={accountBreakdown} prevAccountBreakdown={prevAccountBreakdown} accounts={bankAccounts} monthKey={selectedMonth ?? null} prevMonthKey={prevMonthKey} /></div>}
         </>
       )}
       {!isLoading && !hasExpenseRows && <div className="rounded-md border border-dashed border-border-default bg-sunken p-space-4 text-sm text-secondary">ยังไม่มีรายการค่าใช้จ่ายในเดือนนี้ กด &quot;เพิ่มรายการ&quot; เพื่อเริ่มต้น</div>}

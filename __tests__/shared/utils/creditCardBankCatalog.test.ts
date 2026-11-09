@@ -92,10 +92,60 @@ describe('creditCardBankCatalog — CARD_COLORS derivation (AC-BI-02/03/04)', ()
     expect(BASE_CARD_COLORS).toEqual(CARD_COLORS.slice(0, 8));
   });
 
-  it('has no duplicates and has 19 entries with the current hexes (AC-BI-04)', () => {
+  it('has no duplicates and has 22 entries with the current hexes (AC-BI-04)', () => {
     const unique = new Set(CARD_COLORS);
     expect(unique.size).toBe(CARD_COLORS.length);
-    expect(CARD_COLORS.length).toBe(19);
+    expect(CARD_COLORS.length).toBe(22);
+  });
+});
+
+describe('creditCardBankCatalog — frozen legacy issuer colours (credit-card-issuer-color-fix)', () => {
+  it('ktc/aeon/firstchoice carry the corrected, logo-accurate hex (AC-1)', () => {
+    expect(BANK_ISSUERS.ktc.color).toBe('#cf3339');
+    expect(BANK_ISSUERS.aeon.color).toBe('#533a98');
+    expect(BANK_ISSUERS.firstchoice.color).toBe('#25447e');
+  });
+
+  it('the other 8 issuers keep their byte-identical colours', () => {
+    expect(BANK_ISSUERS.kbank.color).toBe('#138f2d');
+    expect(BANK_ISSUERS.scb.color).toBe('#4e2a84');
+    expect(BANK_ISSUERS.ktb.color).toBe('#1ba5e1');
+    expect(BANK_ISSUERS.bbl.color).toBe('#1e4598');
+    expect(BANK_ISSUERS.krungsri.color).toBe('#fec43b');
+    expect(BANK_ISSUERS.ttb.color).toBe('#004b93');
+    expect(BANK_ISSUERS.uob.color).toBe('#0b3979');
+    expect(BANK_ISSUERS.shopee.color).toBe('#ee4d2d');
+  });
+
+  it('CARD_COLORS still includes the 3 old, superseded hexes (AC-2, frozen legacy, append-only)', () => {
+    expect(CARD_COLORS.includes('#00338e')).toBe(true);
+    expect(CARD_COLORS.includes('#e4002b')).toBe(true);
+    expect(CARD_COLORS.includes('#f26522')).toBe(true);
+  });
+
+  it('CARD_COLORS includes the 3 new, corrected hexes (AC-3)', () => {
+    expect(CARD_COLORS.includes('#cf3339')).toBe(true);
+    expect(CARD_COLORS.includes('#533a98')).toBe(true);
+    expect(CARD_COLORS.includes('#25447e')).toBe(true);
+  });
+
+  it('CARD_COLORS has no duplicate entries (AC-5)', () => {
+    expect(new Set(CARD_COLORS).size).toBe(CARD_COLORS.length);
+  });
+
+  it('a card already stored with an old, superseded hex still passes validateCardInput unchanged (AC-6)', () => {
+    const { validateCardInput } = require('../../../src/shared/utils/creditCardRevolving');
+    const legacyHexes = ['#00338e', '#e4002b', '#f26522'];
+    legacyHexes.forEach((legacyColor) => {
+      const result = validateCardInput({
+        name: 'บัตรทดสอบ',
+        color: legacyColor,
+        creditLimit: 0,
+        statementDay: 1,
+        dueDay: 1,
+      });
+      expect(result.value.color).toBe(legacyColor);
+    });
   });
 });
 

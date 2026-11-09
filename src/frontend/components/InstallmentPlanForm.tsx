@@ -12,6 +12,7 @@ import {
   validatePlanInput,
   getCurrentMonthKey,
   addMonths,
+  getCardDueMonthOffset,
   MAX_INSTALLMENTS_PER_PLAN,
   MAX_LOAN_INSTALLMENTS_PER_PLAN,
   isLoanCardType,
@@ -377,7 +378,12 @@ export default function InstallmentPlanForm({
         ...result.value,
         calcMethod: result.value.calcMethod ?? undefined
       });
-      const rows = findTickableInstallments(schedule, currentMonthKey);
+      const selectedCard = cards.find(item => item.id === result.value.cardId);
+      const rows = findTickableInstallments(
+        schedule,
+        currentMonthKey,
+        getCardDueMonthOffset(selectedCard?.statementDay, selectedCard?.dueDay)
+      );
       if (rows.length > 0) {
         setBackdate({ values: result.value, rows, currentMonthKey });
         return;
