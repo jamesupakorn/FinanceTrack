@@ -143,7 +143,7 @@ const ChangePasswordModal = ({
         })}
         <p className={styles.modalHint}>แนะนำให้ผสมตัวเลข อักษร และสัญลักษณ์</p>
         {displayError && <div className={styles.modalError}>{displayError}</div>}
-        <div className={styles.modalActions}>
+        <div className={`${styles.modalActions} ${styles.changePasswordActions}`}>
           <button type="button" className={styles.cancelButton} onClick={onClose} disabled={isSubmitting}>
             ยกเลิก
           </button>

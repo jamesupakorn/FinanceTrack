@@ -26,6 +26,17 @@ describe('findTickableInstallments', () => {
     expect(findTickableInstallments(schedule, '2026-12').map(r => r.no)).toEqual([1]);
   });
 
+  it('shifts cycle months to the cash month for cards whose due day falls in the next month', () => {
+    const schedule = [
+      { no: 1, dueMonth: '2026-10', payment: 394 },
+      { no: 2, dueMonth: '2026-11', payment: 394 },
+      { no: 3, dueMonth: '2026-12', payment: 394 }
+    ];
+    expect(findTickableInstallments(schedule, '2026-11', 1).map(r => r.no)).toEqual([1]);
+    expect(findTickableInstallments(schedule, '2026-11', 0).map(r => r.no)).toEqual([1, 2]);
+    expect(findTickableInstallments(schedule, '2027-01', 1).map(r => r.no)).toEqual([1, 2, 3]);
+  });
+
   it('returns an empty list for an invalid current month key', () => {
     expect(findTickableInstallments([{ no: 1, dueMonth: '2026-01', payment: 1 }], 'not-a-month')).toEqual([]);
   });
