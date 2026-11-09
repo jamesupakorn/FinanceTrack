@@ -13,7 +13,7 @@ import {
   getDaysInMonth,
   resolveDueDayForMonth
 } from './dateUtils';
-import { BANK_ISSUERS } from './creditCardBankCatalog';
+import { BANK_ISSUERS, FROZEN_LEGACY_CARD_COLORS } from './creditCardBankCatalog';
 
 // ---------------------------------------------------------------------------
 // ค่าคงที่
@@ -35,13 +35,20 @@ export const BASE_CARD_COLORS: readonly string[] = [
 ];
 
 /**
- * ชุดสีประจำบัตร = 8 สีเดิม (BASE_CARD_COLORS) + สีแบรนด์ของผู้ออกบัตรจาก BANK_ISSUERS (BR-CC-021)
+ * ชุดสีประจำบัตร มาจาก 3 แหล่งเรียงกัน (BR-CC-021):
+ *   1) 8 สีเดิม (BASE_CARD_COLORS)
+ *   2) สีแบรนด์ปัจจุบันของผู้ออกบัตรจาก BANK_ISSUERS
+ *   3) สีแบรนด์เดิมที่ถูกแก้ไขแล้ว (FROZEN_LEGACY_CARD_COLORS, เพิ่ม 2026-11-09)
  * append-only หลัง release — ห้าม reorder หรือ prepend สีแบรนด์ (CARD_COLORS[0] ต้องเป็น
  * default/fallback เดิมเสมอ, V-5) ซ้ำกับสีที่มีอยู่แล้วจะถูก de-duplicate (Set)
+ *
+ * แหล่งที่ 3 มีไว้เพื่อบัตรที่เคยบันทึกสีแบรนด์เดิม (ก่อนแก้ไข) ไว้แล้ว ให้ยังผ่าน validateCardInput
+ * เหมือนเดิมต่อไป แทนที่จะถูกเปลี่ยนเป็น CARD_COLORS[0] แบบไม่รู้ตัวตอน save ครั้งต่อไป
  */
 export const CARD_COLORS: string[] = Array.from(new Set([
   ...BASE_CARD_COLORS,
-  ...Object.values(BANK_ISSUERS).map((issuer) => issuer.color)
+  ...Object.values(BANK_ISSUERS).map((issuer) => issuer.color),
+  ...FROZEN_LEGACY_CARD_COLORS
 ]));
 
 /** เพดานขนาดข้อมูลต่อผู้ใช้ (BR-CC-012 · BR-CC-018) */
