@@ -28,7 +28,8 @@ const chainOf = (card: any, cycles: Cycle[], throughMonth: string, spendItems: u
 const gNext = (cycles: Cycle[], asOfMonth: string, plans: any[] = []) =>
   resolveCardNextDueDate(G, plans, chainOf(G, cycles, asOfMonth));
 
-// OLD implementation, verbatim copy of the pre-change function (oracle)
+// OLD implementation, logic-identical copy of the pre-change function (oracle).
+// Not character-identical: 'ongoing' stands in for PLAN_STATUS.ONGOING and params are typed `any`.
 function oldResolveCardNextDueDate(card: any = {}, plans: any[] = [], derivedCycles: any[] = []): string | null {
   const dueMonths: string[] = [];
   plans.forEach(plan => {
@@ -220,6 +221,16 @@ describe('resolveCardNextDueDate trailing-run rule', () => {
         expect(resolveCardNextDueDate(G, [], [...arr].reverse())).toBe(expected);
         expect(JSON.stringify([G, arr])).toBe(before);
       });
+    });
+
+    it('DD-3: latest decided month is found by value even when the array is reversed (two decided cycles)', () => {
+      const rows = chainOf(G, [
+        cyc('cc_g', '2026-07', { newSpend: 100, paymentAction: 'full' }),
+        cyc('cc_g', '2026-08', { newSpend: 100 }),
+        cyc('cc_g', '2026-09', { newSpend: 0, paymentAction: 'full' })
+      ], '2026-09');
+      expect(resolveCardNextDueDate(G, [], rows)).toBeNull();
+      expect(resolveCardNextDueDate(G, [], [...rows].reverse())).toBeNull();
     });
   });
 
