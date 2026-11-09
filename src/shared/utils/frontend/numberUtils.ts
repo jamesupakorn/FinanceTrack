@@ -14,60 +14,9 @@ import { END_OF_MONTH_DUE_DAY, isEndOfMonthDueDay } from '../dateUtils';
 // task-context บันทึกไว้ (ดู spec §Scope A.1)
 import { isCreditCardRowKey } from '../creditCardUtils';
 import type { CardTotalExpenseRow } from '../backend/creditCardSync';
+import { LEGACY_ITEM_ACCOUNT_MAP } from '../commonUtils';
 
-const DEFAULT_BANK_ACCOUNTS = ['กรุงศรี', 'ttb', 'กสิกร', 'UOB'];
-const LEGACY_ITEM_ACCOUNT_MAP: Record<string, string> = {
-  credit_kungsri: 'กรุงศรี',
-  house: 'ttb',
-  credit_ttb: 'ttb',
-  credit_kbank: 'กสิกร',
-  shopee: 'กสิกร',
-  netflix: 'กสิกร',
-  youtube: 'กสิกร',
-  youtube_membership: 'กสิกร',
-  credit_uob: 'UOB'
-};
 
-/**
- * คำนวณสรุปยอดตามบัญชีจากข้อมูลค่าใช้จ่าย
- * รวมเฉพาะรายการที่ยังไม่ได้ชำระ
- *
- * หมายเหตุ: เป็น implementation แยกจาก `getAccountSummary` ใน commonUtils.ts (signature/logic ต่างกัน
- * — ตัวนี้รับ bankAccounts เป็นพารามิเตอร์ที่ 2 และเทียบ paid แบบตรงตัว ไม่ผ่าน isPaidFlag) จงใจไม่รวมกัน
- * ในรอบนี้ (ดู spec §Out of scope)
- */
-export const getAccountSummary = (
-  editExpense: Record<string, unknown> | undefined,
-  bankAccounts: string[] = []
-): Record<string, number> => {
-  const summary: Record<string, number> = {};
-  const normalizedAccounts = Array.isArray(bankAccounts)
-    ? Array.from(new Set(bankAccounts.map((item) => String(item || '').trim()).filter(Boolean)))
-    : [];
-
-  normalizedAccounts.forEach((account) => {
-    summary[account] = 0;
-  });
-
-  Object.entries(editExpense || {}).forEach(([itemKey, item]) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) return;
-    const expenseItem = item as Partial<ExpenseItem>;
-    const paid = expenseItem?.paid;
-    if (paid === true || paid === 'true') return;
-
-    const accountName = (typeof expenseItem.account === 'string' && expenseItem.account.trim().length > 0)
-      ? expenseItem.account.trim()
-      : (LEGACY_ITEM_ACCOUNT_MAP[itemKey] || 'ไม่ระบุบัญชี');
-
-    if (!(accountName in summary)) {
-      summary[accountName] = 0;
-    }
-
-    summary[accountName] += parseToNumber(expenseItem?.actual || 0);
-  });
-
-  return summary;
-};
 // รายการค่าใช้จ่ายมาตรฐานที่ใช้สำหรับสร้างฟอร์ม (15 รายการ)
 export const DEFAULT_EXPENSE_ITEMS: { key: string; label: string }[] = [
   { key: 'house', label: 'ค่าบ้าน' },
