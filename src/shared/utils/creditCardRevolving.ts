@@ -545,8 +545,18 @@ export function summarisePlan(plan: PlanLike = {}): PlanLike & {
 }
 
 /**
- * วันครบกำหนดถัดไปของบัตร — เดือนที่เร็วที่สุดจากงวดผ่อนที่ยังไม่ชำระ
- * รวมกับเดือนของ cycle หมุนเวียนที่ยังไม่ตัดสินใจชำระ (BR-CC-014)
+ * วันครบกำหนดถัดไปของบัตร — เดือนที่เร็วที่สุดจากงวดผ่อนที่ยังไม่ชำระ (แผน ongoing)
+ * รวมกับเดือนของ cycle หมุนเวียนที่ยังไม่ตัดสินใจชำระ (BR-CC-014) เฉพาะ "หางที่ยังไม่ตัดสินใจ"
+ *
+ * กฎ (spec-credit-card-stale-overdue-due-date.md DD-1): cycle ที่ยังไม่ตัดสินใจ
+ * (paymentAction null และ amountDue > 0) นับเป็นผู้สมัครก็ต่อเมื่อเดือนของมัน "ใหม่กว่า"
+ * cycle ที่ตัดสินใจแล้ว ('full' / 'minimum') ล่าสุดในสาย — เพราะยอดยกมาถูกรวมใน totalDue
+ * ของ cycle ที่ตัดสินใจทีหลังไปแล้ว (full = จ่ายหมด · minimum = ยอดที่เหลือยกไปเป็นแถวถัดไป)
+ * ถ้าไม่มี cycle ที่ตัดสินใจเลย ทุก cycle ที่ยังไม่ตัดสินใจนับเหมือนเดิม
+ * - cycle ที่ amountDue <= 0 ไม่เป็นผู้สมัครเสมอ และจะตัดหางก็ต่อเมื่อมี action ที่เก็บไว้
+ * - เทียบเดือนด้วยค่า (YYYY-MM กว้างคงที่) ไม่ใช้ตำแหน่งใน array · ไม่แก้ input · ไม่อ่านธง truncated
+ * - ผลลัพธ์ใหม่ไม่เคยเร็วกว่าเดิม (เท่าเดิม / ช้ากว่า / null) · แสดงผลอย่างเดียว ไม่แตะตัวเลขเงิน
+ * - cycle ที่ตัดสินใจแล้วที่ลงเดือนหลัง asOfMonth ก็ตัดหางด้วย (OQ-2 ที่ผู้ใช้ยอมรับแล้ว)
  */
 export function resolveCardNextDueDate(card: CardLike = {}, plans: PlanLike[] = [], derivedCycles: RevolvingCycleRow[] = []): string | null {
   const dueMonths: string[] = [];
@@ -557,10 +567,21 @@ export function resolveCardNextDueDate(card: CardLike = {}, plans: PlanLike[] = 
       if (typeof row?.dueMonth === 'string') dueMonths.push(row.dueMonth);
     });
   });
-  (Array.isArray(derivedCycles) ? derivedCycles : []).forEach(cycle => {
+  const cycleRows = Array.isArray(derivedCycles) ? derivedCycles : [];
+  // เดือนล่าสุดที่ตัดสินใจแล้ว (เทียบด้วยค่า ไม่ใช่ตำแหน่ง)
+  let lastDecidedMonth: string | null = null;
+  cycleRows.forEach(cycle => {
+    if (cycle?.paymentAction !== 'full' && cycle?.paymentAction !== 'minimum') return;
+    const month = cycle?.month;
+    if (typeof month !== 'string' || !MONTH_KEY_RE.test(month)) return;
+    if (lastDecidedMonth === null || month.localeCompare(lastDecidedMonth) > 0) lastDecidedMonth = month;
+  });
+  cycleRows.forEach(cycle => {
     if (cycle?.paymentAction !== null) return;
     if (!(Number(cycle?.amountDue) > 0)) return;
-    if (typeof cycle?.month === 'string') dueMonths.push(cycle.month);
+    if (typeof cycle?.month !== 'string') return;
+    if (lastDecidedMonth !== null && cycle.month.localeCompare(lastDecidedMonth) <= 0) return;
+    dueMonths.push(cycle.month);
   });
   if (!dueMonths.length) return null;
   dueMonths.sort();
