@@ -12,6 +12,7 @@ import {
   validatePlanInput,
   getCurrentMonthKey,
   addMonths,
+  getCardDueMonthOffset,
   MAX_INSTALLMENTS_PER_PLAN,
   computeStartMonthFromPurchase,
   isValidPurchaseDate,
@@ -45,6 +46,7 @@ interface InstallmentCardOption {
   name: string;
   last4?: string;
   statementDay?: number | string;
+  dueDay?: number | string;
 }
 
 interface InstallmentScheduleItem {
@@ -336,7 +338,12 @@ export default function InstallmentPlanForm({
         ...result.value,
         calcMethod: result.value.calcMethod ?? undefined
       });
-      const rows = findTickableInstallments(schedule, currentMonthKey);
+      const selectedCard = cards.find(item => item.id === result.value.cardId);
+      const rows = findTickableInstallments(
+        schedule,
+        currentMonthKey,
+        getCardDueMonthOffset(selectedCard?.statementDay, selectedCard?.dueDay)
+      );
       if (rows.length > 0) {
         setBackdate({ values: result.value, rows, currentMonthKey });
         return;
