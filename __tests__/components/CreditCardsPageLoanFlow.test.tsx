@@ -2,11 +2,14 @@
 // (step 2 → edit step 1 → step 2 on save AND on cancel, no extra toast, AC-LN-S3-03), the BACK-face
 // "+ เพิ่มตารางผ่อน" entry (P1-1), the E-23 only-loans add-expense guard and the loan delete-blocked toast.
 // CreditCardForm / InstallmentPlanForm are stubbed to expose exactly the props the page drives.
+// S4 D7: the ปรับอัตราดอกเบี้ย round trip (open via onReviseRate → onSaved → close, toast, refetch, focus back);
+// LoanRateRevisionDialog is stubbed the same way (its own behaviour is covered in LoanRateRevisionDialog.test.tsx).
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import CreditCardsPage from '../../pages/credits';
 import { creditCardAPI, userSettingsAPI } from '../../src/shared/utils/frontend/apiUtils';
 import { showToast } from '../../src/shared/utils/frontend/toast';
+import { formatMonthKeyTH } from '../../src/shared/utils/dateUtils';
 
 let mockQuery: Record<string, string> = {};
 
@@ -49,6 +52,21 @@ jest.mock('../../src/frontend/components/InstallmentPlanForm', () => ({
       <span data-testid="plan-form-card">{cards?.find(card => card.id === lockedCardId)?.name ?? ''}</span>
       {onEditLockedCard && <button type="button" onClick={onEditLockedCard}>กลับไปแก้ไขข้อมูลบัตร</button>}
       <button type="button" onClick={onClose}>close-plan</button>
+    </div>
+  ) : null)
+}));
+jest.mock('../../src/frontend/components/LoanRateRevisionDialog', () => ({
+  __esModule: true,
+  default: ({ open, plan, cardName, onSaved, onClose }: {
+    open: boolean;
+    plan?: { id: string } | null;
+    cardName?: string;
+    onSaved?: (result: { plan: unknown; effectiveMonth: string; newPayment: number }) => void;
+    onClose?: () => void;
+  }) => (open ? (
+    <div data-testid="rate-revision-dialog" data-plan-id={plan?.id ?? ''} data-card-name={cardName ?? ''}>
+      <button type="button" onClick={() => onSaved?.({ plan: { id: plan?.id }, effectiveMonth: '2027-01', newPayment: 7350.5 })}>save-revision</button>
+      <button type="button" onClick={onClose}>close-revision</button>
     </div>
   ) : null)
 }));
@@ -201,4 +219,72 @@ test('deleting a loan that still has an active plan shows the loan delete-blocke
   const confirm = screen.getByRole('alertdialog', { name: 'ลบสินเชื่อ' });
   await act(async () => { fireEvent.click(within(confirm).getByRole('button', { name: 'ลบสินเชื่อ' })); });
   expect(showToast).toHaveBeenCalledWith('สินเชื่อนี้ยังผ่อนไม่จบ — ต้องยกเลิกตารางผ่อนหรือผ่อนให้ครบก่อน', 'error');
+});
+
+// ------------------------------------------------------------------ S4 D7: rate revision round trip
+
+const detailLoanCard = {
+  ...loanCard, id: 'cc_loan_1', remainingPrincipal: 950000, remainingPayable: 1500000, ongoingPlanCount: 1, installmentCount: 1
+};
+const revisionSchedule = Array.from({ length: 24 }, (_, index) => ({
+  no: index + 1,
+  dueMonth: `${2026 + Math.floor((index + 10) / 12)}-${String(((index + 10) % 12) + 1).padStart(2, '0')}`,
+  payment: 7164.31, principal: 5000, interest: 2164.31, paid: index < 2
+}));
+const loanPlanBefore = {
+  id: 'ip_loan_1', cardId: 'cc_loan_1', itemName: 'สัญญา 123', status: 'ongoing', installmentsPaid: 2, installmentsRemaining: 22,
+  months: 24, schedule: revisionSchedule, nextUnpaid: revisionSchedule[2], totalPrice: 1000000, progressPercent: 8.33,
+  monthlyPayment: 7164.31, remainingPayable: 157614.82, remainingPrincipal: 940000, interestMode: 'calculated',
+  calcMethod: 'effective', annualRate: 6, rateRevisionCount: 0, createdAt: '2026-01-01'
+};
+const revisedSchedule = revisionSchedule.map(row => (row.no >= 3 ? { ...row, payment: 7350.5 } : row));
+const loanPlanAfter = {
+  ...loanPlanBefore,
+  schedule: revisedSchedule,
+  nextUnpaid: revisedSchedule[2],
+  monthlyPayment: 7350.5,
+  annualRate: 7,
+  rateRevisionCount: 1,
+  rateRevisions: [{ effectiveMonth: '2027-01', fromInstallmentNo: 3, previousRate: 6, newRate: 7, revisedAt: '2026-11-09T03:00:00.000Z' }]
+};
+
+test('D7: ปรับอัตราดอกเบี้ย opens the dialog for the plan; save closes it, toasts, refetches and returns focus', async () => {
+  mockQuery = { card: 'cc_loan_1' };
+  jest.mocked(creditCardAPI.getPlans).mockResolvedValue({ plans: [loanPlanBefore] } as never);
+  await renderWith([detailLoanCard]);
+
+  const header = await screen.findByTestId('loan-detail-header');
+  const metric = (label: string) => within(screen.getByTestId('loan-detail-header')).getByText(label).nextElementSibling;
+  expect(within(header).getByText('ดอกเบี้ยปัจจุบัน').nextElementSibling).toHaveTextContent('6.00% ต่อปี');
+
+  const section = screen.getByRole('region', { name: 'ประวัติอัตราดอกเบี้ย' });
+  fireEvent.click(within(section).getByRole('button', { name: 'ปรับอัตราดอกเบี้ย' }));
+  const dialog = screen.getByTestId('rate-revision-dialog');
+  expect(dialog).toHaveAttribute('data-plan-id', 'ip_loan_1');
+  expect(dialog).toHaveAttribute('data-card-name', 'บ้าน');
+
+  const plansCallsBefore = jest.mocked(creditCardAPI.getPlans).mock.calls.length;
+  jest.mocked(creditCardAPI.getPlans).mockResolvedValue({ plans: [loanPlanAfter] } as never);
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'save-revision' })); });
+
+  expect(screen.queryByTestId('rate-revision-dialog')).toBeNull();
+  expect(showToast).toHaveBeenCalledTimes(1);
+  expect(showToast).toHaveBeenCalledWith(`ปรับอัตราดอกเบี้ยแล้ว · ค่างวดใหม่ 7,350.50 ฿ ตั้งแต่ ${formatMonthKeyTH('2027-01')}`);
+  expect(jest.mocked(creditCardAPI.getPlans).mock.calls.length).toBeGreaterThan(plansCallsBefore);
+  await waitFor(() => expect(metric('ดอกเบี้ยปัจจุบัน')).toHaveTextContent('7.00% ต่อปี'));
+  expect(metric('ค่างวดปัจจุบัน')).toHaveTextContent('7,350.50 ฿');
+  await waitFor(() => expect(document.activeElement).toHaveAttribute('data-loan-rate-revise-trigger'));
+});
+
+test('D7: closing the rate dialog without saving neither toasts nor refetches', async () => {
+  mockQuery = { card: 'cc_loan_1' };
+  jest.mocked(creditCardAPI.getPlans).mockResolvedValue({ plans: [loanPlanBefore] } as never);
+  await renderWith([detailLoanCard]);
+  const section = await screen.findByRole('region', { name: 'ประวัติอัตราดอกเบี้ย' });
+  const plansCallsBefore = jest.mocked(creditCardAPI.getPlans).mock.calls.length;
+  fireEvent.click(within(section).getByRole('button', { name: 'ปรับอัตราดอกเบี้ย' }));
+  fireEvent.click(screen.getByRole('button', { name: 'close-revision' }));
+  expect(screen.queryByTestId('rate-revision-dialog')).toBeNull();
+  expect(showToast).not.toHaveBeenCalled();
+  expect(jest.mocked(creditCardAPI.getPlans).mock.calls.length).toBe(plansCallsBefore);
 });

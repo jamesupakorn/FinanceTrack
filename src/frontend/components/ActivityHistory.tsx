@@ -13,6 +13,7 @@ export const RESOURCE_LABELS: Record<string, string> = {
   credit_cards: 'บัตรเครดิต',
   credit_card_plans: 'แผนผ่อนบัตรเครดิต',
   credit_card_revolving: 'ยอดหมุนเวียนบัตรเครดิต',
+  credit_card_rate_revisions: 'ปรับอัตราดอกเบี้ยสินเชื่อ',
   user_profile: 'การตั้งค่าโปรไฟล์',
   account: 'บัญชีผู้ใช้',
   line_link: 'การเชื่อมต่อ LINE',

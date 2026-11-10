@@ -16,6 +16,10 @@ const CANCEL_BUTTON = `min-h-11 rounded-sm border border-border-interactive bg-s
 const PRIMARY_BUTTON = `min-h-11 rounded-sm bg-accent px-space-5 text-sm font-semibold text-on-accent disabled:opacity-60 ${FOCUS_RING}`;
 const OVERLAY = 'fixed inset-0 z-[120] flex items-end justify-center overflow-y-auto bg-[rgba(10,10,11,0.72)] p-0 backdrop-blur-sm md:items-center md:p-space-5';
 const PANEL = 'flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-lg bg-surface-3 shadow-elev-3 md:max-h-[85vh] md:rounded-lg';
+const SELECT_ALL_BUTTON = `min-h-11 self-start rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary disabled:opacity-60 ${FOCUS_RING}`;
+
+// N-2 / Decision Q: select-all toggle only shown for loans with this many or more tickable rows.
+const SELECT_ALL_ROW_THRESHOLD = 13;
 
 interface BackdatedInstallmentsDialogProps {
   open: boolean;
@@ -23,6 +27,9 @@ interface BackdatedInstallmentsDialogProps {
   currentMonthKey: string;
   rows: TickableInstallment[];
   busy: boolean;
+  loanMode: boolean;
+  /** D4 / Decision S: live per-row progress during a loan's sequential backdated save. */
+  progress?: { done: number; total: number } | null;
   onCancel: () => void;
   onConfirm: (paidInstallmentNos: number[]) => void;
 }
@@ -48,6 +55,8 @@ export default function BackdatedInstallmentsDialog({
   currentMonthKey,
   rows,
   busy,
+  loanMode,
+  progress,
   onCancel,
   onConfirm
 }: BackdatedInstallmentsDialogProps) {
@@ -110,6 +119,14 @@ export default function BackdatedInstallmentsDialog({
     onConfirm([...selected].sort((a, b) => a - b));
   };
 
+  // N-2 / Decision Q: one state-swapping toggle, loan-only, shown from the row threshold up.
+  const showSelectAll = loanMode && rows.length >= SELECT_ALL_ROW_THRESHOLD;
+  const allSelected = rows.length > 0 && selected.size === rows.length;
+  const handleSelectAllToggle = () => {
+    if (busy) return;
+    setSelected(allSelected ? new Set() : new Set(rows.map(row => row.no)));
+  };
+
   return (
     <div
       className={OVERLAY}
@@ -145,6 +162,16 @@ export default function BackdatedInstallmentsDialog({
           <p className="m-0 text-sm leading-relaxed text-secondary">
             {`งวดของเดือนนี้ (${formatMonthKeyTH(currentMonthKey)}) และก่อนหน้า — แตะยืนยันเฉพาะงวดที่ชำระไปแล้วจริง งวดที่ไม่ได้แตะจะบันทึกเป็น "ยังไม่ชำระ" ถ้ายังไม่ได้ชำระงวดใดเลย กด "ยืนยัน" ได้ทันที`}
           </p>
+          {showSelectAll && (
+            <button
+              type="button"
+              className={SELECT_ALL_BUTTON}
+              onClick={handleSelectAllToggle}
+              disabled={busy}
+            >
+              {allSelected ? 'ล้างทั้งหมด' : `เลือกทั้งหมด (${rows.length} งวด)`}
+            </button>
+          )}
           <div className="flex flex-col gap-space-3">
             {rows.map((row, index) => {
               const isPaid = selected.has(row.no);
@@ -172,9 +199,17 @@ export default function BackdatedInstallmentsDialog({
         </div>
 
         <div className="flex shrink-0 flex-col gap-space-3 border-t border-border-subtle px-space-5 py-space-4">
-          <p className="m-0 text-sm text-secondary" aria-live="polite">
-            {`ยืนยันว่าชำระแล้ว ${selected.size} จาก ${rows.length} งวด`}
-          </p>
+          {/* D4 / Decision S: one aria-live region at a time — the progress line replaces the
+              selection-count line during a loan's sequential save; never both at once. */}
+          {loanMode && busy && progress ? (
+            <p className="m-0 text-sm text-secondary" aria-live="polite">
+              {`กำลังบันทึกงวดที่ชำระแล้ว ${progress.done}/${progress.total}…`}
+            </p>
+          ) : (
+            <p className="m-0 text-sm text-secondary" aria-live="polite">
+              {`ยืนยันว่าชำระแล้ว ${selected.size} จาก ${rows.length} งวด`}
+            </p>
+          )}
           {selected.size > 0 && (
             <p className="m-0 text-xs leading-relaxed text-warn">
               เมื่อบันทึกงวดที่ชำระแล้ว จะแก้ราคา จำนวนงวด ดอกเบี้ย และวันที่ซื้อ/รอบบิลของแผนนี้ไม่ได้อีก (แก้ชื่อได้)

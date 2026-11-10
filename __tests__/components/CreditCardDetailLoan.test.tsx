@@ -1,5 +1,6 @@
-// Loan slice S3 — CreditCardDetail loan variant: header metrics (AC-LN-31), hidden credit-only blocks,
-// rate-revision UI fully absent (P0-2, AC-LN-S3-02), loan plan-menu copy, and the existing long-plan reveal.
+// Loan slices S3/S4 — CreditCardDetail loan variant: header metrics (AC-LN-31), hidden credit-only blocks,
+// rate-revision UI absent only for a loan with no plan (AC-LN-S3-02, re-scoped in S4 D6), the S4 rate section
+// and ปรับอัตราดอกเบี้ย trigger, PlanRow edit disable after a revision (N-3), loan plan-menu copy, long-plan reveal.
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CreditCardDetail from '../../src/frontend/components/CreditCardDetail';
@@ -69,21 +70,109 @@ describe.each([['mobile', true], ['desktop', false]])('loan detail (%s)', (_name
     expect(screen.getByRole('heading', { name: 'ตารางผ่อน' })).toBeInTheDocument();
   });
 
-  test('P0-2: no rate-revision section, button or caption at all', () => {
-    render(<CreditCardDetail card={loanCard} plans={[loanPlan]} />);
+  // AC-LN-S3-02, re-scoped in S4 D6: S4 adds the rate section for a loan WITH a plan, so the absence
+  // assertion now applies only to a loan with NO plan. The three absence checks themselves are unchanged.
+  test('AC-LN-S3-02 (re-scoped S4): loan with no plan has no rate-revision section, button or caption', () => {
+    render(<CreditCardDetail card={loanCard} plans={[]} />);
     expect(screen.queryByText(/ประวัติอัตราดอกเบี้ย/)).toBeNull();
     expect(screen.queryByRole('button', { name: /ปรับอัตราดอกเบี้ย/ })).toBeNull();
     expect(screen.queryByText(/ปรับอัตราดอกเบี้ย/)).toBeNull();
   });
+
+  test('S4: ongoing loan plan shows the rate section and an enabled ปรับอัตราดอกเบี้ย button', async () => {
+    const user = userEvent.setup();
+    const onReviseRate = jest.fn();
+    render(<CreditCardDetail card={loanCard} plans={[loanPlan]} onReviseRate={onReviseRate} />);
+    const section = screen.getByRole('region', { name: 'ประวัติอัตราดอกเบี้ย' });
+    expect(within(section).getByRole('heading', { name: 'ประวัติอัตราดอกเบี้ย' })).toBeInTheDocument();
+    expect(within(section).getByText('ยังไม่เคยปรับ · อัตราตามสัญญา 6.00%')).toBeInTheDocument();
+    const button = within(section).getByRole('button', { name: 'ปรับอัตราดอกเบี้ย' });
+    expect(button).not.toHaveAttribute('aria-disabled');
+    expect(button).not.toHaveAttribute('aria-describedby');
+    await user.click(button);
+    expect(onReviseRate).toHaveBeenCalledTimes(1);
+    expect(onReviseRate).toHaveBeenCalledWith(expect.objectContaining({ id: 'ip_loan_1' }));
+  });
 });
 
-test('P0-2 holds for a completed and a cancelled loan plan too', () => {
+// Replaces S3's "P0-2 holds for a completed and a cancelled loan plan too" (AC-LN-S3-02 re-scope, S4 D6):
+// a loan with a non-ongoing plan now renders the section, with the button disabled and a visible reason.
+test.each([
+  ['completed', 'สินเชื่อนี้ปิดแล้ว'],
+  ['cancelled_early', 'ยกเลิกแล้ว']
+])('S4: %s loan plan shows the rate section with a disabled button and reason "%s"', async (status, reason) => {
   setViewport(false);
-  for (const status of ['completed', 'cancelled_early']) {
-    const { unmount } = render(<CreditCardDetail card={loanCard} plans={[{ ...loanPlan, status, nextUnpaid: null }]} />);
-    expect(screen.queryByText(/อัตราดอกเบี้ย/)).toBeNull();
-    unmount();
-  }
+  const user = userEvent.setup();
+  const onReviseRate = jest.fn();
+  render(<CreditCardDetail card={loanCard} plans={[{ ...loanPlan, status, nextUnpaid: null }]} onReviseRate={onReviseRate} />);
+  const section = screen.getByRole('region', { name: 'ประวัติอัตราดอกเบี้ย' });
+  const button = within(section).getByRole('button', { name: 'ปรับอัตราดอกเบี้ย' });
+  expect(button).toHaveAttribute('aria-disabled', 'true');
+  expect(button).toHaveAccessibleDescription(reason);
+  expect(within(section).getByText(reason)).toBeInTheDocument();
+  await user.click(button);
+  expect(onReviseRate).not.toHaveBeenCalled();
+});
+
+test('S4: rate section lists revisions and adds no forbidden credit-card copy (AC-LN-31)', () => {
+  setViewport(false);
+  const revised = {
+    ...loanPlan,
+    annualRate: 7,
+    rateRevisionCount: 1,
+    rateRevisions: [{ id: 'rr_1', effectiveMonth: '2027-01', fromInstallmentNo: 13, previousRate: 6, newRate: 7, revisedAt: '2026-11-03T10:00:00.000Z' }]
+  };
+  render(<CreditCardDetail card={loanCard} plans={[revised]} />);
+  const section = screen.getByRole('region', { name: 'ประวัติอัตราดอกเบี้ย' });
+  expect(within(section).getByText(/\(งวด 13\):/)).toBeInTheDocument();
+  expect(within(section).getByText('6.00% → 7.00%')).toBeInTheDocument();
+  expect(within(section).queryByText(/ยังไม่เคยปรับ/)).toBeNull();
+  expect(section.textContent).not.toMatch(/วงเงิน|ใช้วงเงิน|สรุปยอด|ยอดหมุนเวียน|เพิ่มรายจ่าย/);
+  expect(document.body.textContent).not.toMatch(/วงเงิน|ใช้วงเงิน|สรุปยอด|ยอดหมุนเวียน|เพิ่มรายจ่าย/);
+});
+
+test('N-3: loan plan with a rate revision (no paid rows) disables แก้ไขตารางผ่อน with the revision reason', async () => {
+  setViewport(false);
+  const user = userEvent.setup();
+  const unpaidSchedule = schedule.map(row => ({ ...row, paid: false }));
+  const plan = { ...loanPlan, installmentsPaid: 0, schedule: unpaidSchedule, nextUnpaid: unpaidSchedule[0], rateRevisionCount: 1 };
+  render(<CreditCardDetail card={loanCard} plans={[plan]} />);
+  await user.click(screen.getByRole('button', { name: 'ตัวเลือกของแผน สัญญา 123' }));
+  const edit = screen.getByRole('menuitem', { name: /แก้ไขตารางผ่อน/ });
+  expect(edit).toHaveAttribute('aria-disabled', 'true');
+  expect(edit).toHaveAccessibleDescription('แก้ไขตัวเลขไม่ได้เพราะเคยปรับอัตราดอกเบี้ยแล้ว');
+});
+
+test('N-3: paid rows AND a revision -> revision reason wins (same order as the PUT guard in plans.ts)', async () => {
+  setViewport(false);
+  const user = userEvent.setup();
+  render(<CreditCardDetail card={loanCard} plans={[{ ...loanPlan, rateRevisionCount: 2 }]} />);
+  await user.click(screen.getByRole('button', { name: 'ตัวเลือกของแผน สัญญา 123' }));
+  const edit = screen.getByRole('menuitem', { name: /แก้ไขตารางผ่อน/ });
+  expect(edit).toHaveAttribute('aria-disabled', 'true');
+  expect(edit).toHaveAccessibleDescription('แก้ไขตัวเลขไม่ได้เพราะเคยปรับอัตราดอกเบี้ยแล้ว');
+  expect(document.body.textContent).not.toContain('แก้ไขไม่ได้เพราะชำระไปแล้ว');
+});
+
+test('credit-card plan: no rate section at all and PlanRow edit stays enabled with no paid rows', async () => {
+  setViewport(false);
+  const user = userEvent.setup();
+  const card = { id: 'cc_x', name: 'KTC', creditLimit: 20000, remainingPrincipal: 5000, remainingPayable: 900, availableCredit: 15000, statementDay: 5, dueDay: 25 };
+  const ccSchedule = schedule.slice(0, 10).map(row => ({ ...row, paid: false }));
+  const ccPlan = {
+    id: 'ip_cc_1', cardId: 'cc_x', itemName: 'ทีวี', status: 'ongoing', installmentsPaid: 0, installmentsRemaining: 10, months: 10,
+    schedule: ccSchedule, nextUnpaid: ccSchedule[0], totalPrice: 10000, progressPercent: 0, monthlyPayment: 1000,
+    remainingPayable: 10000, interestMode: 'manual', manualFeePerMonth: 0, createdAt: '2026-01-01'
+  };
+  const onReviseRate = jest.fn();
+  render(<CreditCardDetail card={card} plans={[ccPlan]} onReviseRate={onReviseRate} />);
+  expect(screen.queryByRole('region', { name: 'ประวัติอัตราดอกเบี้ย' })).toBeNull();
+  expect(screen.queryByText(/ประวัติอัตราดอกเบี้ย/)).toBeNull();
+  expect(screen.queryByRole('button', { name: /ปรับอัตราดอกเบี้ย/ })).toBeNull();
+  expect(document.querySelector('[data-loan-rate-revise-trigger]')).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'ตัวเลือกของแผน ทีวี' }));
+  const edit = screen.getByRole('menuitem', { name: /แก้ไขแผน/ });
+  expect(edit).not.toHaveAttribute('aria-disabled');
 });
 
 test('loan without a plan: metrics show "-", empty line has no add-expense wording', () => {

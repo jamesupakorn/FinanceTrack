@@ -40,6 +40,7 @@ export {
   getDaysInMonthKey,
   resolveInstallmentDueDate,
   getCardDueMonthOffset,
+  cardDueMonthOffset,
   resolveCardDueDate,
   resolveStatementCutoffDate,
   getPayableCycleMonth,

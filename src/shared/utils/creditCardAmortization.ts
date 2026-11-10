@@ -160,6 +160,84 @@ export function buildEffectiveSchedule(input: {
   return summariseSchedule(schedule);
 }
 
+/** แถวที่บันทึกแล้วของแผนสินเชื่อ — อาจมี paidAt/paidSource จริง หรือ field อื่นเพิ่มเติม */
+type RevisableScheduleRow = {
+  no: number;
+  dueMonth: string;
+  payment: number;
+  principal: number;
+  interest: number;
+  paid?: boolean;
+};
+
+export type ReviseTailFailureReason = 'paid_in_tail' | 'out_of_range' | 'no_balance';
+
+export type ReviseTailResult<Row extends RevisableScheduleRow> =
+  | {
+    ok: true;
+    schedule: Array<Row | ScheduleRow>;
+    monthlyPayment: number;
+    totalInterest: number;
+    totalPayable: number;
+  }
+  | { ok: false; reason: ReviseTailFailureReason };
+
+/**
+ * แปลงเดือนที่มีผลเป็นเลขงวด k (1-based ตามตำแหน่งในตาราง) — null เมื่อไม่ตรงกับ dueMonth ของงวดใดเลย (E-14)
+ * ตัวเดียวที่ทั้ง route rate-revisions และ preview ใน LoanRateRevisionDialog ใช้ (N-4) — ห้ามเขียนซ้ำที่อื่น
+ */
+export function findRevisionInstallmentNo(
+  rows: readonly ({ dueMonth?: unknown } | null | undefined)[],
+  effectiveMonth: string
+): number | null {
+  const index = rows.findIndex((row) => row?.dueMonth === effectiveMonth);
+  return index === -1 ? null : index + 1;
+}
+
+/**
+ * ปรับอัตราดอกเบี้ยสินเชื่อตั้งแต่งวด fromInstallmentNo เป็นต้นไป (spec loan-installments §I-3)
+ * งวดก่อนหน้า k คงค่าเดิมทุก field · ส่วนท้ายคำนวณใหม่ด้วย buildEffectiveSchedule จากเงินต้นคงเหลือ
+ * monthlyPayment = ค่างวดแรกของส่วนท้ายใหม่ · pure function ไม่แก้ไข plan ที่ส่งเข้ามา
+ */
+export function reviseEffectiveScheduleTail<Row extends RevisableScheduleRow>(
+  plan: { totalPrice: number | string; schedule: readonly Row[] },
+  { fromInstallmentNo, annualRate }: { fromInstallmentNo: number; annualRate: number | string }
+): ReviseTailResult<Row> {
+  const rows = plan.schedule;
+  const k = fromInstallmentNo;
+  if (!Number.isInteger(k) || k < 1 || k > rows.length) {
+    return { ok: false, reason: 'out_of_range' };
+  }
+  if (rows.some((row) => row.no >= k && row.paid === true)) {
+    return { ok: false, reason: 'paid_in_tail' };
+  }
+
+  const head = rows.slice(0, k - 1);
+  const paidPrincipal = head.reduce((sum, row) => sum + row.principal, 0);
+  const balance = round2(round2(plan.totalPrice) - paidPrincipal);
+  if (balance <= 0) {
+    return { ok: false, reason: 'no_balance' };
+  }
+
+  const offset = k - 1;
+  const tail = buildEffectiveSchedule({
+    totalPrice: balance,
+    months: rows.length - offset,
+    startMonth: rows[offset].dueMonth,
+    annualRate
+  }).schedule.map((row) => ({ ...row, no: row.no + offset }));
+
+  // คัดลอกแถวเดิม (shallow) เพื่อไม่ให้ผลลัพธ์แชร์ object กับ input
+  const schedule: Array<Row | ScheduleRow> = [...head.map((row) => ({ ...row })), ...tail];
+  return {
+    ok: true,
+    schedule,
+    monthlyPayment: tail[0].payment,
+    totalInterest: round2(schedule.reduce((sum, row) => sum + row.interest, 0)),
+    totalPayable: round2(schedule.reduce((sum, row) => sum + row.payment, 0))
+  };
+}
+
 /**
  * สร้างตารางผ่อนตามโหมดที่เลือก
  * @returns {{schedule: array, monthlyPayment: number, totalInterest: number, totalPayable: number}}

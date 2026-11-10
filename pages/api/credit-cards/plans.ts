@@ -3,7 +3,7 @@
  * จัดการแผนผ่อนชำระ (per-user, ไม่ผูกกับเดือน)
  * - GET    : รายการแผน กรองด้วย cardId / month / status ได้ (รวมกันได้)
  * - POST   : สร้างแผน + สร้างตารางผ่อนฝั่ง server
- * - PUT    : แก้ไขแผน (ตัวเลขแก้ได้เมื่อยังไม่มีงวดที่ชำระแล้วเท่านั้น)
+ * - PUT    : แก้ไขแผน (ตัวเลขแก้ได้เมื่อยังไม่มีงวดที่ชำระแล้วและไม่เคยปรับอัตราดอกเบี้ยเท่านั้น)
  * - PATCH  : ติ๊กสถานะชำระของงวด
  * - DELETE : ยกเลิกแผน (cancel) หรือลบถาวร (delete)
  *
@@ -50,6 +50,10 @@ function countPaidInstallments(plan: CreditPlan) {
   return schedule.filter(row => row?.paid === true).length;
 }
 
+function countRateRevisions(plan: CreditPlan) {
+  return Array.isArray(plan?.rateRevisions) ? plan.rateRevisions.length : 0;
+}
+
 function countActivePlans(plans: CreditData['plans']) {
   return plans.filter(plan => plan?.status !== PLAN_STATUS.COMPLETED).length;
 }
@@ -79,6 +83,8 @@ function composePlan(base: CreditPlan | null, value: ReturnType<typeof validateP
     totalInterest: computed.totalInterest,
     totalPayable: computed.totalPayable,
     schedule: computed.schedule,
+    // ป้องกันไว้: PUT ที่แก้ตัวเลขถูกบล็อกเมื่อมี rateRevisions แล้ว แต่ห้ามทิ้งประวัติเงียบ ๆ ถ้าถูกเรียกพร้อมค่านี้
+    ...(Array.isArray(base?.rateRevisions) ? { rateRevisions: base.rateRevisions } : {}),
     status: PLAN_STATUS.ONGOING,
     cancelledAt: null,
     createdAt: base?.createdAt || now,
@@ -234,6 +240,12 @@ async function handlePut(req: NextApiRequest, res: NextApiResponse, userId: stri
       const plans = [...data.plans];
       plans[index] = savedPlan;
       return { ...data, plans };
+    }
+
+    // แผนที่เคยปรับอัตราดอกเบี้ยแล้วแก้ตัวเลขไม่ได้ — ตรวจก่อนงวดที่ชำระแล้ว (AC-LN-22, N-1)
+    if (countRateRevisions(existing) > 0) {
+      failure = { status: 409, body: { error: 'plan has rate revisions' } };
+      return data;
     }
 
     // แผนที่มีงวดชำระแล้วถือว่าแก้ตัวเลขไม่ได้ (BR-CC-006)

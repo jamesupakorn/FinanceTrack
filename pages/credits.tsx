@@ -1,13 +1,13 @@
 /**
- * หน้า: /credit-cards
+ * หน้า: /credits (เส้นทางเดิม /credit-cards เป็นแค่ redirect shim ไปที่นี่ — pages/credit-cards.tsx)
  * หน้าจัดการบัตรเครดิตและแผนผ่อนชำระ แยกออกจาก shell ของ edit.js (ADR-008)
  *
  * ข้อมูลบัตร/แผนไม่ผูกกับเดือน จึงตอบสัญญา selectedMonth + triggerSave + Floating Action Bar
  * ของ edit.js ไม่ได้ หน้านี้จึงมี save model ของตัวเอง: บันทึกทันทีต่อ action พร้อม toast
  *
  * มุมมองภายใน 2 แบบ ควบคุมด้วย query string เพื่อให้ deep link และปุ่ม back ทำงาน:
- *   /credit-cards                 → ภาพรวม
- *   /credit-cards?card=<cardId>   → รายละเอียดบัตร (ปลายทางของลิงก์จาก ExpenseTable)
+ *   /credits                 → ภาพรวม
+ *   /credits?card=<cardId>   → รายละเอียดบัตร (ปลายทางของลิงก์จาก ExpenseTable)
  * ปฏิทินไม่อยู่ในหน้านี้ (ADR-025) — เข้าถึงได้จากเมนู "ปฏิทิน" ของ Layout เท่านั้น
  *
  * Graphite redesign (credit-cards-graphite pass) — เต็มหน้าเปลี่ยนเป็น Tailwind แล้ว ไม่ import
@@ -26,6 +26,7 @@ import InstallmentPlanForm, {
   type ValidatedPlanValue
 } from '../src/frontend/components/InstallmentPlanForm';
 import { BackdatedPaidFailureDialog } from '../src/frontend/components/BackdatedInstallmentsDialog';
+import LoanRateRevisionDialog, { type LoanRateRevisionSaved } from '../src/frontend/components/LoanRateRevisionDialog';
 import { Icons } from '../src/frontend/components/Icons';
 import { useSession } from '../src/frontend/contexts/SessionContext';
 import { creditCardAPI, expenseAPI, userSettingsAPI } from '../src/shared/utils/frontend/apiUtils';
@@ -232,6 +233,8 @@ export default function CreditCardsPage() {
   const [planFormOpen, setPlanFormOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<CreditPlanRecord | null>(null);
   const [lockedCardId, setLockedCardId] = useState<string | null>(null);
+  const [rateRevisionOpen, setRateRevisionOpen] = useState(false);
+  const [revisingPlan, setRevisingPlan] = useState<CreditPlanRecord | null>(null);
   // P0-1: ระหว่างตั้งค่าสินเชื่อ ขั้น 2 → ย้อนไปแก้ข้อมูลบัตร (ขั้น 1) แล้วกลับมาขั้น 2 ของบัตรเดิม
   const [planStepBackCardId, setPlanStepBackCardId] = useState<string | null>(null);
   const [expenseFlow, setExpenseFlow] = useState<{
@@ -514,6 +517,26 @@ export default function CreditCardsPage() {
     setPlanFormOpen(true);
   };
 
+  // ------------------------------------------------------- loan rate revision (S4)
+
+  const handleOpenReviseRate = (plan: CreditPlanRecord) => {
+    setRevisingPlan(plan);
+    setRateRevisionOpen(true);
+  };
+
+  const handleCloseReviseRate = () => {
+    setRateRevisionOpen(false);
+    setRevisingPlan(null);
+  };
+
+  /** ตาราง/อัตราใหม่มาจาก server เท่านั้น — refetch แล้วคืน focus ให้ปุ่มเปิด (ปุ่มอาจถูก render ใหม่ระหว่าง refetch) */
+  const handleRateRevised = async ({ effectiveMonth, newPayment }: LoanRateRevisionSaved): Promise<void> => {
+    handleCloseReviseRate();
+    showToast(`ปรับอัตราดอกเบี้ยแล้ว · ค่างวดใหม่ ${formatCurrency(newPayment)} ฿ ตั้งแต่ ${formatMonthKeyTH(effectiveMonth)}`);
+    await loadData({ silent: true });
+    document.querySelector<HTMLElement>('[data-loan-rate-revise-trigger]')?.focus();
+  };
+
   const handleSubmitPlan = async (values: PlanSubmitValues, options?: PlanSubmitOptions): Promise<void> => {
     setSubmitting(true);
     try {
@@ -553,7 +576,8 @@ export default function CreditCardsPage() {
           const result = await applyPaidSequentially(
             created?.plan?.id ?? '',
             rowsToMark,
-            expenseAPI.setPaid
+            expenseAPI.setPaid,
+            options?.onProgress
           );
           let failedNos = [...new Set([...result.failedNos, ...missingNos])].sort((a, b) => a - b);
           let reconciledPlan: CreditPlanRecord | undefined;
@@ -754,6 +778,7 @@ export default function CreditCardsPage() {
             spendSavedItemId={spendSaved.itemId}
             onRenamePlan={handleOpenEditPlan}
             onEditPlan={handleOpenEditPlan}
+            onReviseRate={handleOpenReviseRate}
             onCancelPlan={handleCancelPlan}
             onDeletePlan={handleDeletePlan}
             onToggleInstallment={handleToggleInstallment}
@@ -816,6 +841,14 @@ export default function CreditCardsPage() {
           onEditLockedCard={!editingPlan && isLoanCardType(cards.find(card => card.id === lockedCardId)?.cardType)
             ? handleEditLockedCard
             : undefined}
+        />
+
+        <LoanRateRevisionDialog
+          open={rateRevisionOpen}
+          plan={revisingPlan}
+          cardName={cards.find(card => card.id === revisingPlan?.cardId)?.name}
+          onClose={handleCloseReviseRate}
+          onSaved={handleRateRevised}
         />
 
         <ConfirmDialog

@@ -91,4 +91,87 @@ describe('applyPaidSequentially', () => {
     ], setPaidWithInvalidMonth)).resolves.toEqual({ succeededNos: [], failedNos: [2] });
     expect(setPaidWithInvalidMonth).not.toHaveBeenCalled();
   });
+
+  describe('onProgress (additive)', () => {
+    it('calls onProgress once per row, in ascending order, reaching total on an all-success run', async () => {
+      const setPaid = jest.fn().mockResolvedValue({ paid: true });
+      const onProgress = jest.fn();
+      await applyPaidSequentially('ip_0123456789ab', [
+        { no: 3, dueMonth: '2026-09' },
+        { no: 1, dueMonth: '2026-07' },
+        { no: 2, dueMonth: '2026-08' }
+      ], setPaid, onProgress);
+
+      expect(onProgress).toHaveBeenCalledTimes(3);
+      expect(onProgress).toHaveBeenNthCalledWith(1, 1, 3);
+      expect(onProgress).toHaveBeenNthCalledWith(2, 2, 3);
+      expect(onProgress).toHaveBeenNthCalledWith(3, 3, 3);
+    });
+
+    it('still fires onProgress for a row skipped due to an invalid key, reaching total', async () => {
+      const setPaid = jest.fn().mockResolvedValue({ paid: true });
+      const onProgress = jest.fn();
+      const result = await applyPaidSequentially('invalid', [
+        { no: 1, dueMonth: '2026-07' },
+        { no: 2, dueMonth: '2026-08' }
+      ], setPaid, onProgress);
+
+      expect(setPaid).not.toHaveBeenCalled();
+      expect(result).toEqual({ succeededNos: [], failedNos: [1, 2] });
+      expect(onProgress).toHaveBeenCalledTimes(2);
+      expect(onProgress).toHaveBeenNthCalledWith(1, 1, 2);
+      expect(onProgress).toHaveBeenNthCalledWith(2, 2, 2);
+    });
+
+    it('is a no-op for existing callers that omit onProgress (no behavior change)', async () => {
+      const setPaid = jest.fn()
+        .mockRejectedValueOnce(new Error('network'))
+        .mockResolvedValueOnce({ paid: true });
+      await expect(applyPaidSequentially('ip_0123456789ab', [
+        { no: 1, dueMonth: '2026-07' },
+        { no: 2, dueMonth: '2026-08' }
+      ], setPaid)).resolves.toEqual({ succeededNos: [2], failedNos: [1] });
+      expect(setPaid).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // D5 (loan-installments-s6): 480-row perf smoke (N-4). R-4's worst case — a loan at
+  // `MAX_LOAN_INSTALLMENTS_PER_PLAN` with hundreds of already-past-due rows needing a backdated-paid
+  // sequential save. This is a smoke check on the sequential-save util itself (correctness +
+  // wall-clock time), not a benchmark gate. `setPaid` is stubbed to resolve on the next microtask,
+  // matching the resolved-promise shape a real `cci_` PATCH response takes once network latency is
+  // excluded; the point is confirming the loop, dedup, and `onProgress` plumbing scale to 480 rows
+  // without hanging or losing the ascending order / dedup guarantees proven at small scale above.
+  describe('480-row scale smoke (D5, N-4)', () => {
+    it('completes all 480 rows in ascending order, deduping, with onProgress reaching 480/480, in reasonable time', async () => {
+      const total = 480;
+      const rows = Array.from({ length: total }, (_, index) => ({
+        no: index + 1,
+        dueMonth: '2026-01'
+      }));
+      // A handful of rows past-due in two different calendar months, duplicated once each, to also
+      // exercise the Map-based dedup at scale (not just correctness at N=4 as above).
+      const rowsWithDupes = [...rows, { no: 1, dueMonth: '2026-01' }, { no: 480, dueMonth: '2026-01' }];
+
+      const setPaid = jest.fn().mockImplementation(() => Promise.resolve({ paid: true }));
+      const onProgress = jest.fn();
+
+      const startedAt = Date.now();
+      const result = await applyPaidSequentially('ip_0123456789ab', rowsWithDupes, setPaid, onProgress);
+      const elapsedMs = Date.now() - startedAt;
+
+      expect(result.succeededNos).toHaveLength(total);
+      expect(result.failedNos).toEqual([]);
+      expect(result.succeededNos).toEqual(Array.from({ length: total }, (_, index) => index + 1));
+      expect(setPaid).toHaveBeenCalledTimes(total);
+
+      expect(onProgress).toHaveBeenCalledTimes(total);
+      expect(onProgress).toHaveBeenNthCalledWith(1, 1, total);
+      expect(onProgress).toHaveBeenNthCalledWith(total, total, total);
+
+      // Not a strict benchmark — a generous ceiling so a real stall (e.g. an accidental O(n^2) scan
+      // or a lost `await`) still fails loudly, without making the suite flaky on a loaded machine.
+      expect(elapsedMs).toBeLessThan(5000);
+    });
+  });
 });

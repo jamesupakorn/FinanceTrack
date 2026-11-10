@@ -33,19 +33,24 @@ export function findTickableInstallments(
 export async function applyPaidSequentially(
   planId: string,
   rows: ReadonlyArray<{ no: number; dueMonth: string }>,
-  setPaid: (month: string, key: string, paid: true) => Promise<unknown>
+  setPaid: (month: string, key: string, paid: true) => Promise<unknown>,
+  onProgress?: (done: number, total: number) => void
 ): Promise<SequentialPaidResult> {
   const firstRowByNo = new Map<number, { no: number; dueMonth: string }>();
   rows.forEach(row => {
     if (!firstRowByNo.has(row.no)) firstRowByNo.set(row.no, row);
   });
 
+  const total = firstRowByNo.size;
   const succeededNos: number[] = [];
   const failedNos: number[] = [];
+  let done = 0;
   for (const row of [...firstRowByNo.values()].sort((a, b) => a.no - b.no)) {
     const key = buildInstallmentRowKey(planId, row.no);
     if (!INSTALLMENT_KEY_RE.test(key) || !MONTH_KEY_PATTERN.test(row.dueMonth)) {
       failedNos.push(row.no);
+      done += 1;
+      onProgress?.(done, total);
       continue;
     }
     try {
@@ -57,6 +62,9 @@ export async function applyPaidSequentially(
       }
     } catch {
       failedNos.push(row.no);
+    } finally {
+      done += 1;
+      onProgress?.(done, total);
     }
   }
   return { succeededNos, failedNos };

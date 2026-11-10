@@ -238,7 +238,7 @@ type CardDueFields = { statementDay?: DayLike; dueDay?: DayLike; cardType?: unkn
  * offset ของวันครบกำหนดที่ 3 ฟังก์ชันด้านล่างใช้ร่วมกัน — สินเชื่อไม่มีรอบบิล งวดครบกำหนดในเดือนตารางเสมอ (BR-CC-037)
  * บัตรเครดิต (รวมบัตรที่ไม่มี cardType) ได้ค่าเดียวกับ getCardDueMonthOffset ทุกประการ
  */
-function cardDueMonthOffset(card: CardDueFields): 0 | 1 {
+export function cardDueMonthOffset(card: CardDueFields): 0 | 1 {
   if (isLoanCardType(card?.cardType)) return 0;
   return getCardDueMonthOffset(card?.statementDay, card?.dueDay);
 }

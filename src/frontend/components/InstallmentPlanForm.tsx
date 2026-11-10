@@ -12,7 +12,7 @@ import {
   validatePlanInput,
   getCurrentMonthKey,
   addMonths,
-  getCardDueMonthOffset,
+  cardDueMonthOffset,
   MAX_INSTALLMENTS_PER_PLAN,
   MAX_LOAN_INSTALLMENTS_PER_PLAN,
   isLoanCardType,
@@ -34,6 +34,8 @@ export type ValidatedPlanValue = ReturnType<typeof validatePlanInput>['value'];
 
 export interface PlanSubmitOptions {
   paidInstallmentNos: number[];
+  /** D4 / Decision R: forwards live per-row progress during a loan's sequential backdated save. */
+  onProgress?: (done: number, total: number) => void;
 }
 
 export type PlanSubmitValues = ValidatedPlanValue | Pick<ValidatedPlanValue, 'itemName'>;
@@ -207,6 +209,8 @@ export default function InstallmentPlanForm({
   const [previewToken, setPreviewToken] = useState(0);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [backdate, setBackdate] = useState<BackdateState | null>(null);
+  // D4 / Decision R: progress-counter state lives here, not in the dialog or the page.
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const dialogRef = useRef<HTMLFormElement | null>(null);
   const firstFieldRef = useRef<HTMLInputElement | null>(null);
   const submitButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -382,7 +386,7 @@ export default function InstallmentPlanForm({
       const rows = findTickableInstallments(
         schedule,
         currentMonthKey,
-        getCardDueMonthOffset(selectedCard?.statementDay, selectedCard?.dueDay)
+        cardDueMonthOffset(selectedCard ?? {})
       );
       if (rows.length > 0) {
         setBackdate({ values: result.value, rows, currentMonthKey });
@@ -400,9 +404,15 @@ export default function InstallmentPlanForm({
   const handleBackdateConfirm = async (paidInstallmentNos: number[]) => {
     if (!backdate) return;
     try {
-      await Promise.resolve(onSubmit?.(backdate.values, { paidInstallmentNos }));
+      // D4 / Decision R: `onProgress` is loan-only — credit cards keep the pre-existing options
+      // bag shape byte-identical (hard constraint: credit-card behaviour unchanged).
+      await Promise.resolve(onSubmit?.(backdate.values, {
+        paidInstallmentNos,
+        ...(loanMode ? { onProgress: (done: number, total: number) => setProgress({ done, total }) } : {})
+      }));
     } finally {
       setBackdate(null);
+      setProgress(null);
     }
   };
 
@@ -746,6 +756,8 @@ export default function InstallmentPlanForm({
         currentMonthKey={backdate?.currentMonthKey ?? ''}
         rows={backdate?.rows ?? []}
         busy={submitting}
+        loanMode={loanMode}
+        progress={progress}
         onCancel={handleBackdateCancel}
         onConfirm={handleBackdateConfirm}
       />

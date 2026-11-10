@@ -429,4 +429,64 @@ describe.each<Mode>(['json', 'mongo'])('loan cards — %s mode', (mode) => {
     expect(del.status).toBe(200);
     expect((await readDoc()).spendItems).toEqual([]);
   });
+
+  // --- S4 D2: PUT guard for plans with rate revisions (AC-LN-22, N-1) --------------------------
+
+  const REVISION = { effectiveMonth: '2027-01', fromInstallmentNo: 2, previousRate: 6, newRate: 7, revisedAt: '2026-12-15T00:00:00.000Z' };
+
+  function makeRevisedLoanPlan(id: string, { paidFirst = false }: { paidFirst?: boolean } = {}): Row {
+    return makePlan(LOAN_ID, id, {
+      totalPrice: 600,
+      months: 2,
+      monthlyPayment: 300,
+      totalPayable: 600,
+      schedule: [
+        { no: 1, dueMonth: '2026-12', payment: 300, principal: 300, interest: 0, paid: paidFirst, paidAt: paidFirst ? '2026-12-05' : null, paidSource: paidFirst ? 'user' : null },
+        { no: 2, dueMonth: '2027-01', payment: 300, principal: 300, interest: 0, paid: false, paidAt: null, paidSource: null }
+      ],
+      rateRevisions: [REVISION]
+    });
+  }
+
+  it('N-1: plan with a paid row AND a rate revision → financial PUT returns the rate-revision 409, not the paid body', async () => {
+    const plan = makeRevisedLoanPlan('ip_10a0000000n1', { paidFirst: true });
+    await seed({ cards: [makeLoan()], plans: [plan] });
+
+    const res = await call(handlers.plans, 'PUT', { body: { planId: 'ip_10a0000000n1', patch: { months: 5 } } });
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ error: 'plan has rate revisions' });
+    expect((await readDoc()).plans[0]).toMatchObject({ months: 2, schedule: plan.schedule, rateRevisions: [REVISION] });
+  });
+
+  it('AC-LN-22: after a revision, PUT { totalPrice: 900000 } → 409 plan has rate revisions; PUT { itemName } → 200', async () => {
+    const plan = makeRevisedLoanPlan('ip_10a000000022');
+    await seed({ cards: [makeLoan()], plans: [plan] });
+
+    const blocked = await call(handlers.plans, 'PUT', { body: { planId: 'ip_10a000000022', patch: { totalPrice: 900000 } } });
+    expect(blocked.status).toBe(409);
+    expect(blocked.body).toEqual({ error: 'plan has rate revisions' });
+    expect((await readDoc()).plans[0]).toMatchObject({ totalPrice: 600, schedule: plan.schedule });
+
+    const renamed = await call(handlers.plans, 'PUT', { body: { planId: 'ip_10a000000022', patch: { itemName: 'x' } } });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.plan).toMatchObject({ itemName: 'x', rateRevisionCount: 1 });
+    const stored = (await readDoc()).plans[0];
+    expect(stored).toMatchObject({ itemName: 'x', totalPrice: 600, schedule: plan.schedule, rateRevisions: [REVISION] });
+  });
+
+  it('credit-card plan with no rateRevisions field: financial PUT response shape is unchanged (no rateRevisions key added)', async () => {
+    await seed({ cards: [makeCard()], plans: [makePlan(CARD_ID, 'ip_c0ffee0000d2')] });
+
+    const res = await call(handlers.plans, 'PUT', { body: { planId: 'ip_c0ffee0000d2', patch: { months: 2 } } });
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body)).toEqual(['success', 'plan']);
+    expect(Object.keys(res.body.plan)).toEqual([
+      'id', 'cardId', 'itemName', 'totalPrice', 'months', 'startMonth', 'interestMode', 'manualFeePerMonth',
+      'annualRate', 'calcMethod', 'monthlyPayment', 'totalInterest', 'totalPayable', 'schedule', 'status',
+      'cancelledAt', 'createdAt', 'updatedAt', 'installmentsPaid', 'installmentsRemaining', 'progressPercent',
+      'nextUnpaid', 'remainingPayable', 'remainingPrincipal', 'currentRate', 'rateRevisionCount'
+    ]);
+    expect(res.body.plan).toMatchObject({ months: 2, monthlyPayment: 150, totalPayable: 300, rateRevisionCount: 0 });
+    expect('rateRevisions' in (await readDoc()).plans[0]).toBe(false);
+  });
 });

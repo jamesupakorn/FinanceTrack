@@ -39,6 +39,7 @@ import BillingMonthSwitcher from './BillingMonthSwitcher';
 import CreditSpendItems from './CreditSpendItems';
 import RowActionMenu, { type RowActionMenuItem } from './RowActionMenu';
 import BankIssuerMark from './BankIssuerMark';
+import LoanRateHistory, { type LoanRateRevisionRecord } from './LoanRateHistory';
 import { ADD_BAR_HEIGHT_PX } from './addBarLayout';
 import {
   PAID_PILL_CLASS,
@@ -98,8 +99,10 @@ interface CreditPlanDetail {
   createdAt?: string;
   /** เงินต้นคงเหลือรายแผน ถ้า server ส่งมา — ไม่มีก็ใช้ card.remainingPrincipal (สินเชื่อมีแผนเดียว) */
   remainingPrincipal?: number | string;
-  /** S2 ส่งมาแล้ว; S3 ยังไม่อ่าน (ส่วนปรับอัตราดอกเบี้ยมาใน S4) */
+  /** server คำนวณจาก rateRevisions (ไม่เก็บ) — > 0 แล้วแก้ตัวเลขตารางผ่อนไม่ได้ (BR-CC-040, N-3) */
   rateRevisionCount?: number;
+  /** ประวัติปรับอัตราดอกเบี้ยของสินเชื่อ (append-only) — แสดงอย่างเดียว */
+  rateRevisions?: LoanRateRevisionRecord[];
   [key: string]: unknown;
 }
 
@@ -123,6 +126,8 @@ interface CreditCardDetailProps {
   onEditPlan?: PlanAction;
   onCancelPlan?: PlanAction;
   onDeletePlan?: PlanAction;
+  /** สินเชื่อเท่านั้น: เปิด dialog ปรับอัตราดอกเบี้ยของตารางผ่อนนี้ — หน้าเป็นเจ้าของ state ของ dialog */
+  onReviseRate?: PlanAction;
   onToggleInstallment?: InstallmentAction;
   onConfirmMinimum?: ConfirmMinimumHandler;
   onRevolvingChanged?: () => void;
@@ -205,7 +210,9 @@ function PlanRow({
   const isLongPlan = plan.months > LONG_PLAN_THRESHOLD;
   const detailId = `plan-detail-${plan.id}`;
   const cancelled = plan.status === PLAN_STATUS.CANCELLED;
-  const editable = plan.installmentsPaid === 0 && !cancelled;
+  // N-3: เคยปรับอัตราดอกเบี้ยแล้ว → server ตอบ 409 กับ PUT ที่แก้ตัวเลข จึงปิดเมนูให้ตรงกัน
+  const hasRateRevisions = (plan.rateRevisionCount ?? 0) > 0;
+  const editable = plan.installmentsPaid === 0 && !cancelled && !hasRateRevisions;
   const settled = plan.status === PLAN_STATUS.COMPLETED || cancelled;
 
   const visibleRows = useMemo(() => {
@@ -246,11 +253,14 @@ function PlanRow({
       label: `แก้ไข${planNoun}`,
       icon: <Icons.Settings size={16} />,
       disabled: !editable,
+      // ลำดับเหตุผลเดียวกับ handlePut: ยกเลิก → เคยปรับอัตรา → มีงวดชำระแล้ว
       disabledReason: editable
         ? undefined
         : cancelled
           ? `แก้ไขไม่ได้เพราะ${planNoun}ถูกยกเลิกแล้ว`
-          : `แก้ไขไม่ได้เพราะชำระไปแล้ว ${plan.installmentsPaid} งวด — ให้ยกเลิก${planNoun}แล้วสร้างใหม่`,
+          : hasRateRevisions
+            ? 'แก้ไขตัวเลขไม่ได้เพราะเคยปรับอัตราดอกเบี้ยแล้ว'
+            : `แก้ไขไม่ได้เพราะชำระไปแล้ว ${plan.installmentsPaid} งวด — ให้ยกเลิก${planNoun}แล้วสร้างใหม่`,
       onSelect: () => onEdit?.(plan)
     },
     ...(cancelled ? [] : [{ key: 'cancel', label: `ยกเลิก${planNoun}`, icon: <Icons.X size={16} />, danger: true, onSelect: () => onCancel?.(plan) }]),
@@ -396,6 +406,7 @@ export default function CreditCardDetail({
   onEditPlan,
   onCancelPlan,
   onDeletePlan,
+  onReviseRate,
   onToggleInstallment,
   onConfirmMinimum,
   onRevolvingChanged,
@@ -494,6 +505,10 @@ export default function CreditCardDetail({
   const isLoan = isLoanCardType(card.cardType);
   // สินเชื่อมีแผนได้แผนเดียว (BR-CC-034): ใช้แผนที่กำลังผ่อนก่อน ไม่มีก็แผนแรกที่จบแล้ว
   const loanPlan = isLoan ? (ongoingPlans[0] ?? orderedPlans[0] ?? null) : null;
+  // ปรับอัตราได้เฉพาะตารางผ่อนที่กำลังผ่อน — ปิดแล้วใช้ aria-disabled + เหตุผลที่มองเห็น (idiom เดียวกับ RowActionMenu)
+  const reviseRateDisabledReason = !loanPlan || loanPlan.status === PLAN_STATUS.ONGOING
+    ? undefined
+    : loanPlan.status === PLAN_STATUS.CANCELLED ? 'ยกเลิกแล้ว' : 'สินเชื่อนี้ปิดแล้ว';
   const creditLimit = Number(card.creditLimit) || 0;
   const utilisation = creditLimit > 0
     ? Math.min(100, round2((Number(card.remainingPrincipal) || 0) / creditLimit * 100))
@@ -735,6 +750,33 @@ export default function CreditCardDetail({
               </div>
             )}
           </section>
+
+          {/* S4: สินเชื่อที่มีตารางผ่อนแล้วเท่านั้น (UX §6) — บัตรเครดิตไม่มีส่วนนี้ */}
+          {isLoan && loanPlan && (
+            <section className={`${CARD} flex flex-col gap-space-3`} aria-labelledby="loan-rate-history-title">
+              <div className="flex flex-wrap items-start justify-between gap-space-2">
+                <h3 id="loan-rate-history-title" className={SECTION_TITLE}>ประวัติอัตราดอกเบี้ย</h3>
+                <div className="flex flex-col items-end gap-space-1">
+                  <button
+                    type="button"
+                    data-loan-rate-revise-trigger
+                    className={`${BTN_GHOST} ${reviseRateDisabledReason ? 'cursor-not-allowed opacity-70' : ''}`}
+                    aria-disabled={reviseRateDisabledReason ? 'true' : undefined}
+                    aria-describedby={reviseRateDisabledReason ? 'loan-rate-revise-reason' : undefined}
+                    onClick={() => {
+                      if (!reviseRateDisabledReason) onReviseRate?.(loanPlan);
+                    }}
+                  >
+                    ปรับอัตราดอกเบี้ย
+                  </button>
+                  {reviseRateDisabledReason && (
+                    <span id="loan-rate-revise-reason" className="text-xs text-tertiary">{reviseRateDisabledReason}</span>
+                  )}
+                </div>
+              </div>
+              <LoanRateHistory revisions={loanPlan.rateRevisions} currentRate={Number(loanPlan.annualRate) || 0} />
+            </section>
+          )}
 
           {!isLoan && <RevolvingBalanceSection month={statementMonth} isMobileView={isMobileView} rev={rev} />}
         </div>
