@@ -15,7 +15,7 @@
 
 import { useCallback, useRef, useState, type KeyboardEvent, type MouseEvent, type TouchEvent } from 'react';
 import { flushSync } from 'react-dom';
-import { diffDaysFromToday, formatDayLabel, round2 } from '../../shared/utils/creditCardUtils';
+import { CARD_TYPE_LABELS, diffDaysFromToday, formatDayLabel, isLoanCardType, round2 } from '../../shared/utils/creditCardUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { fitFontSizeCss } from '../../shared/utils/frontend/ringTextFit';
 import { FOCUSABLE_SELECTOR, getTabbableElements } from '../../shared/utils/frontend/focusTrap';
@@ -43,12 +43,23 @@ export type TileCard = MenuCard & {
   installmentPaidCount?: number;
 };
 
+/** สถานะตารางผ่อนของสินเชื่อ (นับจาก plans ฝั่ง grid — นับอย่างเดียว ไม่มีเลขเงิน) */
+export interface LoanPlanProgress {
+  /** มีแผนอยู่แล้วหรือไม่ (ทุกสถานะ — สินเชื่อมีได้แผนเดียวตลอดอายุ BR-CC-034) */
+  hasPlan: boolean;
+  /** เลขงวดของเดือนนี้ หรือ null ถ้าเดือนนี้ไม่มีค่างวด */
+  currentNo: number | null;
+  months: number;
+}
+
 export type TileCardAction = (card: TileCard) => void;
 
 export interface CreditCardTileProps {
   card: TileCard;
   /** จำนวนงวดเลยกำหนดที่ยังไม่ติ๊ก (countOverdueInstallments) — แสดงเฉพาะเมื่อ > 0 */
   overdueInstallmentCount?: number;
+  /** เฉพาะสินเชื่อ; ไม่ส่งมา = ใช้ ongoingPlanCount/installmentCount ของบัตรตัดสินแทน */
+  loanProgress?: LoanPlanProgress | null;
   onEditCard?: TileCardAction;
   onAddPlanForCard?: TileCardAction;
   onDeleteCard?: TileCardAction;
@@ -111,6 +122,7 @@ function shouldFlipFromTap(
 export default function CreditCardTile({
   card,
   overdueInstallmentCount = 0,
+  loanProgress = null,
   onEditCard,
   onAddPlanForCard,
   onDeleteCard,
@@ -186,11 +198,22 @@ export default function CreditCardTile({
   const nextDueDiff = card.nextDueDate ? diffDaysFromToday(card.nextDueDate) : null;
   const dueSoon = nextDueDiff !== null && nextDueDiff <= UPCOMING_WINDOW_DAYS;
 
+  const loanType = isLoanCardType(card.cardType) ? card.cardType : null;
+  const isLoan = loanType !== null;
+  const loanEmpty = isLoan && (loanProgress
+    ? !loanProgress.hasPlan
+    : installmentCount === 0 && (card.ongoingPlanCount ?? 0) === 0);
+  let loanSubline: string | null = null;
+  if (isLoan && !loanEmpty) {
+    if (loanProgress?.currentNo) loanSubline = `งวดที่ ${loanProgress.currentNo} จาก ${loanProgress.months}`;
+    else if (installmentCount === 0) loanSubline = 'ไม่มีค่างวดเดือนนี้';
+  }
+
   const bankLine = [card.bankName, card.last4 ? `····${card.last4}` : ''].filter(Boolean).join(' · ') || 'ไม่ระบุธนาคาร';
   const amountText = formatCurrency(totalDue);
 
-  // อัตราส่วนอยู่ที่หน้าบัตร (ไม่ใช่ rotor) เพื่อให้เป็นความสูงขั้นต่ำ — ชื่อบัตรยาว/chip หลายตัวดันให้สูงขึ้นได้ ไม่ล้นขอบล่าง
-  const FACE = 'flex aspect-[1.6/1] min-h-[13rem] w-full min-w-0 flex-col gap-space-2 rounded-md p-space-4 [backface-visibility:hidden] [grid-area:face] md:p-space-5';
+  // ไม่ล็อก aspect-ratio — หน้าบัตรสูงตามเนื้อหาจริง (ขั้นต่ำ 13rem), rotor เป็น h-full เพื่อให้ grid row stretch ดันทุกใบในแถวให้สูงเท่ากัน
+  const FACE = 'flex min-h-[13rem] w-full min-w-0 flex-col gap-space-2 rounded-md p-space-4 [backface-visibility:hidden] [grid-area:face] md:p-space-5';
   const faceStyle = { background, color: textColor };
 
   const handleBackKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -208,7 +231,7 @@ export default function CreditCardTile({
       data-side={side}
     >
       <div
-        className={`grid w-full [grid-template-areas:'face'] [transform-style:preserve-3d] transition-transform duration-slow ease-graphite motion-reduce:transition-none ${isBack ? '[transform:rotateY(180deg)]' : ''}`}
+        className={`grid h-full w-full [grid-template-columns:minmax(0,1fr)] [grid-template-areas:'face'] [transform-style:preserve-3d] transition-transform duration-slow ease-graphite motion-reduce:transition-none ${isBack ? '[transform:rotateY(180deg)]' : ''}`}
         data-testid="cc-tile-rotor"
       >
         {/* FRONT */}
@@ -223,14 +246,35 @@ export default function CreditCardTile({
           onTouchStartCapture={onTouchStartCapture}
           onClick={handleFaceClick('front', 'back')}
         >
-          <div className="flex items-start justify-between gap-space-2">
+          <div className="flex flex-wrap items-start justify-between gap-space-2">
             <span className="inline-flex min-w-0 items-center gap-space-2 text-base font-semibold">
               <BankIssuerMark card={card} size={24} />
               <span className="min-w-0 break-words">{card.name}</span>
             </span>
+            {loanType && (
+              <span
+                className="inline-flex items-center gap-space-1 rounded-full px-space-2 py-[2px] text-xs font-semibold"
+                style={inverseChipStyle}
+                data-testid="cc-tile-type-chip"
+              >
+                <span aria-hidden="true" className="flex">
+                  {loanType === 'home_loan' ? <Icons.Home size={12} /> : <Icons.Wallet size={12} />}
+                </span>
+                {CARD_TYPE_LABELS[loanType].label}
+              </span>
+            )}
           </div>
 
-          <span className="text-xs">ยอดที่ต้องจ่ายรอบนี้</span>
+          {loanEmpty ? (
+            <>
+              <span className="text-sm font-semibold" data-testid="cc-tile-loan-empty">ยังไม่มีตารางผ่อน</span>
+              <div className="mt-auto flex flex-1 items-center justify-center" data-testid="cc-tile-loan-empty-filler">
+                <span aria-hidden="true" className="flex opacity-30"><Icons.Calendar size={40} /></span>
+              </div>
+            </>
+          ) : (
+          <>
+          <span className="text-xs">{isLoan ? 'ค่างวดเดือนนี้' : 'ยอดที่ต้องจ่ายรอบนี้'}</span>
           <span
             className="font-[family-name:var(--font-numeric)] text-2xl font-semibold tabular-nums"
             style={{ fontSize: fitFontSizeCss(amountText), lineHeight: TILE_AMOUNT_LINE_HEIGHT }}
@@ -238,8 +282,11 @@ export default function CreditCardTile({
           >
             <span className="whitespace-nowrap">{amountText}</span>{' บาท'}
           </span>
-          {subParts.length > 0 && (
+          {!isLoan && subParts.length > 0 && (
             <span className="text-xs" data-testid="cc-tile-subline">{subParts.join(' · ')}</span>
+          )}
+          {loanSubline && (
+            <span className="text-xs" data-testid="cc-tile-loan-subline">{loanSubline}</span>
           )}
 
           {installmentCount > 0 && (
@@ -284,6 +331,8 @@ export default function CreditCardTile({
               )}
             </div>
           )}
+          </>
+          )}
 
           <span className="text-xs">{bankLine}</span>
         </div>
@@ -310,9 +359,9 @@ export default function CreditCardTile({
             />
           </div>
 
-          <span className="text-xs">หนี้คงเหลือรวม</span>
+          <span className="text-xs">{isLoan ? 'เงินต้นคงเหลือ' : 'หนี้คงเหลือรวม'}</span>
           <span className="font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums">
-            <span className="whitespace-nowrap">{formatCurrency(card.remainingPayable)}</span>{' บาท'}
+            <span className="whitespace-nowrap">{formatCurrency(isLoan ? (card.remainingPrincipal ?? 0) : card.remainingPayable)}</span>{' บาท'}
           </span>
           {creditLimit > 0 && (
             <span className="text-xs">
@@ -320,7 +369,9 @@ export default function CreditCardTile({
             </span>
           )}
           <span className="text-xs">
-            {`สรุปยอด ${formatDayLabel(card.statementDay as number | string)} · ครบกำหนด ${formatDayLabel(card.dueDay as number | string)}`}
+            {isLoan
+              ? `ครบกำหนดทุกวันที่ ${formatDayLabel(card.dueDay as number | string)}`
+              : `สรุปยอด ${formatDayLabel(card.statementDay as number | string)} · ครบกำหนด ${formatDayLabel(card.dueDay as number | string)}`}
           </span>
           <span className="text-xs">{`${card.ongoingPlanCount ?? 0} แผนกำลังผ่อน`}</span>
 
@@ -334,7 +385,12 @@ export default function CreditCardTile({
             </div>
           )}
 
-          <div className="mt-auto">
+          <div className={loanEmpty ? 'mt-auto flex flex-col gap-space-2' : 'mt-auto'}>
+            {loanEmpty && (
+              <button type="button" className={`${BTN_GHOST} w-full`} onClick={() => onAddPlanForCard?.(card)}>
+                + เพิ่มตารางผ่อน
+              </button>
+            )}
             <button type="button" className={`${BTN_GHOST} w-full`} onClick={() => onOpenCard?.(card.id)}>
               ดูรายละเอียด
             </button>

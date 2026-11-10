@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
-import CreditCardsPage from '../../pages/credit-cards';
+import CreditCardsPage from '../../pages/credits';
 import { creditCardAPI, userSettingsAPI } from '../../src/shared/utils/frontend/apiUtils';
 import { showToast } from '../../src/shared/utils/frontend/toast';
 
@@ -9,7 +9,7 @@ let openFocus: Element | null = null;
 let mockQuery: Record<string, string> = {};
 
 jest.mock('next/router', () => ({
-  useRouter: () => ({ isReady: true, pathname: '/credit-cards', query: mockQuery, push: jest.fn(), replace: jest.fn() })
+  useRouter: () => ({ isReady: true, pathname: '/credits', query: mockQuery, push: jest.fn(), replace: jest.fn() })
 }));
 jest.mock('../../src/frontend/contexts/SessionContext', () => ({
   useSession: () => ({ currentUser: { id: 'u-page-1' } })

@@ -51,3 +51,46 @@ describe('getCardDueMonth — barrel re-export', () => {
     expect(barrel.getCardDueMonth).toBe(getCardDueMonth);
   });
 });
+
+// AC-LN-14 / BR-CC-037 — loans have no billing cycle: offset is always 0 whatever the stored days say.
+// Credit-card cases above stay untouched; the control below re-asserts the same days on a card.
+describe('loan cards — due-month offset is always 0 (AC-LN-14)', () => {
+  const loanDays: Array<[Day, Day]> = [
+    ['EOM', 5],
+    ['EOM', 'EOM'],
+    [15, 15],
+    [31, 30],
+    [20, 10],
+    [5, 25],
+    [undefined, 10]
+  ];
+
+  test.each(['personal_loan', 'home_loan'])('%s: due month equals the schedule month for every day pair', (cardType) => {
+    loanDays.forEach(([statementDay, dueDay]) => {
+      const loan = { statementDay, dueDay, cardType };
+      expect(getCardDueMonth(loan, '2026-12')).toBe('2026-12');
+      expect(getPayableCycleMonth(loan, '2026-12')).toBe('2026-12');
+      expect(resolveCardDueDate(loan, '2026-12')!.slice(0, 7)).toBe('2026-12');
+    });
+  });
+
+  test('loan dueDay 5, statementDay EOM → 2026-12-05; same days on a credit card still → 2027-01-05', () => {
+    const loan = { statementDay: 'EOM', dueDay: 5, cardType: 'home_loan' };
+    expect(resolveCardDueDate(loan, '2026-12')).toBe('2026-12-05');
+    expect(getCardDueMonth(loan, '2026-12')).toBe('2026-12');
+
+    const card = { statementDay: 'EOM', dueDay: 5 };
+    expect(resolveCardDueDate(card, '2026-12')).toBe('2027-01-05');
+    expect(resolveCardDueDate({ ...card, cardType: 'credit_card' }, '2026-12')).toBe('2027-01-05');
+  });
+
+  test('loan dueDay 31 clamps in a 30-day month; EOM resolves to the last day (E-10)', () => {
+    expect(resolveCardDueDate({ statementDay: 'EOM', dueDay: 31, cardType: 'personal_loan' }, '2026-11')).toBe('2026-11-30');
+    expect(resolveCardDueDate({ statementDay: 'EOM', dueDay: 'EOM', cardType: 'personal_loan' }, '2026-02')).toBe('2026-02-28');
+  });
+
+  test('an unknown cardType is treated as a credit card (offset rule unchanged)', () => {
+    const card = { statementDay: 'EOM', dueDay: 5, cardType: 'car_loan' };
+    expect(resolveCardDueDate(card, '2026-12')).toBe('2027-01-05');
+  });
+});

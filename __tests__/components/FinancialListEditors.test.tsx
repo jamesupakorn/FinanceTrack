@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import IncomeTable from '../../src/frontend/components/IncomeTable';
 import BankAccountTable from '../../src/frontend/components/BankAccountTable';
 import BankAccountManager from '../../src/frontend/components/BankAccountManager';
@@ -160,8 +160,10 @@ test('bank manager treats names differing only by surrounding whitespace as dupl
   expect(screen.getByRole('textbox', { name: 'ชื่อบัญชี 3' })).toHaveAttribute('aria-invalid', 'true');
 });
 
+const bucket = (total: number) => ({ items: [], paidItems: [], total });
+
 test('bank account summary is read-only, sorted, and links to settings', () => {
-  render(<BankAccountTable accounts={['Zulu', 'Alpha']} accountSummary={{ Zulu: 500, Alpha: 200 }} />);
+  render(<BankAccountTable accounts={['Zulu', 'Alpha']} accountBreakdown={{ Zulu: bucket(500), Alpha: bucket(200) }} />);
 
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '+ เพิ่มบัญชี' })).not.toBeInTheDocument();
@@ -182,4 +184,185 @@ test('bank account summary empty state links to settings without rendering the t
   expect(screen.getByText('ยังไม่มีบัญชีธนาคาร')).toBeInTheDocument();
   expect(screen.getByText('เพิ่มบัญชีได้ที่หน้าตั้งค่า')).toHaveAttribute('href', '/settings#bank-accounts');
   expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
+});
+
+describe('BankAccountTable breakdown disclosure', () => {
+  const item = (key: string, name: string, amount: number, extra: Record<string, unknown> = {}) =>
+    ({ key, name, amount, account: 'กสิกร', paid: false, ...extra });
+  const current = {
+    'กสิกร': { items: [item('netflix', 'Netflix', 617), item('youtube', 'YouTube', 519)], paidItems: [item('ccr_p', 'ยอดบัตร Shopee pay', 4475.66, { paid: true, cycleMonth: '2026-10', resolvedDueDate: '2026-11-10' })], total: 1136 },
+    ttb: { items: [], paidItems: [], total: 0 },
+    'ไม่ระบุบัญชี': { items: [item('mystery', 'ไม่รู้ที่มา', 12, { account: 'ไม่ระบุบัญชี' })], paidItems: [], total: 12 }
+  };
+  const prev = {
+    'กสิกร': { items: [item('old', 'ค้างเก่า', 300)], paidItems: [], total: 300 },
+    ttb: { items: [], paidItems: [], total: 0 },
+    'ไม่ระบุบัญชี': { items: [], paidItems: [], total: 0 }
+  };
+  const accounts = ['กสิกร', 'ttb', 'ไม่ระบุบัญชี'];
+  const renderTable = (props: Record<string, unknown> = {}) => render(
+    <BankAccountTable accounts={accounts} accountBreakdown={current} prevAccountBreakdown={prev} monthKey="2026-11" prevMonthKey="2026-10" {...props} />
+  );
+  const tableTrigger = (name: RegExp | string) => screen.getAllByRole('button', { name }).find(b => b.closest('table'))!;
+
+  test('AC-14 trigger name, AC-29 chevron gutter reserved, AC-5 toggles panel row under the account row', () => {
+    renderTable();
+    const trigger = screen.getByRole('button', { name: /^1,136\.00 แจกแจงยอดเดือนนี้ของบัญชี กสิกร$/ });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(document.getElementById(trigger.getAttribute('aria-controls')!)).toBeNull();
+    expect(trigger.className).toMatch(/min-h-11/);
+    expect(trigger.querySelector('[aria-hidden="true"]')).not.toBeNull();
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    const panel = document.getElementById(trigger.getAttribute('aria-controls')!)!;
+    expect(panel).toHaveTextContent('เดือนนี้ · กสิกร');
+    expect(panel.closest('tr')!.previousElementSibling).toBe(trigger.closest('tr'));
+    fireEvent.click(trigger);
+    expect(document.getElementById(trigger.getAttribute('aria-controls')!)).toBeNull();
+  });
+
+  test('zero account and — figure still have enabled triggers (AC-7, AC-29)', () => {
+    renderTable();
+    const zero = screen.getByRole('button', { name: /^0\.00 แจกแจงยอดเดือนนี้ของบัญชี ttb$/ });
+    const dash = screen.getByRole('button', { name: /^— แจกแจงยอดค้างเดือนก่อนของบัญชี ttb$/ });
+    expect(zero).toBeEnabled();
+    expect(dash).toBeEnabled();
+    expect(zero.querySelector('[aria-hidden="true"]')!.className).toBe(dash.querySelector('[aria-hidden="true"]')!.className);
+    fireEvent.click(zero);
+    expect(screen.getAllByText('ไม่มีรายการค้างจ่าย').length).toBeGreaterThan(0);
+  });
+
+  test('F-3: negative prev total shows the signed figure in default tone (table + card); zero stays —; positive stays text-neg', () => {
+    const negPrev = {
+      'กสิกร': { items: [item('old', 'ค้างเก่า', 300)], paidItems: [], total: 300 },
+      ttb: { items: [item('refund', 'คืนเงิน', -50)], paidItems: [], total: -50 },
+      'ไม่ระบุบัญชี': { items: [], paidItems: [], total: 0 }
+    };
+    renderTable({ prevAccountBreakdown: negPrev });
+    const buttons = screen.getAllByRole('button', { name: /-50.00 แจกแจงยอดค้างเดือนก่อนของบัญชี ttb$/ });
+    expect(buttons.length).toBe(2);
+    buttons.forEach(button => {
+      const figure = Array.from(button.querySelectorAll('span')).find(span => span.textContent === '-50.00')!;
+      expect(figure.className).not.toMatch(/text-neg/);
+      expect(figure.className).toMatch(/text-primary/);
+    });
+    const positive = screen.getAllByRole('button', { name: /300.00 แจกแจงยอดค้างเดือนก่อนของบัญชี กสิกร$/ });
+    positive.forEach(button => {
+      const figure = Array.from(button.querySelectorAll('span')).find(span => span.textContent === '300.00')!;
+      expect(figure.className).toMatch(/text-neg/);
+    });
+    expect(screen.getAllByRole('button', { name: /— แจกแจงยอดค้างเดือนก่อนของบัญชี ไม่ระบุบัญชี$/ }).length).toBe(2);
+    // cell === panel header === breakdown.total
+    fireEvent.click(buttons.find(b => b.closest('table'))!);
+    const panel = document.getElementById(buttons.find(b => b.closest('table'))!.getAttribute('aria-controls')!)!;
+    expect(panel).toHaveTextContent('-50.00');
+  });
+
+  test('prev column trigger opens the previous month rows with the prev title (AC-5)', () => {
+    renderTable();
+    const trigger = tableTrigger(/^300\.00 แจกแจงยอดค้างเดือนก่อนของบัญชี กสิกร$/);
+    fireEvent.click(trigger);
+    const panel = document.getElementById(trigger.getAttribute('aria-controls')!)!;
+    expect(panel).toHaveTextContent('ค้างเดือนก่อน (ต.ค. 2569) · กสิกร');
+    expect(panel).toHaveTextContent('ค้างเก่า');
+    expect(panel).not.toHaveTextContent('Netflix');
+  });
+
+  test('only one panel is open; opening another replaces it', () => {
+    renderTable();
+    fireEvent.click(tableTrigger(/^1,136\.00 แจกแจงยอดเดือนนี้/));
+    fireEvent.click(tableTrigger(/^12\.00 แจกแจงยอดเดือนนี้ของบัญชี ไม่ระบุบัญชี$/));
+    // หนึ่ง panel ต่อ layout (table + cards) แต่เป็นบัญชีเดียวกันเสมอ
+    const regions = screen.getAllByRole('region');
+    expect(regions).toHaveLength(2);
+    regions.forEach(region => expect(region).toHaveTextContent('เดือนนี้ · ไม่ระบุบัญชี'));
+  });
+
+  test('AC-8 unassigned bucket lists its rows', () => {
+    renderTable();
+    const trigger = tableTrigger(/ของบัญชี ไม่ระบุบัญชี$/);
+    fireEvent.click(trigger);
+    expect(document.getElementById(trigger.getAttribute('aria-controls')!)).toHaveTextContent('ไม่รู้ที่มา');
+  });
+
+  test('AC-13 Escape on trigger/panel closes and returns focus; Escape elsewhere does nothing; hide button returns focus', () => {
+    renderTable();
+    const trigger = tableTrigger(/^1,136\.00 แจกแจงยอดเดือนนี้/);
+    fireEvent.keyDown(trigger, { key: 'Escape' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    // Escape on a different (closed) trigger does nothing
+    fireEvent.keyDown(tableTrigger(/ของบัญชี ttb$/), { key: 'Escape' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Escape' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger).toHaveFocus();
+    fireEvent.click(trigger);
+    const hide = screen.getAllByRole('button', { name: 'ซ่อนรายละเอียด' })[0];
+    hide.focus();
+    fireEvent.keyDown(hide, { key: 'Escape' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger).toHaveFocus();
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getAllByRole('button', { name: 'ซ่อนรายละเอียด' })[0]);
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger).toHaveFocus();
+  });
+
+  test('AC-12/AC-6 card layout toggles the same content and no IDs are duplicated across layouts', () => {
+    renderTable();
+    const cardTrigger = screen.getAllByRole('button', { name: /^เดือนนี้.*แจกแจงยอดเดือนนี้ของบัญชี กสิกร$/ })[0];
+    expect(cardTrigger.closest('table')).toBeNull();
+    fireEvent.click(cardTrigger);
+    const panel = document.getElementById(cardTrigger.getAttribute('aria-controls')!)!;
+    expect(panel).toHaveTextContent('Netflix');
+    expect(cardTrigger.parentElement).toContainElement(panel);
+    const ids = Array.from(document.querySelectorAll('[id]')).map(node => node.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(document.querySelectorAll('[role="region"]').length).toBe(2);
+  });
+
+  test('AC-11 reset: month change, prev column disappearing, and account filtered out close the panel', () => {
+    const { rerender } = renderTable();
+    fireEvent.click(tableTrigger(/^1,136\.00 แจกแจงยอดเดือนนี้/));
+    expect(screen.getAllByRole('region').length).toBeGreaterThan(0);
+    rerender(<BankAccountTable accounts={accounts} accountBreakdown={current} prevAccountBreakdown={prev} monthKey="2026-12" prevMonthKey="2026-11" />);
+    expect(screen.queryByRole('region')).not.toBeInTheDocument();
+
+    fireEvent.click(tableTrigger(/^300\.00 แจกแจงยอดค้างเดือนก่อน/));
+    expect(screen.getAllByRole('region').length).toBeGreaterThan(0);
+    rerender(<BankAccountTable accounts={accounts} accountBreakdown={current} prevAccountBreakdown={{}} monthKey="2026-12" prevMonthKey="2026-11" />);
+    expect(screen.queryByRole('region')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /แจกแจงยอดค้างเดือนก่อน/ })).not.toBeInTheDocument();
+
+    fireEvent.click(tableTrigger(/^1,136\.00 แจกแจงยอดเดือนนี้/));
+    expect(screen.getAllByRole('region').length).toBeGreaterThan(0);
+    rerender(<BankAccountTable accounts={['ttb']} accountBreakdown={current} prevAccountBreakdown={{}} monthKey="2026-12" prevMonthKey="2026-11" />);
+    expect(screen.queryByRole('region')).not.toBeInTheDocument();
+  });
+
+  test('panel follows live edits while open (AC-10 at table level)', () => {
+    const live = {
+      'กสิกร': { items: [item('a', 'รายการ A', 100), item('b', 'รายการ B', 50)], paidItems: [], total: 150 }
+    };
+    const { rerender } = render(<BankAccountTable accounts={['กสิกร']} accountBreakdown={live} monthKey="2026-11" />);
+    const trigger = tableTrigger(/^150\.00 แจกแจง/);
+    fireEvent.click(trigger);
+    expect(screen.getAllByRole('region')[0]).toHaveTextContent('รวม 150.00 บาท · 2 รายการ');
+    const afterPaid = {
+      'กสิกร': { items: [item('b', 'รายการ B', 50)], paidItems: [item('a', 'รายการ A', 100, { paid: true })], total: 50 }
+    };
+    rerender(<BankAccountTable accounts={['กสิกร']} accountBreakdown={afterPaid} monthKey="2026-11" />);
+    expect(screen.getAllByRole('region')[0]).toHaveTextContent('รวม 50.00 บาท · 1 รายการ');
+    expect(screen.getAllByRole('button', { name: 'จ่ายแล้ว 1 รายการ (ไม่นับในยอด)' }).length).toBeGreaterThan(0);
+    expect(tableTrigger(/^50\.00 แจกแจง/)).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('รวมทั้งหมด row has no buttons', () => {
+    renderTable();
+    const totalRow = screen.getAllByRole('row').find(row => row.textContent?.includes('รวมทั้งหมด'))!;
+    expect(within(totalRow).queryAllByRole('button')).toHaveLength(0);
+  });
 });

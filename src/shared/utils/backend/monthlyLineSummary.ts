@@ -224,7 +224,7 @@ export function buildMonthlySummaryFlex(monthLabel: string, payload: SummaryPayl
         valueRow('🟢', 'เงินออม', model.savings, LINE_THEME.success),
         ...deltaRow(comparison?.savings),
         ...expenseDeltaRow(comparison),
-        valueRow('💳', 'บัตรเครดิต', model.creditCard, LINE_THEME.info),
+        valueRow('💳', 'บัตร & สินเชื่อ', model.creditCard, LINE_THEME.info),
         { type: 'separator', margin: 'xl', color: LINE_THEME.separator },
         textComponent('🧾 ภาษีสะสม', 'md', LINE_THEME.textPrimary, '700'),
         valueRow('', 'ยอดสะสม', taxAccumulated),
@@ -254,7 +254,7 @@ export function formatMonthlySummaryText(monthLabel: string, payload: SummaryPay
     `รายจ่ายทั่วไป: ${amount(model.generalExpense)} บาท`,
     `รายจ่ายประจำวัน: ${amount(model.dailyExpense)} บาท`,
     withDelta(`เงินออม: ${amount(model.savings)} บาท`, comparison?.savings),
-    `บัตรเครดิต: ${amount(model.creditCard)} บาท`
+    `บัตร & สินเชื่อ: ${amount(model.creditCard)} บาท`
   ];
   if (comparison?.expense) {
     lines.push(withDelta(`รายจ่ายรวม: ${amount(comparison.expense.current)} บาท`, comparison.expense));

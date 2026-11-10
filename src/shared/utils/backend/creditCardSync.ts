@@ -30,7 +30,11 @@ import {
   isValidPaymentAction,
   round2,
   MAX_REVOLVING_CYCLES_PER_CARD,
-  PLAN_STATUS
+  PLAN_STATUS,
+  CARD_TYPE_LABELS,
+  DEFAULT_CARD_TYPE,
+  isCardType,
+  type CardType
 } from '../creditCardUtils';
 import { getUserCreditData, updateUserCreditData } from './creditCardStore';
 import { buildRevolvingCyclesForData, isMonthBeyondRevolvingCap } from '../creditCardRevolving';
@@ -394,6 +398,8 @@ export interface CardTotalExpenseRow extends DerivedExpenseRow {
   derived: true;
   /** รอบบิล (YYYY-MM) ที่แถวนี้แสดงตัวเลข (DP-4) — derive ตอน GET ไม่เคยถูกเก็บ ไม่ใช่ข้อมูลเงิน */
   cycleMonth: string;
+  /** ประเภทบัตร ใช้แสดงผลเท่านั้น — derive จากบัตรตอน GET ไม่เคยถูกเก็บ (BR-CC-033) */
+  cardType: CardType;
   breakdown: {
     installments: CardTotalInstallmentLine[];
     installmentTotal: number;
@@ -487,8 +493,11 @@ export function buildCardTotalExpenseRows(
       }
       : { ...EMPTY_REVOLVING_PART };
 
+    // บัตรเครดิต rowPrefix = 'ยอดบัตร' ข้อความจึงเหมือนเดิมทุกตัวอักษร
+    const cardType = isCardType(card.cardType) ? card.cardType : DEFAULT_CARD_TYPE;
+
     rows[buildRevolvingRowKey(card.id)] = {
-      name: `ยอดบัตร ${card.name}`,
+      name: `${CARD_TYPE_LABELS[cardType].rowPrefix} ${card.name}`,
       actual: round2(state.installmentTotal + Math.max(0, revolving.totalDue)),
       account: resolveRowAccount(card, bankAccounts),
       paid: state.paid,
@@ -497,6 +506,7 @@ export function buildCardTotalExpenseRows(
       resolvedDueDate: resolveCardDueDate(card, cycleMonth),
       derived: true,
       cycleMonth,
+      cardType,
       breakdown: {
         installments: state.installments,
         installmentTotal: state.installmentTotal,

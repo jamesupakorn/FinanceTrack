@@ -22,7 +22,9 @@ import {
   getPayableCycleMonth,
   resolveCardDueDate,
   round2,
-  PLAN_STATUS
+  PLAN_STATUS,
+  CARD_TYPE_LABELS,
+  isLoanCardType
 } from '../../shared/utils/creditCardUtils';
 import { MONTH_KEY_RE } from '../../shared/utils/creditCardBasics';
 import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
@@ -37,6 +39,7 @@ import BillingMonthSwitcher from './BillingMonthSwitcher';
 import CreditSpendItems from './CreditSpendItems';
 import RowActionMenu, { type RowActionMenuItem } from './RowActionMenu';
 import BankIssuerMark from './BankIssuerMark';
+import LoanRateHistory, { type LoanRateRevisionRecord } from './LoanRateHistory';
 import { ADD_BAR_HEIGHT_PX } from './addBarLayout';
 import {
   PAID_PILL_CLASS,
@@ -72,6 +75,7 @@ interface CreditCardDetailData {
   dueDay?: number | string;
   annualRate?: number | string;
   minPaymentPercent?: number | string;
+  cardType?: unknown;
 }
 
 interface CreditPlanDetail {
@@ -93,6 +97,12 @@ interface CreditPlanDetail {
   calcMethod?: string;
   annualRate?: number | string;
   createdAt?: string;
+  /** เงินต้นคงเหลือรายแผน ถ้า server ส่งมา — ไม่มีก็ใช้ card.remainingPrincipal (สินเชื่อมีแผนเดียว) */
+  remainingPrincipal?: number | string;
+  /** server คำนวณจาก rateRevisions (ไม่เก็บ) — > 0 แล้วแก้ตัวเลขตารางผ่อนไม่ได้ (BR-CC-040, N-3) */
+  rateRevisionCount?: number;
+  /** ประวัติปรับอัตราดอกเบี้ยของสินเชื่อ (append-only) — แสดงอย่างเดียว */
+  rateRevisions?: LoanRateRevisionRecord[];
   [key: string]: unknown;
 }
 
@@ -116,6 +126,8 @@ interface CreditCardDetailProps {
   onEditPlan?: PlanAction;
   onCancelPlan?: PlanAction;
   onDeletePlan?: PlanAction;
+  /** สินเชื่อเท่านั้น: เปิด dialog ปรับอัตราดอกเบี้ยของตารางผ่อนนี้ — หน้าเป็นเจ้าของ state ของ dialog */
+  onReviseRate?: PlanAction;
   onToggleInstallment?: InstallmentAction;
   onConfirmMinimum?: ConfirmMinimumHandler;
   onRevolvingChanged?: () => void;
@@ -132,6 +144,7 @@ interface PlanRowProps {
   card: CreditCardDetailData;
   isMobileView: boolean;
   pendingKeys: string[];
+  isLoan?: boolean;
   onToggleInstallment?: InstallmentAction;
   onRename?: PlanAction;
   onEdit?: PlanAction;
@@ -141,6 +154,7 @@ interface PlanRowProps {
 
 const COLLAPSED_UNPAID_PREVIEW = 6;
 const LONG_PLAN_THRESHOLD = 12;
+const VISIBLE_COUNT_STEP = 12;
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 const CARD = 'rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1 md:p-space-5';
@@ -166,6 +180,7 @@ function PlanRow({
   card,
   isMobileView,
   pendingKeys,
+  isLoan = false,
   onToggleInstallment,
   onRename,
   onEdit,
@@ -175,18 +190,29 @@ function PlanRow({
   // R-D: มือถือพับ / desktop กาง; ข้าม 768px แล้วรีเซ็ตตามเดิม
   const [open, setOpen] = useState(!isMobileView);
   const [showAll, setShowAll] = useState(false);
+  // D-S3-3: จำนวนงวดที่ยังไม่ชำระที่แสดงในพรีวิว — ขยายทีละ 12 งวดต่อคลิก "แสดงเพิ่ม"
+  const [visibleCount, setVisibleCount] = useState(COLLAPSED_UNPAID_PREVIEW);
 
   useEffect(() => {
     setOpen(!isMobileView);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobileView]);
 
+  // รีเซ็ตพรีวิวเมื่อสลับไปดูแผน/ตารางผ่อนอื่น
+  useEffect(() => {
+    setShowAll(false);
+    setVisibleCount(COLLAPSED_UNPAID_PREVIEW);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan.id]);
+
   const schedule = Array.isArray(plan.schedule) ? plan.schedule : [];
   const nextUnpaidNo = plan.nextUnpaid?.no ?? null;
   const isLongPlan = plan.months > LONG_PLAN_THRESHOLD;
   const detailId = `plan-detail-${plan.id}`;
   const cancelled = plan.status === PLAN_STATUS.CANCELLED;
-  const editable = plan.installmentsPaid === 0 && !cancelled;
+  // N-3: เคยปรับอัตราดอกเบี้ยแล้ว → server ตอบ 409 กับ PUT ที่แก้ตัวเลข จึงปิดเมนูให้ตรงกัน
+  const hasRateRevisions = (plan.rateRevisionCount ?? 0) > 0;
+  const editable = plan.installmentsPaid === 0 && !cancelled && !hasRateRevisions;
   const settled = plan.status === PLAN_STATUS.COMPLETED || cancelled;
 
   const visibleRows = useMemo(() => {
@@ -194,13 +220,13 @@ function PlanRow({
     let unpaidShown = 0;
     return schedule.filter(row => {
       if (row.paid === true) return true;
-      if (unpaidShown < COLLAPSED_UNPAID_PREVIEW) {
+      if (unpaidShown < visibleCount) {
         unpaidShown += 1;
         return true;
       }
       return false;
     });
-  }, [schedule, isLongPlan, showAll]);
+  }, [schedule, isLongPlan, showAll, visibleCount]);
 
   const renderPaidPill = (row: InstallmentScheduleRow) => {
     const key = `${plan.id}_${row.no}`;
@@ -218,28 +244,33 @@ function PlanRow({
     );
   };
 
+  // สินเชื่อใช้คำว่า "ตารางผ่อน" แทน "แผน" (UX §6); กฎ disable เดิมทุกข้อ
+  const planNoun = isLoan ? 'ตารางผ่อน' : 'แผน';
   const menuItems: RowActionMenuItem[] = [
     { key: 'rename', label: 'แก้ไขชื่อรายการ', icon: <Icons.Edit size={16} />, onSelect: () => onRename?.(plan) },
     {
       key: 'edit',
-      label: 'แก้ไขแผน',
+      label: `แก้ไข${planNoun}`,
       icon: <Icons.Settings size={16} />,
       disabled: !editable,
+      // ลำดับเหตุผลเดียวกับ handlePut: ยกเลิก → เคยปรับอัตรา → มีงวดชำระแล้ว
       disabledReason: editable
         ? undefined
         : cancelled
-          ? 'แก้ไขไม่ได้เพราะแผนถูกยกเลิกแล้ว'
-          : `แก้ไขไม่ได้เพราะชำระไปแล้ว ${plan.installmentsPaid} งวด — ให้ยกเลิกแผนแล้วสร้างใหม่`,
+          ? `แก้ไขไม่ได้เพราะ${planNoun}ถูกยกเลิกแล้ว`
+          : hasRateRevisions
+            ? 'แก้ไขตัวเลขไม่ได้เพราะเคยปรับอัตราดอกเบี้ยแล้ว'
+            : `แก้ไขไม่ได้เพราะชำระไปแล้ว ${plan.installmentsPaid} งวด — ให้ยกเลิก${planNoun}แล้วสร้างใหม่`,
       onSelect: () => onEdit?.(plan)
     },
-    ...(cancelled ? [] : [{ key: 'cancel', label: 'ยกเลิกแผน', icon: <Icons.X size={16} />, danger: true, onSelect: () => onCancel?.(plan) }]),
+    ...(cancelled ? [] : [{ key: 'cancel', label: `ยกเลิก${planNoun}`, icon: <Icons.X size={16} />, danger: true, onSelect: () => onCancel?.(plan) }]),
     {
       key: 'delete',
-      label: 'ลบแผน',
+      label: `ลบ${planNoun}`,
       icon: <Icons.Trash size={16} />,
       danger: true,
       disabled: plan.installmentsPaid > 0,
-      disabledReason: plan.installmentsPaid > 0 ? 'ลบไม่ได้เพราะมีงวดที่ชำระแล้ว — ให้ยกเลิกแผนแทน' : undefined,
+      disabledReason: plan.installmentsPaid > 0 ? `ลบไม่ได้เพราะมีงวดที่ชำระแล้ว — ให้ยกเลิก${planNoun}แทน` : undefined,
       onSelect: () => onDelete?.(plan)
     }
   ];
@@ -281,7 +312,7 @@ function PlanRow({
 
       {open && (
         <div id={detailId} className="mt-space-2 flex flex-col gap-space-1">
-          <span className="text-xs text-secondary">{`ราคารวม ${formatCurrency(plan.totalPrice)} ฿ · ${plan.months} งวด`}</span>
+          <span className="text-xs text-secondary">{`${isLoan ? 'ยอดเงินกู้' : 'ราคารวม'} ${formatCurrency(plan.totalPrice)} ฿ · ${plan.months} งวด`}</span>
           <span className="text-xs text-secondary">{`คงเหลือ ${formatCurrency(plan.remainingPayable)} ฿`}</span>
           <span className="text-xs text-secondary">{`ชำระแล้ว ${plan.progressPercent}%`}</span>
           <span className="text-xs text-secondary">{describePlanInterest(plan)}</span>
@@ -338,13 +369,22 @@ function PlanRow({
           </div>
 
           {isLongPlan && !showAll && visibleRows.length < schedule.length && (
-            <button
-              type="button"
-              className={`mt-space-2 min-h-11 w-full rounded-sm border border-dashed border-border-default text-sm text-secondary ${FOCUS_RING}`}
-              onClick={() => setShowAll(true)}
-            >
-              {`แสดงทั้งหมด (${plan.months} งวด)`}
-            </button>
+            <div className="mt-space-2 flex flex-col gap-space-2 sm:flex-row">
+              <button
+                type="button"
+                className={`min-h-11 flex-1 rounded-sm border border-dashed border-border-default text-sm text-secondary ${FOCUS_RING}`}
+                onClick={() => setVisibleCount(value => value + VISIBLE_COUNT_STEP)}
+              >
+                {`แสดงเพิ่ม ${VISIBLE_COUNT_STEP} งวด`}
+              </button>
+              <button
+                type="button"
+                className={`min-h-11 flex-1 rounded-sm border border-dashed border-border-default text-sm text-secondary ${FOCUS_RING}`}
+                onClick={() => setShowAll(true)}
+              >
+                {`แสดงทั้งหมด (${plan.months} งวด)`}
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -366,6 +406,7 @@ export default function CreditCardDetail({
   onEditPlan,
   onCancelPlan,
   onDeletePlan,
+  onReviseRate,
   onToggleInstallment,
   onConfirmMinimum,
   onRevolvingChanged,
@@ -434,8 +475,9 @@ export default function CreditCardDetail({
   }, []);
 
   const handleRevolvingChanged = () => { onRevolvingChanged?.(); };
+  // สินเชื่อไม่มียอดหมุนเวียน (BR-CC-038) — ไม่ต้องดึงรอบบิล
   const rev = useRevolvingCycle({
-    card,
+    card: isLoanCardType(card?.cardType) ? null : card,
     month: statementMonth,
     refreshKey: spendRefreshKey + localTick,
     onChanged: handleRevolvingChanged,
@@ -460,6 +502,13 @@ export default function CreditCardDetail({
     );
   }
 
+  const isLoan = isLoanCardType(card.cardType);
+  // สินเชื่อมีแผนได้แผนเดียว (BR-CC-034): ใช้แผนที่กำลังผ่อนก่อน ไม่มีก็แผนแรกที่จบแล้ว
+  const loanPlan = isLoan ? (ongoingPlans[0] ?? orderedPlans[0] ?? null) : null;
+  // ปรับอัตราได้เฉพาะตารางผ่อนที่กำลังผ่อน — ปิดแล้วใช้ aria-disabled + เหตุผลที่มองเห็น (idiom เดียวกับ RowActionMenu)
+  const reviseRateDisabledReason = !loanPlan || loanPlan.status === PLAN_STATUS.ONGOING
+    ? undefined
+    : loanPlan.status === PLAN_STATUS.CANCELLED ? 'ยกเลิกแล้ว' : 'สินเชื่อนี้ปิดแล้ว';
   const creditLimit = Number(card.creditLimit) || 0;
   const utilisation = creditLimit > 0
     ? Math.min(100, round2((Number(card.remainingPrincipal) || 0) / creditLimit * 100))
@@ -467,7 +516,7 @@ export default function CreditCardDetail({
 
   // DD-7: ผู้ใช้ยังไม่ขยับเดือน → ใช้เดือนปฏิทินเพื่อให้วันที่เริ่มต้นของ sheet เหมือนเดิม; ขยับแล้ว → ใช้เดือนที่ดูอยู่
   const addMonth = monthTouched ? statementMonth : getCurrentMonthKey();
-  const bottomInset = isMobileView ? ADD_BAR_HEIGHT_PX : 0;
+  const bottomInset = isMobileView && !isLoan ? ADD_BAR_HEIGHT_PX : 0;
 
   const blurCashbackIfFocused = () => {
     const active = document.activeElement;
@@ -502,8 +551,8 @@ export default function CreditCardDetail({
   const handleFocusOut = () => setFieldFocused(false);
 
   const cardMenuItems: RowActionMenuItem[] = [
-    { key: 'edit-card', label: 'แก้ไขบัตร', icon: <Icons.Edit size={16} />, onSelect: () => onEditCard?.(card) },
-    { key: 'delete-card', label: 'ลบบัตร', icon: <Icons.Trash size={16} />, danger: true, onSelect: () => onDeleteCard?.(card) }
+    { key: 'edit-card', label: isLoan ? 'แก้ไขสินเชื่อ' : 'แก้ไขบัตร', icon: <Icons.Edit size={16} />, onSelect: () => onEditCard?.(card) },
+    { key: 'delete-card', label: isLoan ? 'ลบสินเชื่อ' : 'ลบบัตร', icon: <Icons.Trash size={16} />, danger: true, onSelect: () => onDeleteCard?.(card) }
   ];
 
   const renderPlanRow = (plan: CreditPlanDetail) => (
@@ -513,6 +562,7 @@ export default function CreditCardDetail({
       card={card}
       isMobileView={isMobileView}
       pendingKeys={pendingKeys}
+      isLoan={isLoan}
       onToggleInstallment={onToggleInstallment}
       onRename={onRenamePlan}
       onEdit={onEditPlan}
@@ -524,7 +574,7 @@ export default function CreditCardDetail({
   return (
     <div
       className="flex flex-col gap-space-4"
-      style={isMobileView ? { paddingBottom: ADD_BAR_HEIGHT_PX } : undefined}
+      style={isMobileView && !isLoan ? { paddingBottom: ADD_BAR_HEIGHT_PX } : undefined}
       onFocus={handleFocusIn}
       onBlur={handleFocusOut}
     >
@@ -533,7 +583,7 @@ export default function CreditCardDetail({
           <Icons.ChevronLeft size={16} /> กลับ
         </button>
         <div className="ml-auto flex items-center gap-space-2">
-          {!isMobileView && (
+          {!isMobileView && !isLoan && (
             <button type="button" data-add-expense-fallback className={BTN_ADD} onClick={() => onAddPlanForCard?.(card, addMonth)}>
               <span aria-hidden="true"><Icons.Plus size={16} /></span> เพิ่มรายจ่าย
             </button>
@@ -545,6 +595,54 @@ export default function CreditCardDetail({
       <div className="grid grid-cols-1 items-start gap-space-4 md:grid-cols-[320px_minmax(0,1fr)]">
         <div className="flex flex-col gap-space-4 md:sticky md:top-[90px]">
           {/* identity header (CD-A): เบากว่าการ์ดอื่น — ไม่มีเงา */}
+          {isLoan ? (
+          <header
+            className="flex flex-col gap-space-2 rounded-md border border-border-default border-l-4 bg-surface-1 p-space-4"
+            style={{ borderLeftColor: card.color || 'var(--color-accent, #D4A857)' }}
+            data-testid="loan-detail-header"
+          >
+            <div className="flex items-center gap-space-2">
+              <BankIssuerMark card={card} size={28} />
+              <h2 className={`${SECTION_TITLE} min-w-0 break-words`}>{card.name}</h2>
+            </div>
+            <span className="text-xs text-tertiary">
+              {[CARD_TYPE_LABELS[isLoanCardType(card.cardType) ? card.cardType : 'credit_card'].label, card.bankName, card.last4 ? `····${card.last4}` : ''].filter(Boolean).join(' · ')}
+            </span>
+            {/* ตัวเลขทุกตัวมาจาก server (plan/card) — แค่จัดวาง ไม่คำนวณ */}
+            <dl className="m-0 grid grid-cols-2 gap-space-2">
+              <div className="flex min-w-0 flex-col rounded-sm bg-surface-2 p-space-2">
+                <dt className="text-xs text-tertiary">เงินต้นคงเหลือ</dt>
+                <dd className="m-0 break-words font-[family-name:var(--font-numeric)] text-sm font-semibold tabular-nums text-primary">
+                  {loanPlan ? `${formatCurrency(loanPlan.remainingPrincipal ?? card.remainingPrincipal ?? 0)} ฿` : '-'}
+                </dd>
+              </div>
+              <div className="flex min-w-0 flex-col rounded-sm bg-surface-2 p-space-2">
+                <dt className="text-xs text-tertiary">ค่างวดปัจจุบัน</dt>
+                <dd className="m-0 break-words font-[family-name:var(--font-numeric)] text-sm font-semibold tabular-nums text-primary">
+                  {loanPlan ? `${formatCurrency(loanPlan.nextUnpaid?.payment ?? 0)} ฿` : '-'}
+                </dd>
+              </div>
+              <div className="flex min-w-0 flex-col rounded-sm bg-surface-2 p-space-2">
+                <dt className="text-xs text-tertiary">ดอกเบี้ยปัจจุบัน</dt>
+                <dd className="m-0 break-words text-sm font-semibold text-primary">
+                  {loanPlan ? `${(Number(loanPlan.annualRate) || 0).toFixed(2)}% ต่อปี` : '-'}
+                </dd>
+              </div>
+              <div className="flex min-w-0 flex-col rounded-sm bg-surface-2 p-space-2">
+                <dt className="text-xs text-tertiary">งวดคงเหลือ</dt>
+                <dd className="m-0 break-words text-sm font-semibold text-primary">
+                  {loanPlan ? `${loanPlan.installmentsRemaining ?? loanPlan.months} / ${loanPlan.months} งวด` : '-'}
+                </dd>
+              </div>
+            </dl>
+            <span className="text-xs text-secondary">
+              {`ครบกำหนดทุกวันที่ ${formatDayLabel(card.dueDay as number | string)}`}
+              {loanPlan?.status === PLAN_STATUS.ONGOING && loanPlan.nextUnpaid
+                ? ` · งวดถัดไป ${formatIsoDateTH(resolveCardDueDate(card, loanPlan.nextUnpaid.dueMonth) || '')}`
+                : ''}
+            </span>
+          </header>
+          ) : (
           <header className="flex flex-col gap-space-1 rounded-md border border-border-default border-l-4 bg-surface-1 p-space-4" style={{ borderLeftColor: card.color || 'var(--color-accent, #D4A857)' }}>
             <div className="flex items-center gap-space-2">
               <BankIssuerMark card={card} size={28} />
@@ -577,7 +675,9 @@ export default function CreditCardDetail({
               <span className="text-xs text-pos">{`เครดิตแคชแบค ${formatCurrency(card.revolvingCredit || 0)}`}</span>
             )}
           </header>
+          )}
 
+          {!isLoan && (
           <CardPayNextSummary
             card={card}
             month={statementMonth}
@@ -599,9 +699,11 @@ export default function CreditCardDetail({
               />
             )}
           />
+          )}
         </div>
 
         <div className="flex min-w-0 flex-col gap-space-4">
+          {!isLoan && (
           <CreditSpendItems
             key={`${card.id}-${statementMonth}`}
             cardId={card.id}
@@ -615,11 +717,14 @@ export default function CreditCardDetail({
             onFocusHandled={() => setFocusItemId(null)}
             onChanged={handleSpendItemsChanged}
           />
+          )}
 
           <section className={`${CARD} flex flex-col gap-space-3`}>
-            <h3 className={SECTION_TITLE}>{`แผนผ่อนชำระ (${plans.length})`}</h3>
+            <h3 className={SECTION_TITLE}>{isLoan ? 'ตารางผ่อน' : `แผนผ่อนชำระ (${plans.length})`}</h3>
             {orderedPlans.length === 0 ? (
-              <p className="m-0 text-sm text-tertiary">ยังไม่มีแผนผ่อนในบัตรนี้ — กด “เพิ่มรายจ่าย” เพื่อเริ่มต้น</p>
+              <p className="m-0 text-sm text-tertiary">
+                {isLoan ? 'ยังไม่มีตารางผ่อนของสินเชื่อนี้' : 'ยังไม่มีแผนผ่อนในบัตรนี้ — กด “เพิ่มรายจ่าย” เพื่อเริ่มต้น'}
+              </p>
             ) : (
               <div className="flex flex-col gap-space-3">
                 {ongoingPlans.map(renderPlanRow)}
@@ -646,11 +751,38 @@ export default function CreditCardDetail({
             )}
           </section>
 
-          <RevolvingBalanceSection month={statementMonth} isMobileView={isMobileView} rev={rev} />
+          {/* S4: สินเชื่อที่มีตารางผ่อนแล้วเท่านั้น (UX §6) — บัตรเครดิตไม่มีส่วนนี้ */}
+          {isLoan && loanPlan && (
+            <section className={`${CARD} flex flex-col gap-space-3`} aria-labelledby="loan-rate-history-title">
+              <div className="flex flex-wrap items-start justify-between gap-space-2">
+                <h3 id="loan-rate-history-title" className={SECTION_TITLE}>ประวัติอัตราดอกเบี้ย</h3>
+                <div className="flex flex-col items-end gap-space-1">
+                  <button
+                    type="button"
+                    data-loan-rate-revise-trigger
+                    className={`${BTN_GHOST} ${reviseRateDisabledReason ? 'cursor-not-allowed opacity-70' : ''}`}
+                    aria-disabled={reviseRateDisabledReason ? 'true' : undefined}
+                    aria-describedby={reviseRateDisabledReason ? 'loan-rate-revise-reason' : undefined}
+                    onClick={() => {
+                      if (!reviseRateDisabledReason) onReviseRate?.(loanPlan);
+                    }}
+                  >
+                    ปรับอัตราดอกเบี้ย
+                  </button>
+                  {reviseRateDisabledReason && (
+                    <span id="loan-rate-revise-reason" className="text-xs text-tertiary">{reviseRateDisabledReason}</span>
+                  )}
+                </div>
+              </div>
+              <LoanRateHistory revisions={loanPlan.rateRevisions} currentRate={Number(loanPlan.annualRate) || 0} />
+            </section>
+          )}
+
+          {!isLoan && <RevolvingBalanceSection month={statementMonth} isMobileView={isMobileView} rev={rev} />}
         </div>
       </div>
 
-      {isMobileView && (
+      {isMobileView && !isLoan && (
         <div
           hidden={fieldFocused}
           className="fixed inset-x-0 z-[90] border-t border-border-subtle bg-surface-1 px-space-4 py-space-3"

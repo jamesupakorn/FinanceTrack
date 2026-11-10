@@ -21,7 +21,10 @@ import {
   summariseTotals,
   MAX_CARDS_PER_USER,
   PLAN_STATUS,
-  getCurrentMonthKey
+  getCurrentMonthKey,
+  DEFAULT_CARD_TYPE,
+  isCardType,
+  isLoanCardType
 } from '../../../src/shared/utils/creditCardUtils';
 import { buildCardMonthDueMap } from '../../../src/shared/utils/backend/creditCardSync';
 import { withAudit } from '../../../lib/auditedMutation';
@@ -60,12 +63,13 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse, userId: str
     return res.status(400).json({ error: 'card payload required' });
   }
 
-  const { valid, errors, value } = validateCardInput(input);
+  const cardId = typeof input.id === 'string' && input.id.trim() ? input.id.trim() : null;
+  // edit: value ไม่มี cardType จึง merge ทับประเภทที่เก็บไว้ไม่ได้ (BR-CC-033)
+  const { valid, errors, value } = validateCardInput(input, { mode: cardId ? 'edit' : 'create' });
   if (!valid) {
     return res.status(400).json({ error: 'ข้อมูลบัตรไม่ถูกต้อง', errors });
   }
 
-  const cardId = typeof input.id === 'string' && input.id.trim() ? input.id.trim() : null;
   const now = new Date().toISOString();
   let savedCard: CreditCard | null = null;
   let failure: { status: number; body: Record<string, unknown> } | null = null;
@@ -77,7 +81,16 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse, userId: str
         failure = { status: 404, body: { error: 'card not found' } };
         return data;
       }
-      savedCard = { ...data.cards[index], ...value, id: cardId, updatedAt: now };
+      const stored = data.cards[index];
+      const storedType = isCardType(stored.cardType) ? stored.cardType : DEFAULT_CARD_TYPE;
+      // ประเภทบัตรเปลี่ยนไม่ได้หลังสร้าง — ไม่ส่งมา = คงค่าเดิม (BR-CC-033)
+      if (input.cardType !== undefined && input.cardType !== storedType) {
+        failure = { status: 409, body: { error: 'cardType cannot change' } };
+        return data;
+      }
+      // สินเชื่อไม่มีวงเงิน — ไม่เชื่อ creditLimit จาก client ตอนแก้ไขเช่นกัน (E-4)
+      const editValue = isLoanCardType(storedType) ? { ...value, creditLimit: 0 } : value;
+      savedCard = { ...stored, ...editValue, id: cardId, updatedAt: now };
       const cards = [...data.cards];
       cards[index] = savedCard;
       return { ...data, cards };

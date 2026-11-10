@@ -283,7 +283,7 @@ export default function MonthComparison() {
               <th scope="col" className="px-space-2 py-space-3 text-right text-xs font-medium text-secondary">รายจ่ายทั่วไป</th>
               <th scope="col" className="px-space-2 py-space-3 text-right text-xs font-medium text-secondary">รายจ่ายประจำวัน</th>
               <th scope="col" className="px-space-2 py-space-3 text-right text-xs font-medium text-secondary">เงินออม</th>
-              <th scope="col" className="px-space-2 py-space-3 text-right text-xs font-medium text-secondary">บัตรเครดิต</th>
+              <th scope="col" className="px-space-2 py-space-3 text-right text-xs font-medium text-secondary">บัตร & สินเชื่อ</th>
               <th scope="col" className="px-space-2 py-space-3 text-right text-xs font-medium text-secondary">กระแสเงินสดสุทธิ</th>
               <th scope="col" className="px-space-2 py-space-3 text-right text-xs font-medium text-secondary">เปลี่ยนแปลง</th>
             </tr>
@@ -329,7 +329,7 @@ export default function MonthComparison() {
               <ComparisonRow label="รายจ่ายทั่วไป" value={formatCurrency(row.model.generalExpense)} />
               <ComparisonRow label="รายจ่ายประจำวัน" value={row.dailyFailed ? '—' : formatCurrency(row.model.dailyExpense)} />
               <ComparisonRow label="เงินออม" value={formatCurrency(row.model.savings)} />
-              <ComparisonRow label="บัตรเครดิต" value={formatCurrency(row.model.creditCard)} />
+              <ComparisonRow label="บัตร & สินเชื่อ" value={formatCurrency(row.model.creditCard)} />
               <ComparisonRow label="สุทธิ" value={formatCurrency(row.model.netCashFlow)} emphasized />
             </div>
           </div>

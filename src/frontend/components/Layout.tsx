@@ -52,12 +52,12 @@ const SESSION_TIMEOUT = 60 * 60 * 1000;
 const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'ภาพรวม', mobileLabel: 'ภาพรวม', href: '/', Icon: Icons.BarChart },
   { id: 'workspace', label: 'แผนการเงินรายเดือน', mobileLabel: 'แผนรายเดือน', href: '/workspace/income', Icon: Icons.Edit },
-  { id: 'credit-cards', label: 'บัตรเครดิต', mobileLabel: 'บัตรเครดิต', href: '/credit-cards', Icon: Icons.CreditCard },
+  { id: 'credits', label: 'บัตร & สินเชื่อ', mobileLabel: 'บัตร & สินเชื่อ', href: '/credits', Icon: Icons.CreditCard },
   { id: 'calendar', label: 'ปฏิทิน', mobileLabel: 'ปฏิทิน', action: 'calendar', Icon: Icons.Calendar },
   { id: 'reports', label: 'รายงาน', mobileLabel: 'รายงาน', href: '/reports', Icon: Icons.TrendingUp },
   { id: 'settings', label: 'ตั้งค่า', mobileLabel: 'ตั้งค่า', href: '/settings', Icon: Icons.Settings }
 ];
-const MOBILE_PRIMARY_IDS = ['dashboard', 'workspace', 'credit-cards', 'calendar'];
+const MOBILE_PRIMARY_IDS = ['dashboard', 'workspace', 'credits', 'calendar'];
 const MOBILE_SHEET_NAV_IDS = ['reports', 'settings'];
 
 function MoreIcon({ size = 20 }: { size?: number }) {
