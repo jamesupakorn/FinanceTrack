@@ -139,7 +139,7 @@ describe('CreditCardDashboard integration', () => {
   test('bank group headers are gone; tiles render inside บัตรทั้งหมด', () => {
     const { container } = render(<CreditCardDashboard cards={CARDS} plans={[]} />);
     expect(container.querySelector('[id^="cc-issuer-group-"]')).toBeNull();
-    expect(screen.getByRole('heading', { name: 'บัตรทั้งหมด' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'บัตรและสินเชื่อทั้งหมด' })).toBeInTheDocument();
     expect(screen.getAllByTestId(/^cc-tile-[a-z]$/)).toHaveLength(4);
   });
 

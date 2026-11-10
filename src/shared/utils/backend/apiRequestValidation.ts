@@ -48,6 +48,7 @@ const schemas = {
     PATCH: { body },
     DELETE: { body }
   },
+  'credit-cards/rate-revisions': { POST: { body } },
   'credit-cards/revolving': {
     GET: { query },
     POST: { body },

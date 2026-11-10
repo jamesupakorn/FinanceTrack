@@ -6,6 +6,13 @@ import { createMocks } from 'node-mocks-http';
 import type { RequestMethod } from 'node-mocks-http';
 import type { NextApiHandler } from 'next';
 import type { Db } from 'mongodb';
+import fs from 'fs';
+import path from 'path';
+import * as creditCardRevolving from '../../src/shared/utils/creditCardRevolving';
+import { getCurrentDateInfo } from '../../src/shared/utils/dateUtils';
+import { buildEffectiveSchedule, reviseEffectiveScheduleTail } from '../../src/shared/utils/creditCardAmortization';
+import { collectLoanDueEvents, deriveLoanHeaderTitle, buildLoanMessage, buildLoanFlex } from '../../pages/api/line_due_notify';
+import type { CreditPlan } from '../../src/shared/utils/backend/creditCardStore';
 
 type RequestOptions = {
   method?: RequestMethod;
@@ -27,6 +34,18 @@ jest.mock('../../lib/dataSource', () => {
 jest.mock('../../src/shared/utils/backend/creditCardStore', () => {
   const actual = jest.requireActual('../../src/shared/utils/backend/creditCardStore');
   return { ...actual, getUserCreditData: jest.fn(actual.getUserCreditData) };
+});
+
+// S5 D3: ห่อ buildRevolvingCyclesForData/summariseRevolving ด้วย jest.fn (ยังเรียก implementation จริง)
+// เพื่อให้เทส "collectLoanDueEvents ต้องไม่เรียกตัวช่วยยอดหมุนเวียนเลย" (BR-CC-038) สังเกตจำนวนครั้งที่ถูกเรียกได้
+// ไม่กระทบเทสอื่นในไฟล์นี้ที่พึ่งพาเลขยอดหมุนเวียนของบัตรเครดิตจริง เพราะ implementation เดิมยังถูกเรียกเหมือนก่อน
+jest.mock('../../src/shared/utils/creditCardRevolving', () => {
+  const actual = jest.requireActual('../../src/shared/utils/creditCardRevolving');
+  return {
+    ...actual,
+    buildRevolvingCyclesForData: jest.fn(actual.buildRevolvingCyclesForData),
+    summariseRevolving: jest.fn(actual.summariseRevolving)
+  };
 });
 
 // AC-24: helper ที่เดินโครงสร้าง Flex `contents` แล้วรวบรวมข้อความ
@@ -649,6 +668,551 @@ describe('/api/line_due_notify — บัตรเครดิตแบบ Flex 
       expect(result).toMatchObject({ sent: true });
       expect(text).toContain('25 ต.ค. 2569');
       expect(text).toContain('งวดเดือนเดียวกัน');
+    });
+  });
+
+  // N-1 (REQUIRED, loan-installments-s5 D1): collectCardDueEvents ต้องกรองบัตรประเภทสินเชื่อ
+  // (personal_loan/home_loan) ออกเสมอ มิฉะนั้นเมื่อ collectLoanDueEvents (S5 D3) มาทำงาน
+  // ผู้ใช้จะได้รับแจ้งเตือนงวดสินเชื่อซ้ำสองข้อความ (BR-CC-041)
+  describe('N-1: บัตรประเภทสินเชื่อต้องไม่ถูกแจ้งเตือนผ่านข้อความบัตรเครดิต', () => {
+    // D5 note: at D1-D4 (before the loan handler loop existed), this fixture's loan was collected
+    // by nothing, so this test originally asserted zero fetch calls at all. Now that S5 D5 wires
+    // collectLoanDueEvents into its own handler loop, this exact fixture's due-today loan correctly
+    // produces its own loan message (S5 D5, spec I-6/E-26) — the fix here narrows the "no fetch"
+    // assertion to "no card message", and adds the now-correct loan-side assertions, without
+    // touching the N-1 card-exclusion assertion itself.
+    it('บัตรสินเชื่อบ้าน (home_loan) มีงวดครบกำหนดวันนี้ → ไม่ปรากฏในข้อความบัตรเครดิต (ข้อความสินเชื่อแยกต่างหากถูกส่งแทน, S5 D5)', async () => {
+      await seedCardUser({
+        cards: [{ id: 'loan-1', name: 'บ้านลาดพร้าว', cardType: 'home_loan', statementDay: 1, dueDay: 15 }],
+        plans: [{
+          id: 'plan-loan-1', cardId: 'loan-1', itemName: 'บ้านลาดพร้าว', months: 240, status: 'ongoing',
+          schedule: [{ no: 13, dueMonth: '2024-01', payment: 7164.31, paid: false }]
+        }]
+      });
+      fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+
+      const { req, res } = makeReqRes({ body: { date: TARGET_DATE, userId: CC_USER_ID, mode: 'both' } });
+      await handler(req, res);
+
+      expect(res._getStatusCode()).toBe(200);
+      const { creditCardResults, loanResults } = JSON.parse(res._getData());
+      expect(creditCardResults).toEqual([{ userId: CC_USER_ID, sent: false, reason: 'no credit card due items' }]);
+      // No fetch call carries the card message shape; the one call that does happen is the loan message.
+      expect(fetchMock.mock.calls.every(c => typeof c[1]?.body === 'string' && !JSON.stringify(JSON.parse(c[1].body)).includes('แจ้งเตือนบัตรเครดิต'))).toBe(true);
+      expect(loanResults[0]).toMatchObject({ userId: CC_USER_ID, sent: true });
+    });
+
+    it('ผู้ใช้มีทั้งบัตรเครดิตจริงและบัตรสินเชื่อส่วนบุคคล (personal_loan) ครบกำหนดพร้อมกัน → ข้อความบัตรเครดิตมีแค่บัตรจริง ไม่มีงวดสินเชื่อปน', async () => {
+      await seedCardUser({
+        cards: [
+          { id: 'card-1', name: 'บัตร A', statementDay: 1, dueDay: 15 },
+          { id: 'loan-2', name: 'สินเชื่อส่วนบุคคล', cardType: 'personal_loan', statementDay: 1, dueDay: 15 }
+        ],
+        plans: [
+          {
+            id: 'plan-1', cardId: 'card-1', itemName: 'มือถือ', months: 10, status: 'ongoing',
+            schedule: [{ no: 1, dueMonth: '2024-01', payment: 1000, paid: false }]
+          },
+          {
+            id: 'plan-loan-2', cardId: 'loan-2', itemName: 'สินเชื่อส่วนบุคคล', months: 36, status: 'ongoing',
+            schedule: [{ no: 1, dueMonth: '2024-01', payment: 3000, paid: false }]
+          }
+        ]
+      });
+      fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+
+      const { req, res } = makeReqRes({ body: { date: TARGET_DATE, userId: CC_USER_ID, mode: 'both' } });
+      await handler(req, res);
+
+      expect(res._getStatusCode()).toBe(200);
+      const { creditCardResults } = JSON.parse(res._getData());
+      expect(creditCardResults[0]).toMatchObject({ userId: CC_USER_ID, sent: true, format: 'flex' });
+
+      const call = fetchMock.mock.calls.find(c => {
+        const requestOptions = c[1];
+        if (typeof requestOptions?.body !== 'string') return false;
+        const b = JSON.parse(requestOptions.body);
+        return b.messages[0].type === 'flex' && b.to === `line-${CC_USER_ID}`;
+      });
+      expect(call).toBeTruthy();
+      if (!call) throw new Error('Expected a LINE Flex request for the credit card user');
+      const callBody = call[1]?.body;
+      if (typeof callBody !== 'string') throw new Error('Expected the LINE request body to be a string');
+      const message = JSON.parse(callBody).messages[0];
+      const nodes = collectFlexTextNodes(message.contents);
+      expect(nodes.join('\n')).toContain('มือถือ');
+      expect(nodes.join('\n')).not.toContain('สินเชื่อส่วนบุคคล');
+    });
+  });
+});
+
+// S1 carry-over fix (loan-installments-s5 D2): the loan-installments route moved from
+// `/credit-cards` to `/credits` back in S1, but two LINE message literals in this file
+// (card text footer and card Flex footer) were deliberately left pointing at the old
+// path until a later slice touched this file for real work. Grep-based so a future edit
+// that reintroduces the stale literal fails the build, not just a copy review.
+describe('/api/line_due_notify — card footer CTA ไม่ใช้ path เก่า /credit-cards (S1 carry-over)', () => {
+  test('ไฟล์ source ไม่มี path literal /credit-cards หลงเหลืออยู่เลย', () => {
+    const source = fs.readFileSync(path.join(__dirname, '../../pages/api/line_due_notify.ts'), 'utf8');
+    expect(source).not.toContain('/credit-cards');
+    // สอง footer ของบัตร (text + Flex) ต้องชี้ไปที่ /credits แทน
+    expect(source).toContain('https://finance-track-one.vercel.app/credits');
+  });
+});
+
+// S5 D3 — collectLoanDueEvents (spec-loan-installments.md §I-6): pure data-collection only, no
+// message/Flex building (that is D4) and not yet wired into the handler (D5). Tested directly
+// through the named export rather than through the handler, per the dispatch instructions.
+// S5 D5 — handler loop + loanResults (spec-loan-installments.md §I-6, E-21, E-26). Through the
+// handler/fetch seam, same pattern as the credit-card Flex describe block above.
+describe('/api/line_due_notify — ข้อความสินเชื่อแบบ Flex + loanResults (loan-installments-s5 D5)', () => {
+  const LOAN_USER_ID = 'user-loan-flex';
+  const TARGET_DATE = '2024-01-15';
+
+  const seedLoanUser = async ({ cards = [], plans = [], cycles = [] }: {
+    cards?: Record<string, unknown>[];
+    plans?: Record<string, unknown>[];
+    cycles?: Record<string, unknown>[];
+  } = {}) => {
+    await db.collection('users').insertOne({ id: LOAN_USER_ID, LineId: `line-${LOAN_USER_ID}` });
+    await db.collection('credit_cards').insertOne({ userId: LOAN_USER_ID, cards, plans, cycles });
+  };
+
+  const LOAN_CARD = { id: 'loan-1', name: 'บ้านลาดพร้าว', cardType: 'home_loan', dueDay: 15 };
+  const LOAN_PLAN = {
+    id: 'plan-loan-1', cardId: 'loan-1', itemName: 'บ้านลาดพร้าว', months: 240, status: 'ongoing',
+    schedule: [{ no: 13, dueMonth: '2024-01', payment: 7164.31, paid: false }]
+  };
+  const CARD = { id: 'card-1', name: 'บัตร A', statementDay: 1, dueDay: 15 };
+  const CARD_PLAN = {
+    id: 'plan-1', cardId: 'card-1', itemName: 'มือถือ', months: 10, status: 'ongoing',
+    schedule: [{ no: 1, dueMonth: '2024-01', payment: 1000, paid: false }]
+  };
+
+  it('สินเชื่อมีงวดครบกำหนดวันนี้ → ส่งข้อความสินเชื่อเป็น Flex และ loanResults ถูกต้อง', async () => {
+    await seedLoanUser({ cards: [LOAN_CARD], plans: [LOAN_PLAN] });
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+
+    const { req, res } = makeReqRes({ body: { date: TARGET_DATE, userId: LOAN_USER_ID, mode: 'both' } });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const data = JSON.parse(res._getData());
+    expect(data.loanResults).toEqual([
+      { userId: LOAN_USER_ID, sent: true, loanCount: 1, installmentCount: 1, format: 'flex' }
+    ]);
+
+    const call = fetchMock.mock.calls.find(c => {
+      const requestOptions = c[1];
+      if (typeof requestOptions?.body !== 'string') return false;
+      const b = JSON.parse(requestOptions.body);
+      return b.messages[0].type === 'flex' && JSON.stringify(b.messages[0]).includes('บ้านลาดพร้าว');
+    });
+    expect(call).toBeTruthy();
+  });
+
+  // E-21: สินเชื่อที่ยังไม่มีแผน → collectLoanDueEvents ไม่ให้ event เลย → ไม่มีข้อความ ไม่ error
+  it('E-21: สินเชื่อที่ยังไม่มีแผน → ไม่มีข้อความสินเชื่อ ไม่มี error, loanResults.sent === false', async () => {
+    await seedLoanUser({ cards: [LOAN_CARD], plans: [] });
+
+    const { req, res } = makeReqRes({ body: { date: TARGET_DATE, userId: LOAN_USER_ID, mode: 'both' } });
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const data = JSON.parse(res._getData());
+    expect(data.loanResults).toEqual([{ userId: LOAN_USER_ID, sent: false, reason: 'no loan due items' }]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  describe('E-26: composition ของข้อความบัตรเครดิต/สินเชื่อ', () => {
+    it('(a) มีแค่บัตรเครดิต → ได้ข้อความบัตรตามเดิม ไม่มีข้อความสินเชื่อ', async () => {
+      await seedLoanUser({ cards: [CARD], plans: [CARD_PLAN] });
+      fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+
+      const { req, res } = makeReqRes({ body: { date: TARGET_DATE, userId: LOAN_USER_ID, mode: 'both' } });
+      await handler(req, res);
+
+      const data = JSON.parse(res._getData());
+      expect(data.creditCardResults[0]).toMatchObject({ userId: LOAN_USER_ID, sent: true, format: 'flex' });
+      expect(data.loanResults).toEqual([{ userId: LOAN_USER_ID, sent: false, reason: 'no loan due items' }]);
+    });
+
+    it('(b) มีแค่สินเชื่อ → ไม่มีข้อความบัตรเครดิต มีข้อความสินเชื่อ', async () => {
+      await seedLoanUser({ cards: [LOAN_CARD], plans: [LOAN_PLAN] });
+      fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+
+      const { req, res } = makeReqRes({ body: { date: TARGET_DATE, userId: LOAN_USER_ID, mode: 'both' } });
+      await handler(req, res);
+
+      const data = JSON.parse(res._getData());
+      expect(data.creditCardResults).toEqual([{ userId: LOAN_USER_ID, sent: false, reason: 'no credit card due items' }]);
+      expect(data.loanResults[0]).toMatchObject({ userId: LOAN_USER_ID, sent: true, format: 'flex' });
+    });
+
+    it('(c) มีทั้งบัตรเครดิตและสินเชื่อครบกำหนดพร้อมกัน → ได้ทั้งสามข้อความ (ค่าใช้จ่าย, บัตร, สินเชื่อ) แยกกันอิสระ', async () => {
+      await db.collection('users').insertOne({ id: LOAN_USER_ID, LineId: `line-${LOAN_USER_ID}` });
+      await db.collection('credit_cards').insertOne({
+        userId: LOAN_USER_ID, cards: [CARD, LOAN_CARD], plans: [CARD_PLAN, LOAN_PLAN], cycles: []
+      });
+      await db.collection('monthly_expense').insertOne({
+        userId: LOAN_USER_ID, month: '2024-01', rent: { name: 'ค่าเช่า', actual: 1000, dueDay: 15 }
+      });
+      fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+
+      const { req, res } = makeReqRes({ body: { date: TARGET_DATE, userId: LOAN_USER_ID, mode: 'both' } });
+      await handler(req, res);
+
+      const data = JSON.parse(res._getData());
+      expect(data.results[0]).toMatchObject({ sent: true });
+      expect(data.creditCardResults[0]).toMatchObject({ sent: true, format: 'flex' });
+      expect(data.loanResults[0]).toMatchObject({ sent: true, format: 'flex' });
+
+      // สามการเรียก fetch แยกกัน: ค่าใช้จ่าย, บัตรเครดิต (มีมือถือ ไม่มีบ้านลาดพร้าว), สินเชื่อ (มีบ้านลาดพร้าว)
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      const bodies = fetchMock.mock.calls.map(c => JSON.parse((c[1]!.body as string)));
+      const cardBody = bodies.find(b => JSON.stringify(b).includes('มือถือ'));
+      const loanBody = bodies.find(b => JSON.stringify(b).includes('บ้านลาดพร้าว'));
+      expect(cardBody).toBeTruthy();
+      expect(loanBody).toBeTruthy();
+      expect(JSON.stringify(cardBody)).not.toContain('บ้านลาดพร้าว');
+      expect(JSON.stringify(loanBody)).not.toContain('มือถือ');
+    });
+  });
+
+  it('Flex ล้มเหลว → fallback เป็นข้อความสินเชื่อแบบข้อความล้วน (เหมือนเส้นทางบัตรเครดิต)', async () => {
+    await seedLoanUser({ cards: [LOAN_CARD], plans: [LOAN_PLAN] });
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ message: 'invalid flex' }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) });
+
+    const { req, res } = makeReqRes({ body: { date: TARGET_DATE, userId: LOAN_USER_ID, mode: 'both' } });
+    await handler(req, res);
+
+    const data = JSON.parse(res._getData());
+    expect(data.loanResults[0]).toMatchObject({ userId: LOAN_USER_ID, sent: true, format: 'text-fallback' });
+    const secondCall = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+    const secondBody = JSON.parse(secondCall[1]!.body as string);
+    expect(secondBody.messages[0].type).toBe('text');
+    expect(secondBody.messages[0].text).toContain('บ้านลาดพร้าว');
+  });
+
+  describe('per-user isolation สำหรับข้อความสินเชื่อ', () => {
+    afterEach(() => {
+      require('../../src/shared/utils/backend/creditCardStore').getUserCreditData.mockImplementation(
+        jest.requireActual('../../src/shared/utils/backend/creditCardStore').getUserCreditData
+      );
+    });
+
+    it('ผู้ใช้คนแรกสร้าง/ดึงข้อมูลสินเชื่อพัง → ผู้ใช้คนถัดไปยังได้รับข้อความค่าใช้จ่าย/บัตร/สินเชื่อตามปกติ', async () => {
+      const users = ['loan-u1', 'loan-u2'];
+      await db.collection('users').insertMany(users.map(id => ({ id, LineId: `line-${id}` })));
+      await db.collection('monthly_expense').insertMany(users.map(id => ({
+        userId: id, month: '2024-01', rent: { name: 'ค่าเช่า', actual: 1000, dueDay: 15 }
+      })));
+      await db.collection('credit_cards').insertMany([
+        { userId: 'loan-u1', cards: [LOAN_CARD], plans: [LOAN_PLAN], cycles: [] },
+        { userId: 'loan-u2', cards: [LOAN_CARD], plans: [LOAN_PLAN], cycles: [] }
+      ]);
+      fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+
+      const store = require('../../src/shared/utils/backend/creditCardStore');
+      const actual = jest.requireActual('../../src/shared/utils/backend/creditCardStore');
+      store.getUserCreditData.mockImplementation(async (userId: string) => (
+        userId === 'loan-u1' ? { get cards() { throw new Error('loan boom'); } } : actual.getUserCreditData(userId)
+      ));
+
+      const { req, res } = makeReqRes({ body: { date: TARGET_DATE } });
+      await handler(req, res);
+
+      expect(res._getStatusCode()).toBe(200);
+      const data = JSON.parse(res._getData());
+      expect(data.loanResults).toHaveLength(2);
+      // The loan loop mirrors the credit-card loop's error handling exactly: on an unexpected failure
+      // (not the `getUserCreditData` rejection, which has a generic reason) the caught error's own
+      // message surfaces in `reason`, same as the existing card-isolation test above never asserts
+      // otherwise for its own 'bad card data' case.
+      expect(data.loanResults[0]).toMatchObject({ userId: 'loan-u1', sent: false, reason: 'loan boom' });
+      expect(data.loanResults[1]).toMatchObject({ userId: 'loan-u2', sent: true, format: 'flex' });
+      // loan-u1's expense message still goes out despite the loan-path failure
+      expect(data.results.map((r: { userId: string; sent: boolean }) => [r.userId, r.sent])).toEqual([
+        ['loan-u1', true], ['loan-u2', true]
+      ]);
+    });
+  });
+});
+
+describe('collectLoanDueEvents (loan-installments-s5 D3) — รวบรวมงวดสินเชื่อที่ครบกำหนด', () => {
+  const TARGET_DATE = '2024-01-15'; // target.day = 15, daysInMonth = 31, monthKey '2024-01'
+  const target = getCurrentDateInfo(TARGET_DATE)!;
+
+  const loanCard = { id: 'loan-1', name: 'บ้านลาดพร้าว', cardType: 'home_loan', dueDay: 15 };
+  const ongoingPlan = {
+    id: 'plan-1', cardId: 'loan-1', itemName: 'บ้านลาดพร้าว', months: 240, status: 'ongoing',
+    // ตั้งใจให้ monthlyPayment ต่างจาก row.payment ของแถวที่ครบกำหนด เพื่อให้เทส "ต้องอ่าน row.payment
+    // เท่านั้น" ไม่ผ่านเงียบ ๆ แม้โค้ดจะอ่านผิดฟิลด์
+    monthlyPayment: 9999.99,
+    schedule: [
+      { no: 13, dueMonth: '2024-01', payment: 7164.31, paid: false },
+      { no: 14, dueMonth: '2024-02', payment: 7164.31, paid: false }
+    ]
+  };
+
+  function makeCreditData(overrides: { cards?: unknown[]; plans?: unknown[] } = {}) {
+    return {
+      cards: overrides.cards ?? [loanCard],
+      plans: overrides.plans ?? [ongoingPlan],
+      cycles: [],
+      spendItems: [],
+      updatedAt: null
+    } as Parameters<typeof collectLoanDueEvents>[0];
+  }
+
+  beforeEach(() => {
+    jest.mocked(creditCardRevolving.buildRevolvingCyclesForData).mockClear();
+    jest.mocked(creditCardRevolving.summariseRevolving).mockClear();
+  });
+
+  it('สินเชื่อที่มีแผน ongoing และแถวครบกำหนดในหน้าต่างเป้าหมาย → ได้ event เดียว ยอด/วัน/label ถูกต้อง', () => {
+    const events = collectLoanDueEvents(makeCreditData(), target);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      name: 'บ้านลาดพร้าว',
+      typeLabel: 'สินเชื่อบ้าน',
+      status: 'due',
+      resolvedDueDay: 15,
+      diffDays: 0,
+      remaining: 2,
+      // BR-CC-038/money rule: ยอดต้องมาจาก row.payment ของแถวที่ครบกำหนดจริง ไม่ใช่ plan.monthlyPayment
+      total: 7164.31
+    });
+    expect(events[0].row.payment).toBe(7164.31);
+    expect(events[0].total).not.toBe(ongoingPlan.monthlyPayment);
+  });
+
+  it('E-21: สินเชื่อที่ยังไม่มีแผนเลย → ไม่มี event (contributes 0)', () => {
+    const events = collectLoanDueEvents(makeCreditData({ plans: [] }), target);
+    expect(events).toEqual([]);
+  });
+
+  it('แผนสินเชื่อสถานะ cancelled หรือ completed → ไม่มี event', () => {
+    const cancelled = collectLoanDueEvents(makeCreditData({ plans: [{ ...ongoingPlan, status: 'cancelled' }] }), target);
+    const completed = collectLoanDueEvents(makeCreditData({ plans: [{ ...ongoingPlan, status: 'completed' }] }), target);
+    expect(cancelled).toEqual([]);
+    expect(completed).toEqual([]);
+  });
+
+  it('BR-CC-038: ไม่เรียก buildRevolvingCyclesForData/summariseRevolving เลยสำหรับบัตรสินเชื่อ', () => {
+    collectLoanDueEvents(makeCreditData(), target);
+
+    expect(creditCardRevolving.buildRevolvingCyclesForData).not.toHaveBeenCalled();
+    expect(creditCardRevolving.summariseRevolving).not.toHaveBeenCalled();
+  });
+
+  it('ยอดที่ได้ต้องมาจาก row.payment ของแถวที่ครบกำหนดอยู่ตอนนี้ ไม่ใช่ plan.monthlyPayment ของการปรับอัตราล่าสุด (S4)', () => {
+    // จำลองสถานการณ์จริงหลังปรับอัตราดอกเบี้ย 2 ครั้ง (reviseEffectiveScheduleTail, S4):
+    // รอบแรก 6% → รอบสอง (จากงวด 13) 7% → รอบสาม (จากงวด 25) 4.5%
+    // plan.monthlyPayment หลังสุดสะท้อนค่างวดของรอบที่ 3 (งวด 25) เท่านั้น ไม่ใช่ของงวด 13 ที่ยังค้างอยู่
+    const base = buildEffectiveSchedule({ totalPrice: 1_000_000, months: 240, startMonth: '2026-01', annualRate: 6 });
+    const afterFirstRevision = reviseEffectiveScheduleTail(
+      { totalPrice: 1_000_000, schedule: base.schedule },
+      { fromInstallmentNo: 13, annualRate: 7 }
+    );
+    if (!afterFirstRevision.ok) throw new Error('expected first revision to succeed');
+    const afterSecondRevision = reviseEffectiveScheduleTail(
+      { totalPrice: 1_000_000, schedule: afterFirstRevision.schedule },
+      { fromInstallmentNo: 25, annualRate: 4.5 }
+    );
+    if (!afterSecondRevision.ok) throw new Error('expected second revision to succeed');
+
+    const dueRow = afterSecondRevision.schedule.find(row => row.no === 13);
+    if (!dueRow) throw new Error('expected row 13 in the revised schedule');
+    // Sanity: row 13 เองต้องต่างจาก monthlyPayment ของแผนหลังปรับครั้งที่สอง ไม่เช่นนั้นเทสนี้ไม่พิสูจน์อะไร
+    expect(dueRow.payment).not.toBe(afterSecondRevision.monthlyPayment);
+
+    const revisedLoanCard = { id: 'loan-rev', name: 'บ้านหลังแรก', cardType: 'home_loan', dueDay: 15 };
+    const revisedLoanPlan = {
+      id: 'plan-rev', cardId: 'loan-rev', itemName: 'บ้านหลังแรก', months: 240, status: 'ongoing',
+      monthlyPayment: afterSecondRevision.monthlyPayment,
+      schedule: afterSecondRevision.schedule
+    };
+    const targetForRow13 = getCurrentDateInfo(`${dueRow.dueMonth}-15`)!;
+
+    const events = collectLoanDueEvents(makeCreditData({ cards: [revisedLoanCard], plans: [revisedLoanPlan] }), targetForRow13);
+
+    expect(events).toHaveLength(1);
+    expect(events[0].total).toBe(dueRow.payment);
+    expect(events[0].total).not.toBe(revisedLoanPlan.monthlyPayment);
+  });
+});
+
+// S5 D4 — deriveLoanHeaderTitle/buildLoanMessage/buildLoanFlex (spec I-6, UX_SPEC-loan-installments.md §9).
+// Tested directly through the named exports, against hand-built LoanDueEvent fixtures (not through
+// collectLoanDueEvents — these builders only consume its output type, per the dispatch instructions).
+// Not yet wired into the handler (that is D5).
+describe('deriveLoanHeaderTitle / buildLoanMessage / buildLoanFlex (loan-installments-s5 D4)', () => {
+  const TARGET_DATE = '2026-12-03'; // target.day = 3 → matches UX_SPEC §9's sample ("วันที่ 3 ธ.ค. 2569")
+  const target = getCurrentDateInfo(TARGET_DATE)!;
+
+  const loanPlan: CreditPlan = {
+    id: 'plan-1', cardId: 'loan-1', itemName: 'สัญญาเลขที่ 123456789', months: 240, status: 'ongoing',
+    schedule: [{ no: 13, dueMonth: '2026-12', payment: 7164.31, paid: false }]
+  };
+
+  // ตรงกับตัวอย่างจริงใน UX_SPEC §9 ทุกตัวอักษร: KBank บ้านลาดพร้าว, home_loan, ครบกำหนดอีก 2 วัน
+  function makeDueSoonLoanEvent(): Parameters<typeof buildLoanMessage>[1][number] {
+    return {
+      card: { id: 'loan-1', name: 'KBank บ้านลาดพร้าว', cardType: 'home_loan', dueDay: 5 },
+      plan: loanPlan,
+      row: loanPlan.schedule![0],
+      remaining: 228,
+      name: 'KBank บ้านลาดพร้าว',
+      typeLabel: 'สินเชื่อบ้าน',
+      status: 'dueSoon',
+      resolvedDueDay: 5,
+      dueDateText: '5 ธ.ค. 2569',
+      isEndOfMonth: false,
+      diffDays: 2,
+      total: 7164.31
+    };
+  }
+
+  function makeOverdueLoanEvent(): Parameters<typeof buildLoanMessage>[1][number] {
+    return {
+      card: { id: 'loan-2', name: 'สินเชื่อส่วนบุคคล SCB', cardType: 'personal_loan', dueDay: 1 },
+      plan: { id: 'plan-2', cardId: 'loan-2', itemName: 'สัญญาเลขที่ 987654321', months: 36, status: 'ongoing',
+        schedule: [{ no: 5, dueMonth: '2026-12', payment: 3500, paid: false }] },
+      row: { no: 5, dueMonth: '2026-12', payment: 3500, paid: false },
+      remaining: 31,
+      name: 'สินเชื่อส่วนบุคคล SCB',
+      typeLabel: 'สินเชื่อส่วนบุคคล',
+      status: 'overdue',
+      resolvedDueDay: 1,
+      dueDateText: '1 ธ.ค. 2569',
+      isEndOfMonth: false,
+      diffDays: -2,
+      total: 3500
+    };
+  }
+
+  // UX_SPEC-loan-installments.md:203-215 — ตัวอย่าง "ตัวจริง" ที่ต้องตรงตัวอักษรทุกตัว
+  const UX_SPEC_SAMPLE = [
+    '🏦 FinanceTrack แจ้งเตือนค่างวดสินเชื่อ',
+    'ครบกำหนดชำระ',
+    'เดือน ธันวาคม 2569',
+    'วันที่ 3 ธ.ค. 2569',
+    '━━━━━━━━━━━━',
+    '📌 ครบกำหนดชำระ',
+    '1. KBank บ้านลาดพร้าว (สินเชื่อบ้าน) — 7,164.31 บาท',
+    '   📅 5 ธ.ค. 2569 (อีก 2 วัน)',
+    '   • สัญญาเลขที่ 123456789 — งวด 13/240 (เหลืออีก 228 งวด)',
+    '━━━━━━━━━━━━',
+    'รวมต้องชำระ: 7,164.31 บาท (1 สินเชื่อ · 1 งวด)',
+    'จัดการสินเชื่อ ➜ https://finance-track-one.vercel.app/credits 🏦'
+  ].join('\n');
+
+  describe('deriveLoanHeaderTitle (Decision B — mirrors deriveCardHeaderTitle)', () => {
+    it('ไม่มีเลยกำหนดเลย → ครบกำหนดชำระ', () => {
+      expect(deriveLoanHeaderTitle(0, 1)).toBe('ครบกำหนดชำระ');
+    });
+    it('เลยกำหนดอย่างเดียว → เลยกำหนดชำระ', () => {
+      expect(deriveLoanHeaderTitle(2, 0)).toBe('เลยกำหนดชำระ');
+    });
+    it('ผสมทั้งครบกำหนดและเลยกำหนด → ครบกำหนดชำระ + เลยกำหนด', () => {
+      expect(deriveLoanHeaderTitle(1, 1)).toBe('ครบกำหนดชำระ + เลยกำหนด');
+    });
+  });
+
+  describe('buildLoanMessage', () => {
+    it('คืน null เมื่อไม่มี event เลย (E-26: ห้ามส่งข้อความเปล่า)', () => {
+      expect(buildLoanMessage(target, [])).toBeNull();
+    });
+
+    it('สินเชื่อตัวเดียว ครบกำหนดอีก 2 วัน → ข้อความตรงกับ UX_SPEC §9 ทุกตัวอักษร', () => {
+      const message = buildLoanMessage(target, [makeDueSoonLoanEvent()]);
+      expect(message).toBe(UX_SPEC_SAMPLE);
+    });
+
+    it('จำนวนเงินของสินเชื่อปรากฏครั้งเดียวต่อสินเชื่อในบล็อกรายการ (Decision A1 — ไม่ซ้ำบรรทัดงวด)', () => {
+      const message = buildLoanMessage(target, [makeDueSoonLoanEvent()]);
+      if (!message) throw new Error('expected a message');
+      const lines = message.split('\n');
+      // บล็อกของสินเชื่อนี้มี 3 บรรทัด: หัว, วัน, งวด — จำนวนเงินต้องอยู่แค่บรรทัดหัวบรรทัดเดียว
+      const headIdx = lines.findIndex(line => line.startsWith('1. KBank บ้านลาดพร้าว'));
+      const loanBlock = lines.slice(headIdx, headIdx + 3);
+      const occurrencesInBlock = loanBlock.filter(line => line.includes('7,164.31')).length;
+      expect(occurrencesInBlock).toBe(1);
+      // บรรทัดงวดต้องไม่มี "บาท" ต่อท้าย (ไม่มีจำนวนเงินซ้ำ)
+      const scheduleLine = lines.find(line => line.includes('งวด 13/240'));
+      expect(scheduleLine).toBe('   • สัญญาเลขที่ 123456789 — งวด 13/240 (เหลืออีก 228 งวด)');
+      expect(scheduleLine).not.toContain('บาท');
+    });
+
+    it('Decision B: เลยกำหนด + ครบกำหนดผสมกัน → header ผสม, เลยกำหนดอยู่ก่อน, ยอดรวมรวมทั้งสองตัว', () => {
+      const overdueEvent = makeOverdueLoanEvent();
+      const dueSoonEvent = makeDueSoonLoanEvent();
+      const message = buildLoanMessage(target, [overdueEvent, dueSoonEvent]);
+      if (!message) throw new Error('expected a message');
+      const lines = message.split('\n');
+
+      expect(lines[1]).toBe('ครบกำหนดชำระ + เลยกำหนด');
+      const overdueSectionIdx = lines.indexOf('⚠️ เลยกำหนดชำระ');
+      const upcomingSectionIdx = lines.indexOf('📌 ครบกำหนดชำระ');
+      expect(overdueSectionIdx).toBeGreaterThan(-1);
+      expect(upcomingSectionIdx).toBeGreaterThan(overdueSectionIdx);
+      // ลำดับเลยกำหนดก่อน: event แรกของเลยกำหนดต้องถูก index "1." ส่วนครบกำหนดต่อที่ "2."
+      expect(lines.some(line => line.startsWith('1. สินเชื่อส่วนบุคคล SCB'))).toBe(true);
+      expect(lines.some(line => line.startsWith('2. KBank บ้านลาดพร้าว'))).toBe(true);
+
+      expect(message).toContain('รวมต้องชำระ: 10,664.31 บาท (2 สินเชื่อ · 2 งวด)');
+      // ยอดรวมของสองสินเชื่อปรากฏครั้งเดียวต่อตัว เหมือนกรณีสินเชื่อเดียว
+      expect(message.split('7,164.31').length - 1).toBe(1);
+      expect(message.split('3,500').length - 1).toBe(1);
+    });
+
+    it('ลิงก์ CTA ต้องชี้ไป /credits ไม่ใช่ /credit-cards', () => {
+      const message = buildLoanMessage(target, [makeDueSoonLoanEvent()]);
+      expect(message).toContain('https://finance-track-one.vercel.app/credits');
+      expect(message).not.toContain('/credit-cards');
+    });
+  });
+
+  describe('buildLoanFlex', () => {
+    it('คืน null เมื่อไม่มี event เลย', () => {
+      expect(buildLoanFlex(target, [])).toBeNull();
+    });
+
+    it('สินเชื่อตัวเดียว → text node ทุกตัวตรงกับฉบับข้อความล้วน และจำนวนเงินปรากฏครั้งเดียว', () => {
+      const flex = buildLoanFlex(target, [makeDueSoonLoanEvent()]);
+      if (!flex) throw new Error('expected a flex bubble');
+      const nodes = collectFlexTextNodes(flex);
+      const amountNodes = nodes.filter(text => text.includes('7,164.31'));
+      // บรรทัดหัว (7,164.31 บาท) + กล่องยอดรวม (7,164.31 บาท) = 2 ครั้งทั้ง bubble แต่ "ต่อสินเชื่อ"
+      // (ไม่รวม totals box) ต้องมีแค่ 1 ครั้งเดียว — แยกเช็คบรรทัดงวดของสินเชื่อต้องไม่มี "บาท" กำกับ
+      const scheduleNode = nodes.find(text => text.includes('งวด 13/240'));
+      expect(scheduleNode).toBe('สัญญาเลขที่ 123456789 — งวด 13/240 (เหลืออีก 228 งวด)');
+      expect(scheduleNode).not.toContain('บาท');
+      expect(amountNodes.length).toBeGreaterThanOrEqual(1);
+      expect(nodes.some(text => text.includes('KBank บ้านลาดพร้าว (สินเชื่อบ้าน)'))).toBe(true);
+      expect(nodes.some(text => text === 'ครบกำหนดชำระ')).toBe(true);
+    });
+
+    it('ธีมสว่าง (ไม่ใช่ธีมมืด) และ CTA ชี้ไป /credits', () => {
+      const flex = buildLoanFlex(target, [makeDueSoonLoanEvent()]) as Record<string, unknown>;
+      const styles = flex.styles as { body: { backgroundColor: string } };
+      expect(styles.body.backgroundColor).toBe('#ffffff'); // LINE_THEME.surface (ธีมสว่าง)
+
+      const footer = flex.footer as { contents: Array<{ action: { uri: string; label: string } }> };
+      const button = footer.contents[0];
+      expect(button.action.uri).toBe('https://finance-track-one.vercel.app/credits');
+      expect(button.action.label).toBe('จัดการสินเชื่อ');
+    });
+
+    it('Decision B: เลยกำหนด + ครบกำหนดผสมกัน → header ผสม เหมือนฉบับข้อความล้วน', () => {
+      const flex = buildLoanFlex(target, [makeOverdueLoanEvent(), makeDueSoonLoanEvent()]);
+      if (!flex) throw new Error('expected a flex bubble');
+      const nodes = collectFlexTextNodes(flex);
+      expect(nodes).toContain('ครบกำหนดชำระ + เลยกำหนด');
     });
   });
 });

@@ -17,7 +17,8 @@ import {
   describeDueDistance,
   round2,
   PLAN_STATUS,
-  normaliseDayValue
+  normaliseDayValue,
+  isLoanCardType
 } from '../../shared/utils/creditCardUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { fitFontSizeCss } from '../../shared/utils/frontend/ringTextFit';
@@ -47,6 +48,7 @@ interface DashboardCard {
   dueDay?: number | string;
   nextDueDate?: string | null;
   ongoingPlanCount?: number;
+  cardType?: unknown;
 }
 
 interface PlanScheduleEntry {
@@ -159,6 +161,9 @@ export function CardMenu({ card, onEdit, onAddPlan, onDelete }: {
     action?.(card);
   };
 
+  // สินเชื่อ: แก้ไข/ลบเท่านั้น ไม่มี "เพิ่มรายจ่าย" (BR-CC-038)
+  const isLoan = isLoanCardType(card.cardType);
+
   return (
     <div className="relative shrink-0" ref={wrapperRef}>
       <button
@@ -180,8 +185,9 @@ export function CardMenu({ card, onEdit, onAddPlan, onDelete }: {
             className={`flex min-h-11 items-center gap-space-2 rounded-sm px-space-3 text-left text-sm text-primary hover:bg-surface-2 ${FOCUS_RING}`}
             onClick={() => run(onEdit)}
           >
-            <Icons.Edit size={16} /> แก้ไขบัตร
+            <Icons.Edit size={16} /> {isLoan ? 'แก้ไขสินเชื่อ' : 'แก้ไขบัตร'}
           </button>
+          {!isLoan && (
           <button
             type="button"
             role="menuitem"
@@ -190,13 +196,14 @@ export function CardMenu({ card, onEdit, onAddPlan, onDelete }: {
           >
             <Icons.Plus size={16} /> เพิ่มรายจ่าย
           </button>
+          )}
           <button
             type="button"
             role="menuitem"
             className={`flex min-h-11 items-center gap-space-2 rounded-sm px-space-3 text-left text-sm text-neg hover:bg-neg/10 ${FOCUS_RING}`}
             onClick={() => run(onDelete)}
           >
-            <Icons.Trash size={16} /> ลบบัตร
+            <Icons.Trash size={16} /> {isLoan ? 'ลบสินเชื่อ' : 'ลบบัตร'}
           </button>
         </div>
       )}
@@ -400,8 +407,8 @@ export default function CreditCardDashboard({
     return (
       <div className="flex flex-col items-center gap-space-3 rounded-md border border-dashed border-border-default bg-sunken px-space-5 py-space-7 text-center">
         <Icons.CreditCard size={48} color="var(--color-accent, #D4A857)" />
-        <h2 className="m-0 text-lg font-semibold text-primary">ยังไม่มีบัตรเครดิต</h2>
-        <p className="m-0 text-sm text-secondary">เพิ่มบัตรเพื่อเริ่มติดตามหนี้และแผนผ่อนชำระ</p>
+        <h2 className="m-0 text-lg font-semibold text-primary">ยังไม่มีบัตรหรือสินเชื่อ</h2>
+        <p className="m-0 text-sm text-secondary">เพิ่มบัตรเครดิตหรือสินเชื่อเพื่อเริ่มติดตามหนี้และค่างวด</p>
         <button type="button" className={BTN_PRIMARY} onClick={onAddCard}>
           <Icons.Plus size={16} /> เพิ่มบัตร
         </button>
@@ -413,6 +420,8 @@ export default function CreditCardDashboard({
   const monthlyDueTotal = round2(upcoming.reduce((sum, group) => sum + group.total, 0));
   const dueCardCount = new Set(upcoming.map(group => group.card.id)).size;
   const visibleUpcoming = showAllUpcoming ? upcoming : upcoming.slice(0, UPCOMING_MAX_GROUPS);
+  // UX §3: "N บัตร" เมื่อทุกรายการเป็นบัตรเครดิต ไม่งั้น "N รายการ"
+  const countUnit = cards.every(card => !isLoanCardType(card.cardType)) ? 'บัตร' : 'รายการ';
 
   return (
     <div className="flex flex-col gap-space-5">
@@ -455,7 +464,7 @@ export default function CreditCardDashboard({
           >
             {formatCurrency(monthlyDueTotal)}
           </span>
-          <span className="text-xs text-tertiary">{`บาท · ${dueCardCount} บัตร`}</span>
+          <span className="text-xs text-tertiary">{`บาท · ${dueCardCount} ${countUnit}`}</span>
         </button>
         <span id="upcoming-jump-hint" hidden>ไปยังรายการครบกำหนดด้านล่าง</span>
         <button
@@ -493,7 +502,7 @@ export default function CreditCardDashboard({
           </span>
           <span className="m-0 mb-space-1 block text-sm text-secondary">แผนที่กำลังผ่อน</span>
           <span className="m-0 block text-2xl font-semibold text-primary">{`${totals?.ongoingPlanCount || 0} แผน`}</span>
-          <span className="text-xs text-tertiary">{`ใน ${totals?.cardCount || 0} บัตร`}</span>
+          <span className="text-xs text-tertiary">{`ใน ${totals?.cardCount || 0} ${countUnit}`}</span>
         </button>
       </div>
 
@@ -514,7 +523,7 @@ export default function CreditCardDashboard({
           </span>
           <span className="m-0 mt-space-1 block text-xs text-tertiary">
             {'ครบกำหนดเร็ว ๆ นี้ '}<span className="max-w-full break-all">{formatCurrency(monthlyDueTotal)}</span>
-            {` · ${dueCardCount} บัตร`}
+            {` · ${dueCardCount} ${countUnit}`}
             {' · เหลือวงเงิน '}<span className="whitespace-nowrap">{formatCurrency(totals?.availableCredit || 0)}</span>
             {` · ${totals?.ongoingPlanCount || 0} แผน`}
           </span>
@@ -570,7 +579,7 @@ export default function CreditCardDashboard({
       {creditOpen && (
         <CreditCardCreditBreakdown
           id={PANEL_IDS.credit}
-          cards={cards}
+          cards={cards.filter(card => !isLoanCardType(card.cardType))}
           totalAvailable={totals?.availableCredit}
           totalLimit={totals?.creditLimit}
           onOpenCard={onOpenCard}
@@ -670,7 +679,7 @@ export default function CreditCardDashboard({
 
       <div>
         <div className="mb-space-3 flex items-center justify-between gap-space-3">
-          <h2 className={SECTION_TITLE}>บัตรทั้งหมด</h2>
+          <h2 className={SECTION_TITLE}>บัตรและสินเชื่อทั้งหมด</h2>
         </div>
 
         <CreditCardTileGrid

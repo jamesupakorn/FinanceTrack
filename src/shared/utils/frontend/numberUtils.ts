@@ -235,7 +235,7 @@ export const formatExpenseData = (
 ): { values: Record<string, ExpenseItem>; persistedKeys: string[]; emptyKeysToDelete: string[]; bankAccounts: string[] } => {
   // สร้างแบบหลวมก่อน (ค่า dueDay ที่แท้จริงเป็น string เสมอในไฟล์นี้ สำหรับแสดงผลในฟอร์ม
   // ไม่ตรงกับ DueDay type ของ ExpenseItem เป๊ะๆ) แล้วค่อย cast เป็น ExpenseItem ครั้งเดียวตอน return
-  const formattedData: Record<string, { name: string; actual: string; account: string; paid: boolean; dueDay: string; breakdown?: CardTotalExpenseRow['breakdown']; resolvedDueDate?: string; cycleMonth?: string }> = {};
+  const formattedData: Record<string, { name: string; actual: string; account: string; paid: boolean; dueDay: string; breakdown?: CardTotalExpenseRow['breakdown']; resolvedDueDate?: string; cycleMonth?: string; cardType?: string }> = {};
   let monthData: Record<string, unknown> = {};
   if (data && typeof data === 'object') {
     const months = data.months as Record<string, unknown> | undefined;
@@ -294,6 +294,8 @@ export const formatExpenseData = (
       ...(isCreditCardRowKey(item) && typeof source.resolvedDueDate === 'string' ? { resolvedDueDate: source.resolvedDueDate } : {}),
       // รอบบิลที่แถวบัตรนี้แสดง (DP-4: label derive ตอน GET ใช้เป็น staleness guard ตอนติ๊กจ่าย ไม่ใช่ข้อมูลเงิน)
       ...(isCreditCardRowKey(item) && typeof source.cycleMonth === 'string' ? { cycleMonth: source.cycleMonth } : {}),
+      // ประเภทบัตรของแถว ccr_ (derive ตอน GET, แสดงผลเท่านั้น — chip ใน ExpenseTable, AC-LN-37)
+      ...(isCreditCardRowKey(item) && typeof source.cardType === 'string' ? { cardType: source.cardType } : {}),
       name: (typeof source.name === 'string' && source.name.trim().length > 0)
         ? source.name
         : (defaultLabel || 'รายการใหม่'),

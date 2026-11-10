@@ -62,7 +62,7 @@ const SEGMENT_DEFS: SegmentDefinition[] = [
   { id: 'generalExpense', label: 'รายจ่ายทั่วไป', ratioKey: 'generalExpense', color: 'var(--neg)' },
   { id: 'dailyExpense', label: 'รายจ่ายประจำวัน', ratioKey: 'dailyExpense', color: 'var(--warn)' },
   { id: 'savings', label: 'เงินออม', ratioKey: 'savings', color: 'var(--pos)' },
-  { id: 'creditCard', label: 'บัตรเครดิต', ratioKey: 'creditCard', color: 'var(--info)' }
+  { id: 'creditCard', label: 'บัตร & สินเชื่อ', ratioKey: 'creditCard', color: 'var(--info)' }
 ];
 
 // ปุ่ม/แถว legend ที่โต้ตอบได้ทั้งหมดใช้กติกาเดียวกัน: 44px ขั้นต่ำ (K1) + focus ring ชัดเจน (K4/N1 §3.1 Focus)

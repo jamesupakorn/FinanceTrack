@@ -75,7 +75,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   { id: 'add-income', label: 'เพิ่มรายรับ', Icon: Icons.TrendingUp, href: '/workspace/income', primary: true },
   { id: 'add-expense', label: 'เพิ่มรายจ่าย', Icon: Icons.TrendingDown, href: '/workspace/expense' },
   { id: 'open-workspace', label: 'เปิดแผนการเงินรายเดือน', Icon: Icons.Edit, href: '/workspace/income' },
-  { id: 'view-credit-cards', label: 'ดูบัตรเครดิต', Icon: Icons.CreditCard, href: '/credit-cards' },
+  { id: 'view-credit-cards', label: 'ดูบัตร & สินเชื่อ', Icon: Icons.CreditCard, href: '/credits' },
   { id: 'open-calendar', label: 'เปิดปฏิทิน', Icon: Icons.Calendar, action: 'scroll-calendar' },
   { id: 'salary-calculator', label: 'คำนวณเงินเดือน', Icon: Icons.DollarSign, href: '/workspace/income?salary=open' }
 ];

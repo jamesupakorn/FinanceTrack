@@ -18,9 +18,26 @@ import {
   sortCardsByDue,
   type OverduePlanLike
 } from '../../shared/utils/frontend/creditCardTileUtils';
-import CreditCardTile, { type TileCard, type TileCardAction } from './CreditCardTile';
+import { getCurrentMonthKey, isLoanCardType } from '../../shared/utils/creditCardUtils';
+import CreditCardTile, { type LoanPlanProgress, type TileCard, type TileCardAction } from './CreditCardTile';
 import CreditCardFilterBar from './CreditCardFilterBar';
 import { BTN_GHOST } from './CreditCardDashboard';
+
+/**
+ * ตารางผ่อนของสินเชื่อจาก plans (ทุกสถานะ — สินเชื่อมีแผนได้ครั้งเดียว BR-CC-034)
+ * งวดของเดือนนี้ = แถวที่ dueMonth ตรงเดือนปฏิทิน (สินเชื่อไม่มีรอบบิล offset 0, BR-CC-037) — นับอย่างเดียว ไม่มีเลขเงิน
+ */
+function describeLoanProgress(card: TileCard, plans: readonly OverduePlanLike[]): LoanPlanProgress | null {
+  if (!isLoanCardType(card.cardType)) return null;
+  const plan = plans.find(item => item?.cardId === card.id) as (OverduePlanLike & { months?: unknown }) | undefined;
+  if (!plan) return { hasPlan: false, currentNo: null, months: 0 };
+  const schedule = (Array.isArray(plan.schedule) ? plan.schedule : []) as Array<{ no?: unknown; dueMonth?: unknown } | null>;
+  const month = card.dueMonth || getCurrentMonthKey();
+  const row = schedule.find(item => item?.dueMonth === month);
+  const months = Number(plan.months) || schedule.length;
+  const no = Number(row?.no);
+  return { hasPlan: true, currentNo: Number.isFinite(no) && no > 0 ? no : null, months };
+}
 
 export const TILE_GRID_CLASS = 'grid grid-cols-1 gap-space-4 md:grid-cols-[repeat(auto-fill,minmax(18rem,1fr))]';
 
@@ -94,6 +111,7 @@ export default function CreditCardTileGrid({
               key={card.id}
               card={card}
               overdueInstallmentCount={countOverdueInstallments(card, plans, todayIso)}
+              loanProgress={describeLoanProgress(card, plans)}
               onEditCard={onEditCard}
               onAddPlanForCard={onAddPlanForCard}
               onDeleteCard={onDeleteCard}

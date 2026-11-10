@@ -153,10 +153,10 @@ export default function CardExpenseDetailsDialog({
 
         <footer className="shrink-0 border-t border-border-subtle p-space-4 pb-[calc(env(safe-area-inset-bottom,0px)_+_1rem)]">
           <Link
-            href={`/credit-cards?card=${encodeURIComponent(cardId)}`}
+            href={`/credits?card=${encodeURIComponent(cardId)}`}
             className={`flex min-h-11 w-full items-center justify-center rounded-sm bg-accent px-space-4 text-sm font-semibold text-on-accent ${FOCUS_RING}`}
           >
-            ไปหน้าจัดการบัตร
+            จัดการที่หน้าบัตร & สินเชื่อ →
           </Link>
         </footer>
       </div>

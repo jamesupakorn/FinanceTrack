@@ -41,7 +41,7 @@ interface FilterEmptyCopy {
 
 const FILTER_EMPTY_COPY: Record<UpcomingFilter, FilterEmptyCopy> = {
   generalExpense: { text: 'ไม่มีรายจ่ายทั่วไปที่ครบกำหนดในช่วงนี้' },
-  creditCard: { text: 'ไม่มีรายการบัตรเครดิตที่ครบกำหนดในช่วงนี้' },
+  creditCard: { text: 'ไม่มีรายการบัตรหรือสินเชื่อที่ครบกำหนดในช่วงนี้' },
   dailyExpense: { text: 'รายจ่ายประจำวันไม่มีวันครบกำหนด ดูรายละเอียดในหน้ารายจ่ายรายวัน', href: '/workspace/daily' },
   savings: { text: 'เงินออมไม่มีวันครบกำหนด', href: '/workspace/savings' }
 };
@@ -475,7 +475,7 @@ export default function UpcomingPayments({
           </button>
         )}
       </div>
-      {filter && <p className="text-sm text-secondary">จากวงแหวน: {({ generalExpense: 'รายจ่ายทั่วไป', creditCard: 'บัตรเครดิต', dailyExpense: 'รายจ่ายประจำวัน', savings: 'เงินออม' })[filter]}</p>}
+      {filter && <p className="text-sm text-secondary">จากวงแหวน: {({ generalExpense: 'รายจ่ายทั่วไป', creditCard: 'บัตร & สินเชื่อ', dailyExpense: 'รายจ่ายประจำวัน', savings: 'เงินออม' })[filter]}</p>}
       {!bareEmpty && (
         <ListToolbar label="รายการที่จะครบกำหนด" criteria={criteria} onChange={setCriteria}
           visible={projection.items.length} total={ringRows.length}

@@ -27,7 +27,7 @@ import {
   getDaysInMonth,
   formatMonthKeyTH
 } from '../../shared/utils/dateUtils';
-import { isCreditCardRowKey, isRevolvingRowKey, buildRevolvingRowKey, formatIsoDateTH } from '../../shared/utils/creditCardUtils';
+import { isCreditCardRowKey, isRevolvingRowKey, buildRevolvingRowKey, formatIsoDateTH, isValidPurchaseDate, isCardType, isLoanCardType, CARD_TYPE_LABELS } from '../../shared/utils/creditCardUtils';
 import { toBankAccountNames } from '../../shared/utils/bankAccountShape';
 import { compareListValues, matchesListQuery } from '../../shared/utils/frontend/listView';
 import { useListProjection } from '../../shared/utils/frontend/useListProjection';
@@ -45,7 +45,10 @@ import CardExpenseDetailsDialog from './CardExpenseDetailsDialog';
 import type { CardTotalExpenseRow } from '../../shared/utils/backend/creditCardSync';
 import { randomInt } from '../../shared/utils/randomId';
 
-type ExpenseRow = ExpenseItem & { [field: string]: unknown; dueDate?: unknown; breakdown?: CardTotalExpenseRow['breakdown'] };
+type ExpenseRow = ExpenseItem & { [field: string]: unknown; dueDate?: unknown; breakdown?: CardTotalExpenseRow['breakdown']; cardType?: unknown };
+
+/** ป้ายประเภทของแถวบัตร — cardType มาจากแถว ccr_ ของ server (แสดงผลเท่านั้น); ไม่มีค่า = บัตรเครดิต */
+const cardRowTypeLabel = (row: ExpenseRow): string => CARD_TYPE_LABELS[isCardType(row.cardType) ? row.cardType : 'credit_card'].label;
 type ExpenseValues = Record<string, ExpenseRow>;
 type DueStatus = 'overdue' | 'dueToday' | 'dueSoon' | 'future' | 'done' | 'none';
 
@@ -643,6 +646,10 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
     if (selectedCardDetails && !showSelectedCardDetails) setSelectedCardDetails(null);
   }, [selectedCardDetails, showSelectedCardDetails]);
   const firstCreditCardKey = useMemo(() => expenseProjection.items.find(key => isCreditCardRowKey(key)) || null, [expenseProjection.items]);
+  // หัวกลุ่มแถวบัตร: มีสินเชื่ออยู่ในกลุ่มด้วย → "บัตร & สินเชื่อ" (UX §3)
+  const cardGroupLabel = expenseProjection.items.some(key => isCreditCardRowKey(key) && isLoanCardType(editExpense[key]?.cardType))
+    ? 'บัตร & สินเชื่อ (ซิงก์อัตโนมัติ)'
+    : 'บัตรเครดิต (ซิงก์อัตโนมัติ)';
 
   const daysInSelectedMonth = useMemo(() => {
     if (!selectedMonth || !/^\d{4}-\d{2}$/.test(selectedMonth)) {
@@ -810,9 +817,9 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
                   const meta = installmentMeta[item];
                   if (isCreditCardRow) {
                     return <Fragment key={item}>
-                      {item === firstCreditCardKey && <tr><td className="border-t border-dashed border-border-default p-space-3 text-xs font-medium text-tertiary" colSpan={5}>บัตรเครดิต (ซิงก์อัตโนมัติ)</td></tr>}
+                      {item === firstCreditCardKey && <tr><td className="border-t border-dashed border-border-default p-space-3 text-xs font-medium text-tertiary" colSpan={5}>{cardGroupLabel}</td></tr>}
                       <tr className="border-b border-border-subtle bg-info/5" data-expense-key={item}>
-                        <td className="p-space-3 align-middle"><span className="flex items-center gap-space-2 text-secondary" title={displayName}><span aria-hidden="true">🔒</span>{displayName}</span>{cycleCaption(row)}{meta && <div className="mt-space-1 flex flex-col gap-space-1"><span className="inline-flex w-fit items-center gap-1 rounded-full border border-info/35 bg-info/15 px-space-2 py-[2px] text-xs font-medium text-info">💳 {meta.cardName}</span><Link href={`/credit-cards?card=${meta.cardId}`} className={`inline-flex min-h-11 items-center text-xs text-accent underline-offset-2 hover:underline ${FOCUS_RING}`}>จัดการที่หน้าบัตรเครดิต →</Link></div>}</td>
+                        <td className="p-space-3 align-middle"><span className="flex items-center gap-space-2 text-secondary" title={displayName}><span aria-hidden="true">🔒</span>{displayName}</span>{cycleCaption(row)}{meta && <div className="mt-space-1 flex flex-col gap-space-1"><span className="inline-flex w-fit items-center gap-1 rounded-full border border-info/35 bg-info/15 px-space-2 py-[2px] text-xs font-medium text-info">💳 {meta.cardName}</span><Link href={`/credits?card=${meta.cardId}`} className={`inline-flex min-h-11 items-center text-xs text-accent underline-offset-2 hover:underline ${FOCUS_RING}`}>จัดการที่หน้าบัตร & สินเชื่อ →</Link></div>}</td>
                         <td className="p-space-3 text-right align-middle"><div className="flex flex-col items-end"><span className="font-[family-name:var(--font-numeric)] tabular-nums text-secondary">{formatCurrency(row.actual)}</span>{cardDetails(item, row, meta)}</div></td><td className="p-space-3 align-middle text-secondary">{selectedAccount}</td><td className="p-space-3 align-middle text-secondary">{formatRowDueText(row, selectedMonth) || 'ไม่ระบุ'}</td>
                         <td className="p-space-3 text-center align-middle"><button type="button" className={`mx-auto flex h-11 items-center gap-space-2 rounded-full border px-space-3 text-xs font-semibold ${FOCUS_RING} ${paid ? 'border-pos/40 bg-pos/15 text-pos' : 'border-border-interactive bg-surface-2 text-secondary'}`} onClick={() => handleTogglePaid(item)} disabled={pendingPaidKeys.includes(item)} aria-busy={pendingPaidKeys.includes(item)} aria-pressed={paid}>{paid ? '✓ จ่ายแล้ว' : '○ ยังไม่จ่าย'}</button></td>
                       </tr>
@@ -841,14 +848,14 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
               const isCreditCardRow = isCreditCardRowKey(item);
               const meta = installmentMeta[item];
               if (isCreditCardRow) {
-                return <Fragment key={item}>{item === firstCreditCardKey && <p className="mt-space-2 text-xs font-medium text-tertiary">บัตรเครดิต (ซิงก์อัตโนมัติ)</p>}<div className={`min-h-14 rounded-md border border-info/30 bg-surface-2 p-space-4 [scroll-margin-top:calc(var(--topbar-safe-top,90px)+8px)] ${paid ? 'opacity-70' : ''}`} data-expense-key={item}>
-                  <div className="flex items-center justify-between gap-space-2"><span className="flex items-center gap-space-2 font-medium text-secondary" title={displayName}><span aria-hidden="true">🔒</span>{displayName}</span><span className="inline-flex w-fit shrink-0 items-center gap-1 rounded-full border border-info/35 bg-info/15 px-space-2 py-[2px] text-xs font-medium text-info">บัตรเครดิต</span></div>
+                return <Fragment key={item}>{item === firstCreditCardKey && <p className="mt-space-2 text-xs font-medium text-tertiary">{cardGroupLabel}</p>}<div className={`min-h-14 rounded-md border border-info/30 bg-surface-2 p-space-4 [scroll-margin-top:calc(var(--topbar-safe-top,90px)+8px)] ${paid ? 'opacity-70' : ''}`} data-expense-key={item}>
+                  <div className="flex items-center justify-between gap-space-2"><span className="flex items-center gap-space-2 font-medium text-secondary" title={displayName}><span aria-hidden="true">🔒</span>{displayName}</span><span className="inline-flex w-fit shrink-0 items-center gap-1 rounded-full border border-info/35 bg-info/15 px-space-2 py-[2px] text-xs font-medium text-info">{cardRowTypeLabel(row)}</span></div>
                   {cycleCaption(row)}
                   {meta &&<span className="mt-space-1 inline-flex w-fit items-center gap-1 text-xs text-tertiary">💳 {meta.cardName}</span>}
                   <p className="mt-space-2 font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums text-primary">{formatCurrency(row.actual)}</p><p className="mt-space-1 text-xs text-secondary">{`ครบกำหนด ${formatRowDueText(row, selectedMonth) || 'ไม่ระบุ'} · ${selectedAccount}`}</p>
                   <button type="button" className={`mt-space-3 flex min-h-11 w-full items-center justify-center rounded-sm border px-space-4 text-sm font-semibold ${FOCUS_RING} ${paid ? 'border-pos/40 bg-pos/15 text-pos' : 'border-border-interactive bg-surface-1 text-secondary'}`} onClick={() => handleTogglePaid(item)} disabled={pendingPaidKeys.includes(item)} aria-busy={pendingPaidKeys.includes(item)} aria-pressed={paid}>{paid ? '✓ ชำระแล้ว' : 'ยังไม่ชำระ — แตะเพื่อยืนยัน'}</button>
                   {cardDetails(item, row, meta)}
-                  {meta && <Link href={`/credit-cards?card=${meta.cardId}`} className={`mt-space-2 inline-flex min-h-11 items-center text-xs text-accent underline-offset-2 hover:underline ${FOCUS_RING}`}>จัดการที่หน้าบัตรเครดิต →</Link>}
+                  {meta && <Link href={`/credits?card=${meta.cardId}`} className={`mt-space-2 inline-flex min-h-11 items-center text-xs text-accent underline-offset-2 hover:underline ${FOCUS_RING}`}>จัดการที่หน้าบัตร & สินเชื่อ →</Link>}
                 </div></Fragment>;
               }
               return <div className={`min-h-14 rounded-md border border-border-default bg-surface-2 p-space-4 [scroll-margin-top:calc(var(--topbar-safe-top,90px)+8px)] ${paid ? 'opacity-70' : ''}`} key={item} data-expense-key={item}>

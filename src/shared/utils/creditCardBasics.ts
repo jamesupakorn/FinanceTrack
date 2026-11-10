@@ -56,6 +56,30 @@ export const MAX_CARDS_PER_USER: number = 20;
 export const MAX_ACTIVE_PLANS_PER_USER: number = 50;
 export const MAX_INSTALLMENTS_PER_PLAN: number = 60;
 export const MAX_REVOLVING_CYCLES_PER_CARD: number = 60;
+/** เพดานจำนวนงวดของแผนสินเชื่อ — บัตรเครดิตยังใช้ MAX_INSTALLMENTS_PER_PLAN (BR-CC-035) */
+export const MAX_LOAN_INSTALLMENTS_PER_PLAN: number = 480;
+/** เพดานจำนวนครั้งที่ปรับอัตราดอกเบี้ยต่อแผน — ยังไม่มีผู้ใช้จนกว่าจะถึง S4 (D-S2-3) */
+export const MAX_RATE_REVISIONS_PER_PLAN: number = 120;
+
+/** ประเภทของ "บัตร" — สินเชื่อใช้เอกสารบัตรเดียวกันแต่ไม่มีวงเงิน/ยอดหมุนเวียน (BR-CC-033) */
+export const CARD_TYPES = ['credit_card', 'personal_loan', 'home_loan'] as const;
+export type CardType = (typeof CARD_TYPES)[number];
+/** บัตรที่ไม่มี cardType ที่เก็บไว้ (ข้อมูลก่อนมีฟิลด์นี้) ถือเป็นบัตรเครดิตเสมอ */
+export const DEFAULT_CARD_TYPE: CardType = 'credit_card';
+
+export const CARD_TYPE_LABELS: Record<CardType, { label: string; rowPrefix: string }> = {
+  credit_card: { label: 'บัตรเครดิต', rowPrefix: 'ยอดบัตร' },
+  personal_loan: { label: 'สินเชื่อส่วนบุคคล', rowPrefix: 'ค่างวดสินเชื่อส่วนบุคคล' },
+  home_loan: { label: 'สินเชื่อบ้าน', rowPrefix: 'ค่างวดสินเชื่อบ้าน' }
+};
+
+export function isCardType(value: unknown): value is CardType {
+  return typeof value === 'string' && (CARD_TYPES as readonly string[]).includes(value);
+}
+
+export function isLoanCardType(value: unknown): value is Exclude<CardType, 'credit_card'> {
+  return isCardType(value) && value !== 'credit_card';
+}
 
 // รายการใช้จ่ายไม่ผ่อน (spend items)
 // เก็บใน credit_cards doc เดียวกับ cycles: เพดานต่อบัตรกันเอกสารเกิน 16 MB (20 บัตร × 1000 × ~250 B ≈ 5 MB)
@@ -82,9 +106,13 @@ export const PAYMENT_ACTIONS = ['full', 'minimum'] as const;
 export const DEFAULT_ANNUAL_RATE: number = 0;
 export const DEFAULT_MIN_PAYMENT_PERCENT: number = 10;
 
-/** คีย์ของแถวผ่อนชำระใน ExpenseTable — คีย์คือ tag (ADR-009) */
+/**
+ * คีย์ของแถวผ่อนชำระใน ExpenseTable — คีย์คือ tag (ADR-009)
+ * เลขงวด 2 หลัก (00-99, คีย์เดิมทุกตัว) หรือ 3 หลักที่ไม่ขึ้นต้นด้วย 0 (100-999, สินเชื่อ) (BR-CC-036)
+ * '_005' ไม่ผ่าน — คีย์หนึ่งงวดจึงมีรูปแบบเดียวเสมอ
+ */
 export const INSTALLMENT_KEY_PREFIX: string = 'cci_';
-export const INSTALLMENT_KEY_RE: RegExp = /^cci_[0-9a-f]{12}_\d{2}$/;
+export const INSTALLMENT_KEY_RE: RegExp = /^cci_[0-9a-f]{12}_(\d{2}|[1-9]\d{2})$/;
 
 /**
  * คีย์ของแถวยอดใช้จ่ายหมุนเวียนใน ExpenseTable (ADR-011)
@@ -204,6 +232,17 @@ export function getCardDueMonthOffset(statementDay: DayLike, dueDay: DayLike): 0
   return due <= statement ? 1 : 0;
 }
 
+type CardDueFields = { statementDay?: DayLike; dueDay?: DayLike; cardType?: unknown };
+
+/**
+ * offset ของวันครบกำหนดที่ 3 ฟังก์ชันด้านล่างใช้ร่วมกัน — สินเชื่อไม่มีรอบบิล งวดครบกำหนดในเดือนตารางเสมอ (BR-CC-037)
+ * บัตรเครดิต (รวมบัตรที่ไม่มี cardType) ได้ค่าเดียวกับ getCardDueMonthOffset ทุกประการ
+ */
+export function cardDueMonthOffset(card: CardDueFields): 0 | 1 {
+  if (isLoanCardType(card?.cardType)) return 0;
+  return getCardDueMonthOffset(card?.statementDay, card?.dueDay);
+}
+
 /**
  * ฟังก์ชันเดียวที่แปลงบัตร + รอบบิล (YYYY-MM) เป็นวันครบกำหนดจริง (XM-5)
  * = dueDay ในเดือน addMonths(cycleMonth, offset) — EOM/clamp ผ่าน resolveDueDayForMonth (XM-4)
@@ -212,11 +251,11 @@ export function getCardDueMonthOffset(statementDay: DayLike, dueDay: DayLike): 0
  * @returns 'YYYY-MM-DD' หรือ null เมื่อ cycleMonth ไม่ถูกต้อง
  */
 export function resolveCardDueDate(
-  card: { statementDay?: DayLike; dueDay?: DayLike },
+  card: CardDueFields,
   cycleMonth: string
 ): string | null {
   if (typeof cycleMonth !== 'string' || !MONTH_KEY_RE.test(cycleMonth)) return null;
-  const offset = getCardDueMonthOffset(card?.statementDay, card?.dueDay);
+  const offset = cardDueMonthOffset(card);
   return resolveInstallmentDueDate(card?.dueDay as number | string, addMonths(cycleMonth, offset));
 }
 
@@ -235,11 +274,11 @@ export function resolveStatementCutoffDate(statementDay: DayLike, monthKey: stri
  * @returns 'YYYY-MM' — calendarMonth ไม่ถูกต้อง → คืนค่าเดิม
  */
 export function getPayableCycleMonth(
-  card: { statementDay?: DayLike; dueDay?: DayLike },
+  card: CardDueFields,
   calendarMonth: string
 ): string {
   if (typeof calendarMonth !== 'string' || !MONTH_KEY_RE.test(calendarMonth)) return calendarMonth;
-  const offset = getCardDueMonthOffset(card?.statementDay, card?.dueDay);
+  const offset = cardDueMonthOffset(card);
   return addMonths(calendarMonth, -offset);
 }
 
@@ -250,11 +289,11 @@ export function getPayableCycleMonth(
  * @returns 'YYYY-MM' — cycleMonth ไม่ถูกต้อง → คืนค่าเดิม (เหมือน getPayableCycleMonth)
  */
 export function getCardDueMonth(
-  card: { statementDay?: DayLike; dueDay?: DayLike },
+  card: CardDueFields,
   cycleMonth: string
 ): string {
   if (typeof cycleMonth !== 'string' || !MONTH_KEY_RE.test(cycleMonth)) return cycleMonth;
-  const offset = getCardDueMonthOffset(card?.statementDay, card?.dueDay);
+  const offset = cardDueMonthOffset(card);
   return addMonths(cycleMonth, offset);
 }
 
@@ -367,12 +406,12 @@ export function planHexSuffix(planId: string | null | undefined): string {
   return String(planId || '').replace(/^ip_/, '');
 }
 
-/** สร้างคีย์แถว: cci_<12 hex>_<NN> */
+/** สร้างคีย์แถว: cci_<12 hex>_<NN> หรือ _<NNN> เมื่องวดที่ >= 100 (BR-CC-036) */
 export function buildInstallmentRowKey(planId: string, installmentNo: number): string {
   return `${INSTALLMENT_KEY_PREFIX}${planHexSuffix(planId)}_${String(installmentNo).padStart(2, '0')}`;
 }
 
-/** อ่านคีย์แถวกลับเป็น { planId, installmentNo } — คืน null เมื่อรูปแบบไม่ตรง */
+/** อ่านคีย์แถว (เลขงวด 2 หรือ 3 หลัก) กลับเป็น { planId, installmentNo } — คืน null เมื่อรูปแบบไม่ตรง */
 export function parseInstallmentRowKey(key: string): { planId: string; installmentNo: number } | null {
   if (typeof key !== 'string' || !INSTALLMENT_KEY_RE.test(key)) return null;
   return {

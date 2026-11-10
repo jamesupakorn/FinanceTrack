@@ -437,6 +437,7 @@ const CREDIT_CARDS_URL: string = '/api/credit-cards';
 const CREDIT_CARD_PLANS_URL: string = '/api/credit-cards/plans';
 const CREDIT_CARD_REVOLVING_URL: string = '/api/credit-cards/revolving';
 const CREDIT_CARD_SPEND_ITEMS_URL = '/api/credit-cards/spend-items';
+const CREDIT_CARD_RATE_REVISIONS_URL = '/api/credit-cards/rate-revisions';
 const JSON_HEADERS: Record<string, string> = { 'Content-Type': 'application/json' };
 
 export interface CreditSpendItem {
@@ -494,6 +495,12 @@ export const creditCardAPI = {
 		method: 'DELETE',
 		headers: JSON_HEADERS,
 		body: withUserPayload({ planId, mode: 'delete' })
+	}),
+	// ส่งเฉพาะ 3 field นี้ — server คำนวณตารางงวดที่เหลือใหม่เองทั้งหมด (AC-LN-23)
+	reviseLoanRate: async (planId: string, effectiveMonth: string, annualRate: number | string): Promise<any> => jsonFetch(CREDIT_CARD_RATE_REVISIONS_URL, {
+		method: 'POST',
+		headers: JSON_HEADERS,
+		body: withUserPayload({ planId, effectiveMonth, annualRate })
 	}),
 	// ยอดใช้จ่ายหมุนเวียนคำนวณจากรายการไม่ผ่อนฝั่ง server เท่านั้น
 	getRevolving: async (filters: Record<string, string | number | undefined | null> = {}): Promise<any> => jsonFetch(buildUrl(CREDIT_CARD_REVOLVING_URL, filters)),

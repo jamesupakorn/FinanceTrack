@@ -84,8 +84,8 @@ describe('resolveCardNextDueDate trailing-run rule', () => {
     });
 
     // AC-3: literals captured by running the OLD code before the change (everything except nextDueDate)
-    const kbBase = { id: 'cc_kb', statementDay: 5, dueDay: 20, annualRate: 16, minPaymentPercent: 10 };
-    const uobBase = { id: 'cc_uob', statementDay: 29, dueDay: 21, annualRate: 16, minPaymentPercent: 10 };
+    const kbBase = { id: 'cc_kb', statementDay: 5, dueDay: 20, annualRate: 16, minPaymentPercent: 10, cardType: 'credit_card' };
+    const uobBase = { id: 'cc_uob', statementDay: 29, dueDay: 21, annualRate: 16, minPaymentPercent: 10, cardType: 'credit_card' };
     const zeroRev = {
       revolvingTotalDue: 0, revolvingMinDue: 0, revolvingDue: 0, revolvingDueMonth: null, revolvingOutstanding: 0,
       revolvingCarryForward: 0, revolvingAction: null, revolvingCredit: 0, payableRevolvingDue: 0, payableRevolvingMonth: null,

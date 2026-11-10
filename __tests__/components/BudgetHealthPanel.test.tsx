@@ -98,7 +98,7 @@ describe('BudgetHealthPanel', () => {
       expect(screen.getAllByText('ยังไม่มีข้อมูลรายรับสำหรับเดือนนี้').length).toBeGreaterThanOrEqual(2);
       // Content is collapsed (inert) by default, so query with hidden:true to reach into it.
       expect(screen.getByRole('link', { name: 'เพิ่มรายรับ', hidden: true })).toHaveAttribute('href', '/workspace/income');
-      expect(screen.queryByText(/บิลและรายจ่าย|ค่าใช้จ่ายรายวัน|เงินออม|บัตรเครดิต/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/บิลและรายจ่าย|ค่าใช้จ่ายรายวัน|เงินออม|บัตรเครดิต|บัตร & สินเชื่อ/)).not.toBeInTheDocument();
       expect(screen.queryByText('เพิ่มเข้าเงินออม')).not.toBeInTheDocument();
       expect(screen.queryByText('เงินออมที่โอนได้')).not.toBeInTheDocument();
     });
@@ -237,7 +237,7 @@ describe('BudgetHealthPanel', () => {
 
       // dailyExpense / creditCard remain 'ok' -> 'ปกติ' (appears twice)
       expect(screen.getByText('ค่าใช้จ่ายรายวัน')).toBeInTheDocument();
-      expect(screen.getByText('บัตรเครดิต')).toBeInTheDocument();
+      expect(screen.getByText('บัตร & สินเชื่อ')).toBeInTheDocument();
       expect(screen.getAllByText('ปกติ').length).toBe(2);
     });
   });

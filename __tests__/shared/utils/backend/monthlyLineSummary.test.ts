@@ -205,7 +205,7 @@ describe('formatMonthlySummaryText', () => {
     expect(text).toContain('รายจ่ายทั่วไป: 8,000.00 บาท');
     expect(text).toContain('รายจ่ายประจำวัน: 3,000.00 บาท');
     expect(text).toContain('เงินออม: 5,000.00 บาท');
-    expect(text).toContain('บัตรเครดิต: 1,500.00 บาท');
+    expect(text).toContain('บัตร & สินเชื่อ: 1,500.00 บาท');
     expect(text).toContain('ภาษีสะสม: 1,200.00 บาท');
     expect(text).toContain('กองทุนฉุกเฉิน: คงเหลือ 8,000.00 บาท');
   });

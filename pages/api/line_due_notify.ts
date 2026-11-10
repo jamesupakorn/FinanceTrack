@@ -27,7 +27,9 @@ import {
   PLAN_STATUS,
   summariseRevolving,
   getPayableCycleMonth,
-  resolveCardDueDate
+  resolveCardDueDate,
+  isLoanCardType,
+  CARD_TYPE_LABELS
 } from '../../src/shared/utils/creditCardUtils';
 import { buildRevolvingCyclesForData } from '../../src/shared/utils/creditCardRevolving';
 import {
@@ -91,6 +93,25 @@ type CardDueEvent = {
   diffDays: number;
   items: CardInstallmentEvent[];
   revolving: { amountDue: number; minPaymentDue: number; paymentAction: string | null } | null;
+  total: number;
+};
+/**
+ * หนึ่งสินเชื่อที่ครบกำหนด/ใกล้ครบ/เลยกำหนดในเดือนเป้าหมาย — เรียบง่ายกว่า CardDueEvent เพราะ
+ * BR-CC-034 (สินเชื่อมีได้แค่แผนเดียว) จึงมี plan/row เดียวเสมอ ไม่ต้องวนรวมหลายแผน
+ * ไม่มีฟิลด์ revolving เลย (BR-CC-038 สินเชื่อไม่มียอดหมุนเวียน)
+ */
+type LoanDueEvent = {
+  card: CreditData['cards'][number];
+  plan: CreditPlan;
+  row: NonNullable<CreditPlan['schedule']>[number];
+  remaining: number;
+  name: string;
+  typeLabel: string;
+  status: 'due' | 'overdue' | 'dueSoon';
+  resolvedDueDay: number;
+  dueDateText: string;
+  isEndOfMonth: boolean;
+  diffDays: number;
   total: number;
 };
 
@@ -453,7 +474,12 @@ async function getExpenseDocForMonth(userId: string, monthKey: string): Promise<
  * @returns {array} รายการเหตุการณ์ต่อบัตร
  */
 function collectCardDueEvents(creditData: CreditData, target: TargetDate): CardDueEvent[] {
-  const cards = Array.isArray(creditData?.cards) ? creditData.cards : [];
+  // N-1 (REQUIRED): บัตรประเภทสินเชื่อ (personal_loan/home_loan) ต้องไม่ถูกแจ้งเตือนผ่านเส้นทางนี้
+  // เพราะตัวรวบรวมแยกของสินเชื่อ (collectLoanDueEvents, S5 D3) จะแจ้งเตือนอยู่แล้ว —
+  // ไม่กรองออกที่นี่จะทำให้แจ้งซ้ำสองข้อความ (BR-CC-041)
+  const cards = Array.isArray(creditData?.cards)
+    ? creditData.cards.filter(card => !isLoanCardType(card.cardType))
+    : [];
   const plans = Array.isArray(creditData?.plans) ? creditData.plans : [];
   const cycles = Array.isArray(creditData?.cycles) ? creditData.cycles : [];
   // ⚠ เช็คแค่ cards เท่านั้น — เงื่อนไขเดิมมี !plans.length ด้วย ทำให้ผู้ใช้ที่ใช้
@@ -517,7 +543,84 @@ function collectCardDueEvents(creditData: CreditData, target: TargetDate): CardD
   }).filter((event): event is CardDueEvent => event !== null);
 }
 
-function describeCardTiming(event: CardDueEvent): string {
+/**
+ * รวบรวมสินเชื่อ (personal_loan/home_loan) ที่มีงวดครบกำหนด/ใกล้ครบ/เลยกำหนด ในเดือนเป้าหมาย (spec I-6)
+ * เป็นตัวรวบรวมข้อมูลล้วน — ไม่สร้างข้อความ/Flex (นั่นคือ buildLoanMessage/buildLoanFlex, S5 D4)
+ * และยังไม่ถูกเรียกจาก handler (S5 D5) ของไฟล์นี้
+ *
+ * ง่ายกว่า collectCardDueEvents เพราะ BR-CC-034 (สินเชื่อมีได้แค่แผนเดียวต่อบัตรเสมอ) — ไม่ต้องวน
+ * รวมหลายแผนเหมือนบัตรเครดิต และ "ห้าม" เรียก buildRevolvingCyclesForData/summariseRevolving เลย
+ * (BR-CC-038 สินเชื่อไม่มียอดหมุนเวียน) ต่างจากบัตรเครดิตที่ต้องรวมยอดหมุนเวียนเข้ากับงวดผ่อนด้วย
+ *
+ * @param {object} creditData - { cards, plans, cycles }
+ * @param {object} target - ข้อมูลวันเป้าหมาย
+ * @returns {array} รายการเหตุการณ์ต่อสินเชื่อ
+ */
+export function collectLoanDueEvents(creditData: CreditData, target: TargetDate): LoanDueEvent[] {
+  const cards = Array.isArray(creditData?.cards)
+    ? creditData.cards.filter(card => isLoanCardType(card.cardType))
+    : [];
+  const plans = Array.isArray(creditData?.plans) ? creditData.plans : [];
+  if (!cards.length) return [];
+
+  return cards.map(card => {
+    // dueDay เสียข้ามบัตรเหมือน collectCardDueEvents (resolveCardDueDate เองจะ fallback เป็นสิ้นเดือน)
+    if (!resolveDueDayForMonth(card.dueDay, target.daysInMonth)) return null;
+
+    // สินเชื่อไม่มีรอบบิล (BR-CC-037) — getPayableCycleMonth/resolveCardDueDate ให้ offset เป็น 0
+    // เสมอสำหรับ isLoanCardType จึง cycleMonth ตรงกับเดือนตารางผ่อนพอดี (reuse ฟังก์ชันเดิม ไม่เขียนใหม่)
+    const cycleMonth = getPayableCycleMonth(card, target.monthKey);
+    const dueDate = resolveCardDueDate(card, cycleMonth);
+    if (!dueDate || dueDate.slice(0, 7) !== target.monthKey) return null;
+    const resolvedDueDay = Number(dueDate.slice(8, 10));
+
+    let status: LoanDueEvent['status'] | null = null;
+    if (resolvedDueDay === target.day) status = 'due';
+    else if (resolvedDueDay < target.day) status = 'overdue';
+    else if ((resolvedDueDay - target.day) <= DUE_SOON_DAYS) status = 'dueSoon';
+    if (!status) return null;
+
+    // BR-CC-034: สินเชื่อมีได้แค่แผนเดียวเสมอ (ไม่ว่าสถานะใด) — หาแผน ongoing ของบัตรนี้แผนเดียว ไม่ต้องวน/รวมหลายแผน
+    const plan = plans.find(candidate => candidate?.cardId === card.id && candidate.status === PLAN_STATUS.ONGOING);
+    // E-21: สินเชื่อที่ยังไม่มีแผน (หรือแผนถูก cancelled/completed) → ข้ามทั้งหมด ไม่สร้าง event, มีค่า = 0
+    if (!plan) return null;
+
+    const schedule = Array.isArray(plan.schedule) ? plan.schedule : [];
+    const remaining = schedule.filter(row => row?.paid !== true).length;
+    // หนึ่งแถวที่ยังไม่จ่ายและครบกำหนดในรอบนี้ — ไม่พบแถว → ข้ามสินเชื่อนี้ (ไม่ใช่ error)
+    const row = schedule.find(candidate => candidate?.dueMonth === cycleMonth && candidate.paid !== true);
+    if (!row) return null;
+
+    const typeLabel = CARD_TYPE_LABELS[card.cardType as 'personal_loan' | 'home_loan']?.label
+      ?? CARD_TYPE_LABELS.personal_loan.label;
+
+    return {
+      card,
+      plan,
+      row,
+      remaining,
+      name: String(card.name ?? ''),
+      typeLabel,
+      status,
+      resolvedDueDay,
+      dueDateText: buildDueDateString(target, resolvedDueDay),
+      isEndOfMonth: isEndOfMonthDueDay(card.dueDay),
+      diffDays: resolvedDueDay - target.day,
+      // BR-CC-038/money rule: อ่าน row.payment เสมอ ไม่อ่าน plan.monthlyPayment/currentRate — มีแค่
+      // ค่างวดของแถว k เดิมของการปรับอัตรา ไม่ใช่ค่าของแถวที่ครบกำหนดอยู่ตอนนี้เสมอไป (S4 rate revision)
+      total: Number(row.payment) || 0
+    };
+  }).filter((event): event is LoanDueEvent => event !== null);
+}
+
+/**
+ * ฟิลด์ร่วมที่ describeCardTiming ต้องใช้ — ทั้ง CardDueEvent และ LoanDueEvent มีฟิลด์เหล่านี้ชื่อ/ชนิดตรงกัน
+ * (ตั้งใจให้ตรงกันตั้งแต่ D3) จึง widen type ของ describeCardTiming ให้ loan ใช้ร่วมได้โดยไม่ต้อง
+ * เขียนฟังก์ชันซ้ำ และไม่แก้ตัว logic เดิมแม้แต่บรรทัดเดียว
+ */
+type CardTimingInfo = { isEndOfMonth: boolean; status: 'due' | 'overdue' | 'dueSoon'; diffDays: number };
+
+function describeCardTiming(event: CardTimingInfo): string {
   if (event.isEndOfMonth) return 'สิ้นเดือน';
   if (event.status === 'due') return 'ครบกำหนดวันนี้';
   if (event.status === 'overdue') return `เลยกำหนด ${Math.abs(event.diffDays)} วัน`;
@@ -587,7 +690,7 @@ function buildCreditCardMessage(target: TargetDate, cardEvents: CardDueEvent[]):
   const footer = [
     '━━━━━━━━━━━━',
     `รวมต้องชำระ: ${formatAmount(grandTotal)} บาท (${countParts})`,
-    'จัดการบัตร ➜ https://finance-track-one.vercel.app/credit-cards 💳'
+    'จัดการบัตร ➜ https://finance-track-one.vercel.app/credits 💳'
   ].join('\n');
 
   return [header, ...sections, footer].join('\n\n');
@@ -683,7 +786,188 @@ function buildCreditCardFlex(target: TargetDate, cardEvents: CardDueEvent[]): Fl
     },
     footer: {
       type: 'box', layout: 'vertical', spacing: 'sm', contents: [
-        ctaButton('จัดการบัตร', 'https://finance-track-one.vercel.app/credit-cards')
+        ctaButton('จัดการบัตร', 'https://finance-track-one.vercel.app/credits')
+      ]
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// ข้อความแจ้งเตือนสินเชื่อ (S5 D4, สเปก I-6/UX §9) — ข้อความแยกฉบับที่สาม ส่งหลังข้อความบัตรเครดิต
+// ยังไม่ถูกเรียกจาก handler ที่นี่ (นั่นคือ S5 D5) — ฟังก์ชันตรงนี้รับ LoanDueEvent[] (ผลจาก
+// collectLoanDueEvents, D3) มาสร้างข้อความ/Flex ล้วน ๆ ไม่อ่าน creditData ตรง ๆ เอง
+//
+// Decision A1 (บันทึกก่อนเขียนทดสอบ, ตาม task-type-loan-installments-s5.md §Copy Decisions):
+// บรรทัดรายการต่อสินเชื่อ "ไม่" พิมพ์จำนวนเงินซ้ำบรรทัดที่สาม (ตรงข้ามกับ buildCardSection ของบัตร
+// ที่พิมพ์ยอดทั้งบรรทัดหัวและบรรทัดรายการ) — จำนวนเงินมีครั้งเดียวที่บรรทัดหัวของแต่ละสินเชื่อ
+// ตรงกับตัวอย่างจริงใน UX_SPEC §9 ทุกตัวอักษร
+//
+// Decision B (บันทึกก่อนเขียนทดสอบ): deriveLoanHeaderTitle ลอก logic สามสถานะของ
+// deriveCardHeaderTitle มาทั้งหมด (overdue-only / due-only / ผสม) ใช้คำเดียวกับฝั่งบัตร
+// เพราะ UX §9 ตัวอย่างโชว์แค่สถานะ due-only แต่ไม่ได้ห้ามคำสำหรับ overdue/mixed และ spec ไม่ได้
+// กำหนดคำใหม่ — ไม่ประดิษฐ์คำเอง
+// ---------------------------------------------------------------------------
+
+/**
+ * ชื่อเดือนไทยแบบเต็ม ใช้เฉพาะบรรทัด "เดือน ..." ของข้อความสินเชื่อ — UX_SPEC §9 ตัวอย่างเขียนชื่อเดือน
+ * แบบเต็ม ("ธันวาคม") ต่างจาก THAI_MONTH_LABELS แบบย่อ ("ธ.ค.") ที่ข้อความค่าใช้จ่าย/บัตรเครดิตใช้
+ * (formatMonthKeyTH) เก็บไว้ในไฟล์นี้ ไม่แก้ dateUtils.ts เพื่อไม่ขยาย diff เกินสเปกของดิสแพตช์นี้
+ */
+const THAI_FULL_MONTH_LABELS: string[] = [
+  'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+];
+
+/** แปลง monthKey ('YYYY-MM') เป็น "<ชื่อเดือนเต็ม> <ปี พ.ศ.>" เช่น '2026-12' → 'ธันวาคม 2569' */
+function formatLoanMonthLabel(monthKey: string): string {
+  const [yearStr, monthStr] = (monthKey || '').split('-');
+  const year = Number(yearStr);
+  const monthIndex = Number(monthStr) - 1;
+  if (!Number.isFinite(year) || monthIndex < 0 || monthIndex > 11) return monthKey;
+  return `${THAI_FULL_MONTH_LABELS[monthIndex]} ${year + 543}`;
+}
+
+/**
+ * headerTitle ของข้อความสินเชื่อ — โครงสร้างเดียวกับ deriveCardHeaderTitle() ทุกประการ (Decision B)
+ * export เพื่อให้ทดสอบตรง ๆ ได้ในดิสแพตช์นี้ (D4) ก่อนที่ handler จะเรียกใช้จริงใน D5
+ */
+export function deriveLoanHeaderTitle(overdueCount: number, upcomingCount: number): string {
+  return overdueCount && upcomingCount
+    ? 'ครบกำหนดชำระ + เลยกำหนด'
+    : overdueCount
+      ? 'เลยกำหนดชำระ'
+      : 'ครบกำหนดชำระ';
+}
+
+/**
+ * บรรทัดรายการต่อสินเชื่อแบบข้อความล้วน — คืนเป็น array ของบรรทัด (ไม่ join ด้วย '\n\n' เหมือน
+ * buildCardSection) เพราะ UX_SPEC §9 ตัวอย่างไม่มีบรรทัดเว้นว่างเลยระหว่างหัวข้อ/รายการ/เส้นแบ่ง —
+ * ผู้เรียก (buildLoanMessage) join บรรทัดทั้งหมดด้วย '\n' เดี่ยวเพื่อให้ตรงตัวอักษรกับตัวอย่าง
+ */
+function buildLoanSectionLines(title: string, events: LoanDueEvent[], startIndex: number): string[] {
+  const lines: string[] = [title];
+  events.forEach((event, index) => {
+    // Decision A1: จำนวนเงินอยู่ตรงนี้ครั้งเดียว — บรรทัดงวดด้านล่างไม่พิมพ์ซ้ำ
+    lines.push(`${startIndex + index + 1}. ${event.name} (${event.typeLabel}) — ${formatAmount(event.total)} บาท`);
+    lines.push(`   📅 ${event.dueDateText} (${describeCardTiming(event)})`);
+    lines.push(`   • ${event.plan.itemName} — งวด ${event.row.no}/${event.plan.months} (เหลืออีก ${event.remaining} งวด)`);
+  });
+  return lines;
+}
+
+/**
+ * สร้างข้อความแจ้งเตือนสินเชื่อแบบข้อความล้วน (I-6, UX_SPEC §9)
+ * @param {object} target - ข้อมูลวันเป้าหมาย
+ * @param {array} loanEvents - ผลจาก collectLoanDueEvents (D3)
+ * @returns {string|null} null เมื่อไม่มีอะไรต้องแจ้ง (E-26: ไม่ส่งข้อความเปล่า)
+ *
+ * export เพื่อให้ทดสอบตรง ๆ ได้ในดิสแพตช์นี้ (D4) — handler จะเรียกใช้จริงใน D5
+ */
+export function buildLoanMessage(target: TargetDate, loanEvents: LoanDueEvent[]): string | null {
+  if (!Array.isArray(loanEvents) || !loanEvents.length) return null;
+
+  const overdue = loanEvents.filter(event => event.status === 'overdue');
+  const upcoming = loanEvents.filter(event => event.status !== 'overdue');
+  const headerTitle = deriveLoanHeaderTitle(overdue.length, upcoming.length);
+
+  const headerLines = [
+    '🏦 FinanceTrack แจ้งเตือนค่างวดสินเชื่อ',
+    headerTitle,
+    `เดือน ${formatLoanMonthLabel(target.monthKey)}`,
+    `วันที่ ${formatThaiDate(target)}`,
+    '━━━━━━━━━━━━'
+  ];
+
+  const sectionLines: string[] = [];
+  if (overdue.length) sectionLines.push(...buildLoanSectionLines('⚠️ เลยกำหนดชำระ', overdue, 0));
+  if (upcoming.length) sectionLines.push(...buildLoanSectionLines('📌 ครบกำหนดชำระ', upcoming, overdue.length));
+
+  // งวดที่ครบกำหนดของสินเชื่อแต่ละตัวมีได้สูงสุดแถวเดียวเสมอ (BR-CC-034 + D3's "หนึ่งแถวต่อสินเชื่อ")
+  // จำนวนสินเชื่อ == จำนวนงวดเสมอ ไม่ต้องรวมแยกเหมือนบัตรเครดิตที่มีได้หลายงวดต่อบัตร
+  const grandTotal = loanEvents.reduce((sum, event) => sum + event.total, 0);
+  const footerLines = [
+    '━━━━━━━━━━━━',
+    `รวมต้องชำระ: ${formatAmount(grandTotal)} บาท (${loanEvents.length} สินเชื่อ · ${loanEvents.length} งวด)`,
+    'จัดการสินเชื่อ ➜ https://finance-track-one.vercel.app/credits 🏦'
+  ];
+
+  return [...headerLines, ...sectionLines, ...footerLines].join('\n');
+}
+
+/** หนึ่ง block ต่อสินเชื่อในสไตล์ Flex — เหมือน buildFlexCardEventBlock() แต่ไม่มี revolving และ
+ *  บรรทัดงวด (บรรทัดที่ 3) ไม่พิมพ์จำนวนเงินซ้ำ (Decision A1) */
+function buildFlexLoanEventBlock(event: LoanDueEvent): FlexComponent[] {
+  const headRow = {
+    type: 'box', layout: 'horizontal', spacing: 'sm', contents: [
+      { ...textComponent(`${event.name} (${event.typeLabel})`, 'sm', LINE_THEME.textPrimary, '700'), flex: 3 },
+      { ...textComponent(`${formatAmount(event.total)} บาท`, 'sm', LINE_THEME.textPrimary, '700'), flex: 2, align: 'end' }
+    ]
+  };
+  const timingColor = (event.status === 'due' || event.status === 'overdue') ? LINE_THEME.danger : LINE_THEME.warning;
+  const timingLine = textComponent(`📅 ${event.dueDateText} (${describeCardTiming(event)})`, 'xs', timingColor);
+  const scheduleLine = textComponent(
+    `${event.plan.itemName} — งวด ${event.row.no}/${event.plan.months} (เหลืออีก ${event.remaining} งวด)`,
+    'xs', LINE_THEME.textSecondary
+  );
+  return [headRow, timingLine, scheduleLine];
+}
+
+/**
+ * สร้างข้อความแจ้งเตือนสินเชื่อแบบ Flex (ธีมสว่าง) — โครงสร้าง/ลำดับข้อมูลเหมือน buildLoanMessage()
+ * (ไม่ใช่ buildCreditCardFlex — สินเชื่อไม่มียอดหมุนเวียน/ไม่มีบรรทัดงวดซ้ำจำนวนเงิน)
+ * @param {object} target - ข้อมูลวันเป้าหมาย
+ * @param {array} loanEvents - ผลจาก collectLoanDueEvents (D3)
+ * @returns {object|null} Flex bubble หรือ null เมื่อไม่มีอะไรต้องแจ้ง
+ *
+ * export เพื่อให้ทดสอบตรง ๆ ได้ในดิสแพตช์นี้ (D4) — handler จะเรียกใช้จริงใน D5
+ */
+export function buildLoanFlex(target: TargetDate, loanEvents: LoanDueEvent[]): FlexComponent | null {
+  if (!Array.isArray(loanEvents) || !loanEvents.length) return null;
+
+  const overdue = loanEvents.filter(event => event.status === 'overdue');
+  const upcoming = loanEvents.filter(event => event.status !== 'overdue');
+  const headerTitle = deriveLoanHeaderTitle(overdue.length, upcoming.length);
+  const statusColor = overdue.length ? LINE_THEME.danger : LINE_THEME.warning;
+
+  const overdueSection = overdue.length
+    ? [textComponent('⚠️ เลยกำหนดชำระ', 'md', LINE_THEME.danger, '700'), ...overdue.flatMap(buildFlexLoanEventBlock)]
+    : null;
+  const upcomingSection = upcoming.length
+    ? [textComponent('📌 ครบกำหนดชำระ', 'md', LINE_THEME.warning, '700'), ...upcoming.flatMap(buildFlexLoanEventBlock)]
+    : null;
+  const sections = [overdueSection, upcomingSection]
+    .filter((section): section is FlexComponent[] => section !== null);
+  const sectionContents = sections.flatMap((section, index) => [
+    ...section,
+    ...(index < sections.length - 1 ? [separator('lg')] : [])
+  ]);
+
+  const grandTotal = loanEvents.reduce((sum, event) => sum + event.total, 0);
+  const countParts = `${loanEvents.length} สินเชื่อ · ${loanEvents.length} งวด`;
+  const totalsBox = tintBox(LINE_THEME.tintDanger, [
+    textComponent('รวมต้องชำระ', 'sm', LINE_THEME.textSecondary),
+    textComponent(`${formatAmount(grandTotal)} บาท`, 'xxl', LINE_THEME.danger, '700'),
+    textComponent(countParts, 'xs', LINE_THEME.textSecondary)
+  ]);
+
+  return {
+    type: 'bubble', size: 'mega',
+    styles: { body: { backgroundColor: LINE_THEME.surface }, footer: { backgroundColor: LINE_THEME.surfaceFooter } },
+    body: {
+      type: 'box', layout: 'vertical', paddingAll: 'xl', contents: [
+        textComponent('FinanceTrack', 'sm', LINE_THEME.brand, '700'),
+        textComponent('🏦 แจ้งเตือนค่างวดสินเชื่อ', 'xl', LINE_THEME.textPrimary, '700'),
+        textComponent(headerTitle, 'md', statusColor, '700'),
+        textComponent(`เดือน ${formatLoanMonthLabel(target.monthKey)}`, 'sm', LINE_THEME.textSecondary),
+        textComponent(`วันที่ ${formatThaiDate(target)}`, 'sm', LINE_THEME.textSecondary),
+        separator('xl'),
+        ...sectionContents,
+        totalsBox
+      ]
+    },
+    footer: {
+      type: 'box', layout: 'vertical', spacing: 'sm', contents: [
+        ctaButton('จัดการสินเชื่อ', 'https://finance-track-one.vercel.app/credits')
       ]
     }
   };
@@ -896,5 +1180,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  return res.status(200).json({ success: true, results, creditCardResults });
+  // ข้อความสินเชื่อเป็นฉบับที่สาม ส่งหลังข้อความบัตรเครดิตของทุกผู้ใช้ (S5 D5, สเปก I-6)
+  // แยก loop ของตัวเอง ไม่รวมกับ loop บัตรเครดิตด้านบน เพื่อให้การดึง creditData/สร้างข้อความของ
+  // สินเชื่อผู้ใช้คนหนึ่งพัง ไม่กระทบข้อความค่าใช้จ่าย/บัตรเครดิต/สินเชื่อของผู้ใช้คนอื่น (isolation เดียวกับบัตร)
+  // ผู้ใช้ที่ไม่มีสินเชื่อ หรือสินเชื่อไม่มีอะไรครบกำหนด/เลยกำหนด (รวม E-21: สินเชื่อที่ยังไม่มีแผน)
+  // จะไม่ได้รับข้อความเลย ไม่ใช่ข้อความเปล่า
+  const loanResults = [];
+  for (const user of users) {
+    let creditData;
+    try {
+      creditData = await getUserCreditData(user.id);
+    } catch (error) {
+      loanResults.push({ userId: user.id, sent: false, reason: 'credit store unavailable' });
+      continue;
+    }
+
+    try {
+      const loanEvents = collectLoanDueEvents(creditData, target);
+      // null-guard ต้องเช็คก่อนพยายามส่งทั้งสองทาง (Flex/text) — ห้ามส่งข้อความเปล่า (E-21/E-26/AC-LN-27)
+      const flexPayload = buildLoanFlex(target, loanEvents);
+      if (!flexPayload) {
+        loanResults.push({ userId: user.id, sent: false, reason: 'no loan due items' });
+        continue;
+      }
+
+      let format = 'flex';
+      try {
+        const overdueCount = loanEvents.filter(event => event.status === 'overdue').length;
+        const upcomingCount = loanEvents.length - overdueCount;
+        const headerTitle = deriveLoanHeaderTitle(overdueCount, upcomingCount);
+        const altText = `🏦 FinanceTrack ${headerTitle} · ${formatThaiDate(target)}`;
+        await sendLineFlexMessage(altText, flexPayload, user.LineId);
+      } catch (flexError) {
+        const textPayload = buildLoanMessage(target, loanEvents);
+        if (textPayload) await sendLineMessage(textPayload, user.LineId);
+        format = 'text-fallback';
+      }
+      loanResults.push({
+        userId: user.id,
+        sent: true,
+        loanCount: loanEvents.length,
+        installmentCount: loanEvents.length,
+        format
+      });
+    } catch (error) {
+      loanResults.push({ userId: user.id, sent: false, reason: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  return res.status(200).json({ success: true, results, creditCardResults, loanResults });
 }
