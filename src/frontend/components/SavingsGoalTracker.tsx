@@ -13,6 +13,9 @@ import ListToolbar from './ListToolbar';
 import { useListCriteria } from '../contexts/ListViewContext';
 import { compareListValues, matchesListQuery, projectList } from '../../shared/utils/frontend/listView';
 import { useListProjection } from '../../shared/utils/frontend/useListProjection';
+import type { SavingsGoalAdjustment } from '../../shared/utils/savingsGoalAdjustments';
+import SavingsGoalAdjustmentDialog from './SavingsGoalAdjustmentDialog';
+import SavingsGoalAdjustmentHistory from './SavingsGoalAdjustmentHistory';
 
 interface SavingsGoal {
   _id: string;
@@ -25,9 +28,34 @@ interface SavingsGoal {
   status?: string;
   allocationPercent?: number | string;
   notes?: string;
-  metadata?: { progressPercentage?: number; remainingAmount?: number };
+  adjustments?: SavingsGoalAdjustment[];
+  metadata?: { progressPercentage?: number; remainingAmount?: number; adjustmentsTotal?: number };
   [key: string]: unknown;
 }
+
+/** การ์ดลบเป้าหมาย/ลบรายการปรับยอดใช้ slot เดียวกัน — เปิดอันใดอันหนึ่งจึงปิดอีกอันเสมอ (S3-C-1) */
+type DeleteConfirmState =
+  | { kind: 'goal'; goalId: string }
+  | { kind: 'adjustment'; goalId: string; adjustmentId: string }
+  | null;
+
+/** เก็บรายการที่เพิ่งลบไว้ชั่วคราวเพื่อให้ "เลิกทำ" เรียก addAdjustment ซ้ำได้ (UX review item 1) */
+interface PendingUndoAdjustment {
+  goalId: string;
+  goalName: string;
+  amount: number;
+  note: string;
+}
+
+const UNDO_DISMISS_MS = 6000;
+
+// ข้อความ error ของ deleteAdjustment (ภาษาอังกฤษจาก server) → ข้อความไทยที่ผู้ใช้อ่านได้ (AC-SGA-22) —
+// เฉพาะ 2 ค่านี้แปลว่าข้อมูลเก่าไปแล้ว (เป้าหมาย/รายการถูกลบที่อื่น) จึงต้อง refetch ด้วย (F-S3-2 item 5)
+const ADJUSTMENT_DELETE_STALE_ERROR_TEXT: Record<string, string> = {
+  'Goal not found': 'ไม่พบเป้าหมายนี้แล้ว — ลองโหลดหน้าใหม่',
+  'Adjustment not found': 'ไม่พบรายการปรับยอดนี้แล้ว — ลองโหลดหน้าใหม่'
+};
+const ADJUSTMENT_DELETE_FALLBACK_ERROR_TEXT = 'ลบการปรับยอดไม่สำเร็จ ลองอีกครั้ง';
 
 interface GoalFormState {
   goalName: string;
@@ -148,12 +176,19 @@ export default function SavingsGoalTracker({
   const [dailyExpenseTotal, setDailyExpenseTotal] = useState(0);
   const [plannerNetIncome, setPlannerNetIncome] = useState<number | null>(null);
   const [plannerLoading, setPlannerLoading] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
   const [allocationInputs, setAllocationInputs] = useState<Record<string, string>>({});
   const [lastSavedAllocationInputs, setLastSavedAllocationInputs] = useState<Record<string, number>>({});
   const [savingAllocation, setSavingAllocation] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [loadRevision, setLoadRevision] = useState(0);
+  const [adjustDialogGoal, setAdjustDialogGoal] = useState<SavingsGoal | null>(null);
+  const [adjustDialogEditing, setAdjustDialogEditing] = useState<SavingsGoalAdjustment | null>(null);
+  const [undoAdjustment, setUndoAdjustment] = useState<PendingUndoAdjustment | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const adjustButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  useEffect(() => () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current); }, []);
 
   const loadGoals = useCallback(async () => {
     setLoading(true);
@@ -269,7 +304,7 @@ export default function SavingsGoalTracker({
     }
   };
 
-  const handleDelete = (goalId: string) => setDeleteConfirm(goalId);
+  const handleDelete = (goalId: string) => setDeleteConfirm({ kind: 'goal', goalId });
 
   const handleDeleteConfirmed = async (goalId: string) => {
     setDeleteConfirm(null);
@@ -280,6 +315,89 @@ export default function SavingsGoalTracker({
     } catch {
       showToast('ลบไม่สำเร็จ', 'error');
     }
+  };
+
+  // ---- การปรับยอด (adjustments) — dialog เพิ่ม/แก้ไข + ลบจากประวัติ ----
+
+  const openAddAdjustment = (goal: SavingsGoal) => {
+    setDeleteConfirm(null);
+    setAdjustDialogEditing(null);
+    setAdjustDialogGoal(goal);
+  };
+
+  const openEditAdjustment = (goal: SavingsGoal, adjustment: SavingsGoalAdjustment) => {
+    setDeleteConfirm(null);
+    setAdjustDialogEditing(adjustment);
+    setAdjustDialogGoal(goal);
+  };
+
+  // reason === 'stale' เมื่อ dialog ปิดหลังเจอ error "ไม่พบเป้าหมาย/รายการปรับยอดนี้แล้ว" — แถว/การ์ด
+  // อาจเป็นข้อมูลเก่า ต้อง loadGoals() ใหม่ (แก้ deviation (a) ที่ UX_SPEC §4.4 ตั้งใจไว้)
+  const closeAdjustDialog = (reason?: 'stale') => {
+    setAdjustDialogGoal(null);
+    setAdjustDialogEditing(null);
+    if (reason === 'stale') void loadGoals();
+  };
+
+  const handleAdjustmentSaved = async () => {
+    const wasEditing = adjustDialogEditing !== null;
+    closeAdjustDialog();
+    await loadGoals();
+    showToast(wasEditing ? 'แก้ไขการปรับยอดแล้ว' : 'บันทึกการปรับยอดแล้ว');
+  };
+
+  const requestDeleteAdjustment = (goalId: string, adjustmentId: string) =>
+    setDeleteConfirm({ kind: 'adjustment', goalId, adjustmentId });
+
+  const cancelDeleteAdjustment = () => setDeleteConfirm(null);
+
+  // "เลิกทำ" (UX review item 1) สร้างรายการใหม่ที่มี amount/note เท่าของเดิม — ไม่ใช่ undo จริงฝั่ง server
+  const scheduleUndoDismiss = () => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => setUndoAdjustment(null), UNDO_DISMISS_MS);
+  };
+
+  // F-S3-2: `setDeleteConfirm(null)` only happens on a path that actually closes the strip
+  // (success, or a stale error where the row is genuinely gone server-side and we refetch).
+  // On any other failure the strip must stay open with focus on "ยืนยัน" (UX_SPEC §5.4) — we
+  // rethrow so the History component (which owns that focus) knows the delete failed.
+  const handleConfirmDeleteAdjustment = async (goal: SavingsGoal, adjustment: SavingsGoalAdjustment) => {
+    try {
+      await savingsGoalsAPI.deleteAdjustment(goal._id, adjustment._id);
+      setDeleteConfirm(null);
+      setUndoAdjustment({ goalId: goal._id, goalName: goal.goalName, amount: adjustment.amount, note: adjustment.note });
+      scheduleUndoDismiss();
+      await loadGoals();
+    } catch (error) {
+      const message = (error as { message?: string } | null)?.message ?? '';
+      const staleText = ADJUSTMENT_DELETE_STALE_ERROR_TEXT[message];
+      showToast(staleText ?? ADJUSTMENT_DELETE_FALLBACK_ERROR_TEXT, 'error');
+      if (staleText) {
+        setDeleteConfirm(null);
+        await loadGoals();
+        return;
+      }
+      throw error;
+    }
+  };
+
+  const handleUndoDeleteAdjustment = async () => {
+    if (!undoAdjustment) return;
+    const pending = undoAdjustment;
+    setUndoAdjustment(null);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    try {
+      await savingsGoalsAPI.addAdjustment(pending.goalId, { amount: pending.amount, note: pending.note });
+      showToast('เลิกทำการลบแล้ว');
+      await loadGoals();
+    } catch {
+      showToast('เลิกทำไม่สำเร็จ ลองอีกครั้ง', 'error');
+    }
+  };
+
+  // หลังลบรายการปรับยอดจนลิสต์ว่าง — โฟกัสปุ่ม "ปรับยอด" ของการ์ดนั้น (UX_SPEC §5.4)
+  const focusAdjustButton = (goalId: string) => {
+    adjustButtonRefs.current[goalId]?.focus();
   };
 
   const handleMarkComplete = async (goal: SavingsGoal) => {
@@ -295,14 +413,37 @@ export default function SavingsGoalTracker({
   const activeGoals = goals.filter(goal => goal.status !== 'completed' && goal.status !== 'abandoned');
   const completedGoals = goals.filter(goal => goal.status === 'completed');
 
+  // Mirrors `lastSavedAllocationInputs` as of *before* this effect's own update, so the
+  // merge below always compares against the pre-update value (S2-C-1) instead of a value
+  // this same pass has already overwritten.
+  const lastSavedAllocationInputsRef = useRef<Record<string, number>>({});
+
   useEffect(() => {
-    const nextInputs: Record<string, string> = {};
+    const nextServerInputs: Record<string, string> = {};
     activeGoals.forEach(goal => {
       const raw = Number(goal.allocationPercent);
-      nextInputs[goal._id] = Number.isFinite(raw) && raw > 0 ? String(raw) : '';
+      nextServerInputs[goal._id] = Number.isFinite(raw) && raw > 0 ? String(raw) : '';
     });
-    setAllocationInputs(nextInputs);
-    setLastSavedAllocationInputs(normalizeAllocationMap(nextInputs, activeGoals));
+    const nextServerSaved = normalizeAllocationMap(nextServerInputs, activeGoals);
+    const previousSaved = lastSavedAllocationInputsRef.current;
+
+    setAllocationInputs(prevInputs => {
+      const merged: Record<string, string> = {};
+      activeGoals.forEach(goal => {
+        const oldSaved = previousSaved[goal._id];
+        const serverValue = nextServerSaved[goal._id];
+        // No prior saved-state entry (first mount, or a goal just created): always take the
+        // server value (S2-C-2) — never treat a missing entry as "unchanged".
+        const hasUnsavedEdit = oldSaved !== undefined && parseAllocationPercent(prevInputs[goal._id]) !== oldSaved;
+        const serverUnchangedSinceLastSave = oldSaved !== undefined && serverValue === oldSaved;
+        merged[goal._id] = hasUnsavedEdit && serverUnchangedSinceLastSave
+          ? (prevInputs[goal._id] ?? '')
+          : nextServerInputs[goal._id];
+      });
+      return merged;
+    });
+    setLastSavedAllocationInputs(nextServerSaved);
+    lastSavedAllocationInputsRef.current = nextServerSaved;
   }, [goals]);
 
   const hasUnsavedAllocationChanges = useMemo(() => {
@@ -431,7 +572,14 @@ export default function SavingsGoalTracker({
         <button type="button" className={`min-h-11 shrink-0 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent ${FOCUS_RING}`} onClick={openCreate}>+ เพิ่มเป้าหมาย</button>
       </div>
 
-      <p className="mb-space-4 text-xs italic text-tertiary">ตั้งชื่อรายการออมให้ตรงกับชื่อเป้าหมาย ยอดจะถูกนับเข้า progress อัตโนมัติ</p>
+      <p className="mb-space-4 text-xs italic text-tertiary">ตั้งชื่อรายการออมให้ตรงกับชื่อเป้าหมาย ยอดจะถูกนับเข้า progress อัตโนมัติ · ยอดไม่ตรง? กด &quot;ปรับยอด&quot; ที่การ์ดเป้าหมาย</p>
+
+      {undoAdjustment && (
+        <div role="status" className="mb-space-4 flex flex-wrap items-center gap-space-2 rounded-sm border border-border-subtle bg-surface-2 p-space-3 text-sm text-secondary">
+          <span className="min-w-0 flex-1">{`ลบการปรับยอดแล้ว · ${undoAdjustment.goalName}`}</span>
+          <button type="button" className={`min-h-11 shrink-0 rounded-sm border border-border-interactive px-space-3 text-sm font-medium text-accent ${FOCUS_RING}`} onClick={() => void handleUndoDeleteAdjustment()}>เลิกทำ</button>
+        </div>
+      )}
       {!loading && !loadError && <ListToolbar label="เป้าหมายเงินออม" criteria={criteria} onChange={setCriteria}
         visible={goalProjection.items.length} total={activeGoals.length + completedGoals.length}
         changed={goalProjection.changed} onRefresh={goalProjection.refresh} groupNote="เรียงภายในแต่ละกลุ่ม"
@@ -548,7 +696,7 @@ export default function SavingsGoalTracker({
                 </div>
               </div>
 
-              {deleteConfirm === goal._id && (
+              {deleteConfirm?.kind === 'goal' && deleteConfirm.goalId === goal._id && (
                 <div className="mb-space-2 flex flex-wrap items-center gap-space-2 rounded-sm border border-neg/25 bg-neg/10 p-space-3">
                   <span className="min-w-0 flex-1 text-sm text-secondary">ลบ &ldquo;{goal.goalName}&rdquo; ใช่หรือไม่?</span>
                   <button className={`min-h-11 shrink-0 rounded-sm border border-neg px-space-4 text-sm font-semibold text-neg ${FOCUS_RING}`} type="button" onClick={() => handleDeleteConfirmed(goal._id)}>ยืนยัน</button>
@@ -559,13 +707,72 @@ export default function SavingsGoalTracker({
               <div className="mb-space-1 text-base font-semibold text-primary">{goal.goalName}</div>
               {goal.description && <div className="mb-space-2 text-sm text-secondary">{goal.description}</div>}
               <ProgressBar percent={pct} status={goal.status} />
-              <div className="mt-space-1 flex flex-wrap items-center justify-between gap-space-1 text-sm text-secondary"><span>ออมแล้ว: <strong className="font-semibold text-accent">{formatCurrency(current)}</strong></span><span className="text-tertiary">เป้า: {formatCurrency(target)}</span></div>
+              <div className="mt-space-1 flex flex-wrap items-center justify-between gap-space-1 text-sm text-secondary"><span>ออมแล้ว: <strong className={`font-semibold ${current < 0 ? 'text-neg' : 'text-accent'}`}>{formatCurrency(current)}</strong></span><span className="text-tertiary">เป้า: {formatCurrency(target)}</span></div>
               {remaining > 0 && <div className="mt-space-1 text-xs text-tertiary">ยังขาดอีก <strong className="font-semibold text-warn">{formatCurrency(remaining)}</strong></div>}
               {pct >= 100 && <div className="mt-space-2 text-center text-sm font-semibold text-pos">🎉 บรรลุเป้าหมายแล้ว!</div>}
+
+              {(() => {
+                const adjustments = goal.adjustments ?? [];
+                const adjustmentsTotal = goal.metadata?.adjustmentsTotal ?? 0;
+                const hasAdjustments = adjustments.length > 0;
+                return (
+                  <>
+                    <div className="mt-space-3 flex flex-wrap items-center justify-between gap-space-2 border-t border-border-subtle pt-space-3">
+                      {hasAdjustments ? (
+                        <div className="flex min-w-0 flex-col">
+                          <span className="text-xs text-tertiary">
+                            รวมปรับยอด{' '}
+                            <strong className={`font-semibold tabular-nums ${adjustmentsTotal === 0 ? 'text-secondary' : adjustmentsTotal > 0 ? 'text-pos' : 'text-neg'}`}>
+                              <span className="sr-only">{adjustmentsTotal >= 0 ? 'เพิ่มยอด ' : 'ลดยอด '}</span>
+                              {adjustmentsTotal === 0 ? `±${formatCurrency(0)}` : `${adjustmentsTotal > 0 ? '+' : '−'}${formatCurrency(Math.abs(adjustmentsTotal))}`} ฿
+                            </strong>
+                          </span>
+                          <span className="text-xs text-tertiary">(รวมอยู่ในยอดออมแล้วด้านบนแล้ว)</span>
+                        </div>
+                      ) : null}
+                      <button
+                        ref={element => { adjustButtonRefs.current[goal._id] = element; }}
+                        type="button"
+                        className={`min-h-11 shrink-0 rounded-sm border border-border-interactive px-space-4 text-sm font-medium text-primary hover:bg-surface-3 ${hasAdjustments ? '' : 'ml-auto'} ${FOCUS_RING}`}
+                        onClick={() => openAddAdjustment(goal)}
+                        aria-label={`ปรับยอด ${goal.goalName}`}
+                      >
+                        ปรับยอด
+                      </button>
+                    </div>
+                    {/*
+                      No `hasAdjustments &&` guard here (F-S3-1 fix): if this unmounts once the
+                      list empties, its own useEffect([sortedList]) focus-fallback can never fire,
+                      and focus drops to <body> instead of the "ปรับยอด" button above. The
+                      component already returns null at length 0 — but only *after* its hooks run,
+                      so keeping it mounted is what lets the fallback actually land.
+                    */}
+                    <SavingsGoalAdjustmentHistory
+                      goalName={goal.goalName}
+                      adjustments={adjustments}
+                      disableActions={adjustDialogGoal?._id === goal._id}
+                      deletingId={deleteConfirm?.kind === 'adjustment' && deleteConfirm.goalId === goal._id ? deleteConfirm.adjustmentId : null}
+                      onEdit={adjustment => openEditAdjustment(goal, adjustment)}
+                      onRequestDelete={adjustmentId => requestDeleteAdjustment(goal._id, adjustmentId)}
+                      onCancelDelete={cancelDeleteAdjustment}
+                      onConfirmDelete={adjustment => handleConfirmDeleteAdjustment(goal, adjustment)}
+                      onEmptyFocusFallback={() => focusAdjustButton(goal._id)}
+                    />
+                  </>
+                );
+              })()}
             </div>
           );
         })}
       </div>
+
+      <SavingsGoalAdjustmentDialog
+        open={adjustDialogGoal !== null}
+        goal={adjustDialogGoal}
+        editing={adjustDialogEditing}
+        onClose={closeAdjustDialog}
+        onSaved={handleAdjustmentSaved}
+      />
 
       {visibleCompletedGoals.length > 0 && (
         <details className="mt-space-5" open={completedOpen || hasGoalRestriction} onToggle={event => {
