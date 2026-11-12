@@ -469,3 +469,371 @@ describe('/api/savings-goals (Mongo mode)', () => {
     expect(await db.collection('savingsGoals').findOne({ _id: goalId })).not.toBeNull();
   });
 });
+
+// ---- savings-goal-adjustments S1 (spec §4.2, AC-SGA-01…16, architecture-review H-1…H-8) ----
+
+type StoredGoal = Record<string, unknown> & { _id: string };
+type AdjustmentErrorCase = [label: string, body: Record<string, unknown>, status: number, error: string];
+
+const ADJ_GOAL_ID = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+const ADJ_ID = 'adj000000000000000000001';
+const SEEDED_AT = '2026-10-01T00:00:00.000Z';
+const ADJUSTMENT_KEYS = ['_id', 'amount', 'createdAt', 'note', 'updatedAt'];
+
+// Same table as __tests__/api/savings-goals-adjustments-json.test.ts (mode parity).
+const ADJUSTMENT_ERROR_CASES: AdjustmentErrorCase[] = [
+  ['unknown action', { action: 'foo', goalId: ADJ_GOAL_ID }, 400, 'unknown action'],
+  ['null action', { action: null, goalId: ADJ_GOAL_ID }, 400, 'unknown action'],
+  ['missing goalId', { action: 'addAdjustment', amount: 10, note: 'x' }, 400, 'goalId required'],
+  ['empty goalId', { action: 'addAdjustment', goalId: '', amount: 10, note: 'x' }, 400, 'goalId required'],
+  ['object goalId', { action: 'addAdjustment', goalId: { $ne: null }, amount: 10, note: 'x' }, 400, 'goalId required'],
+  ['id alias not accepted', { action: 'addAdjustment', id: ADJ_GOAL_ID, amount: 10, note: 'x' }, 400, 'goalId required'],
+  ['edit missing adjustmentId', { action: 'editAdjustment', goalId: ADJ_GOAL_ID, amount: 10, note: 'x' }, 400, 'adjustmentId required'],
+  ['delete object adjustmentId', { action: 'deleteAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: { $ne: null } }, 400, 'adjustmentId required'],
+  ['zero amount', { action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: 0, note: 'x' }, 400, 'amount must be a non-zero number'],
+  ['dust amount', { action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: '0.001', note: 'x' }, 400, 'amount must be a non-zero number'],
+  ['non-numeric amount', { action: 'editAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: ADJ_ID, amount: 'abc', note: 'x' }, 400, 'amount must be a non-zero number'],
+  ['boolean amount', { action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: true, note: 'x' }, 400, 'amount must be a non-zero number'],
+  ['overflowing amount (H-4)', { action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: 1e307, note: 'x' }, 400, 'amount must be a non-zero number'],
+  ['amount above cap', { action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: -10000000, note: 'x' }, 400, 'amount too large'],
+  // tester supplement (Stage 4): cap + H-4 on edit, check order, trimmed length on edit
+  ['edit amount above cap', { action: 'editAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: ADJ_ID, amount: '10,000,000', note: 'x' }, 400, 'amount too large'],
+  ['edit overflowing amount string (H-4)', { action: 'editAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: ADJ_ID, amount: '1e307', note: 'x' }, 400, 'amount must be a non-zero number'],
+  ['huge finite amount hits cap, not overflow', { action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: 1.7e306, note: 'x' }, 400, 'amount too large'],
+  ['cap checked before note', { action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: 10000000, note: '' }, 400, 'amount too large'],
+  ['edit note too long', { action: 'editAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: ADJ_ID, amount: 10, note: '  ' + 'x'.repeat(121) + '  ' }, 400, 'note too long'],
+  ['400 before 404: bad amount on unknown goal', { action: 'addAdjustment', goalId: 'bbbbbbbbbbbbbbbbbbbbbbbb', amount: 'abc', note: 'x' }, 400, 'amount must be a non-zero number'],
+  ['blank note', { action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: 10, note: '   ' }, 400, 'note required'],
+  ['missing note', { action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: 10 }, 400, 'note required'],
+  ['note too long', { action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: 10, note: 'x'.repeat(121) }, 400, 'note too long'],
+  ['unknown goal', { action: 'addAdjustment', goalId: 'bbbbbbbbbbbbbbbbbbbbbbbb', amount: 10, note: 'x' }, 404, 'Goal not found'],
+  ['edit unknown adjustment', { action: 'editAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: 'nope', amount: 10, note: 'x' }, 404, 'Adjustment not found'],
+  ['delete unknown adjustment', { action: 'deleteAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: 'nope' }, 404, 'Adjustment not found'],
+];
+
+describe('/api/savings-goals adjustments (Mongo mode)', () => {
+  beforeEach(async () => {
+    await db.collection('audit_logs').deleteMany({});
+  });
+
+  function seededAdjustment(overrides: Record<string, unknown> = {}) {
+    return { _id: ADJ_ID, amount: 500, note: 'ยอดตกหล่น', createdAt: SEEDED_AT, updatedAt: SEEDED_AT, ...overrides };
+  }
+
+  /** Same shape Mongo POST writes (stored currentAmount: 0 included), plus optional overrides. */
+  async function seedGoal(overrides: Record<string, unknown> = {}, userId = USER_A) {
+    await db.collection<StoredGoal>('savingsGoals').insertOne({
+      _id: ADJ_GOAL_ID,
+      userId,
+      goalName: 'ทองคำ',
+      targetAmount: 10000,
+      currentAmount: 0,
+      currency: 'THB',
+      category: 'other',
+      priority: 'medium',
+      status: 'active',
+      allocationPercent: null,
+      createdAt: new Date(SEEDED_AT),
+      updatedAt: new Date(SEEDED_AT),
+      metadata: { progressPercentage: 0, remainingAmount: 10000, monthlyContribution: null, estimatedCompletionDate: null },
+      ...overrides,
+    });
+  }
+
+  const readGoal = () => db.collection<StoredGoal>('savingsGoals').findOne({ _id: ADJ_GOAL_ID });
+
+  async function call(body: Record<string, unknown>, userId = USER_A) {
+    const { req, res } = makeReqRes({ method: 'PUT', userId, body });
+    await handler(req, res);
+    const raw = res._getData();
+    return { status: res._getStatusCode(), body: raw ? JSON.parse(raw) : null };
+  }
+
+  async function getGoal() {
+    const { req, res } = makeReqRes({});
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    return JSON.parse(res._getData()).goals.find((g: StoredGoal) => g._id === ADJ_GOAL_ID);
+  }
+
+  // --- GET formula ---
+
+  it('AC-SGA-01/04: currentAmount = savings sum + rounded adjustments total; GET returns adjustments + adjustmentsTotal', async () => {
+    await seedGoal({ adjustments: [seededAdjustment({ amount: 0.1 }), seededAdjustment({ _id: 'adj2', amount: 0.2 })] });
+    await db.collection('savings').insertOne({ month: '2026-01', userId: USER_A, savings_list: [{ savings_type: 'ทองคำ', savings_amount: 3000 }] });
+
+    const goal = await getGoal();
+    expect(goal.currentAmount).toBe(3000.3);
+    expect(goal.metadata.adjustmentsTotal).toBe(0.3);
+    expect(goal.adjustments).toHaveLength(2);
+    expect(goal.metadata.progressPercentage).toBe(30);
+    expect(goal.metadata.remainingAmount).toBe(10000 - 3000.3);
+  });
+
+  it('AC-SGA-03/E-SGA-1: legacy goal (no adjustments) keeps every numeric output and gets [] / 0', async () => {
+    await seedGoal();
+    await db.collection('savings').insertOne({ month: '2026-01', userId: USER_A, savings_list: [{ savings_type: 'ทองคำ', savings_amount: '2,000.50' }] });
+
+    const goal = await getGoal();
+    expect(goal.adjustments).toEqual([]);
+    expect(Object.is(goal.metadata.adjustmentsTotal, 0)).toBe(true);
+    expect(goal.currentAmount).toBe(2000.5);
+    expect(goal.metadata.progressPercentage).toBe(20.01);
+    expect(goal.metadata.remainingAmount).toBe(7999.5);
+  });
+
+  it('AC-SGA-05: negative currentAmount is not clamped; remaining > target; progress negative', async () => {
+    await seedGoal({ adjustments: [seededAdjustment({ amount: -2000 })] });
+
+    const goal = await getGoal();
+    expect(goal.currentAmount).toBe(-2000);
+    expect(goal.metadata.remainingAmount).toBe(12000);
+    expect(goal.metadata.progressPercentage).toBe(-20);
+  });
+
+  it('AC-SGA-06 + H-2: junk stored adjustments/metadata.adjustmentsTotal never leak into the response', async () => {
+    await seedGoal({
+      adjustments: [seededAdjustment({ amount: 100 }), null, 'junk', { _id: '', amount: 5, note: 'x' }, { _id: 'z', amount: 0, note: 'x' }],
+      metadata: { adjustmentsTotal: 999, progressPercentage: 0, remainingAmount: 10000 },
+    });
+
+    const goal = await getGoal();
+    expect(goal.adjustments).toEqual([seededAdjustment({ amount: 100 })]);
+    expect(goal.metadata.adjustmentsTotal).toBe(100);
+    expect(goal.currentAmount).toBe(100);
+  });
+
+  it.each([[null], [{ a: 1 }], ['abc']])('E-SGA-2: non-array stored adjustments %p reads as [] and the next add writes [entry]', async (stored) => {
+    await seedGoal({ adjustments: stored });
+    expect((await getGoal()).adjustments).toEqual([]);
+
+    const res = await call({ action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: 10, note: 'x' });
+    expect(res.status).toBe(200);
+    expect((await readGoal())?.adjustments).toEqual([res.body.adjustment]);
+  });
+
+  // --- actions ---
+
+  it('AC-SGA-07: addAdjustment appends an ISO-stamped entry; GET reflects it', async () => {
+    await seedGoal();
+
+    const res = await call({ action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: '1,500.50', note: '  ยอดตกหล่น  ' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    const adjustment = res.body.adjustment;
+    expect(Object.keys(adjustment).sort()).toEqual(ADJUSTMENT_KEYS);
+    expect(adjustment).toMatchObject({ amount: 1500.5, note: 'ยอดตกหล่น' });
+    expect(adjustment._id).toMatch(/^[0-9a-f]{24}$/);
+    expect(adjustment.createdAt).toBe(adjustment.updatedAt);
+    expect(new Date(adjustment.createdAt).toISOString()).toBe(adjustment.createdAt);
+
+    const stored = await readGoal();
+    expect(stored?.adjustments).toEqual([adjustment]);
+    expect(stored?.updatedAt).toBeInstanceOf(Date);
+
+    const goal = await getGoal();
+    expect(goal.currentAmount).toBe(1500.5);
+    expect(goal.metadata.adjustmentsTotal).toBe(1500.5);
+  });
+
+  it('AC-SGA-08: editAdjustment replaces amount/note only, bumps updatedAt, keeps _id/createdAt/position', async () => {
+    const first = seededAdjustment({ _id: 'first' });
+    const last = seededAdjustment({ _id: 'last' });
+    await seedGoal({ adjustments: [first, seededAdjustment(), last] });
+
+    const res = await call({ action: 'editAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: ADJ_ID, amount: -42.5, note: 'แก้' });
+
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body.adjustment).sort()).toEqual(ADJUSTMENT_KEYS);
+    expect(res.body.adjustment).toMatchObject({ _id: ADJ_ID, amount: -42.5, note: 'แก้', createdAt: SEEDED_AT });
+    expect(res.body.adjustment.updatedAt).not.toBe(SEEDED_AT);
+    expect((await readGoal())?.adjustments).toEqual([first, res.body.adjustment, last]);
+  });
+
+  it('AC-SGA-09: deleteAdjustment removes exactly that entry and returns { success: true }', async () => {
+    const keep = seededAdjustment({ _id: 'keep' });
+    await seedGoal({ adjustments: [seededAdjustment(), keep] });
+
+    const res = await call({ action: 'deleteAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: ADJ_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
+    expect((await readGoal())?.adjustments).toEqual([keep]);
+  });
+
+  it.each(ADJUSTMENT_ERROR_CASES)('AC-SGA-10/13: %s → exact error, document unchanged, no audit event', async (_label, body, status, error) => {
+    await seedGoal({ adjustments: [seededAdjustment()] });
+    const before = await readGoal();
+
+    const res = await call(body);
+
+    expect(res.status).toBe(status);
+    expect(res.body).toEqual({ error });
+    expect(await readGoal()).toEqual(before);
+    expect(await db.collection('audit_logs').countDocuments({})).toBe(0);
+  });
+
+  it('AC-SGA-11: cross-user access → 404 and the owner document is unchanged', async () => {
+    await seedGoal({ adjustments: [seededAdjustment()] });
+    const before = await readGoal();
+
+    for (const body of [
+      { action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: 10, note: 'x' },
+      { action: 'editAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: ADJ_ID, amount: 10, note: 'x' },
+      { action: 'deleteAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: ADJ_ID },
+    ]) {
+      const res = await call(body, USER_B);
+      expect(res.status).toBe(404);
+      expect(res.body).toEqual({ error: 'Goal not found' });
+    }
+    expect(await readGoal()).toEqual(before);
+  });
+
+  it('AC-SGA-12 + H-1: client extra fields are ignored; only adjustments + updatedAt are written', async () => {
+    await seedGoal();
+    const before = await readGoal();
+
+    const res = await call({
+      action: 'addAdjustment',
+      goalId: ADJ_GOAL_ID,
+      amount: 100,
+      note: 'x',
+      currentAmount: 999999,
+      _id: 'evil',
+      createdAt: '2000-01-01T00:00:00.000Z',
+      goalName: 'renamed',
+      targetAmount: 1,
+      allocations: [{ goalId: ADJ_GOAL_ID, allocationPercent: 50 }],
+      adjustmentsTotal: 5,
+      metadata: { adjustmentsTotal: 5 },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.adjustment._id).not.toBe('evil');
+    const stored = await readGoal();
+    const { adjustments, updatedAt, ...rest } = stored as StoredGoal;
+    const { updatedAt: _beforeUpdatedAt, ...beforeRest } = before as StoredGoal;
+    expect(rest).toEqual(beforeRest);
+    expect(adjustments).toEqual([res.body.adjustment]);
+    expect(updatedAt).not.toEqual(_beforeUpdatedAt);
+    expect(stored).not.toHaveProperty('adjustmentsTotal');
+    expect(stored?.metadata).not.toHaveProperty('adjustmentsTotal');
+    expect(stored?.currentAmount).toBe(0);
+  });
+
+  it('AC-SGA-14/E-SGA-12: 121st add → 409; edit and delete still work at the cap', async () => {
+    const full = Array.from({ length: 120 }, (_, i) => seededAdjustment({ _id: `adj${i}` }));
+    await seedGoal({ adjustments: full });
+    const before = await readGoal();
+
+    const add = await call({ action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: 1, note: 'x' });
+    expect(add.status).toBe(409);
+    expect(add.body).toEqual({ error: 'adjustment limit reached (120)' });
+    expect(await readGoal()).toEqual(before);
+
+    const edit = await call({ action: 'editAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: 'adj7', amount: 2, note: 'y' });
+    expect(edit.status).toBe(200);
+    const del = await call({ action: 'deleteAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: 'adj7' });
+    expect(del.status).toBe(200);
+    expect(((await readGoal())?.adjustments as unknown[])).toHaveLength(119);
+  });
+
+  it('AC-SGA-15: each successful action writes exactly one savings_goals audit event naming adjustments; failures write none', async () => {
+    await seedGoal();
+    const events = () => db.collection('audit_logs').find({}).toArray();
+
+    const add = await call({ action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: 10, note: 'x' });
+    expect(add.status).toBe(200);
+    expect(await events()).toHaveLength(1);
+
+    const edit = await call({ action: 'editAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: add.body.adjustment._id, amount: 20, note: 'y' });
+    expect(edit.status).toBe(200);
+    expect(await events()).toHaveLength(2);
+
+    const failed = await call({ action: 'deleteAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: 'nope' });
+    expect(failed.status).toBe(404);
+    expect(await events()).toHaveLength(2);
+
+    const del = await call({ action: 'deleteAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: add.body.adjustment._id });
+    expect(del.status).toBe(200);
+
+    const all = await events();
+    expect(all).toHaveLength(3);
+    for (const event of all) {
+      expect(event.source).toBe('savings_goals');
+      expect(event.changedFields).toContain('adjustments');
+    }
+    expect(JSON.stringify(all)).not.toContain('"y"');
+  });
+
+  it('AC-SGA-16: existing single-goal PUT (no action) behaves as before and leaves adjustments alone', async () => {
+    await seedGoal({ adjustments: [seededAdjustment()] });
+
+    const res = await call({ goalId: ADJ_GOAL_ID, goalName: 'ทองคำแท่ง', adjustments: [] });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
+    const stored = await readGoal();
+    expect(stored?.goalName).toBe('ทองคำแท่ง');
+    expect(stored?.adjustments).toEqual([seededAdjustment()]);
+  });
+
+  it('AC-SGA-16: existing allocations bulk PUT (no action) behaves as before', async () => {
+    await seedGoal({ adjustments: [seededAdjustment()] });
+
+    const res = await call({ allocations: [{ goalId: ADJ_GOAL_ID, allocationPercent: 40 }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, matchedCount: 1, modifiedCount: 1 });
+    const stored = await readGoal();
+    expect(stored?.allocationPercent).toBe(40);
+    expect(stored?.adjustments).toEqual([seededAdjustment()]);
+  });
+
+  it('E-SGA-14: action + allocations → action runs, allocations ignored', async () => {
+    await seedGoal();
+
+    const res = await call({ action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: 10, note: 'x', allocations: [{ goalId: ADJ_GOAL_ID, allocationPercent: 40 }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.adjustment.amount).toBe(10);
+    expect((await readGoal())?.allocationPercent).toBeNull();
+  });
+
+  it('works on a non-active goal (D-SGA-16: no server status check)', async () => {
+    await seedGoal({ status: 'completed' });
+
+    const res = await call({ action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: 10, note: 'x' });
+
+    expect(res.status).toBe(200);
+  });
+
+  // ---- tester supplement (Stage 4) ----
+
+  it('cap boundary: ±9,999,999.99 accepted on add and edit (both signs, comma string)', async () => {
+    await seedGoal();
+
+    const add = await call({ action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: '9,999,999.99', note: 'max' });
+    expect(add.status).toBe(200);
+    expect(add.body.adjustment.amount).toBe(9999999.99);
+
+    const edit = await call({ action: 'editAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: add.body.adjustment._id, amount: -9999999.99, note: 'min' });
+    expect(edit.status).toBe(200);
+    expect(edit.body.adjustment.amount).toBe(-9999999.99);
+    expect((await readGoal())?.adjustments).toEqual([edit.body.adjustment]);
+  });
+
+  it('cross-user access writes no audit event', async () => {
+    await seedGoal();
+    for (const body of [
+      { action: 'addAdjustment', goalId: ADJ_GOAL_ID, amount: 10, note: 'x' },
+      { action: 'editAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: 'whatever', amount: 10, note: 'x' },
+      { action: 'deleteAdjustment', goalId: ADJ_GOAL_ID, adjustmentId: 'whatever' },
+    ]) {
+      expect((await call(body, USER_B)).status).toBe(404);
+    }
+    expect(await db.collection('audit_logs').countDocuments({})).toBe(0);
+  });
+});
+

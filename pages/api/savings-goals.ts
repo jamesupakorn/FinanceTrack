@@ -3,7 +3,7 @@
  * จัดการเป้าหมายเงินออมต่อ user
  * GET  - ดึงเป้าหมายทั้งหมด พร้อมคำนวณ currentAmount จากข้อมูล savings จริง
  * POST - สร้างเป้าหมายใหม่
- * PUT  - อัปเดตเป้าหมาย
+ * PUT  - อัปเดตเป้าหมาย / allocations แบบ bulk / ปรับยอด (action: addAdjustment | editAdjustment | deleteAdjustment)
  * DELETE - ลบเป้าหมาย
  */
 
@@ -18,6 +18,17 @@ import {
   updateUserData,
 } from '../../src/backend/data/userUtils';
 import { withAudit } from '../../lib/auditedMutation';
+import {
+  applyAdjustmentAction,
+  isAdjustmentAction,
+  isAdjustmentAmountWithinCap,
+  normalizeAdjustmentNote,
+  readAdjustments,
+  sumAdjustments,
+  toAdjustmentAmount,
+  type AdjustmentRequest,
+  type SavingsGoalAdjustment,
+} from '../../src/shared/utils/savingsGoalAdjustments';
 
 const GOALS_JSON_FILE = 'savings-goals.json';
 const SAVINGS_JSON_FILE = 'savings.json';
@@ -29,6 +40,7 @@ interface SavingsGoal {
   status: string;
   allocationPercent?: number | null;
   metadata?: Record<string, unknown>;
+  adjustments?: unknown;
   [key: string]: unknown;
 }
 interface MongoSavingsGoal extends Document {
@@ -38,6 +50,7 @@ interface MongoSavingsGoal extends Document {
   status: string;
   allocationPercent?: number | null;
   metadata?: Record<string, unknown>;
+  adjustments?: unknown;
   [key: string]: unknown;
 }
 
@@ -61,8 +74,10 @@ function toAllocationPercent(value: unknown): number | null {
 }
 
 /**
- * คำนวณ currentAmount ของแต่ละ goal โดยรวมจาก savings collection
- * ตรงกับ goalName (case-insensitive trim match)
+ * คำนวณ currentAmount ของแต่ละ goal:
+ * currentAmount = ผลรวม savings ที่ตรงกับ goalName (case-insensitive trim match)
+ *               + sumAdjustments(adjustments) (ปัดทศนิยม 2 ตำแหน่ง, ไม่ clamp ที่ 0)
+ * adjustmentsTotal คำนวณใหม่ทุกครั้ง ไม่เคยบันทึกลง DB
  * @param {Array} goals - goals array
  * @param {Array} savingsDocs - savings docs array (all months for this user)
  */
@@ -85,6 +100,10 @@ function computeCurrentAmounts(goals: SavingsGoal[], savingsDocs: SavingsDocumen
       });
     });
 
+    const adjustments = readAdjustments(goal);
+    const adjustmentsTotal = sumAdjustments(adjustments);
+    currentAmount += adjustmentsTotal;
+
     const targetAmount = Number(goal.targetAmount) || 0;
     const progressPercentage = targetAmount > 0
       ? Math.min(100, Math.round((currentAmount / targetAmount) * 10000) / 100)
@@ -94,13 +113,78 @@ function computeCurrentAmounts(goals: SavingsGoal[], savingsDocs: SavingsDocumen
     return {
       ...goal,
       currentAmount,
+      adjustments,
       metadata: {
         ...(goal.metadata || {}),
         progressPercentage,
         remainingAmount,
+        adjustmentsTotal,
       }
     };
   });
+}
+
+// ---- adjustment actions (shared by JSON + Mongo PUT) ----
+
+type ParsedAdjustmentRequest =
+  | { ok: true; goalId: string; request: AdjustmentRequest }
+  | { ok: false; error: string };
+
+/** Steps 2-6 of the action contract; reads only action/goalId/adjustmentId/amount/note. */
+function parseAdjustmentRequest(body: Record<string, unknown> | undefined): ParsedAdjustmentRequest {
+  const action = body?.action;
+  if (!isAdjustmentAction(action)) return { ok: false, error: 'unknown action' };
+
+  const goalId = asPlainString(body?.goalId);
+  if (!goalId) return { ok: false, error: 'goalId required' };
+
+  let adjustmentId = '';
+  if (action !== 'addAdjustment') {
+    adjustmentId = asPlainString(body?.adjustmentId) || '';
+    if (!adjustmentId) return { ok: false, error: 'adjustmentId required' };
+  }
+
+  if (action === 'deleteAdjustment') {
+    return { ok: true, goalId, request: { action, adjustmentId } };
+  }
+
+  const amount = toAdjustmentAmount(body?.amount);
+  if (amount === null) return { ok: false, error: 'amount must be a non-zero number' };
+  if (!isAdjustmentAmountWithinCap(amount)) return { ok: false, error: 'amount too large' };
+
+  const rawNote = body?.note;
+  if (typeof rawNote !== 'string' || rawNote.trim().length === 0) return { ok: false, error: 'note required' };
+  const note = normalizeAdjustmentNote(rawNote);
+  if (note === null) return { ok: false, error: 'note too long' };
+
+  return action === 'addAdjustment'
+    ? { ok: true, goalId, request: { action, amount, note } }
+    : { ok: true, goalId, request: { action, adjustmentId, amount, note } };
+}
+
+interface AdjustmentStore {
+  /** Owner-scoped lookup; null when the goal doesn't exist for this user. */
+  load(goalId: string): Promise<{ adjustments?: unknown } | null>;
+  /** Persist exactly `adjustments` + the goal's `updatedAt`; nothing derived. */
+  save(goalId: string, adjustments: SavingsGoalAdjustment[], now: Date): Promise<void>;
+}
+
+async function handleAdjustmentAction(req: NextApiRequest, res: NextApiResponse, store: AdjustmentStore) {
+  const parsed = parseAdjustmentRequest(req.body);
+  if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+
+  const goal = await store.load(parsed.goalId);
+  if (!goal) return res.status(404).json({ error: 'Goal not found' });
+
+  const now = new Date();
+  const newId = crypto.randomBytes(12).toString('hex');
+  const result = applyAdjustmentAction(readAdjustments(goal), parsed.request, now.toISOString(), newId);
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+
+  await store.save(parsed.goalId, result.adjustments, now);
+  return result.adjustment
+    ? res.status(200).json({ success: true, adjustment: result.adjustment })
+    : res.status(200).json({ success: true });
 }
 
 // ---- JSON mode helpers ----
@@ -120,7 +204,7 @@ function computeCurrentAmountsFromJson(goals: SavingsGoal[], userId: string) {
   return computeCurrentAmounts(goals, savingsDocs);
 }
 
-function handleJsonMode(req: NextApiRequest, res: NextApiResponse, userId: string) {
+async function handleJsonMode(req: NextApiRequest, res: NextApiResponse, userId: string) {
   if (req.method === 'GET') {
     const goals = getJsonGoals(userId).filter(g => g.status !== 'abandoned');
     const goalsWithProgress = computeCurrentAmountsFromJson(goals, userId);
@@ -156,6 +240,18 @@ function handleJsonMode(req: NextApiRequest, res: NextApiResponse, userId: strin
   }
 
   if (req.method === 'PUT') {
+    if (req.body?.action !== undefined) {
+      return await handleAdjustmentAction(req, res, {
+        load: async (goalId) => getJsonGoals(userId).find(g => g._id === goalId) ?? null,
+        save: async (goalId, adjustments, now) => {
+          const goals = getJsonGoals(userId);
+          const idx = goals.findIndex(g => g._id === goalId);
+          goals[idx] = { ...goals[idx], adjustments, updatedAt: now.toISOString() };
+          setJsonGoals(userId, goals);
+        },
+      });
+    }
+
     const allocations = Array.isArray(req.body?.allocations) ? req.body.allocations : null;
     if (allocations) {
       const goals = getJsonGoals(userId);
@@ -297,6 +393,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   // ------- PUT (update) -------
   if (req.method === 'PUT') {
+    // findOne/updateOne run in withAudit's transaction (session bound by getMongoCollection)
+    if (req.body?.action !== undefined) {
+      return await handleAdjustmentAction(req, res, {
+        load: (goalId) => goalsCol.findOne({ _id: goalId, userId }),
+        save: async (goalId, adjustments, now) => {
+          await goalsCol.updateOne({ _id: goalId, userId }, { $set: { adjustments, updatedAt: now } });
+        },
+      });
+    }
+
     const allocations = Array.isArray(req.body?.allocations)
       ? req.body.allocations as Array<Record<string, unknown>>
       : null;

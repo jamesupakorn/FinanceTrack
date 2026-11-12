@@ -16,6 +16,7 @@ import {
 } from './monthlySummaryContent';
 import { LINE_THEME, textComponent, valueRow as sharedValueRow } from './lineFlexTheme';
 import type { MetricDelta, UpcomingDues } from './monthlySummaryContent';
+import { readAdjustments, sumAdjustments } from '../savingsGoalAdjustments';
 
 type MonthlyModel = ReturnType<typeof getMonthlySummaryModel>;
 type MonthlyModelInput = NonNullable<Parameters<typeof getMonthlySummaryModel>[0]>;
@@ -34,7 +35,7 @@ type SummaryPayload = {
   comparison?: SummaryComparison;
   upcoming?: UpcomingDues | null;
 };
-type StoredGoal = Document & { goalName?: string; targetAmount?: number | string; status?: string };
+type StoredGoal = Document & { goalName?: string; targetAmount?: number | string; status?: string; adjustments?: unknown };
 type TaxDocument = Document & { year?: string; accumulated_tax?: number | string };
 type SavingsDocument = {
   savings_list?: Array<{
@@ -72,7 +73,7 @@ function getGoalSummary(goals: StoredGoal[] = [], savingsDocs: SavingsDocument[]
       const itemName = String(item?.savings_type || item?.รายการ || '').trim().toLowerCase();
       if (itemName !== name) return sum;
       return sum + (Number(String(item?.savings_amount ?? item?.จำนวนเงิน ?? 0).replace(/,/g, '')) || 0);
-    }, 0), 0);
+    }, 0), 0) + sumAdjustments(readAdjustments(goal));
     const target = Number(goal.targetAmount) || 0;
     return {
       name: goal.goalName || 'เป้าหมายเงินออม',
@@ -201,7 +202,7 @@ export function buildMonthlySummaryFlex(monthLabel: string, payload: SummaryPayl
     ? goals.slice(0, 4).flatMap(goal => [
       valueRow('🎯', goal.name, goal.current, LINE_THEME.info),
       valueRow(' ', 'คงเหลือ', goal.remaining, LINE_THEME.textSecondary),
-      ...(goal.progress === undefined ? [] : [textComponent(`ถึงเป้าแล้ว ${goal.progress}%`, 'xs', LINE_THEME.info)])
+      ...(goal.progress === undefined ? [] : [textComponent(`ถึงเป้าแล้ว ${Math.max(0, goal.progress)}%`, 'xs', LINE_THEME.info)])
     ])
     : [textComponent('ยังไม่มีเป้าหมายเงินออมที่กำลังดำเนินการ', 'sm', LINE_THEME.textSecondary)];
 
@@ -244,7 +245,7 @@ export function buildMonthlySummaryFlex(monthLabel: string, payload: SummaryPayl
 export function formatMonthlySummaryText(monthLabel: string, payload: SummaryPayload): string {
   const { model, taxAccumulated, goals, comparison, upcoming } = payload;
   const goalText = goals.length
-    ? goals.map(goal => `${goal.name}: คงเหลือ ${amount(goal.remaining)} บาท${goal.progress === undefined ? '' : ` (ถึงเป้าแล้ว ${goal.progress}%)`}`).join('\n')
+    ? goals.map(goal => `${goal.name}: คงเหลือ ${amount(goal.remaining)} บาท${goal.progress === undefined ? '' : ` (ถึงเป้าแล้ว ${Math.max(0, goal.progress)}%)`}`).join('\n')
     : 'ยังไม่มีเป้าหมายเงินออม';
   const withDelta = (line: string, delta: MetricDelta | undefined) => (delta ? `${line} · ${formatDeltaLabel(delta)}` : line);
   const lines = [

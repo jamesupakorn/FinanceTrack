@@ -392,6 +392,21 @@ export const savingsGoalsAPI = {
 		method: 'DELETE',
 		headers: { 'Content-Type': 'application/json' },
 		body: withUserPayload({ goalId: id })
+	}),
+	addAdjustment: async (goalId: string, input: { amount: number; note: string }): Promise<any> => jsonFetch('/api/savings-goals', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ action: 'addAdjustment', goalId, ...input })
+	}),
+	editAdjustment: async (goalId: string, adjustmentId: string, input: { amount: number; note: string }): Promise<any> => jsonFetch('/api/savings-goals', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ action: 'editAdjustment', goalId, adjustmentId, ...input })
+	}),
+	deleteAdjustment: async (goalId: string, adjustmentId: string): Promise<any> => jsonFetch('/api/savings-goals', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ action: 'deleteAdjustment', goalId, adjustmentId })
 	})
 };
 
