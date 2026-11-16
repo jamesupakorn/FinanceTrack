@@ -66,6 +66,17 @@ const schemas = {
     POST: { body },
     PUT: { body },
     DELETE: { body, query }
+  },
+  // Passthrough envelopes; the ledger routes parse every field themselves via savingsLedger.ts.
+  'savings-loans': {
+    GET: { query },
+    POST: { body },
+    DELETE: { body, query }
+  },
+  'savings-withdrawals': {
+    GET: { query },
+    POST: { body },
+    DELETE: { body, query }
   }
 } satisfies Record<string, Partial<Record<string, { body?: z.ZodType; query?: z.ZodType }>>>;
 

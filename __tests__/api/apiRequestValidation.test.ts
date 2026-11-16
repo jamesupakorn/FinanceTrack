@@ -62,4 +62,22 @@ describe('API request validation', () => {
     expect(req.body).toBe(body);
     expect(res.statusCode).toBe(200);
   });
+
+  it.each(['savings-loans', 'savings-withdrawals'] as const)(
+    'passes %s bodies through for route-level parsing and still rejects a non-object body',
+    (route) => {
+      const body = { source: { type: 'goal', goalId: { $ne: null } }, amount: '1,500.50', note: 42 };
+      for (const method of ['POST', 'DELETE']) {
+        const ok = { method, query: {}, body };
+        const okRes = createResponse();
+        expect(validateApiRequest(ok as NextApiRequest, okRes as unknown as NextApiResponse, route)).toBe(true);
+        expect(ok.body).toBe(body);
+
+        const bad = { method, query: {}, body: [] };
+        const badRes = createResponse();
+        expect(validateApiRequest(bad as NextApiRequest, badRes as unknown as NextApiResponse, route)).toBe(false);
+        expect(badRes.statusCode).toBe(400);
+      }
+    }
+  );
 });
