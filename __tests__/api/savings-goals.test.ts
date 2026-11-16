@@ -837,3 +837,385 @@ describe('/api/savings-goals adjustments (Mongo mode)', () => {
   });
 });
 
+// ---- savings-loan-withdrawal S2, dispatch 5 — Mongo-mode coverage for the DELETE
+// /api/savings-goals open-loan guard (spec §4.7 step "S2, DELETE", C-S2-4). Mirrors
+// __tests__/api/savings-goals-delete-ledger-json.test.ts's 6 cases. Per C-S2-6, this describe
+// owns its own beforeEach for the ledger collections (savingsLoans / savingsWithdrawals /
+// savingsLedgerGuards) instead of touching the shared top-level beforeEach at :75-80, which only
+// clears savingsGoals / savings.
+describe('DELETE /api/savings-goals — Mongo mode open-loan guard (S2, C-S2-3/C-S2-4)', () => {
+  const DEL_GOAL_ID = 'dddddddddddddddddddddddd';
+  const GHOST_GOAL_ID = 'd9d9d9d9d9d9d9d9d9d9d9d9';
+  const LOAN_1 = 'e1e1e1e1e1e1e1e1e1e1e1e1';
+  const WD_1 = 'f1f1f1f1f1f1f1f1f1f1f1f1';
+  const SEEDED_AT = '2026-11-16T00:00:00.000Z';
+
+  beforeEach(async () => {
+    await db.collection('savingsLoans').deleteMany({});
+    await db.collection('savingsWithdrawals').deleteMany({});
+    await db.collection('savingsLedgerGuards').deleteMany({});
+  });
+
+  async function seedGoal(id = DEL_GOAL_ID, overrides: Record<string, unknown> = {}) {
+    await db.collection<StoredGoal>('savingsGoals').insertOne({
+      _id: id,
+      userId: USER_A,
+      goalName: 'เที่ยว',
+      targetAmount: 20000,
+      currentAmount: 0,
+      currency: 'THB',
+      category: 'other',
+      priority: 'medium',
+      status: 'active',
+      allocationPercent: null,
+      createdAt: new Date(SEEDED_AT),
+      updatedAt: new Date(SEEDED_AT),
+      metadata: { progressPercentage: 0, remainingAmount: 20000, monthlyContribution: null, estimatedCompletionDate: null },
+      ...overrides,
+    });
+  }
+
+  async function seedLoan(id: string, overrides: Record<string, unknown> = {}) {
+    // `as never`: matches __tests__/helpers/savingsLoansRouteSuite.ts's pattern for inserting a
+    // string `_id` into an untyped collection (its default generic requires an ObjectId `_id`).
+    await db.collection('savingsLoans').insertOne({
+      _id: id,
+      userId: USER_A,
+      source: { type: 'goal', goalId: DEL_GOAL_ID },
+      principalAmount: 1000,
+      outstandingAmount: 1000,
+      status: 'open',
+      note: null,
+      createdAt: new Date(SEEDED_AT),
+      updatedAt: new Date(SEEDED_AT),
+      closedAt: null,
+      repayments: [],
+      ...overrides,
+    } as never);
+  }
+
+  async function seedWithdrawal(id: string, overrides: Record<string, unknown> = {}) {
+    await db.collection('savingsWithdrawals').insertOne({
+      _id: id,
+      userId: USER_A,
+      source: { type: 'goal', goalId: DEL_GOAL_ID },
+      amount: 500,
+      note: null,
+      createdAt: new Date(SEEDED_AT),
+      ...overrides,
+    } as never);
+  }
+
+  async function del(goalId: string, userId = USER_A) {
+    const { req, res } = makeReqRes({ method: 'DELETE', userId, body: { goalId } });
+    await handler(req, res);
+    const raw = res._getData();
+    return { status: res._getStatusCode(), body: raw ? JSON.parse(raw) : null };
+  }
+
+  it('a goal with an open loan against it → 409 goal_has_open_loans, goal NOT deleted', async () => {
+    await seedGoal();
+    await seedLoan(LOAN_1, { outstandingAmount: 750 });
+
+    const r = await del(DEL_GOAL_ID);
+    expect(r).toEqual({ status: 409, body: { error: 'goal_has_open_loans', outstanding: 750 } });
+    expect(await db.collection<StoredGoal>('savingsGoals').findOne({ _id: DEL_GOAL_ID })).not.toBeNull();
+  });
+
+  it('a goal with only a closed loan and a withdrawal (no open loan) → succeeds as before', async () => {
+    await seedGoal();
+    await seedLoan(LOAN_1, { status: 'closed', outstandingAmount: 0, closedAt: new Date(SEEDED_AT) });
+    await seedWithdrawal(WD_1);
+
+    const r = await del(DEL_GOAL_ID);
+    expect(r).toEqual({ status: 200, body: { success: true } });
+    expect(await db.collection<StoredGoal>('savingsGoals').findOne({ _id: DEL_GOAL_ID })).toBeNull();
+  });
+
+  it('S2-F-3 regression: deleting an already-nonexistent goal id returns 404, not 409, even with a stray open loan referencing it', async () => {
+    await seedGoal(); // GHOST_GOAL_ID is not a real goal
+    await seedLoan(LOAN_1, { source: { type: 'goal', goalId: GHOST_GOAL_ID }, outstandingAmount: 400 });
+
+    const r = await del(GHOST_GOAL_ID);
+    expect(r).toEqual({ status: 404, body: { error: 'Goal not found' } });
+  });
+
+  it('a goal with no ledger activity at all → succeeds exactly as before (regression guard)', async () => {
+    await seedGoal();
+
+    const r = await del(DEL_GOAL_ID);
+    expect(r).toEqual({ status: 200, body: { success: true } });
+    expect(await db.collection<StoredGoal>('savingsGoals').findOne({ _id: DEL_GOAL_ID })).toBeNull();
+  });
+
+  it('a loan sourced from the pool never blocks a goal delete', async () => {
+    await seedGoal();
+    await seedLoan(LOAN_1, { source: { type: 'pool' } });
+
+    const r = await del(DEL_GOAL_ID);
+    expect(r).toEqual({ status: 200, body: { success: true } });
+  });
+
+  it('an open loan against a different goal never blocks this goal\'s delete', async () => {
+    const OTHER_GOAL_ID = 'c3c3c3c3c3c3c3c3c3c3c3c3';
+    await seedGoal(DEL_GOAL_ID);
+    await seedGoal(OTHER_GOAL_ID, { goalName: 'อื่น' });
+    await seedLoan(LOAN_1, { source: { type: 'goal', goalId: OTHER_GOAL_ID } });
+
+    const r = await del(DEL_GOAL_ID);
+    expect(r).toEqual({ status: 200, body: { success: true } });
+    expect(await db.collection<StoredGoal>('savingsGoals').findOne({ _id: DEL_GOAL_ID })).toBeNull();
+    expect(await db.collection<StoredGoal>('savingsGoals').findOne({ _id: OTHER_GOAL_ID })).not.toBeNull();
+  });
+
+  it('an abandoned goal with an open loan still returns 409 (status filter does not bypass the guard)', async () => {
+    await seedGoal(DEL_GOAL_ID, { status: 'abandoned' });
+    await seedLoan(LOAN_1, { outstandingAmount: 300 });
+
+    const r = await del(DEL_GOAL_ID);
+    expect(r).toEqual({ status: 409, body: { error: 'goal_has_open_loans', outstanding: 300 } });
+  });
+
+  it('acquireLedgerGuard writes the guard doc as the first write (D-SLW-16)', async () => {
+    await seedGoal();
+
+    await del(DEL_GOAL_ID);
+
+    expect(await db.collection('savingsLedgerGuards').findOne({ _id: USER_A as never })).toEqual({
+      _id: USER_A,
+      touchedAt: expect.any(Date),
+    });
+  });
+});
+
+// S2 dispatch 6: E-SLW-5 — a goal DELETE racing a loan-create against the same goal (Mongo). Both routes
+// now take `acquireLedgerGuard` as their first write (dispatch 4/5 made DELETE the third call site), so the
+// shared guard document is what serializes them. Pattern mirrors
+// __tests__/helpers/savingsWithdrawalsRouteSuite.ts's `holdCommitsUntilBothArrive` (AC-SLW-08): hold each
+// transaction right before its audit-event commit until both requests have arrived there, so a real Mongo
+// write-write conflict on the guard document is forced rather than left to incidental timing.
+describe('DELETE /api/savings-goals racing POST /api/savings-loans — Mongo mode (S2, E-SLW-5)', () => {
+  const RACE_GOAL_ID = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+  const SEEDED_AT = '2026-11-17T00:00:00.000Z';
+
+  let loansHandler: NextApiHandler;
+  let auditedMod: typeof import('../../lib/auditedMutation');
+
+  beforeAll(() => {
+    // No jest.resetModules()/env changes here: the outer beforeAll already set DATA_MODE=mongo and
+    // reset the module registry once, before `handler` was required. Requiring the loans handler and
+    // auditedMutation now reuses that same registry, so both routes share the same `getDbPromise()`
+    // connection and the same `auditTestHooks` object `handler` already runs against.
+    loansHandler = require('../../pages/api/savings-loans').default;
+    auditedMod = require('../../lib/auditedMutation');
+  });
+
+  beforeEach(async () => {
+    auditedMod.auditTestHooks.beforeAuditWrite = undefined;
+    await db.collection('savingsLoans').deleteMany({});
+    await db.collection('savingsWithdrawals').deleteMany({});
+    await db.collection('savingsLedgerGuards').deleteMany({});
+  });
+
+  afterEach(() => {
+    auditedMod.auditTestHooks.beforeAuditWrite = undefined;
+  });
+
+  async function seedGoal() {
+    await db.collection<Document>('savingsGoals').insertOne({
+      _id: RACE_GOAL_ID,
+      userId: USER_A,
+      goalName: 'เที่ยว',
+      targetAmount: 20000,
+      currentAmount: 0,
+      currency: 'THB',
+      category: 'other',
+      priority: 'medium',
+      status: 'active',
+      allocationPercent: null,
+      createdAt: new Date(SEEDED_AT),
+      updatedAt: new Date(SEEDED_AT),
+      metadata: { progressPercentage: 0, remainingAmount: 20000, monthlyContribution: null, estimatedCompletionDate: null },
+    } as never);
+    // Enough matched savings for the goal's available balance to clear the 1,000 loan below.
+    await db.collection('savings').insertOne({
+      month: '2026-11', userId: USER_A, savings_list: [{ savings_type: 'เที่ยว', savings_amount: 5000 }],
+    } as never);
+  }
+
+  async function postLoan(amount: number) {
+    const { req, res } = makeReqRes({ method: 'POST', body: { source: { type: 'goal', goalId: RACE_GOAL_ID }, amount } });
+    await loansHandler(req, res);
+    const raw = res._getData();
+    return { status: res._getStatusCode(), body: raw ? JSON.parse(raw) : null };
+  }
+
+  async function deleteGoal() {
+    const { req, res } = makeReqRes({ method: 'DELETE', body: { goalId: RACE_GOAL_ID } });
+    await handler(req, res);
+    const raw = res._getData();
+    return { status: res._getStatusCode(), body: raw ? JSON.parse(raw) : null };
+  }
+
+  /** See savingsWithdrawalsRouteSuite.ts's identically named helper for the full rationale. */
+  function holdCommitsUntilBothArrive(timeoutMs = 300) {
+    let arrived = 0;
+    let release!: () => void;
+    const both = new Promise<void>(resolve => { release = resolve; });
+    auditedMod.auditTestHooks.beforeAuditWrite = async () => {
+      arrived += 1;
+      if (arrived >= 2) release();
+      await Promise.race([both, new Promise(resolve => setTimeout(resolve, timeoutMs))]);
+    };
+  }
+
+  it('resolves to exactly one clean outcome: either the delete wins (loan sees 404 goal_not_found) or the loan wins (delete sees 409 goal_has_open_loans) — never a loan left open against a deleted goal, or a delete that removed a goal with a just-created open loan', async () => {
+    await seedGoal();
+    holdCommitsUntilBothArrive();
+
+    const [delResult, loanResult] = await Promise.all([deleteGoal(), postLoan(1000)]);
+
+    const goalAfter = await db.collection<StoredGoal>('savingsGoals').findOne({ _id: RACE_GOAL_ID });
+    const loansAfter = await db.collection('savingsLoans').find({ userId: USER_A }).toArray();
+
+    // Exactly one side must have won; the API must never answer 2xx/2xx or 4xx/4xx for this race.
+    expect([delResult.status, loanResult.status].sort()).toEqual(
+      delResult.status === 200 ? [200, 404] : [201, 409]
+    );
+
+    if (delResult.status === 200) {
+      // Delete won: the goal is gone, the loan POST must have been refused against it, and no loan
+      // was ever persisted — no open loan can be left pointing at a goal that no longer exists.
+      expect(delResult.body).toEqual({ success: true });
+      expect(loanResult).toEqual({ status: 404, body: { error: 'goal_not_found' } });
+      expect(goalAfter).toBeNull();
+      expect(loansAfter).toHaveLength(0);
+    } else {
+      // Loan-create won: the goal must still exist with its new open loan, and the delete must have
+      // been refused with the matching open-loan error — no delete can have removed a goal whose
+      // loan-create committed concurrently.
+      expect(delResult).toEqual({ status: 409, body: { error: 'goal_has_open_loans', outstanding: 1000 } });
+      expect(loanResult.status).toBe(201);
+      expect(loanResult.body).toMatchObject({ success: true });
+      expect(goalAfter).not.toBeNull();
+      expect(loansAfter).toHaveLength(1);
+      expect(loansAfter[0]).toMatchObject({ status: 'open', outstandingAmount: 1000, source: { type: 'goal', goalId: RACE_GOAL_ID } });
+    }
+
+    // Whichever side won, the shared guard document proves both requests actually took the guard
+    // (D-SLW-16 / C-1): this is the third named call site (loans, withdrawals, goal DELETE).
+    expect(await db.collection('savingsLedgerGuards').findOne({ _id: USER_A as never })).toEqual({
+      _id: USER_A,
+      touchedAt: expect.any(Date),
+    });
+  });
+});
+
+// ---- Stage 4 (tester) additions — Mongo mode: cross-user isolation on the new 409, transaction
+// rollback of the guard write on 4xx, and GET-level AC-SLW-11 / C-S2-5 checks. Own beforeEach for the
+// ledger collections per C-S2-6 (the top-level hook is not edited).
+describe('/api/savings-goals — Mongo mode, tester additions (S2)', () => {
+  const T_GOAL_ID = 'abababababababababababab';
+  const T_OTHER_ID = 'cdcdcdcdcdcdcdcdcdcdcdcd';
+  const T_LOAN_ID = 'efefefefefefefefefefefef';
+  const T_AT = '2026-11-17T00:00:00.000Z';
+
+  beforeEach(async () => {
+    await db.collection('savingsLoans').deleteMany({});
+    await db.collection('savingsWithdrawals').deleteMany({});
+    await db.collection('savingsLedgerGuards').deleteMany({});
+  });
+
+  async function seedGoalFor(userId: string, id: string, overrides: Record<string, unknown> = {}) {
+    await db.collection('savingsGoals').insertOne({
+      _id: id, userId, goalName: 'เที่ยว', targetAmount: 1, status: 'active',
+      createdAt: new Date(T_AT), updatedAt: new Date(T_AT), ...overrides,
+    } as never);
+  }
+
+  async function seedOpenLoan(userId: string, goalId: string, outstandingAmount = 100) {
+    await db.collection('savingsLoans').insertOne({
+      _id: T_LOAN_ID, userId, source: { type: 'goal', goalId }, principalAmount: outstandingAmount,
+      outstandingAmount, status: 'open', note: null, createdAt: new Date(T_AT), updatedAt: new Date(T_AT),
+      closedAt: null, repayments: [],
+    } as never);
+  }
+
+  async function run(method: RequestMethod, userId: string, body?: Record<string, unknown>) {
+    const { req, res } = makeReqRes({ method, userId, body });
+    await handler(req, res);
+    const raw = res._getData();
+    return { status: res._getStatusCode(), body: raw ? JSON.parse(raw) : null };
+  }
+
+  it('cross-user: user B deleting user A\'s goal that has open loans gets 404, never 409 (no probing)', async () => {
+    await seedGoalFor(USER_A, T_GOAL_ID);
+    await seedOpenLoan(USER_A, T_GOAL_ID);
+
+    expect(await run('DELETE', USER_B, { goalId: T_GOAL_ID })).toEqual({ status: 404, body: { error: 'Goal not found' } });
+    expect(await db.collection('savingsGoals').findOne({ _id: T_GOAL_ID as never })).not.toBeNull();
+  });
+
+  it('cross-user: user A\'s open loan naming user B\'s goal id never blocks user B\'s delete', async () => {
+    await seedGoalFor(USER_B, T_GOAL_ID);
+    await seedOpenLoan(USER_A, T_GOAL_ID);
+
+    expect(await run('DELETE', USER_B, { goalId: T_GOAL_ID })).toEqual({ status: 200, body: { success: true } });
+  });
+
+  it('a 409 aborts the transaction: goal kept, guard upsert rolled back', async () => {
+    await seedGoalFor(USER_A, T_GOAL_ID);
+    await seedOpenLoan(USER_A, T_GOAL_ID, 12.34);
+
+    expect(await run('DELETE', USER_A, { goalId: T_GOAL_ID }))
+      .toEqual({ status: 409, body: { error: 'goal_has_open_loans', outstanding: 12.34 } });
+    expect(await db.collection('savingsLedgerGuards').countDocuments({})).toBe(0);
+  });
+
+  it('a 404 also aborts: no guard document is left behind for a nonexistent goal', async () => {
+    expect(await run('DELETE', USER_A, { goalId: T_GOAL_ID })).toEqual({ status: 404, body: { error: 'Goal not found' } });
+    expect(await db.collection('savingsLedgerGuards').countDocuments({})).toBe(0);
+  });
+
+  it('operator-injection goalId is refused with 400 before any ledger work', async () => {
+    expect(await run('DELETE', USER_A, { goalId: { $ne: null } })).toEqual({ status: 400, body: { error: 'goalId required' } });
+  });
+
+  it('GET AC-SLW-11 / S2-F-5: zero-ledger float-dust goal stays unrounded; ledger goal is net and rounded', async () => {
+    await db.collection('savings').insertOne({
+      month: '2026-10', userId: USER_A,
+      savings_list: [
+        { savings_type: 'เที่ยว', savings_amount: 0.1 }, { savings_type: 'เที่ยว', savings_amount: 0.2 },
+        { savings_type: 'อื่น', savings_amount: 0.7 }, { savings_type: 'อื่น', savings_amount: 0.1 },
+      ],
+    } as never);
+    await seedGoalFor(USER_A, T_GOAL_ID);
+    await seedGoalFor(USER_A, T_OTHER_ID, { goalName: 'อื่น' });
+    await seedOpenLoan(USER_A, T_OTHER_ID, 0.3);
+
+    const r = await run('GET', USER_A);
+    expect(r.status).toBe(200);
+    const dust = r.body.goals.find((g: GoalResponse) => g._id === T_GOAL_ID);
+    expect(dust.currentAmount).toBe(0.1 + 0.2);
+    expect(dust.metadata).toMatchObject({ outstandingLoansTotal: 0, withdrawalsTotal: 0 });
+    const other = r.body.goals.find((g: GoalResponse) => g._id === T_OTHER_ID);
+    expect(other.currentAmount).toBe(0.5);
+    expect(other.metadata).toMatchObject({ outstandingLoansTotal: 0.3, withdrawalsTotal: 0 });
+  });
+
+  it('GET C-S2-5: stored junk metadata.outstandingLoansTotal never leaks', async () => {
+    await seedGoalFor(USER_A, T_GOAL_ID, { metadata: { outstandingLoansTotal: 999999, withdrawalsTotal: 'junk' } });
+
+    const r = await run('GET', USER_A);
+    expect(r.body.goals[0].metadata).toMatchObject({ outstandingLoansTotal: 0, withdrawalsTotal: 0 });
+  });
+
+  it('GET cross-user: user B\'s loan naming user A\'s goal id does not reduce user A\'s goal', async () => {
+    await seedGoalFor(USER_A, T_GOAL_ID);
+    await seedOpenLoan(USER_B, T_GOAL_ID, 50);
+
+    const r = await run('GET', USER_A);
+    expect(r.body.goals[0].currentAmount).toBe(0);
+    expect(r.body.goals[0].metadata.outstandingLoansTotal).toBe(0);
+  });
+});
