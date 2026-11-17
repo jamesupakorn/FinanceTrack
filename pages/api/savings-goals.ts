@@ -33,6 +33,8 @@ import {
   type SavingsDocument,
   type SavingsGoal,
 } from '../../src/shared/utils/backend/savingsGoalBalances';
+import { acquireLedgerGuard, loadLedgerContext } from '../../src/shared/utils/backend/savingsLedgerStore';
+import { summarizeLedger } from '../../src/shared/utils/savingsLedger';
 
 const GOALS_JSON_FILE = 'savings-goals.json';
 const SAVINGS_JSON_FILE = 'savings.json';
@@ -129,16 +131,20 @@ function setJsonGoals(userId: string, goals: SavingsGoal[]) {
   updateUserData(GOALS_JSON_FILE, userId, () => ({ goals }));
 }
 
-function computeCurrentAmountsFromJson(goals: SavingsGoal[], userId: string) {
+async function computeCurrentAmountsFromJson(goals: SavingsGoal[], userId: string) {
   const savingsBucket = getUserData(SAVINGS_JSON_FILE, userId);
   const savingsDocs = Object.values(savingsBucket || {}) as SavingsDocument[];
-  return computeCurrentAmounts(goals, savingsDocs);
+  // S2-F-1 / C-S2-1: wire the per-goal ledger term into the GET response (loans + withdrawals
+  // net currentAmount, outstandingLoansTotal / withdrawalsTotal metadata).
+  const { loans, withdrawals } = await loadLedgerContext(userId);
+  const ledgerByGoal = summarizeLedger(loans, withdrawals).byGoal;
+  return computeCurrentAmounts(goals, savingsDocs, ledgerByGoal);
 }
 
 async function handleJsonMode(req: NextApiRequest, res: NextApiResponse, userId: string) {
   if (req.method === 'GET') {
     const goals = getJsonGoals(userId).filter(g => g.status !== 'abandoned');
-    const goalsWithProgress = computeCurrentAmountsFromJson(goals, userId);
+    const goalsWithProgress = await computeCurrentAmountsFromJson(goals, userId);
     return res.status(200).json({ goals: goalsWithProgress });
   }
 
@@ -233,15 +239,32 @@ async function handleJsonMode(req: NextApiRequest, res: NextApiResponse, userId:
   }
 
   if (req.method === 'DELETE') {
-    const goalId = req.body?.goalId || req.body?.id || req.query?.goalId || req.query?.id;
+    const goalId = asPlainString(req.body?.goalId || req.body?.id || req.query?.goalId || req.query?.id);
     if (!goalId) {
       return res.status(400).json({ error: 'goalId required' });
     }
+
+    // S2 / C-S2-4: guard first (no-op in JSON mode, kept for parity with the Mongo branch),
+    // then the existing 404 lookup, then the open-loan check — in that order, so a goalId that
+    // no longer exists still answers 404, never 409, even if a stray open loan references it
+    // (S2-F-3 / E-SLW-16's "เป้าหมายที่ลบแล้ว" case).
+    await acquireLedgerGuard(userId);
+
     const goals = getJsonGoals(userId);
     const idx = goals.findIndex(g => g._id === goalId);
     if (idx === -1) {
       return res.status(404).json({ error: 'Goal not found' });
     }
+
+    const { loans } = await loadLedgerContext(userId);
+    const openLoans = loans.filter(
+      l => l.status === 'open' && l.source.type === 'goal' && l.source.goalId === goalId
+    );
+    if (openLoans.length > 0) {
+      const outstanding = Math.round(openLoans.reduce((sum, l) => sum + l.outstandingAmount, 0) * 100) / 100;
+      return res.status(409).json({ error: 'goal_has_open_loans', outstanding });
+    }
+
     goals.splice(idx, 1);
     setJsonGoals(userId, goals);
     return res.status(200).json({ success: true });
@@ -277,9 +300,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       .toArray();
 
     const savingsDocs = await getAllSavings();
+    // S2-F-1 / C-S2-1: wire the per-goal ledger term into the GET response (mirrors the JSON
+    // branch above — loadLedgerContext + summarizeLedger(...).byGoal as the 3rd argument).
+    const { loans, withdrawals } = await loadLedgerContext(userId);
+    const ledgerByGoal = summarizeLedger(loans, withdrawals).byGoal;
     const goalsWithProgress = computeCurrentAmounts(
       goals.map(g => ({ ...g, _id: g._id.toString() })),
-      savingsDocs
+      savingsDocs,
+      ledgerByGoal
     );
 
     return res.status(200).json({ goals: goalsWithProgress });
@@ -404,6 +432,28 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const goalId = asPlainString(req.body?.goalId || req.body?.id || req.query?.goalId || req.query?.id);
     if (!goalId) {
       return res.status(400).json({ error: 'goalId required' });
+    }
+
+    // S2 / C-S2-4: guard first (first write in this branch, D-SLW-16), then a dedicated
+    // owner-scoped lookup for 404 (Mongo had none before S2 — the old code derived 404 purely
+    // from deleteOne's deletedCount), then the open-loan check, then the existing delete. This
+    // ordering keeps a nonexistent goalId answering 404 even if a stray open loan's
+    // source.goalId happens to equal it (S2-F-3 / E-SLW-16's "เป้าหมายที่ลบแล้ว" case) — the
+    // open-loan check must never run before the existence check.
+    await acquireLedgerGuard(userId);
+
+    const existing = await goalsCol.findOne({ _id: goalId, userId });
+    if (!existing) {
+      return res.status(404).json({ error: 'Goal not found' });
+    }
+
+    const { loans } = await loadLedgerContext(userId);
+    const openLoans = loans.filter(
+      l => l.status === 'open' && l.source.type === 'goal' && l.source.goalId === goalId
+    );
+    if (openLoans.length > 0) {
+      const outstanding = Math.round(openLoans.reduce((sum, l) => sum + l.outstandingAmount, 0) * 100) / 100;
+      return res.status(409).json({ error: 'goal_has_open_loans', outstanding });
     }
 
     const result = await goalsCol.deleteOne({ _id: goalId, userId });

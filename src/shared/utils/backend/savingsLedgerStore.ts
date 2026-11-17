@@ -305,15 +305,12 @@ export function computeAvailableBalance(ctx: LedgerContext, source: SavingsLoanS
   const goal = ctx.goals.find(g => String(g._id) === source.goalId);
   if (!goal) return null;
 
-  const [withProgress] = computeCurrentAmounts([goal], requireSavingsDocs(ctx));
-  // S1 interim: computeCurrentAmounts has no ledger term yet (S2 adds `ledgerByGoal`). The line below
-  // is the exact S2 line, so the goal's own loans/withdrawals already count against "available".
-  // When S2 lands, pass summarizeLedger(...).byGoal as the third argument and DELETE these lines,
-  // otherwise the ledger is subtracted twice.
-  const ledger = summarizeLedger(ctx.loans, ctx.withdrawals).byGoal.get(String(goal._id));
-  const ledgerTotal = ledger ? ledger.outstanding + ledger.withdrawn : 0;
+  const ledgerByGoal = summarizeLedger(ctx.loans, ctx.withdrawals).byGoal;
+  const [withProgress] = computeCurrentAmounts([goal], requireSavingsDocs(ctx), ledgerByGoal);
   const currentAmount = withProgress.currentAmount;
-  // Round both branches: currentAmount is an unrounded float sum (0.7 + 0.1 = 0.7999…), which would
-  // refuse a borrow of the exact displayed amount (E-SLW-1).
-  return Math.round((ledgerTotal !== 0 ? currentAmount - ledgerTotal : currentAmount) * 100) / 100;
+  // Round: currentAmount is an unrounded float sum (0.7 + 0.1 = 0.7999…) on goals without ledger
+  // activity, which would refuse a borrow of the exact displayed amount (E-SLW-1). When the ledger
+  // term fires inside computeCurrentAmounts, it already returns a rounded value; round2 is idempotent
+  // on an already-rounded value, so this stays value-identical either way (S2-F-5).
+  return Math.round(currentAmount * 100) / 100;
 }

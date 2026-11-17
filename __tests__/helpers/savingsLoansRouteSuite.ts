@@ -323,6 +323,47 @@ export function defineSavingsLoansRouteSuite(mode: SavingsLedgerMode) {
       });
     });
 
+    // ---- GET /api/savings-goals ledger wiring (S2-F-1 / dispatch 3) ----
+
+    describe('GET /api/savings-goals wires the per-goal ledger term', () => {
+      it('a goal with an open loan and a withdrawal gets a net currentAmount and ledger metadata', async () => {
+        await seedStandardFixture();
+        await seedLoans(USER_A, [makeLoan(LOAN_1, { source: { type: 'goal', goalId: GOAL_ID }, principalAmount: 1000, outstandingAmount: 1000 })]);
+        await seedWithdrawals(USER_A, [makeWithdrawal(WD_1, { source: { type: 'goal', goalId: GOAL_ID }, amount: 500 })]);
+
+        const r = await call(goalsHandler, { userId: USER_A });
+        expect(r.status).toBe(200);
+        const goal = r.body.goals.find((g: Row) => g._id === GOAL_ID);
+        // Base currentAmount (no ledger) is 4000, per AC-SLW-07 above.
+        expect(goal.currentAmount).toBe(4000 - 1000 - 500);
+        expect(goal.metadata.outstandingLoansTotal).toBe(1000);
+        expect(goal.metadata.withdrawalsTotal).toBe(500);
+      });
+
+      it('AC-SLW-11 regression guard: a goal with no ledger activity is unaffected and defaults the new metadata to 0', async () => {
+        // seedGoals replaces the whole per-user bucket in JSON mode, so both goals are seeded in
+        // one call (unlike Mongo's additive insertMany) — ledger activity exists, but only for
+        // OTHER_GOAL_ID, and must not leak onto GOAL_ID.
+        await seedSavings(USER_A, [month('2026-09', [['เที่ยว', 4000]])]);
+        await seedGoals(USER_A, [
+          { _id: GOAL_ID, goalName: 'เที่ยว', targetAmount: 20000, status: 'active', createdAt: NOW },
+          { _id: OTHER_GOAL_ID, goalName: 'อื่น', targetAmount: 1000, status: 'active', createdAt: NOW }
+        ]);
+        await seedLoans(USER_A, [makeLoan(LOAN_1, { source: { type: 'goal', goalId: OTHER_GOAL_ID }, principalAmount: 200, outstandingAmount: 200 })]);
+
+        const r = await call(goalsHandler, { userId: USER_A });
+        expect(r.status).toBe(200);
+        const goal = r.body.goals.find((g: Row) => g._id === GOAL_ID);
+        expect(goal.currentAmount).toBe(4000);
+        expect(goal.metadata.outstandingLoansTotal).toBe(0);
+        expect(goal.metadata.withdrawalsTotal).toBe(0);
+
+        const other = r.body.goals.find((g: Row) => g._id === OTHER_GOAL_ID);
+        expect(other.currentAmount).toBe(-200);
+        expect(other.metadata.outstandingLoansTotal).toBe(200);
+      });
+    });
+
     // ---- POST ----
 
     describe('POST create', () => {
