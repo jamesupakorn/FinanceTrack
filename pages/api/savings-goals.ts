@@ -30,14 +30,12 @@ import {
 } from '../../src/shared/utils/savingsGoalAdjustments';
 import {
   computeCurrentAmounts,
-  type SavingsDocument,
   type SavingsGoal,
 } from '../../src/shared/utils/backend/savingsGoalBalances';
 import { acquireLedgerGuard, loadLedgerContext } from '../../src/shared/utils/backend/savingsLedgerStore';
 import { summarizeLedger } from '../../src/shared/utils/savingsLedger';
 
 const GOALS_JSON_FILE = 'savings-goals.json';
-const SAVINGS_JSON_FILE = 'savings.json';
 
 interface MongoSavingsGoal extends Document {
   _id: string | ObjectId;
@@ -131,21 +129,33 @@ function setJsonGoals(userId: string, goals: SavingsGoal[]) {
   updateUserData(GOALS_JSON_FILE, userId, () => ({ goals }));
 }
 
-async function computeCurrentAmountsFromJson(goals: SavingsGoal[], userId: string) {
-  const savingsBucket = getUserData(SAVINGS_JSON_FILE, userId);
-  const savingsDocs = Object.values(savingsBucket || {}) as SavingsDocument[];
-  // S2-F-1 / C-S2-1: wire the per-goal ledger term into the GET response (loans + withdrawals
-  // net currentAmount, outstandingLoansTotal / withdrawalsTotal metadata).
-  const { loans, withdrawals } = await loadLedgerContext(userId);
-  const ledgerByGoal = summarizeLedger(loans, withdrawals).byGoal;
-  return computeCurrentAmounts(goals, savingsDocs, ledgerByGoal);
+// ---- GET (shared by JSON + Mongo) ----
+
+/**
+ * Savings months and the carry-forward come from one loadLedgerContext read (C-S2c-10 revision
+ * bracket), so a concurrent prune is never seen half-applied; the ledger term (S2-F-1) and the
+ * carried term (S2c) both enter through computeCurrentAmounts, the single goal formula.
+ */
+async function computeGoalsWithProgress(goals: SavingsGoal[], userId: string) {
+  const ctx = await loadLedgerContext(userId, { includeSavings: true });
+  const ledgerByGoal = summarizeLedger(ctx.loans, ctx.withdrawals).byGoal;
+  return computeCurrentAmounts(goals, ctx.savingsDocs ?? [], ledgerByGoal, ctx.carryForward?.goalAmounts);
+}
+
+/** GET only: the bracket throws after repeated concurrent prunes; answer 500, never skewed numbers. */
+async function respondWithGoals(res: NextApiResponse, userId: string, loadGoals: () => Promise<SavingsGoal[]>) {
+  try {
+    const goals = await loadGoals();
+    return res.status(200).json({ goals: await computeGoalsWithProgress(goals, userId) });
+  } catch (error) {
+    console.error('savings-goals GET failed', (error as Error)?.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 }
 
 async function handleJsonMode(req: NextApiRequest, res: NextApiResponse, userId: string) {
   if (req.method === 'GET') {
-    const goals = getJsonGoals(userId).filter(g => g.status !== 'abandoned');
-    const goalsWithProgress = await computeCurrentAmountsFromJson(goals, userId);
-    return res.status(200).json({ goals: goalsWithProgress });
+    return respondWithGoals(res, userId, async () => getJsonGoals(userId).filter(g => g.status !== 'abandoned'));
   }
 
   if (req.method === 'POST') {
@@ -285,32 +295,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   const goalsCol = await getMongoCollection<MongoSavingsGoal>('savingsGoals');
-  const savingsCol = await getMongoCollection('savings');
-
-  // ดึง savings ทุกเดือนของ user มาใช้คำนวณ currentAmount
-  async function getAllSavings() {
-    return savingsCol.find({ userId, month: { $exists: true } }).toArray() as Promise<SavingsDocument[]>;
-  }
 
   // ------- GET -------
   if (req.method === 'GET') {
-    const goals = await goalsCol
-      .find<MongoSavingsGoal>({ userId, status: { $ne: 'abandoned' } })
-      .sort({ createdAt: -1 })
-      .toArray();
-
-    const savingsDocs = await getAllSavings();
-    // S2-F-1 / C-S2-1: wire the per-goal ledger term into the GET response (mirrors the JSON
-    // branch above — loadLedgerContext + summarizeLedger(...).byGoal as the 3rd argument).
-    const { loans, withdrawals } = await loadLedgerContext(userId);
-    const ledgerByGoal = summarizeLedger(loans, withdrawals).byGoal;
-    const goalsWithProgress = computeCurrentAmounts(
-      goals.map(g => ({ ...g, _id: g._id.toString() })),
-      savingsDocs,
-      ledgerByGoal
-    );
-
-    return res.status(200).json({ goals: goalsWithProgress });
+    return respondWithGoals(res, userId, async () => {
+      const goals = await goalsCol
+        .find<MongoSavingsGoal>({ userId, status: { $ne: 'abandoned' } })
+        .sort({ createdAt: -1 })
+        .toArray();
+      return goals.map(g => ({ ...g, _id: g._id.toString() }) as SavingsGoal);
+    });
   }
 
   // ------- POST (create) -------

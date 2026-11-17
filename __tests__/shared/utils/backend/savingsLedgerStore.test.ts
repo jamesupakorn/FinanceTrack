@@ -192,7 +192,10 @@ describe.each<Mode>(['json', 'mongo'])('savingsLedgerStore — %s mode', (mode) 
     it('reads an absent store as empty and only adds savings/goals when asked', async () => {
       expect(await store.loadLedgerContext(USER_A)).toEqual({ loans: [], withdrawals: [] });
       expect(await store.loadLedgerContext(USER_A, { includeGoals: true, includeSavings: true }))
-        .toEqual({ loans: [], withdrawals: [], savingsDocs: [], goals: [] });
+        .toEqual({
+          loans: [], withdrawals: [], savingsDocs: [], goals: [],
+          carryForward: { poolAmount: 0, goalAmounts: {}, prunedMonths: [] },
+        });
     });
 
     it('normalizes stored records through readLoans/readWithdrawals and keeps order', async () => {
@@ -215,7 +218,10 @@ describe.each<Mode>(['json', 'mongo'])('savingsLedgerStore — %s mode', (mode) 
       await seedSavings(USER_B, savingsMonths([['2026-01', [{ savings_type: 'x', savings_amount: 1 }]]]));
       await seedGoals(USER_B, [{ _id: GOAL_ID, goalName: 'B', targetAmount: 1, status: 'active' }]);
       expect(await store.loadLedgerContext(USER_A, { includeGoals: true, includeSavings: true }))
-        .toEqual({ loans: [], withdrawals: [], savingsDocs: [], goals: [] });
+        .toEqual({
+          loans: [], withdrawals: [], savingsDocs: [], goals: [],
+          carryForward: { poolAmount: 0, goalAmounts: {}, prunedMonths: [] },
+        });
     });
 
     it('drops abandoned goals and returns string goal ids', async () => {
@@ -366,6 +372,7 @@ describe.each<Mode>(['json', 'mongo'])('savingsLedgerStore — %s mode', (mode) 
         poolOutstanding: 2000,
         poolWithdrawn: 500,
         poolBalance: 7500,
+        poolCarriedForward: 0,
         totalOutstanding: 3000,
         openLoanCount: 2
       });

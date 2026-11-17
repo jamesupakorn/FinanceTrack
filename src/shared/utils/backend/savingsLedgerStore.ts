@@ -10,6 +10,8 @@
  *          savings-withdrawals.json → { "<userId>": { withdrawals: SavingsWithdrawal[] } }
  *   mongo: savingsLoans / savingsWithdrawals (one document per record, string `_id`)
  *          savingsLedgerGuards       (Mongo only: { _id: userId, touchedAt }, NO `userId` field)
+ *   read through savingsCarryForward.ts (S2c): savings-carry-forward.json / savingsCarryForward —
+ *          that module owns the container; only the savings POST prune hook writes it
  *
  * ⚠ None of these containers has a top-level `month`, so no month-window pruner may touch them
  *   (same reasoning as BR-CC-002).
@@ -22,6 +24,11 @@ import { getUserData, updateUserData } from '../../../backend/data/userUtils';
 import { assertScopedUserId } from './userRequest';
 import { calculateTotalSavings } from './apiUtils';
 import { computeCurrentAmounts, type SavingsDocument, type SavingsGoal } from './savingsGoalBalances';
+import {
+  readCarryForward,
+  readConsistentWithCarryForward,
+  type CarryForwardTotals,
+} from './savingsCarryForward';
 import {
   computePoolBalance,
   readLoans,
@@ -60,6 +67,8 @@ export interface LedgerContext {
   savingsDocs?: SavingsDocument[];
   /** Non-abandoned goals with a string `_id`; present iff `includeGoals` was set. */
   goals?: SavingsGoal[];
+  /** Carry-forward of pruned months, read in the same revision bracket as `savingsDocs` (S2c). */
+  carryForward?: CarryForwardTotals;
 }
 
 export interface LedgerSummaryTotals extends PoolBalance {
@@ -98,6 +107,9 @@ function hasRepayments(entry: unknown): boolean {
  * Loads the user's ledger (and optionally savings months and goals), normalized through
  * readLoans/readWithdrawals. Inside withAudit every Mongo read joins the request's transaction, so
  * a caller that has acquired the guard first sees state no concurrent ledger write can invalidate.
+ * `includeSavings` also loads the carry-forward, paired with the savings months through the
+ * revision bracket (C-S2c-10) so a concurrent prune can never be seen half-applied; it throws if
+ * the bracket keeps changing.
  */
 export async function loadLedgerContext(
   userId: unknown,
@@ -111,7 +123,12 @@ export async function loadLedgerContext(
       withdrawals: readWithdrawals(getUserData(WITHDRAWALS_JSON_FILE, scopedUserId).withdrawals),
     };
     if (opts.includeSavings) {
-      ctx.savingsDocs = Object.values(getUserData(SAVINGS_JSON_FILE, scopedUserId) || {}) as SavingsDocument[];
+      const { value, carryForward } = await readConsistentWithCarryForward(
+        () => readCarryForward(scopedUserId),
+        async () => Object.values(getUserData(SAVINGS_JSON_FILE, scopedUserId) || {}) as SavingsDocument[]
+      );
+      ctx.savingsDocs = value;
+      ctx.carryForward = carryForward;
     }
     if (opts.includeGoals) {
       const goals = getUserData(GOALS_JSON_FILE, scopedUserId).goals;
@@ -130,9 +147,14 @@ export async function loadLedgerContext(
   if (opts.includeSavings) {
     const savingsCol = await getMongoCollection(SAVINGS_COLLECTION);
     // Same query as savings-goals.ts GET, so both read the same months.
-    ctx.savingsDocs = await savingsCol
-      .find({ userId: scopedUserId, month: { $exists: true } })
-      .toArray() as SavingsDocument[];
+    const { value, carryForward } = await readConsistentWithCarryForward(
+      () => readCarryForward(scopedUserId),
+      async () => await savingsCol
+        .find({ userId: scopedUserId, month: { $exists: true } })
+        .toArray() as SavingsDocument[]
+    );
+    ctx.savingsDocs = value;
+    ctx.carryForward = carryForward;
   }
   if (opts.includeGoals) {
     const goalsCol = await getMongoCollection<GoalDoc>(GOALS_COLLECTION);
@@ -289,7 +311,11 @@ function requireSavingsDocs(ctx: LedgerContext): SavingsDocument[] {
 /** Pool figures plus ledger totals: the loans GET `summary` and the pool no-overdraw check share this. */
 export function computeLedgerSummary(ctx: LedgerContext): LedgerSummaryTotals {
   const summary = summarizeLedger(ctx.loans, ctx.withdrawals);
-  const pool = computePoolBalance(sumLifetimeSavings(requireSavingsDocs(ctx), calculateTotalSavings), summary);
+  const pool = computePoolBalance(
+    sumLifetimeSavings(requireSavingsDocs(ctx), calculateTotalSavings),
+    summary,
+    ctx.carryForward?.poolAmount
+  );
   return { ...pool, totalOutstanding: summary.totalOutstanding, openLoanCount: summary.openLoanCount };
 }
 
@@ -306,11 +332,17 @@ export function computeAvailableBalance(ctx: LedgerContext, source: SavingsLoanS
   if (!goal) return null;
 
   const ledgerByGoal = summarizeLedger(ctx.loans, ctx.withdrawals).byGoal;
-  const [withProgress] = computeCurrentAmounts([goal], requireSavingsDocs(ctx), ledgerByGoal);
+  const [withProgress] = computeCurrentAmounts(
+    [goal],
+    requireSavingsDocs(ctx),
+    ledgerByGoal,
+    ctx.carryForward?.goalAmounts
+  );
   const currentAmount = withProgress.currentAmount;
   // Round: currentAmount is an unrounded float sum (0.7 + 0.1 = 0.7999…) on goals without ledger
   // activity, which would refuse a borrow of the exact displayed amount (E-SLW-1). When the ledger
   // term fires inside computeCurrentAmounts, it already returns a rounded value; round2 is idempotent
-  // on an already-rounded value, so this stays value-identical either way (S2-F-5).
+  // on an already-rounded value, so this stays value-identical either way (S2-F-5). The carry-forward
+  // term (S2c) does not change this: after it, adjustments can add float dust again.
   return Math.round(currentAmount * 100) / 100;
 }

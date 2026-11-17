@@ -65,6 +65,13 @@ export function matchedAmountForGoalName(
   return currentAmount;
 }
 
+/** Inherited keys (e.g. `constructor`) and non-finite values read as 0, so they never poison the sum. */
+function carriedAmountFor(carriedByGoal: Record<string, number> | undefined, goalId: string): number {
+  if (!carriedByGoal || !Object.hasOwn(carriedByGoal, goalId)) return 0;
+  const amount: unknown = carriedByGoal[goalId];
+  return typeof amount === 'number' && Number.isFinite(amount) ? amount : 0;
+}
+
 /**
  * คำนวณ currentAmount ของแต่ละ goal:
  * currentAmount = ผลรวม savings ที่ตรงกับ goalName (case-insensitive trim match)
@@ -77,12 +84,21 @@ export function matchedAmountForGoalName(
  * เพิ่มสำหรับ goal ที่ไม่มี ledger activity
  * @param {Array} goals - goals array
  * @param {Array} savingsDocs - savings docs array (all months for this user)
+ *
+ * เมื่อส่ง carriedByGoal มา (S2c, spec §5.6): บวกยอดยกมาของเดือนที่ถูก prune แล้ว (carryForward.goalAmounts)
+ * ต่อจาก matching loop ทันที แล้วปัดทศนิยม 2 ตำแหน่ง — ทำเฉพาะเมื่อยอด !== 0 เท่านั้น goal ที่ไม่มียอดยกมา
+ * จึงเหมือนเดิมทุกประการ (AC-SLW-11) อ่านเฉพาะ own key ที่เป็นตัวเลข finite (C-S2c-4)
+ * ลำดับใน function: matching loop → carry-forward → adjustments → ledger
+ * @param {Array} goals - goals array
+ * @param {Array} savingsDocs - savings docs array (all months for this user)
  * @param {Map} [ledgerByGoal] - summarizeLedger(...).byGoal, keyed by goal._id (optional, S2)
+ * @param {Record} [carriedByGoal] - carryForward.goalAmounts, keyed by goal._id (optional, S2c)
  */
 export function computeCurrentAmounts(
   goals: SavingsGoal[],
   savingsDocs: SavingsDocument[],
-  ledgerByGoal?: Map<string, GoalLedgerTotals>
+  ledgerByGoal?: Map<string, GoalLedgerTotals>,
+  carriedByGoal?: Record<string, number>
 ) {
   return goals.map(goal => {
     const goalName = (goal.goalName || '').trim().toLowerCase();
@@ -92,6 +108,9 @@ export function computeCurrentAmounts(
       if (!doc) return;
       currentAmount = matchedAmountForGoalName(doc.savings_list, goalName, currentAmount);
     });
+
+    const carried = carriedAmountFor(carriedByGoal, String(goal._id));
+    if (carried !== 0) currentAmount = Math.round((currentAmount + carried) * 100) / 100;
 
     const adjustments = readAdjustments(goal);
     const adjustmentsTotal = sumAdjustments(adjustments);

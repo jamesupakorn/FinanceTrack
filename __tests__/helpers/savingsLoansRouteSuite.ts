@@ -277,7 +277,7 @@ export function defineSavingsLoansRouteSuite(mode: SavingsLedgerMode) {
           status: 200,
           body: {
             loans: [],
-            summary: { poolSavingsTotal: 0, poolOutstanding: 0, poolWithdrawn: 0, poolBalance: 0, totalOutstanding: 0, openLoanCount: 0 }
+            summary: { poolSavingsTotal: 0, poolOutstanding: 0, poolWithdrawn: 0, poolBalance: 0, poolCarriedForward: 0, totalOutstanding: 0, openLoanCount: 0 }
           }
         });
       });
@@ -297,6 +297,7 @@ export function defineSavingsLoansRouteSuite(mode: SavingsLedgerMode) {
           poolOutstanding: 2000,
           poolWithdrawn: 500,
           poolBalance: 7500,
+          poolCarriedForward: 0,
           totalOutstanding: 3000,
           openLoanCount: 2
         });
