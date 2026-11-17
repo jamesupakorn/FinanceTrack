@@ -95,6 +95,8 @@ export interface PoolBalance {
   poolOutstanding: number;
   poolWithdrawn: number;
   poolBalance: number;
+  /** Carry-forward of already-pruned months included in `poolSavingsTotal` (S2c); 0 when none. */
+  poolCarriedForward: number;
 }
 
 export type NormalizeLedgerNoteResult =
@@ -320,9 +322,17 @@ export function sumLifetimeSavings(
   return round2(total);
 }
 
-/** Not clamped: the pool can go negative after savings rows are lowered (E-SLW-12). */
-export function computePoolBalance(lifetimeSavings: number, summary: LedgerSummary): PoolBalance {
-  const poolSavingsTotal = round2(lifetimeSavings);
+/**
+ * Not clamped: the pool can go negative after savings rows are lowered (E-SLW-12).
+ * `carriedPool` is the carry-forward of already-pruned months (S2c, spec §5.6); with the default 0
+ * every result is identical to S1's.
+ */
+export function computePoolBalance(
+  lifetimeSavings: number,
+  summary: LedgerSummary,
+  carriedPool: number = 0
+): PoolBalance {
+  const poolSavingsTotal = round2(carriedPool + lifetimeSavings);
   const poolOutstanding = summary.pool.outstanding;
   const poolWithdrawn = summary.pool.withdrawn;
   return {
@@ -330,6 +340,7 @@ export function computePoolBalance(lifetimeSavings: number, summary: LedgerSumma
     poolOutstanding,
     poolWithdrawn,
     poolBalance: round2(poolSavingsTotal - poolOutstanding - poolWithdrawn),
+    poolCarriedForward: round2(carriedPool),
   };
 }
 

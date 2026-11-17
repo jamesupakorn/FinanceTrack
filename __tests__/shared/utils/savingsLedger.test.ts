@@ -267,6 +267,7 @@ describe('computePoolBalance', () => {
       poolOutstanding: 2000,
       poolWithdrawn: 500,
       poolBalance: 7500,
+      poolCarriedForward: 0,
     });
     expect(summary.totalOutstanding).toBe(2400);
   });
