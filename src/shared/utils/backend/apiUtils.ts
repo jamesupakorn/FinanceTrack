@@ -57,13 +57,52 @@ interface EnforceMonthLimitOptions {
   sortComparator?: (a: string, b: string) => number;
 }
 
+/**
+ * Pure month-key selector shared by `enforceMonthLimit` (Mongo) and, from S2c onward, the
+ * carry-forward prune hook (§5.8 A-5 of spec-savings-loan-withdrawal.md). Filters out non-string/
+ * empty entries, unions with `additionalMonths` (same filter), dedupes via `Set`, sorts (custom
+ * `sortComparator` or the default newest-first `b.localeCompare(a)`), then splits at `limit`:
+ * the first `limit` months are `retained`, the rest are `pruned`. Extracted out of
+ * `enforceMonthLimit` verbatim (no behaviour change, S2b) — see architecture-review-savings-loan-
+ * withdrawal-s2b.md §2.
+ */
+export function selectMonthsBeyondLimit(
+  months: unknown[],
+  limit: number,
+  options: { additionalMonths?: string[]; sortComparator?: (a: string, b: string) => number } = {}
+): { retained: string[]; pruned: string[] } {
+  const { additionalMonths = [], sortComparator } = options || {};
+
+  const monthSet = new Set<string>();
+  (months || []).forEach(monthKey => {
+    if (typeof monthKey === 'string' && monthKey.length > 0) {
+      monthSet.add(monthKey);
+    }
+  });
+  additionalMonths.forEach(monthKey => {
+    if (typeof monthKey === 'string' && monthKey.length > 0) {
+      monthSet.add(monthKey);
+    }
+  });
+
+  const comparator = typeof sortComparator === 'function'
+    ? sortComparator
+    : (a: string, b: string) => b.localeCompare(a);
+  const orderedMonths = Array.from(monthSet).sort(comparator);
+
+  return {
+    retained: orderedMonths.slice(0, limit),
+    pruned: orderedMonths.slice(limit),
+  };
+}
+
 export async function enforceMonthLimit(
   collection: MonthLimitCollection | null | undefined,
   limit: number = 15,
   options: EnforceMonthLimitOptions = {}
-): Promise<{ retainedMonths: string[] }> {
+): Promise<{ retainedMonths: string[]; prunedMonths: string[] }> {
   if (!collection || typeof collection.find !== 'function') {
-    return { retainedMonths: [] };
+    return { retainedMonths: [], prunedMonths: [] };
   }
 
   const {
@@ -77,24 +116,11 @@ export async function enforceMonthLimit(
     .find(baseFilter, { projection: { month: 1 } })
     .toArray();
 
-  const monthSet = new Set<string>();
-  monthDocs.forEach(doc => {
-    if (doc && typeof doc.month === 'string' && doc.month.length > 0) {
-      monthSet.add(doc.month);
-    }
-  });
-  additionalMonths.forEach(monthKey => {
-    if (typeof monthKey === 'string' && monthKey.length > 0) {
-      monthSet.add(monthKey);
-    }
-  });
-
-  const comparator = typeof sortComparator === 'function'
-    ? sortComparator
-    : (a: string, b: string) => b.localeCompare(a);
-  const orderedMonths = Array.from(monthSet).sort(comparator);
-  const retainedMonths = orderedMonths.slice(0, limit);
-  const monthsToDelete = orderedMonths.slice(limit);
+  const { retained: retainedMonths, pruned: monthsToDelete } = selectMonthsBeyondLimit(
+    monthDocs.map(doc => doc.month),
+    limit,
+    { additionalMonths, sortComparator }
+  );
 
   if (monthsToDelete.length > 0) {
     const deleteFilter = { ...filter, month: { $in: monthsToDelete } };
@@ -104,7 +130,7 @@ export async function enforceMonthLimit(
     await withRetention(() => collection.deleteMany(deleteFilter));
   }
 
-  return { retainedMonths };
+  return { retainedMonths, prunedMonths: monthsToDelete };
 }
 
 // Investment: map doc to month-data object

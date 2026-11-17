@@ -36,6 +36,36 @@ export interface SavingsDocument {
 }
 
 /**
+ * รวมยอด savings ของ 1 doc (`savings_list`) ที่ตรงกับ `goalNameLower`, บวกต่อจาก `initial`
+ * (running total) — สกัดออกมาจาก `computeCurrentAmounts`'s matching loop เดิมแบบ order-preserving
+ * (S2b, ไม่เปลี่ยนพฤติกรรม): เรียกครั้งละ 1 doc ตามลำดับเดิมของ `savingsDocs`, ผลรวมทศนิยมจึงเหมือน
+ * loop เดิมทุกประการ (spec §5.8 A-0, AC-SLW-37) — สำคัญเพราะ S2c's carry-forward ขึ้นกับ fold order นี้
+ * @param {unknown} savingsList - doc?.savings_list (ไม่ใช่ array หรือ falsy → คืน initial เฉย ๆ)
+ * @param {string} goalNameLower - ชื่อ goal ที่ trim + lowercase แล้ว
+ * @param {number} [initial=0] - ผลรวมที่สะสมมาจาก doc ก่อนหน้า
+ */
+export function matchedAmountForGoalName(
+  savingsList: unknown,
+  goalNameLower: string,
+  initial: number = 0
+): number {
+  if (!Array.isArray(savingsList)) return initial;
+
+  let currentAmount = initial;
+  savingsList.forEach(item => {
+    const itemType = (item?.savings_type || item?.รายการ || '').trim().toLowerCase();
+    if (itemType === goalNameLower) {
+      const raw = item.savings_amount ?? item.จำนวนเงิน ?? 0;
+      const amt = typeof raw === 'number'
+        ? raw
+        : Number(String(raw).replace(/,/g, '')) || 0;
+      currentAmount += amt;
+    }
+  });
+  return currentAmount;
+}
+
+/**
  * คำนวณ currentAmount ของแต่ละ goal:
  * currentAmount = ผลรวม savings ที่ตรงกับ goalName (case-insensitive trim match)
  *               + sumAdjustments(adjustments) (ปัดทศนิยม 2 ตำแหน่ง, ไม่ clamp ที่ 0)
@@ -59,17 +89,8 @@ export function computeCurrentAmounts(
     let currentAmount = 0;
 
     savingsDocs.forEach(doc => {
-      if (!doc || !doc.savings_list || !Array.isArray(doc.savings_list)) return;
-      doc.savings_list.forEach(item => {
-        const itemType = (item?.savings_type || item?.รายการ || '').trim().toLowerCase();
-        if (itemType === goalName) {
-          const raw = item.savings_amount ?? item.จำนวนเงิน ?? 0;
-          const amt = typeof raw === 'number'
-            ? raw
-            : Number(String(raw).replace(/,/g, '')) || 0;
-          currentAmount += amt;
-        }
-      });
+      if (!doc) return;
+      currentAmount = matchedAmountForGoalName(doc.savings_list, goalName, currentAmount);
     });
 
     const adjustments = readAdjustments(goal);
