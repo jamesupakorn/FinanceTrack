@@ -425,6 +425,17 @@ function toBangkokCalendarDate(input: string | number | Date): CalendarDate | nu
 }
 
 /**
+ * Asia/Bangkok "current month" and day of month for one instant (C-S3-13). A repayment computes
+ * it once per request and uses it for both the D-SLW-22 month range and the D-SLW-23 `dueDay`.
+ * Unparseable input → null; callers must not fall back to server-local time.
+ */
+export function toBangkokMonthDay(now: string | number | Date): { monthKey: string; day: number } | null {
+  const date = toBangkokCalendarDate(now);
+  if (!date) return null;
+  return { monthKey: `${date.year}-${String(date.month).padStart(2, '0')}`, day: date.day };
+}
+
+/**
  * Elapsed age of an open loan by Asia/Bangkok calendar dates (UX_SPEC §6.3). It is plain
  * information, never a deadline. Unparseable dates → ''. A `createdAt` after `now` reads as today.
  */
