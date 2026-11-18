@@ -4,6 +4,7 @@
  * รองรับทั้ง JSON และ MongoDB
  * - GET: อ่านข้อมูลรายเดือนหรือทั้งหมด
  * - POST: บันทึก/อัปเดตข้อมูลและลบรายการที่ถูกลบ
+ * - POST { month, repayment }: คืนเงินกู้ออม (spec-savings-loan-withdrawal §4.10) — แยกจาก POST ปกติตั้งแต่ใน handler
  * - PATCH: ตั้งค่า paid ของแถวเดียว (ADR-028) · แถว ccr_ = ยอดรวมบัตร จ่ายทั้งบัตร (+ paymentAction, cycleMonth)
  * - แถวบัตรเครดิตใน GET: ccr_<cardId> หนึ่งแถวต่อบัตร (งวดผ่อนอยู่ใน breakdown) ไม่มีคีย์ cci_ ระดับบน
  *   (spec-credit-card-spend §4.3 — 4 จุดเรียก safeBuildCreditCardRows ตรง ๆ + 1 จุดใน mergeCreditCardOnlyMonths)
@@ -18,7 +19,12 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import type { Collection, Document } from 'mongodb';
 import { mapDocToFlatItemObjectWithTotals, stripKnownTotalFields } from '../../src/shared/utils/backend/apiUtils';
 import type { z } from 'zod';
-import { parseRequestBody, monthlyExpensePostBodySchema, monthlyExpensePatchBodySchema } from '../../src/shared/utils/backend/pilotRequestSchemas';
+import {
+  parseRequestBody,
+  monthlyExpensePostBodySchema,
+  monthlyExpensePatchBodySchema,
+  monthlyExpenseRepaymentBodySchema
+} from '../../src/shared/utils/backend/pilotRequestSchemas';
 import { assertUserId, asPlainString } from '../../src/shared/utils/backend/userRequest';
 import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import { getAccountSummary, getExpenseTotals, extractRemovalKeys } from '../../src/shared/utils/commonUtils';
@@ -30,7 +36,12 @@ import {
   applyCreditCardPaidForKey,
   stripCreditCardKeys
 } from '../../src/shared/utils/backend/creditCardSync';
-import { isCreditCardRowKey } from '../../src/shared/utils/creditCardBasics';
+import { addMonths, isCreditCardRowKey } from '../../src/shared/utils/creditCardBasics';
+import { isSavingsLoanRepaymentRowKey, toBangkokMonthDay, toLedgerAmount } from '../../src/shared/utils/savingsLedger';
+import {
+  applySavingsLoanRepayment,
+  stripSavingsLoanRepaymentKeys
+} from '../../src/shared/utils/backend/savingsLoanSync';
 import { buildDefaultExpenseRows, DEFAULT_EXPENSE_ITEMS } from '../../src/shared/utils/expenseDefaults';
 import { getUserBankAccountNames, getUserBankAccounts } from '../../lib/userStore';
 import {
@@ -215,7 +226,8 @@ async function handleJsonExpensePost(req: NextApiRequest, res: NextApiResponse, 
   const expense_data = body.expense_data as ExpenseData;
   // เขียนเฉพาะ paid กลับเข้าแผนผ่อน/ยอดหมุนเวียน แล้วตัดคีย์ cci_/ccr_ ทิ้งก่อนบันทึก
   // (BR-CC-007 · BR-CC-016) — month จำเป็นเพราะคีย์ ccr_ ไม่ได้เข้ารหัสเดือนไว้ในตัวเอง
-  const payload = await applyCreditCardPaid(userId, expense_data, month);
+  // ตัดคีย์ slr_ (แถวคืนเงินกู้) ทั้งในข้อมูลและ __removeKeys — แถวที่เก็บไว้แล้วจึงไม่ถูกแก้/ลบ (D-SLW-15, C-S3-7)
+  const payload = stripSavingsLoanRepaymentKeys(await applyCreditCardPaid(userId, expense_data, month));
   const removalList = extractRemovalKeys(payload);
   const cleanData = stripKnownTotalFields(payload ?? {});
   delete cleanData.__removeKeys;
@@ -278,7 +290,10 @@ function planPaidPatch(
     return { kind: 'error', status: 409, error: 'Legacy expense document cannot be updated per row' };
   }
 
-  const hasOrdinaryRows = !!doc && Object.keys(doc).some(field => isOrdinaryRow(doc, field));
+  // slr_ rows ไม่นับเป็นแถวปกติ — เดือนที่มีแต่แถวคืนเงินกู้ยังต้อง seed แถว default (spec §4.10, C-S3-9)
+  const hasOrdinaryRows = !!doc && Object.keys(doc).some(
+    field => isOrdinaryRow(doc, field) && !isSavingsLoanRepaymentRowKey(field)
+  );
   const isDefaultKey = DEFAULT_EXPENSE_ITEMS.some(item => item.key === key);
   if (isDefaultKey && !hasOrdinaryRows) {
     const accounts = (doc?.bankAccounts && Array.isArray(doc.bankAccounts) ? doc.bankAccounts : bankAccounts) as string[];
@@ -321,6 +336,11 @@ async function handleExpensePaidPatch(
   if (!body) return;
   const { month, key, paid, paymentAction, cycleMonth } = body;
 
+  // แถว slr_ เขียนครั้งเดียวโดย flow คืนเงินกู้ — ห้ามแก้ผ่าน PATCH ทุกโหมด ก่อนเขียนอะไรทั้งสิ้น (spec §4.10, C-S3-8)
+  if (isSavingsLoanRepaymentRowKey(key)) {
+    return res.status(409).json({ error: 'repayment_row_immutable' });
+  }
+
   if (isCreditCardRowKey(key)) {
     // ccr_ = แถวยอดรวมบัตร: จ่าย/ยกเลิกทั้งบัตรในการเขียนครั้งเดียว (spec-credit-card-spend §5.3)
     const result = await applyCreditCardPaidForKey(userId, key, paid, month, paymentAction, cycleMonth);
@@ -358,6 +378,44 @@ async function handleExpensePaidPatch(
   });
 }
 
+const REPAYMENT_MONTH_WINDOW = 14; // D-SLW-22: [current − 14, current] = 15 เดือนของหน้าต่าง
+
+/**
+ * POST /api/monthly_expense { month, repayment } — คืนเงินกู้ออม (spec §4.10, D-SLW-14/22/23)
+ * เรียกจาก handler ก่อนแยกโหมด และอยู่นอก try/catch ทุกชั้นโดยตั้งใจ (C-S3-1): error ที่ throw
+ * (เช่น WriteConflict ของ Mongo) ต้องไปถึง withAudit เพื่อ rollback/retry ไม่ใช่กลายเป็น 500 ธรรมดา
+ */
+async function handleRepaymentPost(req: NextApiRequest, res: NextApiResponse, userId: string) {
+  const body = parseRequestBody(req, res, monthlyExpenseRepaymentBodySchema);
+  if (!body) return;
+  const { month, repayment } = body;
+
+  // นาฬิกาเดียวต่อ request; "เดือนปัจจุบัน" อิง Asia/Bangkok ห้าม fallback เป็นเวลาเครื่อง (C-S3-5, C-S3-13)
+  const now = new Date().toISOString();
+  const today = toBangkokMonthDay(now);
+  if (!today) throw new Error('Repayment: cannot derive the Asia/Bangkok date for this request');
+
+  if (month < addMonths(today.monthKey, -REPAYMENT_MONTH_WINDOW) || month > today.monthKey) {
+    return res.status(400).json({ error: 'month_out_of_range' });
+  }
+  const amount = toLedgerAmount(repayment.amount);
+  if (amount === null) return res.status(400).json({ error: 'invalid_amount' });
+
+  const result = await applySavingsLoanRepayment(
+    userId,
+    { loanId: repayment.loanId, amount, month, account: repayment.account },
+    { now, today }
+  );
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+
+  const { ok: _ok, ...payload } = result;
+  return res.status(201).json({ success: true, ...payload });
+}
+
+function isRepaymentPost(req: NextApiRequest): boolean {
+  return req.method === 'POST' && isRecord(req.body) && Object.hasOwn(req.body, 'repayment');
+}
+
 /**
  * ตัวจัดการหลักของ API ค่าใช้จ่ายรายเดือน
  * เลือกเส้นทางตามโหมด (JSON/MongoDB) และ method
@@ -368,6 +426,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   const userId = assertUserId(req, res);
   if (!userId) return;
   if (!validateApiRequest(req, res, 'monthly_expense')) return;
+
+  // แยกก่อนเลือกโหมด เพื่อให้ JSON/Mongo ใช้จุดเข้าเดียวกัน และ body ที่ไม่มี repayment ไม่เข้าเส้นทางนี้ (C-S3-1)
+  if (isRepaymentPost(req)) return await handleRepaymentPost(req, res, userId);
 
   if (isJsonMode()) {
     if (req.method === 'GET') {
@@ -491,7 +552,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const expense_data = body.expense_data as ExpenseData;
       // เขียนเฉพาะ paid กลับเข้าแผนผ่อน/ยอดหมุนเวียน แล้วตัดคีย์ cci_/ccr_ ทิ้งก่อนบันทึก
       // (BR-CC-007 · BR-CC-016) — month จำเป็นเพราะคีย์ ccr_ ไม่ได้เข้ารหัสเดือนไว้ในตัวเอง
-      const payload = await applyCreditCardPaid(userId, expense_data, month);
+      // ตัดคีย์ slr_ (แถวคืนเงินกู้) ทั้งในข้อมูลและ __removeKeys — แถวที่เก็บไว้แล้วจึงไม่ถูกแก้/ลบ (D-SLW-15, C-S3-7)
+      const payload = stripSavingsLoanRepaymentKeys(await applyCreditCardPaid(userId, expense_data, month));
       // ลบ field summary ก่อนบันทึก
       const removalList = extractRemovalKeys(payload);
       const cleanData = stripKnownTotalFields(payload ?? {});

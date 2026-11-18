@@ -13,6 +13,7 @@ import { END_OF_MONTH_DUE_DAY, isEndOfMonthDueDay } from '../dateUtils';
 // isCreditCardRowKey ยังเป็น .js (นอก scope ของ slice นี้) — TS จะอนุมาน type แบบหลวมให้ตามที่
 // task-context บันทึกไว้ (ดู spec §Scope A.1)
 import { isCreditCardRowKey } from '../creditCardUtils';
+import { isSavingsLoanRepaymentRowKey } from '../savingsLedger';
 import type { CardTotalExpenseRow } from '../backend/creditCardSync';
 import { LEGACY_ITEM_ACCOUNT_MAP } from '../commonUtils';
 
@@ -277,12 +278,18 @@ export const formatExpenseData = (
   //   และ Save All จะบันทึกการหายนั้นทับลงไป
   //   ต้องครอบทั้งสอง prefix — บั๊กนี้เคยหลุดขึ้น production มาแล้วครั้งหนึ่งกับ cci_
   //   (Stage 4 MAJOR-2 / AC-32 / AC-53)
+  //
+  // ⚠ แถวชำระคืนเงินยืมเงินออม (slr_) เป็นบันทึกถาวรจากระบบ ไม่ใช่แถวที่ผู้ใช้สร้าง ต้องไม่นับเป็น
+  //   "แถวปกติ" เช่นเดียวกัน ไม่งั้นเดือนที่มีแต่แถวชำระคืนจะทำให้รายการมาตรฐานหาย (spec §4.11)
+  //   ใช้ predicate แบบ strict เท่านั้น ห้ามใช้ startsWith('slr_') (C-S3-10)
   const creditCardKeys = dynamicKeys.filter(isCreditCardRowKey);
-  const persistedKeys = dynamicKeys.filter(key => !isCreditCardRowKey(key));
+  const repaymentKeys = dynamicKeys.filter(isSavingsLoanRepaymentRowKey);
+  const persistedKeys = dynamicKeys.filter(key => !isCreditCardRowKey(key) && !isSavingsLoanRepaymentRowKey(key));
   const hasPersistedRows = persistedKeys.length > 0;
   const allKeys = Array.from(new Set([
     ...(hasPersistedRows ? persistedKeys : DEFAULT_EXPENSE_KEYS),
-    ...creditCardKeys
+    ...creditCardKeys,
+    ...repaymentKeys
   ]));
 
   allKeys.forEach(item => {
@@ -330,7 +337,10 @@ export const formatExpenseData = (
     // ทุก field ของ ExpenseItem ถูกกำหนดค่าเสมอในลูปด้านบน (ไม่มี field ใดถูกข้ามแบบมีเงื่อนไข)
     // จึงใช้ cast เดียวที่นี่แทนการประกาศ type ซ้ำ
     values: formattedData as Record<string, ExpenseItem>,
-    persistedKeys: allDynamicKeys, // ← ส่งทั้งหมด รวมรายการว่างด้วย เพื่อให้ระบบรู้ว่าอะไรมาจาก API
+    // ส่งทั้งหมด รวมรายการว่างด้วย เพื่อให้ระบบรู้ว่าอะไรมาจาก API — ยกเว้น slr_ โดยตั้งใจ
+    // (Save All จึงไม่มีทางส่งแถวชำระคืนไปใน __removeKeys) ส่วน cci_/ccr_ ยังคงอยู่โดยตั้งใจเช่นกัน
+    // ความต่างนี้ไม่ใช่บั๊ก ห้าม "ปรับให้เหมือนกัน" (ผู้ใช้ตัดสินใจ Q-S3-1, C-S3-11)
+    persistedKeys: allDynamicKeys.filter(key => !isSavingsLoanRepaymentRowKey(key)),
     emptyKeysToDelete: emptyCustomKeys, // ← ส่งรายการว่างเพื่อลบ
     bankAccounts: Array.from(new Set([
       ...storedBankAccounts,

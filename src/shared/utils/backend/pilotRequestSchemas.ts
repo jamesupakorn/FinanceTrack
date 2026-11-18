@@ -55,6 +55,17 @@ export const monthlyExpensePostBodySchema = z.strictObject({
   expense_data: z.record(z.string(), z.unknown())
 });
 
+// คืนเงินกู้ออม: sub-shape แยกของ POST /api/monthly_expense (spec-savings-loan-withdrawal §4.8, D-SLW-14)
+// amount ยังเป็นค่าดิบ — route ส่งต่อให้ toLedgerAmount (400 invalid_amount)
+export const monthlyExpenseRepaymentBodySchema = z.strictObject({
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'month must be YYYY-MM'),
+  repayment: z.strictObject({
+    loanId: z.string().min(1).max(64),
+    amount: z.union([z.number().finite(), z.string().max(40)]),
+    account: z.string().max(200).optional()
+  })
+});
+
 // ADR-028: key ถูกใช้เป็น Mongo field path จึงจำกัดอักขระ ('.' และ '$' ห้าม) และกันชื่อ field ที่สงวนไว้
 const RESERVED_EXPENSE_KEYS = new Set([
   'month', '_id', 'id', 'userId', 'bankAccounts', 'accountSummary', 'totalActualPaid',
