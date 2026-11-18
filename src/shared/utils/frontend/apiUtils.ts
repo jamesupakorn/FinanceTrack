@@ -249,6 +249,19 @@ export const expenseAPI = {
 			...(paymentAction ? { paymentAction } : {}),
 			...(cycleMonth ? { cycleMonth } : {})
 		})
+	}),
+	/**
+	 * คืนเงินกู้ออม (spec-savings-loan-withdrawal §4.10/§5, S5's own addition — not `savingsLedgerAPI`,
+	 * S4's object). POST { month, repayment } → server เขียนแถว slr_ ให้เอง, client ไม่สร้าง/แก้แถวนี้เอง
+	 * (D-SLW-15). `account` ไม่ส่ง = ไม่ระบุบัญชี (server ใส่ default label เอง).
+	 */
+	repayLoan: async (
+		month: string,
+		repayment: { loanId: string; amount: number | string; account?: string }
+	): Promise<any> => jsonFetch(API_URLS.EXPENSE, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ month, repayment })
 	})
 };
 
