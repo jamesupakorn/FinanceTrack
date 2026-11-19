@@ -12,11 +12,13 @@ import BudgetHealthPanel from '../src/frontend/components/BudgetHealthPanel';
 import DashboardCalendarSection from '../src/frontend/components/DashboardCalendarSection';
 import UpcomingPayments from '../src/frontend/components/UpcomingPayments';
 import NotificationBell from '../src/frontend/components/NotificationBell';
+import SavingsLoanBadge from '../src/frontend/components/SavingsLoanBadge';
 import { RevolvingConfirmDialog } from '../src/frontend/components/ExpenseCalendarModal';
 import { useSession } from '../src/frontend/contexts/SessionContext';
 import { showToast } from '../src/shared/utils/frontend/toast';
 import {
-  incomeAPI, expenseAPI, savingsAPI, salaryAPI, dailyExpenseAPI, taxAPI, creditCardAPI, userSettingsAPI
+  incomeAPI, expenseAPI, savingsAPI, salaryAPI, dailyExpenseAPI, taxAPI, creditCardAPI, userSettingsAPI,
+  savingsLedgerAPI
 } from '../src/shared/utils/frontend/apiUtils';
 import { getMonthlySummaryModel, DEFAULT_BUDGET_THRESHOLDS } from '../src/shared/utils/frontend/monthlySummary';
 import { buildMonthEvents, collectPaidCardPayments, collectUpcomingPayments } from '../src/shared/utils/frontend/expenseEvents';
@@ -46,9 +48,13 @@ interface DashboardFetchResult {
   monthsMap: Record<string, unknown>;
   cards: DashboardCard[];
   plans: DashboardPlan[];
+  loansSummary: { totalOutstanding: number; openLoanCount: number };
   failedFields: string[];
   allFailed: boolean;
 }
+
+/** ค่าเริ่มต้นเมื่อ `savingsLedgerAPI.getLoans()` ล้มเหลว/ยังไม่โหลด — ป้าย §9 ไม่แสดงที่ 0 (D-S6-1) */
+const EMPTY_LOANS_SUMMARY = { totalOutstanding: 0, openLoanCount: 0 };
 
 interface ConfirmState {
   event: CalendarEvent;
@@ -102,6 +108,7 @@ export default function DashboardPage() {
   const [monthsMap, setMonthsMap] = useState<Record<string, unknown>>({});
   const [cards, setCards] = useState<DashboardCard[]>([]);
   const [plans, setPlans] = useState<DashboardPlan[]>([]);
+  const [loansSummary, setLoansSummary] = useState(EMPTY_LOANS_SUMMARY);
   const [loading, setLoading] = useState(true);
   const [fullError, setFullError] = useState(false);
   const [partialErrorFields, setPartialErrorFields] = useState<string[]>([]);
@@ -194,9 +201,15 @@ export default function DashboardPage() {
     const results = await Promise.allSettled([
       incomeAPI.getByMonth(monthKey), expenseAPI.getByMonth(monthKey), savingsAPI.getByMonth(monthKey),
       salaryAPI.getByMonth(monthKey), dailyExpenseAPI.getByMonth(monthKey), taxAPI.getByYear(year),
-      expenseAPI.getAll(), creditCardAPI.getCards(), creditCardAPI.getPlans()
+      expenseAPI.getAll(), creditCardAPI.getCards(), creditCardAPI.getPlans(),
+      // D-S6-1: wrapped in an async call so `savingsLedgerAPI.getLoans()` is invoked *inside* a
+      // promise, not while this array literal is being built. If `savingsLedgerAPI` is ever
+      // missing from a caller's apiUtils mock (as __tests__/pages/indexRevolvingCycleMonth.test.tsx's
+      // does), the resulting TypeError becomes a normal rejected entry for Promise.allSettled to
+      // catch, instead of throwing synchronously and crashing fetchAll before allSettled ever runs.
+      (async () => savingsLedgerAPI.getLoans())()
     ]);
-    const [incomeR, expenseR, savingsR, salaryR, dailyR, taxR, allExpenseR, cardsR, plansR] = results;
+    const [incomeR, expenseR, savingsR, salaryR, dailyR, taxR, allExpenseR, cardsR, plansR, loansR] = results;
     const failedFields: string[] = [];
     const pick = <T,>(result: PromiseSettledResult<T>, fallback: T, label: string): T => {
       if (result.status === 'fulfilled') return result.value;
@@ -206,6 +219,9 @@ export default function DashboardPage() {
     const allExpense = pick(allExpenseR, { months: {} }, 'ปฏิทิน/รายการครบกำหนด');
     const cardsResponse = pick(cardsR, { cards: [] }, 'บัตรเครดิต');
     const plansResponse = pick(plansR, { plans: [] }, 'แผนผ่อนชำระ');
+    const loansResponse = pick(loansR, {
+      loans: [], summary: { poolSavingsTotal: 0, poolOutstanding: 0, poolWithdrawn: 0, poolBalance: 0, poolCarriedForward: 0, ...EMPTY_LOANS_SUMMARY }
+    }, 'เงินยืมจากเงินออม');
     const monthsValue = allExpense?.months;
     return {
       incomeData: pick(incomeR, {}, 'รายรับ') as Record<string, unknown>,
@@ -217,6 +233,9 @@ export default function DashboardPage() {
       monthsMap: monthsValue && typeof monthsValue === 'object' ? monthsValue as Record<string, unknown> : {},
       cards: Array.isArray(cardsResponse?.cards) ? cardsResponse.cards as DashboardCard[] : [],
       plans: Array.isArray(plansResponse?.plans) ? plansResponse.plans as DashboardPlan[] : [],
+      loansSummary: loansResponse?.summary && typeof loansResponse.summary.totalOutstanding === 'number'
+        ? { totalOutstanding: loansResponse.summary.totalOutstanding, openLoanCount: loansResponse.summary.openLoanCount ?? 0 }
+        : EMPTY_LOANS_SUMMARY,
       failedFields,
       allFailed: results.every(result => result.status === 'rejected')
     };
@@ -232,6 +251,7 @@ export default function DashboardPage() {
     setMonthsMap(data.monthsMap);
     setCards(data.cards);
     setPlans(data.plans);
+    setLoansSummary(data.loansSummary);
     setFullError(data.allFailed);
     setPartialErrorFields(data.allFailed ? [] : data.failedFields);
     if (data.failedFields.length > 0 && !data.allFailed) setNoticeDismissed(false);
@@ -458,10 +478,11 @@ export default function DashboardPage() {
   } else if (fullError) {
     body = <div role="alert" className="flex flex-wrap items-center justify-between gap-space-3 rounded-md border border-neg/35 bg-neg/10 p-space-4 text-neg"><span>โหลดข้อมูลภาพรวมไม่สำเร็จ</span><button type="button" className={`min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-semibold text-primary ${FOCUS_RING}`} onClick={() => void refreshData()}>ลองอีกครั้ง</button></div>;
   } else if (isTrulyEmpty) {
-    body = <div className="flex flex-col gap-space-4"><div className="flex flex-col items-center gap-space-3 py-space-7 text-center md:py-space-8"><Icons.BarChart size={40} color="var(--accent)" /><h2 className="text-xl font-semibold text-primary">ยังไม่มีข้อมูลของเดือนนี้</h2><p className="text-secondary">เริ่มจากบันทึกรายรับของเดือนนี้ แล้วภาพรวมจะคำนวณให้อัตโนมัติ</p></div>{renderQuickActions({ includeCalendarAction: false })}</div>;
+    body = <div className="flex flex-col gap-space-4"><SavingsLoanBadge totalOutstanding={loansSummary.totalOutstanding} openLoanCount={loansSummary.openLoanCount} /><div className="flex flex-col items-center gap-space-3 py-space-7 text-center md:py-space-8"><Icons.BarChart size={40} color="var(--accent)" /><h2 className="text-xl font-semibold text-primary">ยังไม่มีข้อมูลของเดือนนี้</h2><p className="text-secondary">เริ่มจากบันทึกรายรับของเดือนนี้ แล้วภาพรวมจะคำนวณให้อัตโนมัติ</p></div>{renderQuickActions({ includeCalendarAction: false })}</div>;
   } else {
     body = <>
       {partialErrorFields.length > 0 && !noticeDismissed && <div role="alert" className="mb-space-4 flex flex-wrap items-center justify-between gap-space-3 rounded-md border border-neg bg-neg/10 p-space-4 text-primary"><span>{`โหลดข้อมูลบางส่วนไม่สำเร็จ: ${partialErrorFields.join(', ')}`}</span><div className="flex items-center gap-space-2"><button type="button" className={`min-h-11 rounded-full border border-neg bg-transparent px-space-4 font-semibold text-primary ${FOCUS_RING}`} onClick={() => void refreshData()}>ลองอีกครั้ง</button><button type="button" className={`min-h-11 min-w-11 rounded-full border-none bg-transparent text-secondary ${FOCUS_RING}`} onClick={() => setNoticeDismissed(true)} aria-label="ปิดข้อความแจ้งเตือน"><Icons.X size={16} /></button></div></div>}
+      <SavingsLoanBadge totalOutstanding={loansSummary.totalOutstanding} openLoanCount={loansSummary.openLoanCount} />
       <div className="flex flex-col gap-space-4 lg:grid lg:grid-cols-12 lg:items-start lg:gap-space-5">
         <div className={`${GRID_ITEM} flex flex-col gap-space-4 lg:col-span-5 lg:gap-space-5`}>
           <UpcomingPayments upcoming={upcoming} filter={ringFilter} onClearFilter={() => setRingFilter(null)} onViewCalendar={scrollToCalendar} pendingKeys={pendingKeys} onToggleInstallment={handleToggleInstallment} onRevolvingFull={handleRevolvingFull} onRevolvingMinimum={handleRevolvingMinimumClick} highlightedKey={highlightedKey} paidEvents={paidCardEvents} onRevolvingCancel={handleRevolvingCancel} incomplete={partialErrorFields.length > 0} onRetry={() => void refreshData()} />
