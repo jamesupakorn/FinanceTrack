@@ -976,8 +976,8 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
                 return <Fragment key={item}>
                   {item === firstRepaymentKey && <p className="mt-space-2 text-xs font-medium text-tertiary">คืนเงินกู้ (เงินออม) · แก้ไข/ลบไม่ได้</p>}
                   <div className="min-h-14 rounded-md border border-info/30 bg-surface-2 p-space-4 opacity-70 [scroll-margin-top:calc(var(--topbar-safe-top,90px)+8px)]" data-expense-key={item}>
-                    <div className="flex items-center justify-between gap-space-2">
-                      <span className="flex items-center gap-space-2 font-medium text-secondary" title={displayName}><span aria-hidden="true">🔒</span>{displayName}</span>
+                    <div className="flex flex-wrap items-center justify-between gap-space-2">
+                      <span className="flex min-w-0 flex-[1_1_12rem] items-center gap-space-2 font-medium text-secondary" title={displayName}><span aria-hidden="true">🔒</span><span className="min-w-0 break-words">{displayName}</span></span>
                       <span className="inline-flex w-fit shrink-0 items-center gap-1 rounded-full border border-info/35 bg-info/15 px-space-2 py-[2px] text-xs font-medium text-info">คืนเงินกู้ (เงินออม)</span>
                     </div>
                     <p className="mt-space-2 font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums text-primary">{formatCurrency(row.actual)}</p>

@@ -102,7 +102,7 @@ export default function SavingsLedgerPanel({ reloadKey = 0 }: SavingsLedgerPanel
       ) : summary ? (
         <>
           <div className="rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1">
-            <p className={`m-0 font-[family-name:var(--font-numeric)] text-3xl font-semibold tabular-nums ${poolBalance < 0 ? 'text-neg' : 'text-primary'}`}>
+            <p className={`m-0 break-words font-[family-name:var(--font-numeric)] text-3xl font-semibold tabular-nums ${poolBalance < 0 ? 'text-neg' : 'text-primary'}`}>
               {poolBalance < 0 ? `−${formatCurrency(Math.abs(poolBalance))}` : formatCurrency(poolBalance)} ฿
             </p>
             {poolBalance < 0 && (
@@ -111,15 +111,15 @@ export default function SavingsLedgerPanel({ reloadKey = 0 }: SavingsLedgerPanel
               </p>
             )}
             <dl className="m-0 mt-space-2 flex flex-col gap-space-1 text-sm text-secondary">
-              <div className="flex items-center justify-between gap-space-2">
+              <div className="flex flex-wrap items-center justify-between gap-space-2">
                 <dt>เงินออมที่บันทึกไว้</dt>
                 <dd className="m-0 tabular-nums text-primary">{formatCurrency(summary.poolSavingsTotal)}</dd>
               </div>
-              <div className="flex items-center justify-between gap-space-2">
+              <div className="flex flex-wrap items-center justify-between gap-space-2">
                 <dt>ยืมออกไป (ยังไม่คืน)</dt>
                 <dd className="m-0 tabular-nums text-primary">{`− ${formatCurrency(summary.poolOutstanding)}`}</dd>
               </div>
-              <div className="flex items-center justify-between gap-space-2">
+              <div className="flex flex-wrap items-center justify-between gap-space-2">
                 <dt>ถอนออกแล้ว</dt>
                 <dd className="m-0 tabular-nums text-primary">{`− ${formatCurrency(summary.poolWithdrawn)}`}</dd>
               </div>
