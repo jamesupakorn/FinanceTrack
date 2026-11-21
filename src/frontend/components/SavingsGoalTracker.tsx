@@ -795,8 +795,8 @@ export default function SavingsGoalTracker({
                 )
               )}
 
-              <div className="mb-space-1 text-base font-semibold text-primary">{goal.goalName}</div>
-              {goal.description && <div className="mb-space-2 text-sm text-secondary">{goal.description}</div>}
+              <div className="mb-space-1 break-words text-base font-semibold text-primary">{goal.goalName}</div>
+              {goal.description && <div className="mb-space-2 break-words text-sm text-secondary">{goal.description}</div>}
               <ProgressBar percent={pct} status={goal.status} />
               <div className="mt-space-1 flex flex-wrap items-center justify-between gap-space-1 text-sm text-secondary"><span>ออมแล้ว: <strong className={`font-semibold ${current < 0 ? 'text-neg' : 'text-accent'}`}>{formatCurrency(current)}</strong></span><span className="text-tertiary">เป้า: {formatCurrency(target)}</span></div>
               {remaining > 0 && <div className="mt-space-1 text-xs text-tertiary">ยังขาดอีก <strong className="font-semibold text-warn">{formatCurrency(remaining)}</strong></div>}
@@ -873,7 +873,7 @@ export default function SavingsGoalTracker({
           <summary className={`cursor-pointer select-none py-space-2 text-sm font-medium text-secondary marker:content-none [&::-webkit-details-marker]:hidden ${FOCUS_RING}`}>{completedOpen || hasGoalRestriction ? '▼' : '▶'} ✅ เป้าหมายที่สำเร็จแล้ว ({visibleCompletedGoals.length})</summary>
           <div className="flex flex-col gap-space-4">{visibleCompletedGoals.map(goal => (
             <div key={goal._id} className="rounded-md border border-border-default bg-surface-2 p-space-4 opacity-60">
-              <div className="mb-space-1 text-base font-semibold text-primary">{goal.goalName}</div><ProgressBar percent={100} status="completed" />
+              <div className="mb-space-1 break-words text-base font-semibold text-primary">{goal.goalName}</div><ProgressBar percent={100} status="completed" />
               <div className="mt-space-1 flex flex-wrap items-center justify-between gap-space-1 text-sm text-secondary"><span>ออมแล้ว: <strong className="font-semibold text-accent">{formatCurrency(goal.currentAmount || 0)}</strong></span><span className="text-tertiary">เป้า: {formatCurrency(goal.targetAmount || 0)}</span></div>
               <GoalLoanWithdrawalLines goal={goal} selectedMonth={selectedMonth} />
               <div className="mt-space-2 text-center text-sm font-semibold text-pos">🎉 สำเร็จ</div>

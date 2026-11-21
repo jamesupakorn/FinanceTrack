@@ -204,10 +204,10 @@ export default function SavingsLedgerHistory({ loans, withdrawals, goalNameById,
           <ul className="m-0 mt-space-2 flex list-none flex-col gap-space-3 p-0">
             {openLoans.map(loan => (
               <li key={loan._id} className="rounded-sm border border-border-subtle bg-surface-2 p-space-3">
-                <div className="flex items-start justify-between gap-space-2">
-                  <span className="text-sm font-medium text-primary">{`ยืมจาก${sourceLabel(loan.source)}`}</span>
-                  <span className="flex items-center gap-space-2">
-                    <span className="font-semibold tabular-nums text-primary">{`ค้าง ${formatCurrency(loan.outstandingAmount)} ฿`}</span>
+                <div className="flex flex-wrap items-start justify-between gap-space-2">
+                  <span className="min-w-0 flex-[1_1_12rem] break-words text-sm font-medium text-primary">{`ยืมจาก${sourceLabel(loan.source)}`}</span>
+                  <span className="flex max-w-full items-center gap-space-2">
+                    <span className="min-w-0 break-words font-semibold tabular-nums text-primary">{`ค้าง ${formatCurrency(loan.outstandingAmount)} ฿`}</span>
                     {loan.repayments.length === 0 && (
                       <RowActionMenu
                         triggerLabel={`ตัวเลือกของรายการยืม ${formatCurrency(loan.principalAmount)} บาท`}
@@ -220,7 +220,7 @@ export default function SavingsLedgerHistory({ loans, withdrawals, goalNameById,
                 <p className="m-0 mt-space-1 text-xs text-tertiary">
                   {`ยืม ${formatCurrency(loan.principalAmount)} ฿ · ${formatDateTH(loan.createdAt)}${formatLoanAge(loan.createdAt, Date.now()) ? ` · ${formatLoanAge(loan.createdAt, Date.now())}` : ''}`}
                 </p>
-                {loan.note && <p className="m-0 mt-space-1 text-xs text-secondary">{loan.note}</p>}
+                {loan.note && <p className="m-0 mt-space-1 break-words text-xs text-secondary">{loan.note}</p>}
                 {confirming?.kind === 'loan' && confirming.id === loan._id && confirmStrip(confirming)}
                 {repaymentList(loan)}
               </li>
@@ -241,12 +241,12 @@ export default function SavingsLedgerHistory({ loans, withdrawals, goalNameById,
                 return (
                   <li key={`loan-${loan._id}`} className="rounded-sm border border-border-subtle bg-surface-2 p-space-3">
                     <div className="flex items-start justify-between gap-space-2">
-                      <span className="text-sm font-medium text-primary">{`ยืมจาก${sourceLabel(loan.source)} · คืนครบแล้ว ✓`}</span>
+                      <span className="min-w-0 break-words text-sm font-medium text-primary">{`ยืมจาก${sourceLabel(loan.source)} · คืนครบแล้ว ✓`}</span>
                     </div>
                     <p className="m-0 mt-space-1 text-xs text-tertiary">
                       {`ยืม ${formatCurrency(loan.principalAmount)} ฿ · ${formatDateTH(loan.createdAt)} – ${formatDateTH(loan.closedAt)}`}
                     </p>
-                    {loan.note && <p className="m-0 mt-space-1 text-xs text-secondary">{loan.note}</p>}
+                    {loan.note && <p className="m-0 mt-space-1 break-words text-xs text-secondary">{loan.note}</p>}
                     {repaymentList(loan)}
                   </li>
                 );
@@ -254,10 +254,10 @@ export default function SavingsLedgerHistory({ loans, withdrawals, goalNameById,
               const withdrawal = row.withdrawal;
               return (
                 <li key={`withdrawal-${withdrawal._id}`} className="rounded-sm border border-border-subtle bg-surface-2 p-space-3">
-                  <div className="flex items-start justify-between gap-space-2">
-                    <span className="text-sm font-medium text-primary">{`ถอนจาก${sourceLabel(withdrawal.source)}`}</span>
-                    <span className="flex items-center gap-space-2">
-                      <span className="font-semibold tabular-nums text-neg"><span className="sr-only">ถอน </span>{`−${formatCurrency(withdrawal.amount)} ฿`}</span>
+                  <div className="flex flex-wrap items-start justify-between gap-space-2">
+                    <span className="min-w-0 flex-[1_1_12rem] break-words text-sm font-medium text-primary">{`ถอนจาก${sourceLabel(withdrawal.source)}`}</span>
+                    <span className="flex max-w-full items-center gap-space-2">
+                      <span className="min-w-0 break-words font-semibold tabular-nums text-neg"><span className="sr-only">ถอน </span>{`−${formatCurrency(withdrawal.amount)} ฿`}</span>
                       <RowActionMenu
                         triggerLabel={`ตัวเลือกของรายการถอน ${formatCurrency(withdrawal.amount)} บาท`}
                         triggerDataId={withdrawal._id}
@@ -266,7 +266,7 @@ export default function SavingsLedgerHistory({ loans, withdrawals, goalNameById,
                     </span>
                   </div>
                   <p className="m-0 mt-space-1 text-xs text-tertiary">{formatDateTH(withdrawal.createdAt)}</p>
-                  {withdrawal.note && <p className="m-0 mt-space-1 text-xs text-secondary">{withdrawal.note}</p>}
+                  {withdrawal.note && <p className="m-0 mt-space-1 break-words text-xs text-secondary">{withdrawal.note}</p>}
                   {confirming?.kind === 'withdrawal' && confirming.id === withdrawal._id && confirmStrip(confirming)}
                 </li>
               );

@@ -332,8 +332,8 @@ export default function SavingsLoanRepaymentDialog({ open, month, bankAccounts, 
                       disabled={busy}
                       onClick={() => { setSelectedLoanId(loan._id); setServerError(null); }}
                     >
-                      <span>{`${sourceLabel} — ค้าง ${formatCurrency(loan.outstandingAmount)} ฿`}</span>
-                      <span className="text-xs text-tertiary">{secondLine}</span>
+                      <span className="max-w-full break-words">{`${sourceLabel} — ค้าง ${formatCurrency(loan.outstandingAmount)} ฿`}</span>
+                      <span className="max-w-full break-words text-xs text-tertiary">{secondLine}</span>
                     </button>
                   );
                 })}
