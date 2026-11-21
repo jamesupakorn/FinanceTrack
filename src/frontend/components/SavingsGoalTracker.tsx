@@ -29,7 +29,15 @@ interface SavingsGoal {
   allocationPercent?: number | string;
   notes?: string;
   adjustments?: SavingsGoalAdjustment[];
-  metadata?: { progressPercentage?: number; remainingAmount?: number; adjustmentsTotal?: number };
+  // outstandingLoansTotal/withdrawalsTotal widened additively per C-S6-3 (savings-loan-withdrawal
+  // S6) — sourced from savingsGoalBalances.ts (S2), read-only display here, never recomputed.
+  metadata?: {
+    progressPercentage?: number;
+    remainingAmount?: number;
+    adjustmentsTotal?: number;
+    outstandingLoansTotal?: number;
+    withdrawalsTotal?: number;
+  };
   [key: string]: unknown;
 }
 
@@ -156,6 +164,42 @@ function ProgressBar({ percent, status }: { percent: number; status?: string }) 
   );
 }
 
+/**
+ * ยอดยืม/ถอนของเป้าหมายนี้ (UX_SPEC-savings-loan-withdrawal.md §7.1) — ทั้งสองค่ามาจาก
+ * server (savingsGoalBalances.ts, S2) แสดงผลเฉยๆ ไม่คำนวณซ้ำ (ARCHITECTURE constraint 19);
+ * แสดงทั้งการ์ด active และ completed (C-S6-4) โดยไม่มีสีเตือน (D-SLW-9 — ยอดค้างเป็นปกติ)
+ */
+function GoalLoanWithdrawalLines({ goal, selectedMonth }: { goal: SavingsGoal; selectedMonth?: string | null }) {
+  const outstanding = goal.metadata?.outstandingLoansTotal ?? 0;
+  const withdrawn = goal.metadata?.withdrawalsTotal ?? 0;
+  if (outstanding <= 0 && withdrawn <= 0) return null;
+  const current = goal.currentAmount || 0;
+  return (
+    <>
+      {outstanding > 0 && (
+        <div className="mt-space-1 text-xs text-secondary">
+          ยอดยืมออกจากเป้าหมายนี้{' '}
+          <strong className="font-semibold tabular-nums text-primary">{formatCurrency(outstanding)} ฿</strong>
+          {' · คืนครบจะเป็น '}
+          <strong className="font-semibold tabular-nums text-primary">{formatCurrency(current + outstanding)} ฿</strong>
+        </div>
+      )}
+      {withdrawn > 0 && (
+        <div className="mt-space-1 text-xs text-secondary">
+          ถอนออกแล้ว{' '}
+          <strong className="font-semibold tabular-nums text-primary">{formatCurrency(withdrawn)} ฿</strong>
+        </div>
+      )}
+      <a
+        href={`/workspace/savings?month=${selectedMonth ?? ''}#savings-ledger`}
+        className={`mt-space-1 inline-block min-h-11 text-xs text-accent underline-offset-2 hover:underline ${FOCUS_RING}`}
+      >
+        ดูประวัติยืม/ถอน →
+      </a>
+    </>
+  );
+}
+
 export default function SavingsGoalTracker({
   refreshTrigger,
   selectedMonth,
@@ -187,8 +231,18 @@ export default function SavingsGoalTracker({
   const [undoAdjustment, setUndoAdjustment] = useState<PendingUndoAdjustment | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const adjustButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  // ปุ่มลบ (ถังขยะ) ของการ์ด active แต่ละใบ — ใช้คืนโฟกัสให้หลังปิดข้อความ "ลบไม่ได้" (UX_SPEC §7.2)
+  const trashButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const guardCloseButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current); }, []);
+
+  // เมื่อ strip เปลี่ยนเป็นข้อความ "ลบไม่ได้" (มีเงินยืมค้าง) ให้โฟกัส [ปิด] ทันที (UX_SPEC §7.2)
+  useEffect(() => {
+    if (deleteConfirm?.kind !== 'goal') return;
+    const goal = goals.find(item => item._id === deleteConfirm.goalId);
+    if ((goal?.metadata?.outstandingLoansTotal ?? 0) > 0) guardCloseButtonRef.current?.focus();
+  }, [deleteConfirm, goals]);
 
   const loadGoals = useCallback(async () => {
     setLoading(true);
@@ -306,13 +360,28 @@ export default function SavingsGoalTracker({
 
   const handleDelete = (goalId: string) => setDeleteConfirm({ kind: 'goal', goalId });
 
+  // ปิดข้อความ "ลบไม่ได้" แล้วคืนโฟกัสให้ปุ่มถังขยะของการ์ดนั้น (UX_SPEC §7.2: focus return)
+  const closeDeleteGuard = (goalId: string) => {
+    setDeleteConfirm(null);
+    trashButtonRefs.current[goalId]?.focus();
+  };
+
   const handleDeleteConfirmed = async (goalId: string) => {
     setDeleteConfirm(null);
     try {
       await savingsGoalsAPI.delete(goalId);
       showToast('ลบเป้าหมายสำเร็จ');
       await loadGoals();
-    } catch {
+    } catch (error) {
+      // 409 goal_has_open_loans = สถานะเปลี่ยนไปแล้วที่แท็บอื่น (ยืมเงินออกจากเป้าหมายนี้ก่อนลบสำเร็จ) —
+      // ต้องขึ้นข้อความเดียวกับ guard ตัวเต็ม ไม่ใช่ 'ลบไม่สำเร็จ' แบบทั่วไป (UX_SPEC §7.2, R-SLW-6)
+      const err = error as { code?: string; data?: { outstanding?: number } } | null;
+      if (err?.code === 'goal_has_open_loans') {
+        const outstanding = typeof err.data?.outstanding === 'number' ? err.data.outstanding : 0;
+        showToast(`ลบไม่ได้ — ยังมีเงินยืมจากเป้าหมายนี้ค้างอยู่ ${formatCurrency(outstanding)} ฿ คืนให้ครบก่อน แล้วจึงลบเป้าหมายได้`, 'error');
+        await loadGoals();
+        return;
+      }
       showToast('ลบไม่สำเร็จ', 'error');
     }
   };
@@ -692,16 +761,38 @@ export default function SavingsGoalTracker({
                 <div className="flex items-center gap-space-1">
                   <button className={`${ICON_BTN} hover:bg-surface-3`} onClick={() => openEdit(goal)} aria-label={`แก้ไข ${goal.goalName}`} type="button"><Icons.Edit size={16} /></button>
                   {pct >= 100 && <button className={`${ICON_BTN} bg-pos/15 text-pos hover:bg-pos/25`} onClick={() => handleMarkComplete(goal)} aria-label={`ทำเครื่องหมายว่าสำเร็จ ${goal.goalName}`} type="button">✓</button>}
-                  <button className={`${ICON_BTN} hover:bg-neg/15 hover:text-neg`} onClick={() => handleDelete(goal._id)} aria-label={`ลบ ${goal.goalName}`} type="button"><Icons.Trash size={16} /></button>
+                  <button ref={element => { trashButtonRefs.current[goal._id] = element; }} className={`${ICON_BTN} hover:bg-neg/15 hover:text-neg`} onClick={() => handleDelete(goal._id)} aria-label={`ลบ ${goal.goalName}`} type="button"><Icons.Trash size={16} /></button>
                 </div>
               </div>
 
               {deleteConfirm?.kind === 'goal' && deleteConfirm.goalId === goal._id && (
-                <div className="mb-space-2 flex flex-wrap items-center gap-space-2 rounded-sm border border-neg/25 bg-neg/10 p-space-3">
-                  <span className="min-w-0 flex-1 text-sm text-secondary">ลบ &ldquo;{goal.goalName}&rdquo; ใช่หรือไม่?</span>
-                  <button className={`min-h-11 shrink-0 rounded-sm border border-neg px-space-4 text-sm font-semibold text-neg ${FOCUS_RING}`} type="button" onClick={() => handleDeleteConfirmed(goal._id)}>ยืนยัน</button>
-                  <button className={`min-h-11 shrink-0 rounded-sm border border-border-interactive px-space-3 text-sm text-secondary ${FOCUS_RING}`} type="button" onClick={() => setDeleteConfirm(null)}>ยกเลิก</button>
-                </div>
+                (goal.metadata?.outstandingLoansTotal ?? 0) > 0 ? (
+                  // ลบไม่ได้ — ยังมีเงินยืมค้างจากเป้าหมายนี้ (UX_SPEC §7.2, R-SLW-6) — ปุ่มเดียว [ปิด]
+                  // แทนคู่ ยืนยัน/ยกเลิก; Escape ปิดเหมือนปุ่ม, โฟกัสคืนปุ่มถังขยะ (closeDeleteGuard)
+                  <div
+                    className="mb-space-2 flex flex-wrap items-center gap-space-2 rounded-sm border border-neg/25 bg-neg/10 p-space-3"
+                    role="alert"
+                    onKeyDown={event => { if (event.key === 'Escape') closeDeleteGuard(goal._id); }}
+                  >
+                    <span className="min-w-0 flex-1 text-sm text-secondary">
+                      {`ลบไม่ได้ — ยังมีเงินยืมจากเป้าหมายนี้ค้างอยู่ ${formatCurrency(goal.metadata?.outstandingLoansTotal ?? 0)} ฿ คืนให้ครบก่อน แล้วจึงลบเป้าหมายได้`}
+                    </span>
+                    <button
+                      ref={element => { guardCloseButtonRef.current = element; }}
+                      className={`min-h-11 shrink-0 rounded-sm border border-border-interactive px-space-4 text-sm font-semibold text-primary ${FOCUS_RING}`}
+                      type="button"
+                      onClick={() => closeDeleteGuard(goal._id)}
+                    >
+                      ปิด
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mb-space-2 flex flex-wrap items-center gap-space-2 rounded-sm border border-neg/25 bg-neg/10 p-space-3">
+                    <span className="min-w-0 flex-1 text-sm text-secondary">ลบ &ldquo;{goal.goalName}&rdquo; ใช่หรือไม่?</span>
+                    <button className={`min-h-11 shrink-0 rounded-sm border border-neg px-space-4 text-sm font-semibold text-neg ${FOCUS_RING}`} type="button" onClick={() => handleDeleteConfirmed(goal._id)}>ยืนยัน</button>
+                    <button className={`min-h-11 shrink-0 rounded-sm border border-border-interactive px-space-3 text-sm text-secondary ${FOCUS_RING}`} type="button" onClick={() => setDeleteConfirm(null)}>ยกเลิก</button>
+                  </div>
+                )
               )}
 
               <div className="mb-space-1 text-base font-semibold text-primary">{goal.goalName}</div>
@@ -709,6 +800,7 @@ export default function SavingsGoalTracker({
               <ProgressBar percent={pct} status={goal.status} />
               <div className="mt-space-1 flex flex-wrap items-center justify-between gap-space-1 text-sm text-secondary"><span>ออมแล้ว: <strong className={`font-semibold ${current < 0 ? 'text-neg' : 'text-accent'}`}>{formatCurrency(current)}</strong></span><span className="text-tertiary">เป้า: {formatCurrency(target)}</span></div>
               {remaining > 0 && <div className="mt-space-1 text-xs text-tertiary">ยังขาดอีก <strong className="font-semibold text-warn">{formatCurrency(remaining)}</strong></div>}
+              <GoalLoanWithdrawalLines goal={goal} selectedMonth={selectedMonth} />
               {pct >= 100 && <div className="mt-space-2 text-center text-sm font-semibold text-pos">🎉 บรรลุเป้าหมายแล้ว!</div>}
 
               {(() => {
@@ -783,6 +875,7 @@ export default function SavingsGoalTracker({
             <div key={goal._id} className="rounded-md border border-border-default bg-surface-2 p-space-4 opacity-60">
               <div className="mb-space-1 text-base font-semibold text-primary">{goal.goalName}</div><ProgressBar percent={100} status="completed" />
               <div className="mt-space-1 flex flex-wrap items-center justify-between gap-space-1 text-sm text-secondary"><span>ออมแล้ว: <strong className="font-semibold text-accent">{formatCurrency(goal.currentAmount || 0)}</strong></span><span className="text-tertiary">เป้า: {formatCurrency(goal.targetAmount || 0)}</span></div>
+              <GoalLoanWithdrawalLines goal={goal} selectedMonth={selectedMonth} />
               <div className="mt-space-2 text-center text-sm font-semibold text-pos">🎉 สำเร็จ</div>
             </div>
           ))}</div>

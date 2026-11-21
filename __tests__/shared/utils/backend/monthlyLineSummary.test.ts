@@ -17,6 +17,8 @@ import {
 } from '../../../../src/shared/utils/backend/lineFlexTheme';
 import { getUserCreditData } from '../../../../src/shared/utils/backend/creditCardStore';
 import { buildCardTotalExpenseRows } from '../../../../src/shared/utils/backend/creditCardSync';
+import { computeCurrentAmounts } from '../../../../src/shared/utils/backend/savingsGoalBalances';
+import { summarizeLedger } from '../../../../src/shared/utils/savingsLedger';
 
 // buildMonthlySummaryPayload pulls from userUtils/getMongoCollection/creditCardStore — in JSON
 // mode (the repo default when DATA_MODE isn't 'mongo') it reads real per-user JSON fixtures via
@@ -464,5 +466,85 @@ describe('S4 adjustments — end-to-end through getGoalSummary and both renderer
     expect(JSON.stringify(payload.goals)).not.toContain(secret);
     expect(formatMonthlySummaryText('ม.ค. 2567', payload)).not.toContain(secret);
     expect(JSON.stringify(buildMonthlySummaryFlex('ม.ค. 2567', payload))).not.toContain(secret);
+  });
+});
+
+// S7: getGoalSummary gains the carry-forward + ledger terms (AC-SLW-45/46). Extends the suite
+// with a new describe block only — every test above this one is unedited.
+describe('S7 carry-forward + ledger terms (AC-SLW-45/46)', () => {
+  const userUtils = require('../../../../src/backend/data/userUtils');
+  const goal = { _id: 'g1', goalName: 'กองทุนฉุกเฉิน', targetAmount: 10000, status: 'active' };
+  const savingsList = { '2024-01': { savings_list: [{ savings_type: 'กองทุนฉุกเฉิน', savings_amount: 2000 }] } };
+  const loan = {
+    _id: 'l1', userId: 'u001', source: { type: 'goal', goalId: 'g1' },
+    principalAmount: 1200, outstandingAmount: 1200, status: 'open', createdAt: '', updatedAt: ''
+  };
+  const withdrawal = {
+    _id: 'w1', userId: 'u001', source: { type: 'goal', goalId: 'g1' },
+    amount: 500, createdAt: ''
+  };
+  const carryForwardDoc = { poolAmount: 0, goalAmounts: { g1: 2000 }, prunedMonths: [] };
+
+  // AC-SLW-45: a goal with no carriedByGoal entry and no loans/withdrawals keeps current/remaining/
+  // progress identical to today — the new optional params default to "no change", same as the
+  // existing S4 adjustments fixture above (which this test leaves unedited).
+  it('AC-SLW-45: no carry-forward/ledger activity leaves current/remaining/progress unchanged', async () => {
+    userUtils.getUserData.mockImplementation((filename: string) => {
+      if (filename === 'savings-goals.json') return { goals: [goal] };
+      if (filename === 'savings.json') return savingsList;
+      return {};
+    });
+
+    const payload = await buildMonthlySummaryPayload('u001', '2024-01');
+    expect(payload.goals).toEqual([
+      { name: 'กองทุนฉุกเฉิน', current: 2000, target: 10000, remaining: 8000, progress: 20 }
+    ]);
+  });
+
+  // AC-SLW-46: current = matched(2000) + carried(2000) - ledger(outstanding 1200 + withdrawn 500) = 2300,
+  // cross-checked against a direct computeCurrentAmounts call on the identical fixture — the thing that
+  // actually proves "equals the app's currentAmount", not just a hand-computed literal.
+  it('AC-SLW-46: current = matched + carried - ledger, equal to computeCurrentAmounts on the same fixture', async () => {
+    userUtils.getUserData.mockImplementation((filename: string) => {
+      if (filename === 'savings-goals.json') return { goals: [goal] };
+      if (filename === 'savings.json') return savingsList;
+      if (filename === 'savings-loans.json') return { loans: [loan] };
+      if (filename === 'savings-withdrawals.json') return { withdrawals: [withdrawal] };
+      if (filename === 'savings-carry-forward.json') return carryForwardDoc;
+      return {};
+    });
+
+    const payload = await buildMonthlySummaryPayload('u001', '2024-01');
+    expect(payload.goals).toEqual([
+      { name: 'กองทุนฉุกเฉิน', current: 2300, target: 10000, remaining: 7700, progress: 23 }
+    ]);
+
+    const [expected] = computeCurrentAmounts(
+      [goal],
+      [{ savings_list: savingsList['2024-01'].savings_list }],
+      summarizeLedger([loan as never], [withdrawal as never]).byGoal,
+      carryForwardDoc.goalAmounts
+    );
+    expect(payload.goals[0].current).toBe(expected.currentAmount);
+  });
+
+  // D-SLW-30 best-effort: a rejected readCarryForward (the one JSON-mode read that can throw, via
+  // assertScopedUserId) must not fail the whole summary build — the affected goal's current just
+  // shows no carry-forward term (ledger/matching still apply as usual).
+  it('best-effort: a rejected readCarryForward still builds the payload, with no carry-forward term applied', async () => {
+    userUtils.getUserData.mockImplementation((filename: string) => {
+      if (filename === 'savings-goals.json') return { goals: [goal] };
+      if (filename === 'savings.json') return savingsList;
+      if (filename === 'savings-loans.json') return { loans: [loan] };
+      if (filename === 'savings-withdrawals.json') return { withdrawals: [withdrawal] };
+      if (filename === 'savings-carry-forward.json') throw new Error('boom');
+      return {};
+    });
+
+    const payload = await buildMonthlySummaryPayload('u001', '2024-01');
+    // matched(2000) - ledger(1700) = 300, no carry-forward term since readCarryForward's read rejected
+    expect(payload.goals).toEqual([
+      { name: 'กองทุนฉุกเฉิน', current: 300, target: 10000, remaining: 9700, progress: 3 }
+    ]);
   });
 });
