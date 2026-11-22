@@ -251,6 +251,9 @@ export default function CreditCardsPage() {
   const [backdateFailure, setBackdateFailure] = useState<BackdateFailureState | null>(null);
 
   const selectedCardId = typeof router.query.card === 'string' ? router.query.card : null;
+  // S2 (dashboard-upcoming-click-to-view): ปลายทาง "ดู" จาก UpcomingItem ของเดชบอร์ด — ส่งต่อให้ CreditCardDetail
+  // แยกวิเคราะห์เอง (parseCreditFocusKey); goTo(...) แทนที่ query ทั้งก้อนทุกครั้ง ทำให้ focus หายไปเองตอนนำทางในหน้า
+  const focusParam = typeof router.query.focus === 'string' ? router.query.focus : null;
 
   const loadData = useCallback(async ({ silent = false }: { silent?: boolean } = {}): Promise<void> => {
     if (!currentUser?.id) return;
@@ -767,6 +770,7 @@ export default function CreditCardsPage() {
             card={selectedCard}
             plans={selectedCardPlans}
             pendingKeys={pendingKeys}
+            focusKey={focusParam}
             onBack={() => goTo({})}
             onEditCard={handleOpenEditCard}
             onDeleteCard={handleDeleteCard}
