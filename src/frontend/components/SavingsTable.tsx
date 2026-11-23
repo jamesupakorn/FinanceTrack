@@ -355,9 +355,9 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b border-border-subtle bg-surface-2">
-                  <th className="p-space-3 text-left text-xs font-medium text-secondary">รายการออม</th>
-                  <th className="p-space-3 text-right text-xs font-medium text-secondary">จำนวนเงินออม</th>
-                  <th className="p-space-3 text-center text-xs font-medium text-secondary">การจัดการ</th>
+                  <th scope="col" className="p-space-3 text-left text-xs font-medium text-secondary">รายการออม</th>
+                  <th scope="col" className="p-space-3 text-right text-xs font-medium text-secondary">จำนวนเงินออม</th>
+                  <th scope="col" className="p-space-3 text-center text-xs font-medium text-secondary">การจัดการ</th>
                 </tr>
               </thead>
               <tbody>
@@ -367,6 +367,7 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
                       <select
                         value={item.savings_type || ''}
                         onChange={(event) => handleSavingsItemChange(item.id, 'savings_type', event.target.value)}
+                        aria-label="ประเภทเงินออม"
                         className={SELECT}
                       >
                         <option value="">ไม่ระบุ</option>
@@ -384,6 +385,7 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
                         onBlur={event => handleSavingsAmountBlur(event.target.value, item.id)}
                         onFocus={handleAmountInputFocus}
                         placeholder="จำนวนเงินออม"
+                        aria-label="จำนวนเงินออม"
                         className={`${INPUT} text-right font-[family-name:var(--font-numeric)] tabular-nums`}
                       />
                     </td>
@@ -418,6 +420,7 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
                   <select
                     value={item.savings_type || ''}
                     onChange={event => handleSavingsItemChange(item.id, 'savings_type', event.target.value)}
+                    aria-label="ประเภทเงินออม"
                     className={`${SELECT} flex-1`}
                   >
                     <option value="">ไม่ระบุ</option>
@@ -442,6 +445,7 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
                   onBlur={event => handleSavingsAmountBlur(event.target.value, item.id)}
                   onFocus={handleAmountInputFocus}
                   placeholder="จำนวนเงินออม"
+                  aria-label="จำนวนเงินออม"
                   className={`${INPUT} mt-space-3 text-right font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums`}
                 />
               </div>
