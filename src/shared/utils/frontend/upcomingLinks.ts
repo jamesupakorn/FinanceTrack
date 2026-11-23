@@ -2,9 +2,11 @@
  * upcomingLinks — ตัวช่วยสร้าง/แยกวิเคราะห์ "focus key" ของการ์ดเดชบอร์ด "รายการที่จะมาถึง" (`UpcomingItem`)
  *
  * S2 (credits receiver) สร้างเฉพาะส่วนนี้: `CreditFocusTarget`, `revolvingFocusKey`, `parseCreditFocusKey`
- * ตัว builder ของลิงก์ปลายทาง (`upcomingItemHref`/`upcomingCardHref`) เป็นงานของ S3 — จะมาเพิ่มในไฟล์นี้
- * แบบ additive เท่านั้น (ห้ามสร้างไฟล์นี้ใหม่/overwrite)
+ * S3 (dashboard links) เพิ่ม `upcomingItemHref`/`upcomingCardHref` แบบ additive ต่อจากนี้
  */
+
+import type { UrlObject } from 'url';
+import { WORKSPACE_SECTIONS } from './workspaceRoutes';
 
 /** ปลายทางที่ `?focus=` บน /credits ชี้ถึง — แผนผ่อนชำระ หรือ รอบยอดหมุนเวียน */
 export type CreditFocusTarget =
@@ -33,4 +35,51 @@ export function parseCreditFocusKey(focusKey: string | null | undefined, cardId:
     if (REVOLVING_MONTH_RE.test(month)) return { kind: 'revolving', month };
   }
   return { kind: 'plan', planId: focusKey };
+}
+
+/**
+ * สร้างปลายทาง (href) ของการ์ด "รายการที่จะมาถึง" บนหน้า dashboard
+ * - `plain`: ไปหน้ารายจ่ายรายเดือน เดือน = cycleMonth ที่ถูกต้อง หรือ fallback เป็นเดือนจาก isoDate
+ * - `installment`: ไปหน้า /credits โดย focus = planId (ต้องมีทั้ง card และ plan)
+ * - `revolving`: ไปหน้า /credits โดย focus = revolvingFocusKey (ถ้า cycleMonth ถูกต้อง) หรือไม่มี focus
+ * - source อื่น: คืน null (ผู้เรียกจะ render การ์ดแบบไม่มีลิงก์เหมือนเดิม)
+ */
+export function upcomingItemHref(event: {
+  source: string;
+  key: string;
+  isoDate: string;
+  cycleMonth?: string;
+  card: { id: string } | null;
+  plan?: { id: string } | null;
+}): UrlObject | null {
+  if (event.source === 'plain') {
+    const month = event.cycleMonth && REVOLVING_MONTH_RE.test(event.cycleMonth)
+      ? event.cycleMonth
+      : event.isoDate.slice(0, 7);
+    if (!REVOLVING_MONTH_RE.test(month) || !event.key) return null;
+    return { pathname: WORKSPACE_SECTIONS.expense.path, query: { month, focus: event.key } };
+  }
+
+  if (event.source === 'installment') {
+    const cardId = event.card?.id;
+    const planId = event.plan?.id;
+    if (!cardId || !planId) return null;
+    return { pathname: '/credits', query: { card: cardId, focus: planId } };
+  }
+
+  if (event.source === 'revolving') {
+    const cardId = event.card?.id;
+    if (!cardId) return null;
+    if (event.cycleMonth && REVOLVING_MONTH_RE.test(event.cycleMonth)) {
+      return { pathname: '/credits', query: { card: cardId, focus: revolvingFocusKey(cardId, event.cycleMonth) } };
+    }
+    return { pathname: '/credits', query: { card: cardId } };
+  }
+
+  return null;
+}
+
+/** สร้างปลายทาง (href) ของการ์ดบัตรเครดิต (group) บน dashboard — ไม่มี focus */
+export function upcomingCardHref(group: { card: { id: string } }): UrlObject {
+  return { pathname: '/credits', query: { card: group.card.id } };
 }
