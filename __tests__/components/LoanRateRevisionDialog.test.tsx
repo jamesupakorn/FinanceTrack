@@ -204,9 +204,9 @@ describe('LoanRateRevisionDialog', () => {
     expect(cancelButton()).toBeEnabled();
 
     // an unmapped server message is shown as is
-    reviseLoanRate.mockRejectedValueOnce(new Error('rate revision limit reached (120)'));
+    reviseLoanRate.mockRejectedValueOnce(new Error('rate revision is only for loans'));
     await act(async () => { fireEvent.click(confirmButton()); });
-    expect(screen.getByRole('alert')).toHaveTextContent('rate revision limit reached (120)');
+    expect(screen.getByRole('alert')).toHaveTextContent('rate revision is only for loans');
   });
 
   it('cancel, ✕, Escape and the backdrop close the dialog when idle', () => {
@@ -253,5 +253,42 @@ describe('creditCardAPI.reviseLoanRate', () => {
     const body = JSON.parse(options.body);
     expect(body).toMatchObject({ planId: 'ip_aaaaaaaaaaaa', effectiveMonth: '2027-12', annualRate: 7 });
     expect(Object.keys(body).filter(key => !['planId', 'effectiveMonth', 'annualRate', 'userId'].includes(key))).toEqual([]);
+  });
+});
+
+// Loan TD cleanup D3 (§I4, AC-TDC-14/15): the preview runs the shared isRevisableSchedule guard on the RAW
+// stored rows, before toNumericRows could turn '7500.00' into 7500 and hide the case the route rejects (R-TDC-5).
+describe('LoanRateRevisionDialog — malformed stored schedule', () => {
+  const MALFORMED_TEXT = 'ข้อมูลตารางผ่อนของสินเชื่อนี้ไม่สมบูรณ์ จึงปรับอัตราไม่ได้';
+  const PLACEHOLDER_TEXT = 'กรอกอัตราใหม่เพื่อดูค่างวดที่คำนวณใหม่';
+  const { effectiveMonth, annualRate } = REVISION_FIXTURE_INPUTS[0];
+
+  /** Shared fixture with tail row 21 (after k = 13) storing payment as a numeric string. */
+  function malformedPlan(): LoanRateRevisionPlan {
+    const stored = buildRevisionFixturePlan();
+    const schedule = stored.schedule.map(row => ({ ...row }));
+    schedule[20] = { ...schedule[20], payment: (schedule[20].payment as number).toFixed(2) };
+    return summarisePlan({ ...stored, schedule }) as unknown as LoanRateRevisionPlan;
+  }
+
+  it('AC-TDC-14: preview is exactly { ok: false, reason: "malformed_schedule" } where the unmodified fixture is ok', () => {
+    expect(computeLoanRateRevisionPreview(fixturePlan(), effectiveMonth, annualRate).ok).toBe(true);
+    expect(typeof malformedPlan().schedule![20].payment).toBe('string');
+    expect(computeLoanRateRevisionPreview(malformedPlan(), effectiveMonth, annualRate)).toEqual({ ok: false, reason: 'malformed_schedule' });
+  });
+
+  it('AC-TDC-15: rate 7 shows the malformed message instead of the placeholder, and confirm stays inert', () => {
+    renderDialog({ plan: malformedPlan() });
+    expect(monthSelect().value).toBe(effectiveMonth);
+    typeRate('7');
+
+    expect(screen.getByText(MALFORMED_TEXT)).toBeInTheDocument();
+    expect(screen.getByText(MALFORMED_TEXT).className).toContain('text-neg');
+    expect(screen.queryByText(PLACEHOLDER_TEXT)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('loan-rate-preview-payment')).not.toBeInTheDocument();
+    expect(confirmButton()).toBeDisabled();
+
+    fireEvent.click(confirmButton());
+    expect(reviseLoanRate).not.toHaveBeenCalled();
   });
 });
