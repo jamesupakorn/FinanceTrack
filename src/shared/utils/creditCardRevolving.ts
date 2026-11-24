@@ -535,7 +535,8 @@ export function summarisePlan(plan: PlanLike = {}): PlanLike & {
   rateRevisionCount: number;
 } {
   const schedule = Array.isArray(plan.schedule) ? plan.schedule : [];
-  // rateRevisions ยังไม่มีผู้เขียน (S4) — อ่านแบบป้องกันไว้ จึงเป็น 0 เสมอในตอนนี้
+  // /api/credit-cards/rate-revisions เขียน rateRevisions แล้ว (ตั้งแต่ S4) — การอ่านแบบ
+  // defensive ด้านล่างยังจำเป็นอยู่ เพื่อรองรับ plan เก่า/malformed ที่ยังไม่มีฟิลด์นี้
   const rateRevisions = (plan as { rateRevisions?: unknown }).rateRevisions;
   const total = schedule.length;
   const installmentsPaid = schedule.filter(row => row?.paid === true).length;

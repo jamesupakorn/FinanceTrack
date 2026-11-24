@@ -67,6 +67,13 @@ guessing from the filename alone.
   data, but a working local-dev tool.
 - **`printMongoCollections.ts`** — read-only diagnostic (counts + samples per collection). No writes.
   Clear keep.
+- **`setupMonthlyExpenseUniqueIndex.ts`** — idempotent setup of the `uniq_userId_month` unique
+  index on `monthly_expense` (TD-L08). Dry-run by default; writes only with `--apply`. Exit
+  codes: `0` nothing to do (collection absent, index already present, or a clean dry-run), `1`
+  unexpected error or an unknown CLI flag, `2` duplicate `{userId, month}` groups found (dry-run
+  or apply) or a build-time race, `3` a conflicting index already exists on `{userId, month}` or
+  under the target name with different options. Never drops or merges anything — a duplicate or
+  conflicting index stops the run untouched. **Run-state: not run.**
 
 ## Deciding whether to delete a script later
 

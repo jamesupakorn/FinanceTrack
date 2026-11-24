@@ -38,6 +38,8 @@ import {
 } from '../../src/shared/utils/backend/creditCardSync';
 import { addMonths, isCreditCardRowKey } from '../../src/shared/utils/creditCardBasics';
 import { isSavingsLoanRepaymentRowKey, toBangkokMonthDay, toLedgerAmount } from '../../src/shared/utils/savingsLedger';
+import { upsertMonthlyExpenseDoc } from '../../src/shared/utils/backend/monthlyExpenseIndex';
+import { rethrowIfTransientTransactionError } from '../../src/shared/utils/backend/mongoTransactionErrors';
 import {
   applySavingsLoanRepayment,
   stripSavingsLoanRepaymentKeys
@@ -571,15 +573,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           return acc;
         }, {});
       }
-      await collection.updateOne(
-        { month, ...userFilter },
-        updateOps,
-        { upsert: true }
-      );
+      await upsertMonthlyExpenseDoc(collection, { month, userId }, updateOps);
       // จำกัดหน้าต่าง 15 เดือนแบบรวมทุก collection (expense/income/salary/investment)
       await enforceSharedMonthWindowMongo(userId, { extraMonth: month });
       res.status(200).json({ success: true });
     } catch (error) {
+      rethrowIfTransientTransactionError(error); // a race retries via withAudit's withTransaction (D-SLW-16)
       res.status(500).json({ error: 'Failed to write monthly expense data' });
     }
   } else if (req.method === 'PATCH') {
@@ -591,11 +590,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           if (plan.kind === 'paid') {
             await collection.updateOne({ month, ...userFilter }, { $set: { [`${key}.paid`]: paid } });
           } else if (plan.kind === 'init') {
-            await collection.updateOne(
-              { month, ...userFilter },
-              { $set: { ...plan.rows, month, ...userFilter } },
-              { upsert: true }
-            );
+            await upsertMonthlyExpenseDoc(collection, { month, userId }, { $set: { ...plan.rows, month, ...userFilter } });
           }
           if (plan.kind === 'paid' || plan.kind === 'init') {
             await enforceSharedMonthWindowMongo(userId, { extraMonth: month });
@@ -604,6 +599,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         }
       });
     } catch (error) {
+      rethrowIfTransientTransactionError(error); // a race retries via withAudit's withTransaction (D-SLW-16)
       console.error('Failed to update paid state (mongo PATCH):', error);
       return res.status(500).json({ error: 'Failed to write monthly expense data' });
     }

@@ -161,7 +161,7 @@ export function buildEffectiveSchedule(input: {
 }
 
 /** แถวที่บันทึกแล้วของแผนสินเชื่อ — อาจมี paidAt/paidSource จริง หรือ field อื่นเพิ่มเติม */
-type RevisableScheduleRow = {
+export type RevisableScheduleRow = {
   no: number;
   dueMonth: string;
   payment: number;
@@ -169,6 +169,20 @@ type RevisableScheduleRow = {
   interest: number;
   paid?: boolean;
 };
+
+/**
+ * ตารางที่เก็บไว้ต้องเป็นตัวเลขครบทุกแถว (ไม่แปลงค่า) — กฎเดียวกับที่ route ตรวจก่อน reviseEffectiveScheduleTail
+ * ตัวเดียวที่ทั้ง route rate-revisions และ preview ใน LoanRateRevisionDialog ใช้ (N-4) — ห้ามเขียนซ้ำที่อื่น
+ */
+export function isRevisableSchedule(rows: readonly unknown[]): rows is RevisableScheduleRow[] {
+  return rows.every(row => {
+    const r = row as Partial<RevisableScheduleRow> | null;
+    return !!r
+      && Number.isInteger(r.no)
+      && typeof r.dueMonth === 'string'
+      && [r.payment, r.principal, r.interest].every(v => typeof v === 'number' && Number.isFinite(v));
+  });
+}
 
 export type ReviseTailFailureReason = 'paid_in_tail' | 'out_of_range' | 'no_balance';
 

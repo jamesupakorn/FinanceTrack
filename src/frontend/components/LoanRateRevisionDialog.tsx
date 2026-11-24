@@ -8,7 +8,11 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { findRevisionInstallmentNo, reviseEffectiveScheduleTail } from '../../shared/utils/creditCardAmortization';
+import {
+  findRevisionInstallmentNo,
+  isRevisableSchedule,
+  reviseEffectiveScheduleTail
+} from '../../shared/utils/creditCardAmortization';
 import { getCurrentMonthKey, round2, toAmount } from '../../shared/utils/creditCardUtils';
 import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
 import { creditCardAPI } from '../../shared/utils/frontend/apiUtils';
@@ -59,7 +63,7 @@ export type LoanRateRevisionPreview =
     delta: number;
     totalInterest: number;
   }
-  | { ok: false };
+  | { ok: false; reason?: 'malformed_schedule' };
 
 export interface LoanRateRevisionSaved {
   plan: unknown;
@@ -78,6 +82,9 @@ interface LoanRateRevisionDialogProps {
   onSaved: (result: LoanRateRevisionSaved) => void;
 }
 
+// ตารางที่เก็บไว้ไม่เป็นตัวเลขครบ — ใช้ทั้งใน preview (ก่อนส่ง) และเมื่อ route ตอบ 'plan schedule is malformed'
+const MALFORMED_SCHEDULE_TEXT = 'ข้อมูลตารางผ่อนของสินเชื่อนี้ไม่สมบูรณ์ จึงปรับอัตราไม่ได้';
+
 // ข้อความ error ของ route (ภาษาอังกฤษ) → ข้อความที่ผู้ใช้อ่านได้ ไม่รู้จักก็แสดงข้อความ server ตรง ๆ
 const SERVER_ERROR_TEXT: Record<string, string> = {
   'plan not found': 'ไม่พบตารางผ่อนนี้แล้ว — ลองโหลดหน้าใหม่',
@@ -86,8 +93,21 @@ const SERVER_ERROR_TEXT: Record<string, string> = {
   'tail has paid installments': 'มีงวดที่ชำระแล้วตั้งแต่เดือนที่เลือก — ลองโหลดหน้าใหม่',
   'effectiveMonth is before the latest revision': 'เลือกเดือนก่อนการปรับอัตราครั้งล่าสุดไม่ได้',
   'annualRate is unchanged': 'อัตราใหม่ต้องต่างจากอัตราปัจจุบัน',
-  'annualRate must be between 0 and 100': 'อัตราดอกเบี้ยต้องอยู่ระหว่าง 0–100%'
+  'annualRate must be between 0 and 100': 'อัตราดอกเบี้ยต้องอยู่ระหว่าง 0–100%',
+  'plan has no remaining balance': 'สินเชื่อนี้ไม่มีเงินต้นคงเหลือให้ปรับอัตราแล้ว',
+  'plan schedule is malformed': MALFORMED_SCHEDULE_TEXT
 };
+
+// งวดที่ปรับอัตราครบจำนวนครั้งสูงสุดแล้ว — route ส่งข้อความพร้อมจำนวนครั้งต่อท้าย เช่น "rate revision limit reached (120)"
+const RATE_REVISION_LIMIT_PREFIX = 'rate revision limit reached';
+const RATE_REVISION_LIMIT_TEXT = 'ปรับอัตราดอกเบี้ยของสินเชื่อนี้ครบจำนวนครั้งสูงสุดแล้ว';
+
+/** แปลงข้อความ error จาก server เป็นข้อความที่ผู้ใช้อ่านได้ — จับคู่ตรงก่อน จับคู่ prefix รองลงมา ไม่รู้จักก็แสดงตรง ๆ */
+function toServerErrorText(message: string): string {
+  if (Object.hasOwn(SERVER_ERROR_TEXT, message)) return SERVER_ERROR_TEXT[message];
+  if (message.startsWith(RATE_REVISION_LIMIT_PREFIX)) return RATE_REVISION_LIMIT_TEXT;
+  return message || 'ปรับอัตราดอกเบี้ยไม่สำเร็จ ลองอีกครั้ง';
+}
 
 const toNumber = (value: unknown) => toAmount(value as number | string);
 
@@ -112,7 +132,10 @@ export function computeLoanRateRevisionPreview(
   effectiveMonth: string,
   annualRate: number
 ): LoanRateRevisionPreview {
-  const rows = toNumericRows(Array.isArray(plan.schedule) ? plan.schedule : []);
+  // guard ต้องตรวจแถวดิบก่อน toNumericRows — ไม่งั้น '7500.00' จะถูกแปลงเป็น 7500 และซ่อนกรณีที่ server ตอบ 409 (R-TDC-5)
+  const rawRows = Array.isArray(plan.schedule) ? plan.schedule : [];
+  if (!isRevisableSchedule(rawRows)) return { ok: false, reason: 'malformed_schedule' };
+  const rows = toNumericRows(rawRows);
   const k = findRevisionInstallmentNo(rows, effectiveMonth);
   if (k === null || !Number.isFinite(annualRate)) return { ok: false };
   // route ปัด round2 ก่อนคำนวณ (newRate) — ปัดเหมือนกันเพื่อให้ preview ตรงกับค่าที่บันทึก
@@ -172,6 +195,7 @@ export default function LoanRateRevisionDialog({
   const [serverError, setServerError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const monthRef = useRef<HTMLSelectElement | null>(null);
+  const confirmRef = useRef<HTMLButtonElement | null>(null);
   const busyRef = useRef(false);
   busyRef.current = busy;
   const onCloseRef = useRef(onClose);
@@ -226,6 +250,13 @@ export default function LoanRateRevisionDialog({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open || !serverError) return;
+    // the save failed: busy disabled every control, so put focus back inside the dialog
+    const target = confirmRef.current && !confirmRef.current.disabled ? confirmRef.current : dialogRef.current;
+    target?.focus();
+  }, [open, serverError]);
+
   const rateError = validateRate(rateInput, currentRate);
   const rate = toAmount(rateInput);
   const rateValid = rateInput.trim() !== '' && rateError === null;
@@ -257,7 +288,7 @@ export default function LoanRateRevisionDialog({
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
-      setServerError(SERVER_ERROR_TEXT[message] ?? (message || 'ปรับอัตราดอกเบี้ยไม่สำเร็จ ลองอีกครั้ง'));
+      setServerError(toServerErrorText(message));
       busyRef.current = false;
       setBusy(false);
     }
@@ -356,6 +387,8 @@ export default function LoanRateRevisionDialog({
                 <dt className="text-secondary">ดอกเบี้ยรวมใหม่</dt>
                 <dd className="m-0 text-primary">{`${formatCurrency(preview.totalInterest)} ฿`}</dd>
               </dl>
+            ) : preview?.reason === 'malformed_schedule' ? (
+              <p className="m-0 text-sm text-neg">{MALFORMED_SCHEDULE_TEXT}</p>
             ) : (
               <p className="m-0 text-sm text-secondary">กรอกอัตราใหม่เพื่อดูค่างวดที่คำนวณใหม่</p>
             )}
@@ -371,7 +404,7 @@ export default function LoanRateRevisionDialog({
             <button type="button" className={CANCEL_BUTTON} onClick={close} disabled={busy}>
               ยกเลิก
             </button>
-            <button type="button" className={PRIMARY_BUTTON} onClick={submit} disabled={!canConfirm}>
+            <button type="button" ref={confirmRef} className={PRIMARY_BUTTON} onClick={submit} disabled={!canConfirm}>
               {busy ? 'กำลังบันทึก...' : 'ยืนยันปรับอัตรา'}
             </button>
           </div>

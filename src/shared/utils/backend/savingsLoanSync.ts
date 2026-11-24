@@ -14,6 +14,7 @@ import { getMongoCollection, isJsonMode, withGeneratedId } from '../../../../lib
 import { getUserData, updateUserData } from '../../../backend/data/userUtils';
 import { enforceSharedMonthWindowJson, enforceSharedMonthWindowMongo } from './sharedMonthWindow';
 import { loadLedgerContext, replaceLoan } from './savingsLedgerStore';
+import { upsertMonthlyExpenseDoc } from './monthlyExpenseIndex';
 import {
   isSavingsLoanRepaymentRowKey,
   planRepayment,
@@ -157,11 +158,7 @@ async function writeRepaymentRow(userId: string, month: string, rowKey: string, 
   }
   // rowKey ผ่าน REPAYMENT_ROW_KEY_RE (slr_<24hex>) จึงใช้เป็น field path ของ $set ได้ปลอดภัย (C-S3-5, C-S3-6)
   const collection = await getMongoCollection(EXPENSE_COLLECTION);
-  await collection.updateOne(
-    { month, userId },
-    { $set: { [rowKey]: row, month, userId } },
-    { upsert: true }
-  );
+  await upsertMonthlyExpenseDoc(collection, { month, userId }, { $set: { [rowKey]: row, month, userId } });
 }
 
 async function enforceMonthWindow(userId: string, month: string): Promise<void> {
