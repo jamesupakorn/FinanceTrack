@@ -11,6 +11,7 @@ import ChangePasswordModal from './ChangePasswordModal';
 import ExpenseCalendarModal from './ExpenseCalendarModal';
 import { withCsrfHeaders } from '../../shared/utils/frontend/apiUtils';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 
 interface NavItemBase {
   id: string;
@@ -252,8 +253,14 @@ export default function Layout({
     };
   }, [moreSheetOpen]);
 
-  const handleNavClick = async (item: NavItem) => {
-    setMoreSheetOpen(false);
+  // Back on the "เพิ่มเติม" sheet = Escape = backdrop (setMoreSheetOpen(false)) (R-SBC-8). Called above
+  // any early return — Layout has none, but the rule still applies to every hook call.
+  const moreSheetBack = useBackToClose(moreSheetOpen, () => setMoreSheetOpen(false));
+
+  // the original handleNavClick body, unchanged, now run after the sheet's own overlay entry (if any)
+  // is released — S-1 (F-SBC-7): a push issued while the sheet's entry is still on top would land after
+  // it and leave a dead same-URL entry.
+  const continueNav = async (item: NavItem) => {
     if (item.action === 'calendar') {
       if (typeof onCalendarNavClick === 'function') onCalendarNavClick();
       else setCalendarOpen(true);
@@ -264,6 +271,13 @@ export default function Layout({
       if (proceed === false) return;
     }
     router.push(item.href);
+  };
+
+  const handleNavClick = (item: NavItem) => {
+    setMoreSheetOpen(false);
+    // when the sheet isn't open (sidebar, bottom nav), the overlay stack holds no entry for it, so
+    // release(...) runs its callback synchronously — today's behaviour, unchanged.
+    moreSheetBack.release(() => { void continueNav(item); });
   };
 
   const renderNavIcon = (Icon: NavItem['Icon'], active: boolean) => (

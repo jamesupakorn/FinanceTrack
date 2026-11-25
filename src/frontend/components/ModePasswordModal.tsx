@@ -9,6 +9,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import styles from '../styles/ModePasswordModal.module.css';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 
 const defaultTitle = 'ใส่รหัสผ่านเพื่อเข้าโหมดแก้ไข';
 
@@ -82,6 +83,9 @@ const ModePasswordModal = ({
       triggerRef.current?.focus?.();
     };
   }, [open, onClose]);
+
+  // ไม่มี live import path ของคอมโพเนนต์นี้ (D-SBC-6) — ใส่ hook ไว้เพื่อความครบของ inventory (AC-SBC-58)
+  useBackToClose(open, () => onClose?.());
 
   const handleSubmit = (event: React.SyntheticEvent) => {
     event.preventDefault();

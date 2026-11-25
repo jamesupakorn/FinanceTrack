@@ -7,8 +7,10 @@ import Toast from '../src/frontend/components/Toast';
 import ErrorBoundary from '../src/frontend/components/ErrorBoundary';
 import { ListViewProvider } from '../src/frontend/contexts/ListViewContext';
 import { useSession } from '../src/frontend/contexts/SessionContext';
-import { useRouter } from 'next/router';
+import Router, { useRouter } from 'next/router';
+import { useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { installOverlayHistory } from '../src/shared/utils/frontend/overlayHistory';
 import '../src/frontend/styles/globals.css';
 
 // Graphite redesign fonts (UX_SPEC §3.2), self-hosted at build time via next/font — no runtime
@@ -37,6 +39,12 @@ function RouteListViews({ children }: { children: ReactNode }) {
   return <ListViewProvider key={`${router.pathname}:${currentUser?.id ?? ''}`}>{children}</ListViewProvider>;
 }
 
+// Back closes overlays first (ADR-036). Pass the next/router singleton, never a useRouter() snapshot.
+function OverlayHistoryInstaller() {
+  useEffect(() => installOverlayHistory(Router), []);
+  return null;
+}
+
 function MyApp({ Component, pageProps }: AppProps) {
   return (
     <ThemeProvider>
@@ -62,6 +70,7 @@ function MyApp({ Component, pageProps }: AppProps) {
           {/* Toast ต้อง mount ก่อน Component เสมอ — ถ้าสลับลำดับ effect ของหน้าที่ยิง showToast()
               ทันทีตอน mount (เช่น EditRedirect) อาจ dispatch เหตุการณ์ app:toast ก่อนที่ Toast จะ
               ผูก window.addEventListener ทัน (mount-order race, พบจาก Stage 4 bug log) */}
+          <OverlayHistoryInstaller />
           <Toast />
           <ErrorBoundary>
             <RouteListViews><Component {...pageProps} /></RouteListViews>

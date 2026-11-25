@@ -1,7 +1,8 @@
 /**
  * คอมโพเนนต์: UnsavedChangesDialog
  * กล่องยืนยัน "ยังไม่ได้บันทึก" ที่คุมทุกช่องทางออกจากหน้าที่มีข้อมูลยังไม่ได้บันทึกใน /workspace/*
- * (Amendment A5) — เจ้าของเดียวคือ WorkspaceShell.js ซึ่งเรียกผ่าน guard()/beforePopState/onBeforeNavigate
+ * (Amendment A5) — เจ้าของเดียวคือ WorkspaceShell.js ซึ่งเรียกผ่าน guard()/registerPopGuard (overlayHistory.ts)/
+ * onBeforeNavigate — ตัวมันเองก็เป็น overlay (useBackToClose) ดังนั้น Back บนไดอะล็อกนี้ = onStay (D-SBC-5)
  *
  * chrome (backdrop/modal/modalNarrow/modalHeader/modalTitle/closeButton/modalBody/confirmText/
  * modalFooter/secondaryButton/primaryButton) ใช้คลาสร่วมจาก CreditCardForm.module.css เหมือนที่
@@ -18,6 +19,7 @@
 import { useEffect, useRef } from 'react';
 import { Icons } from './Icons';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 import formStyles from '../styles/CreditCardForm.module.css';
 
 interface UnsavedChangesDialogProps {
@@ -31,6 +33,28 @@ export default function UnsavedChangesDialog({ open, message, onStay, onLeave }:
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const stayButtonRef = useRef<HTMLButtonElement | null>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
+
+  const leavingRef = useRef(false);
+  useEffect(() => { if (open) leavingRef.current = false; }, [open]);
+  // ทุกทาง "stay" (Back บนไดอะล็อก, Escape, backdrop, ✕, "กลับไปบันทึก") ต้องเงียบขณะที่ "ออกโดยไม่บันทึก"
+  // คิวไว้แล้วรอ self-pop settle — ถ้าไม่เช็ค leavingRef ผู้ใช้กด "กลับไปบันทึก" ในหน้าต่างนั้นจะเห็นไดอะล็อก
+  // ปิดเหมือน stay สำเร็จ แต่ onLeave ที่คิวไว้ยังยิงอยู่ดี (เด้งออกทั้งที่เลือก stay แล้ว)
+  const handleStay = () => {
+    if (leavingRef.current) return;
+    onStay();
+  };
+
+  // Back on this dialog = Escape = backdrop = ✕ = "กลับไปบันทึก" (D-SBC-5). Called above the early
+  // `return null` below — hooks can't be conditional.
+  const back = useBackToClose(open, handleStay);
+  // "ออกโดยไม่บันทึก": release this dialog's own overlay entry first, and defer onLeave (the real
+  // navigation) until that self-pop settles (F-SBC-7) — never run onLeave inline with release, or the
+  // bypassed history.back() in WorkspaceShell's guard could race the dialog's own go(-1) (INV-4).
+  const handleLeave = () => {
+    if (leavingRef.current) return;
+    leavingRef.current = true;
+    back.release(onLeave);
+  };
 
   // คืน focus ให้ element ที่เปิด dialog ตอนปิดจริง ๆ (open → false) เท่านั้น — ผูก dep กับ [open]
   // ล้วน ๆ ไม่ผสมกับ effect ข้างล่างที่ dep มี onStay ด้วย (บทเรียนเดียวกับ SalaryModal.tsx:49-64)
@@ -52,7 +76,7 @@ export default function UnsavedChangesDialog({ open, message, onStay, onLeave }:
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onStay();
+        handleStay();
         return;
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
@@ -79,7 +103,7 @@ export default function UnsavedChangesDialog({ open, message, onStay, onLeave }:
       className={formStyles.backdrop}
       role="presentation"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onStay();
+        if (event.target === event.currentTarget) handleStay();
       }}
     >
       <div
@@ -91,7 +115,7 @@ export default function UnsavedChangesDialog({ open, message, onStay, onLeave }:
       >
         <div className={formStyles.modalHeader}>
           <h2 id="unsaved-changes-dialog-title" className={formStyles.modalTitle}>ยังไม่ได้บันทึก</h2>
-          <button type="button" className={formStyles.closeButton} onClick={onStay} aria-label="ปิด" tabIndex={0}>
+          <button type="button" className={formStyles.closeButton} onClick={handleStay} aria-label="ปิด" tabIndex={0}>
             <Icons.X size={18} />
           </button>
         </div>
@@ -104,10 +128,10 @@ export default function UnsavedChangesDialog({ open, message, onStay, onLeave }:
               Shift+Tab จากปุ่มสุดท้ายกระโดดข้าม secondaryButton ไปยัง element ถัดไปนอก dialog แทนที่จะ
               วนกลับมาในนี้ — ตรงกับ root cause เดียวกับที่พบใน focus-return WebKit divergence (AC-A5-12
               §Gaps): Safari ต้องมี tabindex ชัดเจนถึงจะนับ element นั้นเข้า keyboard focus flow */}
-          <button type="button" className={formStyles.secondaryButton} onClick={onLeave} tabIndex={0}>
+          <button type="button" className={formStyles.secondaryButton} onClick={handleLeave} tabIndex={0}>
             ออกโดยไม่บันทึก
           </button>
-          <button ref={stayButtonRef} type="button" className={formStyles.primaryButton} onClick={onStay} tabIndex={0}>
+          <button ref={stayButtonRef} type="button" className={formStyles.primaryButton} onClick={handleStay} tabIndex={0}>
             กลับไปบันทึก
           </button>
         </div>

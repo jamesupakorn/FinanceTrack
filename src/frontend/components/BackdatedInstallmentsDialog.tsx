@@ -3,6 +3,7 @@ import type { TickableInstallment } from '../../shared/utils/installmentBackdate
 import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 import { Icons } from './Icons';
 import {
   PAID_PILL_CLASS,
@@ -103,6 +104,9 @@ export default function BackdatedInstallmentsDialog({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [open]);
+
+  // row 18 (spec §I5): onBack = onCancel (same path the ✕/backdrop/Escape already use), blocked = busy
+  useBackToClose(open, onCancel, { blocked: busy });
 
   if (!open) return null;
 
@@ -273,6 +277,9 @@ export function BackdatedPaidFailureDialog({
       trigger?.focus();
     };
   }, [open]);
+
+  // row 19 (spec §I5): onBack = onClose (same path the ✕/backdrop/"ปิด"/Escape already use); no busy flag here
+  useBackToClose(open, onClose);
 
   if (!open) return null;
 

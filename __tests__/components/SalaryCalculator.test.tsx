@@ -372,7 +372,7 @@ describe('SalaryCalculator', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('16. asymmetry #2: incomeAPI.save rejecting logs via console.error but still does not block success', async () => {
+  it('16. incomeAPI.save rejecting logs via console.error, does not call onSalaryUpdate, and shows the income-sync-failed error toast instead of the success toast', async () => {
     salaryAPI.getByMonth.mockResolvedValue({
       income: { salary: 30000 },
       deduct: { tax: 1500, provident_fund: 750 },
@@ -388,15 +388,19 @@ describe('SalaryCalculator', () => {
     render(<SalaryCalculator selectedMonth="2026-01" onSalaryUpdate={onSalaryUpdate} />);
     await screen.findByDisplayValue('30,000.00');
 
-    await user.click(screen.getByRole('button', { name: 'บันทึกเงินเดือน' }));
-    await waitFor(() => expect(onSalaryUpdate).toHaveBeenCalledTimes(1));
+    const saveButton = screen.getByRole('button', { name: 'บันทึกเงินเดือน' });
+    await user.click(saveButton);
+    await waitFor(() => expect(toasts.length).toBeGreaterThan(0));
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       'Failed to sync monthly income salary value:',
       expect.any(Error)
     );
     const last = toasts[toasts.length - 1];
-    expect(last.message).toBe('บันทึกข้อมูลเงินเดือนเรียบร้อย');
+    expect(last.message).toBe('บันทึกเงินเดือนแล้ว แต่อัปเดตยอดเงินเดือนในหน้ารายรับไม่สำเร็จ กดบันทึกอีกครั้ง');
+    expect(last.type).toBe('error');
+    expect(onSalaryUpdate).not.toHaveBeenCalled();
+    expect(saveButton).not.toBeDisabled();
 
     cleanup();
     consoleErrorSpy.mockRestore();

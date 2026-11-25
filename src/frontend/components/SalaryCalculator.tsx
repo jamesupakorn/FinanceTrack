@@ -21,6 +21,8 @@ import {
 import type { OvertimeMultiplier } from '../../shared/utils/overtimeUtils';
 import { randomBase36 } from '../../shared/utils/randomId';
 
+const INCOME_SYNC_FAILED_TEXT = 'บันทึกเงินเดือนแล้ว แต่อัปเดตยอดเงินเดือนในหน้ารายรับไม่สำเร็จ กดบันทึกอีกครั้ง';
+
 type ItemType = 'income' | 'deduction';
 type SalaryItem = { id: string; key: string; label: string; value: string; locked?: boolean };
 type OvertimeRow = ReturnType<typeof normaliseOvertimeRows>[number];
@@ -427,13 +429,19 @@ export default function SalaryCalculator({ selectedMonth, onSalaryUpdate, inModa
         } catch {
           // Tax sync is best-effort; salary data has already been saved.
         }
+        let incomeSynced = true;
         try {
           await incomeAPI.save(selectedMonth, { salary: netIncomeValue });
         } catch (error) {
           console.error('Failed to sync monthly income salary value:', error);
+          incomeSynced = false;
         }
-        onSalaryUpdate?.();
-        showToast('บันทึกข้อมูลเงินเดือนเรียบร้อย');
+        if (incomeSynced) {
+          onSalaryUpdate?.();
+          showToast('บันทึกข้อมูลเงินเดือนเรียบร้อย');
+        } else {
+          showToast(INCOME_SYNC_FAILED_TEXT, 'error');
+        }
       } else {
         showToast('เกิดข้อผิดพลาด: ' + (result.error || 'ไม่สามารถบันทึกได้'), 'error');
       }

@@ -21,6 +21,7 @@ import {
 import { savingsGoalsAPI } from '../../shared/utils/frontend/apiUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 import { Icons } from './Icons';
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
@@ -178,6 +179,9 @@ export default function SavingsGoalAdjustmentDialog({ open, goal, editing, onClo
       trigger?.focus();
     };
   }, [open]);
+
+  // Back = Escape path เดิมเป๊ะ รวมอาร์กิวเมนต์ 'stale' เดียวกัน เพื่อไม่ให้สัญญาณ refetch หายไป (spec §I5 row 23)
+  useBackToClose(open, () => onCloseRef.current(staleDataErrorRef.current ? 'stale' : undefined), { blocked: busy });
 
   // เครื่องหมาย '-' พิมพ์เองไม่ได้ — สัญลักษณ์มาจาก toggle เพียงอย่างเดียว (D-SGA-17)
   const hasTypedMinus = amountInput.includes('-');

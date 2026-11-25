@@ -24,6 +24,7 @@ import SalaryCalculator from './SalaryCalculator';
 import { Icons } from './Icons';
 import { formatMonthLabelTH } from '../../shared/utils/frontend/monthUtils';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 
@@ -88,6 +89,10 @@ export default function SalaryModal({ open, selectedMonth, onClose, onSaved }: S
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [open, onClose]);
+
+  // Back on this modal = Escape = backdrop = ✕ = onClose (R-SBC-8). Called above the early
+  // `return null` below (hooks rule).
+  useBackToClose(open, () => onClose?.());
 
   if (!open) return null;
 

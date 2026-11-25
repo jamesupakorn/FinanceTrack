@@ -45,6 +45,36 @@ type IncomeSetter = Dispatch<SetStateAction<IncomeValues>>;
 
 const CUSTOM_LABEL_FALLBACK = 'รายรับใหม่';
 
+/**
+ * อ่านเงินเดือนสุทธิจากข้อมูลเครื่องคำนวณเงินเดือน (salary record) ด้วย precedence เดียวกับ
+ * computeTotalIncome (monthlySummary.ts) — summary.net_income (ภาษาอังกฤษ) ชนะก่อน ตามด้วย
+ * สรุป.เงินได้สุทธิ (ภาษาไทย แบบเดิม) ค่าแรกที่ truthy ชนะ คืนค่าเป็นตัวเลข finite หรือ 0 เท่านั้น (ไม่คืน NaN)
+ */
+function readSalaryNetIncome(salaryData: unknown): number {
+  if (!salaryData || typeof salaryData !== 'object') return 0;
+  const data = salaryData as Record<string, unknown>;
+
+  const summary = data.summary;
+  const netIncomeFromSummary = summary && typeof summary === 'object' && 'net_income' in summary
+    ? (summary as Record<string, unknown>).net_income
+    : undefined;
+
+  const summaryThai = data['สรุป'];
+  const netIncomeFromSummaryThai = summaryThai && typeof summaryThai === 'object' && 'เงินได้สุทธิ' in summaryThai
+    ? (summaryThai as Record<string, unknown>)['เงินได้สุทธิ']
+    : undefined;
+
+  let selected: unknown = 0;
+  for (const value of [netIncomeFromSummary, netIncomeFromSummaryThai]) {
+    if (value) {
+      selected = value;
+      break;
+    }
+  }
+  const parsed = typeof selected === 'number' ? selected : parseFloat(String(selected));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 const INPUT = `h-11 w-full rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-base text-primary outline-none ${FOCUS_RING}`;
 const REMOVE_BTN = `flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border-interactive bg-surface-2 text-neg ${FOCUS_RING}`;
@@ -94,18 +124,14 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, onOpen
       }
     };
 
+    // display-only (I1): ไม่เขียนลง editIncome.salary อีกต่อไป — ค่านี้แสดงผลเท่านั้น ที่เขียนจริง
+    // (income.salary ที่บันทึกลง DB) เป็นหน้าที่ของ SalaryCalculator ล้วน ๆ (R-SBC-2)
     const loadSalary = async () => {
+      setSalaryNetIncome(0); // รีเซ็ตก่อนยิง GET กันไม่ให้ค่าของเดือนก่อนหน้าค้างอยู่ตอน GET ล้มเหลว (F-SBC-3)
       try {
         const salaryData = await salaryAPI.getByMonth(selectedMonth);
         if (cancelled) return;
-        if (salaryData && salaryData.สรุป) {
-          const salaryValue = salaryData.สรุป.เงินได้สุทธิ || 0;
-          setSalaryNetIncome(salaryValue);
-          setEditIncome(prev => ({
-            ...prev,
-            salary: parseAndFormat(salaryValue)
-          }));
-        }
+        setSalaryNetIncome(readSalaryNetIncome(salaryData));
       } catch (error) {
         console.error('Error loading salary data:', error);
       }
@@ -153,11 +179,15 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, onOpen
     };
   }, [editIncome, pendingScrollKey]);
 
+  // แถวเงินเดือนอยู่อันดับแรกเสมอ ไม่ว่า editIncome จะมี key 'salary' หรือไม่ก็ตาม (D-SBC-1, F-SBC-1)
+  // editIncome เป็น {} จนกว่า income GET จะเสร็จ จึงยังคงแสดง LoadingNotice ตามเดิมตอนกำลังโหลด
   const sortedIncomeKeys = useMemo(() => {
     const keys = Object.keys(editIncome || {});
-    const defaults = defaultIncomeOrder.filter(key => keys.includes(key));
-    const custom = keys.filter(key => !defaultIncomeOrder.includes(key));
-    return [...defaults, ...custom];
+    if (keys.length === 0) return [];
+    const rest = keys.filter(key => key !== 'salary');
+    const defaults = defaultIncomeOrder.filter(key => key !== 'salary' && rest.includes(key));
+    const custom = rest.filter(key => !defaultIncomeOrder.includes(key));
+    return ['salary', ...defaults, ...custom];
   }, [editIncome, defaultIncomeOrder]);
 
   const hasIncomeRows = sortedIncomeKeys.length > 0;
@@ -187,18 +217,21 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, onOpen
     return 0;
   };
 
+  // จุดอ่านจำนวนเงินจุดเดียวสำหรับทุกแถว (แถว, filter, sort, รวม) เพื่อไม่ให้ค่าขัดแย้งกันเอง (F-SBC-2)
+  const amountOf = (key: string): number => (key === 'salary' ? getSalaryDisplayValue() : parseToNumber(editIncome[key] ?? 0));
+
   const [criteria, setCriteria] = useListCriteria('income');
   const projection = useListProjection({
     rows: sortedIncomeKeys,
     getId: key => key,
     matches: key => matchesListQuery(getDisplayLabel(key), criteria.query) &&
       (!criteria.filters.amount || (criteria.filters.amount === 'zero'
-        ? parseToNumber(editIncome[key]) === 0 : parseToNumber(editIncome[key]) !== 0)),
+        ? amountOf(key) === 0 : amountOf(key) !== 0)),
     compare: (a, b) => {
       const [field, direction] = criteria.order.split(':');
       if (!field) return 0;
-      return compareListValues(field === 'name' ? getDisplayLabel(a) : parseToNumber(editIncome[a]),
-        field === 'name' ? getDisplayLabel(b) : parseToNumber(editIncome[b]), direction === 'desc');
+      return compareListValues(field === 'name' ? getDisplayLabel(a) : amountOf(a),
+        field === 'name' ? getDisplayLabel(b) : amountOf(b), direction === 'desc');
     },
     criteriaKey: JSON.stringify(criteria),
     datasetKey: JSON.stringify([selectedMonth, isLoading, salaryUpdateTrigger]),
@@ -268,13 +301,16 @@ export default function IncomeTable({ selectedMonth, salaryUpdateTrigger, onOpen
   };
 
   const totalIncomeValue = useMemo(() => {
-    return sortedIncomeKeys.reduce((sum, key) => sum + parseToNumber(editIncome[key] ?? 0), 0);
-  }, [sortedIncomeKeys, editIncome]);
+    return sortedIncomeKeys.reduce((sum, key) => sum + amountOf(key), 0);
+  }, [sortedIncomeKeys, editIncome, salaryNetIncome]);
 
   const handleSave = async (): Promise<void> => {
     if (!selectedMonth) return;
     try {
-      const incomeToSave = { ...editIncome };
+      // salary ไม่ถูกส่งไปบันทึกเด็ดขาด (R-SBC-6/AC-SBC-04) — ค่าของแถวนี้มาจาก getSalaryDisplayValue()
+      // ซึ่งอ่านจาก salary record เท่านั้น เขียนกลับไปที่ income.salary ไม่ได้ ไม่งั้นจะสร้างบั๊ก write-back
+      // ตัวเดิมที่ fix นี้เอาออกขึ้นมาใหม่ ผู้เขียนตัวจริงของ income.salary คือ SalaryCalculator (D2)
+      const { salary: _salaryIsCalculatorOwned, ...incomeToSave } = editIncome;
       const currentKeys = Object.keys(incomeToSave || {});
       const removedKeys = persistedKeys.filter(key => key !== 'salary' && !currentKeys.includes(key));
       const payload: Record<string, unknown> = formatIncomeForSave(incomeToSave, parseToNumber);

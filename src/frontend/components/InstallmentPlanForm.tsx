@@ -26,6 +26,7 @@ import { BANK_ISSUERS, isBankIssuerKey } from '../../shared/utils/creditCardBank
 import { formatCurrency, parseAndFormat } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 import { findTickableInstallments, type TickableInstallment } from '../../shared/utils/installmentBackdate';
 import { Icons } from './Icons';
 import BackdatedInstallmentsDialog from './BackdatedInstallmentsDialog';
@@ -313,6 +314,9 @@ export default function InstallmentPlanForm({
       lastMonth: computed.schedule[computed.schedule.length - 1]?.dueMonth || ''
     };
   }, [previewToken]);
+
+  // row 17 (spec §I5): onBack = the same onClose the ✕/backdrop/"ยกเลิก"/Escape paths already use
+  useBackToClose(open, () => onClose?.());
 
   if (!open) return null;
 

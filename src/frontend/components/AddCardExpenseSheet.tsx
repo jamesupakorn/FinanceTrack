@@ -22,6 +22,7 @@ import {
   isLoanCardType
 } from '../../shared/utils/creditCardUtils';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 import { Icons } from './Icons';
 
 export interface SpendDialogCard {
@@ -121,6 +122,10 @@ function SheetBody({
   const submitRef = useRef<HTMLButtonElement>(null);
   const stepFocusRef = useRef<'heading' | 'choice' | null>(null);
   const [focusField, setFocusField] = useState<{ field: string; n: number } | null>(null);
+
+  // row 16 (spec §I5): SheetBody only ever mounts while open (the outer wrapper's early return
+  // guarantees this), so `open` is the literal true; blocked = busy, same guard as the Escape handler below.
+  useBackToClose(true, onCancel, { blocked: busy });
 
   const selected = card ?? cards.find(c => c.id === cardId) ?? null;
   const dirty = name !== initialValues.current.name

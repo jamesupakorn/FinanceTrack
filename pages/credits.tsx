@@ -37,6 +37,7 @@ import { formatCurrency } from '../src/shared/utils/frontend/numberUtils';
 import { formatMonthKeyTH } from '../src/shared/utils/dateUtils';
 import { addMonths, buildSchedule, getCardDueMonth, getCurrentMonthKey, isLoanCardType, PLAN_STATUS } from '../src/shared/utils/creditCardUtils';
 import { getTabbableElements } from '../src/shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../src/shared/utils/frontend/useBackToClose';
 import AddCardExpenseSheet, {
   type AddExpenseSheetMode,
   type AddExpenseSheetStep,
@@ -158,6 +159,9 @@ function ConfirmDialog({ open, title, message, confirmLabel, onCancel, onConfirm
       triggerRef.current?.focus?.();
     };
   }, [open]);
+
+  // row 22 (spec §I5): onBack = onCancel, never onConfirm (Back's target is always the dismiss path)
+  useBackToClose(open, onCancel);
 
   if (!open) return null;
 

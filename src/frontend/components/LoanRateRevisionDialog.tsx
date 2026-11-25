@@ -18,6 +18,7 @@ import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
 import { creditCardAPI } from '../../shared/utils/frontend/apiUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 import { Icons } from './Icons';
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
@@ -264,6 +265,9 @@ export default function LoanRateRevisionDialog({
     () => (plan && effectiveMonth && rateValid ? computeLoanRateRevisionPreview(plan, effectiveMonth, rate) : null),
     [plan, effectiveMonth, rateValid, rate]
   );
+
+  // row 20 (spec §I5): onBack = onClose (the literal prop, not the local `close` wrapper), blocked = busy
+  useBackToClose(open, onClose, { blocked: busy });
 
   if (!open || !plan) return null;
 
