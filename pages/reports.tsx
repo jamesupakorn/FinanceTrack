@@ -40,6 +40,7 @@ import { formatMonthLabelTH } from '../src/shared/utils/frontend/monthUtils';
 import { downloadSummaryReportPdf } from '../src/shared/utils/frontend/reportPdf';
 import { downloadSummaryReportCsv, type ReportPayload } from '../src/shared/utils/frontend/reportCsv';
 import { getTabbableElements } from '../src/shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../src/shared/utils/frontend/useBackToClose';
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 // การ์ด/แผงหลักทุกใบใช้กติกาเดียวกัน (C1 §5 component vocabulary) — ตัวคงที่เดียวกับที่ pages/index.js ใช้
@@ -442,6 +443,9 @@ export default function ReportsPage() {
       previouslyFocused?.focus?.();
     };
   }, [reportMonthModalOpen]);
+
+  // Back = Escape path เดิม (setReportMonthModalOpen(false)) — ไม่มี blocked flag, ไม่มี navigation ต้อง sequencing
+  useBackToClose(reportMonthModalOpen, () => setReportMonthModalOpen(false));
 
   const monthLabel = selectedMonth ? getMonthLabel(selectedMonth) : '';
 

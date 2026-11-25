@@ -15,6 +15,7 @@ import { createDefault12MonthsObject, sumAccumulated, getSortedYears } from '../
 import { taxAPI, salaryAPI } from '../../shared/utils/frontend/apiUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 import { Icons } from './Icons';
 import formStyles from '../styles/CreditCardForm.module.css';
 import { useListCriteria } from '../contexts/ListViewContext';
@@ -205,6 +206,12 @@ export default function TaxTable({ selectedMonth: _selectedMonth, salaryUpdateTr
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [confirmDeleteOpen]);
+
+  // Back on this confirm dialog = Escape = backdrop = ✕ = setConfirmDeleteOpen(false) (R-SBC-8). No
+  // `blocked` option: today's Escape/backdrop/✕ aren't gated on deleteBusy either, so this matches
+  // existing behaviour exactly. No component-level early return in this file, so this can sit anywhere
+  // in the component body (unlike MonthManager).
+  useBackToClose(confirmDeleteOpen, () => setConfirmDeleteOpen(false));
 
   const handleSyncFromSalary = async () => {
     try {

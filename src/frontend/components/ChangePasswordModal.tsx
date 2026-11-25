@@ -5,6 +5,7 @@
 
 import React, { useEffect, useState } from 'react';
 import styles from '../styles/ModePasswordModal.module.css';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 
 interface PasswordPayload {
   currentPassword: string;
@@ -80,6 +81,11 @@ const ChangePasswordModal = ({
     setInternalError('');
     onSubmit({ currentPassword, newPassword });
   };
+
+  // Back = the "ยกเลิก" button — the only close path this modal has today (no Escape/backdrop, a
+  // separately-tracked a11y gap, see architecture-review.md Check 2). `blocked` mirrors the cancel
+  // button's own `disabled={isSubmitting}` (:147). Called above the early `return null` (hooks rule).
+  useBackToClose(open, onClose, { blocked: isSubmitting });
 
   if (!open) return null;
 

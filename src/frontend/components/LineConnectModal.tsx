@@ -4,6 +4,7 @@
  */
 import { useState } from 'react';
 import styles from '../styles/ModePasswordModal.module.css';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 
 interface LineConnectionPayload {
   userId: string;
@@ -23,6 +24,10 @@ export default function LineConnectModal({ open, onClose, onSubmit }: LineConnec
   const [userId, setUserId] = useState('');
   const [token, setToken] = useState('');
   const [error, setError] = useState('');
+
+  // ไม่มี live import path ของคอมโพเนนต์นี้ (D-SBC-6) — ใส่ hook ไว้เพื่อความครบของ inventory (AC-SBC-58)
+  // ไม่เพิ่ม role="dialog"/aria-modal/Escape ที่นี่ — เป็น a11y gap ที่แยกไปแก้ต่างหาก (เหมือน D5's ChangePasswordModal)
+  useBackToClose(open, onClose);
 
   if (!open) return null;
 

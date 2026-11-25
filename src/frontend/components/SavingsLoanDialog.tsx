@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { savingsGoalsAPI, savingsLedgerAPI } from '../../shared/utils/frontend/apiUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { MAX_LEDGER_NOTE_LENGTH, toLedgerAmount } from '../../shared/utils/savingsLedger';
 import SavingsSourceSelect, { buildSavingsSourceOptions, type SavingsSourceGoalOption } from './SavingsSourceSelect';
@@ -167,6 +168,9 @@ export default function SavingsLoanDialog({ open, poolBalance, onClose, onSaved 
       trigger?.focus();
     };
   }, [open]);
+
+  // Back = Escape path เดิม (D-SBC-3)
+  useBackToClose(open, onClose, { blocked: busy });
 
   if (!open) return null;
 

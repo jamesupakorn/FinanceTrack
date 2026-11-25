@@ -17,6 +17,7 @@ import { formatMonthLabelTH, collectMonthKeys, getMeaningfulMonthKeys } from '..
 import { getNextMonth } from '../../shared/utils/frontend/numberUtils';
 import { WORKSPACE_SECTIONS, sectionHref } from '../../shared/utils/frontend/workspaceRoutes';
 import { isListViewControl } from '../../shared/utils/frontend/listView';
+import { registerPopGuard } from '../../shared/utils/frontend/overlayHistory';
 
 interface WorkspacePayload {
   selectedMonth: string | null;
@@ -312,7 +313,7 @@ export default function WorkspaceShell({ section, overlay, children }: Workspace
     captureState();
     router.events.on('routeChangeComplete', captureState);
 
-    router.beforePopState(() => {
+    const unregisterGuard = registerPopGuard(() => {
       if (bypassRef.current) {
         bypassRef.current = false;
         return true;
@@ -331,7 +332,7 @@ export default function WorkspaceShell({ section, overlay, children }: Workspace
 
     return () => {
       router.events.off('routeChangeComplete', captureState);
-      router.beforePopState(() => true);
+      unregisterGuard();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);

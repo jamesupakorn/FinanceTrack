@@ -23,6 +23,7 @@ import { showToast } from '../../shared/utils/frontend/toast';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { buildMonthEvents } from '../../shared/utils/frontend/expenseEvents';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 import {
   addMonths,
   getCurrentMonthKey,
@@ -90,6 +91,12 @@ export function RevolvingConfirmDialog({
   open, dialogRef, restoreFocusRef, cardName, minPaymentDue, preview, busy, onCancel, onConfirm
 }: RevolvingConfirmDialogProps) {
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  // Back on this confirm dialog = Escape = backdrop = ✕ = "ยกเลิก" = onCancel (R-SBC-8). It is the
+  // top of the overlay stack while open (pushed after the main calendar's own entry), so Back closes
+  // it first, same ordering the Escape handler already special-cases (:238). Called above the early
+  // `return null` below (hooks rule).
+  useBackToClose(open, () => onCancel?.());
 
   useEffect(() => {
     if (!open) return undefined;
@@ -389,6 +396,12 @@ export default function ExpenseCalendarModal({ open, onClose }: ExpenseCalendarM
   };
 
   const handleNavigateMonth = (delta: number) => setMonthKey(prev => addMonths(prev, delta));
+
+  // Back on the main calendar dialog = Escape = backdrop = ✕ = handleClose (R-SBC-8). The nested
+  // RevolvingConfirmDialog pushes its own entry above this one when it opens, so the generic overlay
+  // stack (D3) closes it first on Back, top-most first — no extra wiring needed here beyond this call.
+  // Called above the early `return null` below (hooks rule).
+  useBackToClose(open, handleClose);
 
   if (!open) return null;
 

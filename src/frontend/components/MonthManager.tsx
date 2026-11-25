@@ -10,6 +10,7 @@ import { getMonthData, getPrevMonth, formatMonthLabelTH } from '../../shared/uti
 import { showToast } from '../../shared/utils/frontend/toast';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
 import { stripLegacyOvertimeKeys } from '../../shared/utils/overtimeUtils';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 import { Icons } from './Icons';
 
 interface MonthManagerProps {
@@ -398,6 +399,15 @@ export default function MonthManager({
     onMonthSelected(event.target.value);
     onRequestClose?.();
   };
+
+  // Back on each layer = Escape = backdrop/✕ = the same close callback already wired above (R-SBC-8).
+  // Compound `open && X` conditions (not raw flags) so the shell closing the picker collapses all live
+  // entries into one release in the same commit — see architecture-review.md Check 1/2 for why. Called
+  // above the early `return null` below (hooks rule).
+  useBackToClose(open, () => onRequestClose?.());
+  useBackToClose(open && showAddForm, () => setShowAddForm(false));
+  useBackToClose(open && showCopyConfirmation, () => setShowCopyConfirmation(false));
+  useBackToClose(open && showPruneConfirm, () => setPruneConfirm(null));
 
   if (!open || typeof document === 'undefined') return null;
 

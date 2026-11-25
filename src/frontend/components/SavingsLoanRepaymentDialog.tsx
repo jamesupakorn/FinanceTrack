@@ -14,6 +14,7 @@ import { expenseAPI, savingsGoalsAPI, savingsLedgerAPI } from '../../shared/util
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { formatMonthKeyTH, formatThaiDate, getCurrentDateInfo } from '../../shared/utils/dateUtils';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 import { showToast } from '../../shared/utils/frontend/toast';
 import {
   formatLoanAge,
@@ -218,6 +219,11 @@ export default function SavingsLoanRepaymentDialog({ open, month, bankAccounts, 
       trigger?.focus();
     };
   }, [open]);
+
+  // row 14 (spec §I5): must sit above the early return below (hooks rule). onBack = onClose directly
+  // (not the local `close` wrapper) — blocked: busy reproduces close's/Escape's own !busy guard without
+  // adding a second, possibly-diverging check (architecture-review.md Check 5).
+  useBackToClose(open, onClose, { blocked: busy });
 
   if (!open) return null;
 
