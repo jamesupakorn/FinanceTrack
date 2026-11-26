@@ -55,6 +55,8 @@ const INPUT = `h-11 w-full rounded-sm border border-border-interactive bg-surfac
 const SELECT = `h-11 w-full rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-sm text-primary outline-none ${FOCUS_RING}`;
 const REMOVE_BTN = `flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border-interactive bg-surface-2 text-neg ${FOCUS_RING}`;
 const CARD = 'rounded-md border border-border-default bg-surface-1 p-space-4 shadow-elev-1';
+// สำเนาในเครื่อง (ไม่ export) — ตรงกับ SavingsLedgerPanel.tsx:23 ไบต์ต่อไบต์ (D-STU-2)
+const RETRY_BUTTON = `min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-3 text-sm text-primary ${FOCUS_RING}`;
 
 /**
  * ตารางเงินออมรายเดือน
@@ -65,6 +67,7 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
   const [goalOptions, setGoalOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [loadRevision, setLoadRevision] = useState(0);
   const [criteria, setCriteria] = useListCriteria('savings-entries');
 
@@ -86,6 +89,7 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
   const loadSavingsData = useCallback(async (month: string) => {
     if (!month) return;
     setLoading(true);
+    setLoadError(false);
     try {
       const data = await savingsAPI.getByMonth(month);
       setSavingsData(data);
@@ -103,8 +107,10 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
         };
       });
       setรายการเงินออม(formattedList);
+      setLoadError(false);
     } catch (error) {
       console.error('Error loading savings data:', error);
+      setLoadError(true);
     } finally {
       setLoadRevision(revision => revision + 1);
       setLoading(false);
@@ -120,6 +126,7 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
       setSavingsData(null);
       setรายการเงินออม([]);
       setLoading(false);
+      setLoadError(false);
     }
   }, [selectedMonth, loadSavingsData]);
 
@@ -258,7 +265,8 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
   };
 
   const handleSavingsSave = async (): Promise<void> => {
-    if (!selectedMonth) return;
+    // D-STU-4: ป้องกันการบันทึกทับรายการจริงด้วยข้อมูลที่โหลดไม่สำเร็จ (บันทึกเพิ่มเติมจาก D-STU-3)
+    if (!selectedMonth || loadError) return;
     try {
       // แปลงเป็น number ก่อนบันทึก
       const numericSavings = รายการเงินออม.map(item => {
@@ -305,7 +313,7 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
   const รวมเงินเก็บ = hasEditableRows
     ? displayedTotalSavings
     : (typeof savingsData?.รวมเงินเก็บ === 'number' ? savingsData.รวมเงินเก็บ : 0);
-  const isLoading = loading || !savingsData;
+  const isLoading = loading || (!savingsData && !loadError);
 
   const getRowGoalOptions = (currentValue?: string | null) => {
     const value = (currentValue || '').trim();
@@ -319,21 +327,42 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
         <LoadingNotice className="mb-space-4" />
       )}
 
+      {!loading && loadError && (
+        <div className="mb-space-4 flex flex-col items-start gap-space-2">
+          <p role="alert" className="m-0 text-sm text-neg">โหลดรายการเงินออมไม่สำเร็จ</p>
+          <button
+            type="button"
+            className={RETRY_BUTTON}
+            onClick={() => { if (selectedMonth) void loadSavingsData(selectedMonth); }}
+          >
+            ลองอีกครั้ง
+          </button>
+        </div>
+      )}
+
       <div className="mb-space-4 flex flex-wrap items-start justify-between gap-space-3">
         <h3 className="flex items-center gap-space-2 text-lg font-medium text-primary">
           <Icons.Edit size={20} />
           รายการเงินออม
         </h3>
-        <button
-          type="button"
-          className="min-h-11 shrink-0 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
-          onClick={handleAddSavingsItem}
-        >
-          + เพิ่มรายการ
-        </button>
+        {!loadError && (
+          <button
+            type="button"
+            className="min-h-11 shrink-0 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+            onClick={handleAddSavingsItem}
+          >
+            + เพิ่มรายการ
+          </button>
+        )}
       </div>
 
-      {!isLoading && (
+      {!isLoading && !loadError && hasEditableRows && (
+        <p className="mb-space-3 text-xs text-secondary">
+          แก้ไขรายการแล้วกดปุ่มบันทึกที่มุมขวาล่างเพื่อบันทึก
+        </p>
+      )}
+
+      {!isLoading && !loadError && hasEditableRows && (
         <ListToolbar
           label="รายการเงินออม"
           criteria={criteria}
@@ -348,7 +377,7 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
         />
       )}
 
-      {hasEditableRows && projection.items.length > 0 ? (
+      {!loadError && (hasEditableRows && projection.items.length > 0 ? (
         <>
           {/* md+: C5 table */}
           <div className="hidden overflow-x-auto rounded-md border border-border-default md:block">
@@ -367,7 +396,7 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
                       <select
                         value={item.savings_type || ''}
                         onChange={(event) => handleSavingsItemChange(item.id, 'savings_type', event.target.value)}
-                        aria-label="ประเภทเงินออม"
+                        aria-label={`ประเภทเงินออม ${item.savings_type || NAME_FALLBACK}`}
                         className={SELECT}
                       >
                         <option value="">ไม่ระบุ</option>
@@ -385,7 +414,7 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
                         onBlur={event => handleSavingsAmountBlur(event.target.value, item.id)}
                         onFocus={handleAmountInputFocus}
                         placeholder="จำนวนเงินออม"
-                        aria-label="จำนวนเงินออม"
+                        aria-label={`จำนวนเงินออม ${item.savings_type || NAME_FALLBACK}`}
                         className={`${INPUT} text-right font-[family-name:var(--font-numeric)] tabular-nums`}
                       />
                     </td>
@@ -420,7 +449,7 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
                   <select
                     value={item.savings_type || ''}
                     onChange={event => handleSavingsItemChange(item.id, 'savings_type', event.target.value)}
-                    aria-label="ประเภทเงินออม"
+                    aria-label={`ประเภทเงินออม ${item.savings_type || NAME_FALLBACK}`}
                     className={`${SELECT} flex-1`}
                   >
                     <option value="">ไม่ระบุ</option>
@@ -445,7 +474,7 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
                   onBlur={event => handleSavingsAmountBlur(event.target.value, item.id)}
                   onFocus={handleAmountInputFocus}
                   placeholder="จำนวนเงินออม"
-                  aria-label="จำนวนเงินออม"
+                  aria-label={`จำนวนเงินออม ${item.savings_type || NAME_FALLBACK}`}
                   className={`${INPUT} mt-space-3 text-right font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums`}
                 />
               </div>
@@ -464,7 +493,7 @@ export default function SavingsTable({ selectedMonth, onRegisterSave, onSaved, m
             ยังไม่มีรายการเงินออมในเดือนนี้ กด &quot;เพิ่มรายการ&quot; เพื่อเริ่มต้น
           </div>
         )
-      )}
+      ))}
     </div>
   );
 }

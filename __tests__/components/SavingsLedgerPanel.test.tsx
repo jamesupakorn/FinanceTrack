@@ -140,3 +140,34 @@ it('does not let a dialog field change bubble to an ancestor onInput/onChange li
   await waitFor(() => expect(createLoan).toHaveBeenCalledWith({ source: { type: 'goal', goalId: 'g1' }, amount: 100, note: 'ค่าซ่อมรถ' }));
   await waitFor(() => expect(dialog).not.toBeInTheDocument());
 });
+
+// AC-STU-14 (spec-savings-table-ux-fixes.md S3, E-STU-14): the "saves immediately" caption shares its
+// visibility with the ยืมเงิน/ถอนเงินออม button grid — present once summary loads, absent while loading/erroring.
+describe('save-timing caption (S3)', () => {
+  const CAPTION = 'ยืมเงินและถอนเงินออมบันทึกทันทีเมื่อกดยืนยัน ไม่ต้องกดปุ่มบันทึกของหน้า';
+
+  it('AC-STU-14: shows the caption once the summary loads, alongside the borrow/withdraw buttons', async () => {
+    render(<SavingsLedgerPanel />);
+    await screen.findByText('7,500.00 ฿');
+    expect(screen.getByText(CAPTION)).toBeInTheDocument();
+  });
+
+  it('AC-STU-14: the caption is absent while still loading (before the summary resolves)', async () => {
+    let resolveLoad: (value: { loans: unknown[]; summary: ReturnType<typeof summaryFixture> }) => void = () => {};
+    getLoans.mockReturnValue(new Promise(resolve => { resolveLoad = resolve; }));
+    render(<SavingsLedgerPanel />);
+
+    expect(screen.queryByText(CAPTION)).not.toBeInTheDocument();
+
+    resolveLoad({ loans: [], summary: summaryFixture() });
+    await screen.findByText('7,500.00 ฿');
+    expect(screen.getByText(CAPTION)).toBeInTheDocument();
+  });
+
+  it('AC-STU-14: the caption is absent in the load-error state', async () => {
+    getLoans.mockRejectedValue(new Error('fail'));
+    render(<SavingsLedgerPanel />);
+    await screen.findByText('โหลดข้อมูลยอดกลางไม่สำเร็จ');
+    expect(screen.queryByText(CAPTION)).not.toBeInTheDocument();
+  });
+});
