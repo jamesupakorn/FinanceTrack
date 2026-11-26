@@ -28,6 +28,7 @@ import {
   formatMonthKeyTH
 } from '../../shared/utils/dateUtils';
 import { isCreditCardRowKey, isRevolvingRowKey, buildRevolvingRowKey, formatIsoDateTH, isValidPurchaseDate, isCardType, isLoanCardType, CARD_TYPE_LABELS } from '../../shared/utils/creditCardUtils';
+import { isSavingsLoanRepaymentRowKey } from '../../shared/utils/savingsLedger';
 import { toBankAccountNames } from '../../shared/utils/bankAccountShape';
 import { compareListValues, matchesListQuery } from '../../shared/utils/frontend/listView';
 import { useListProjection } from '../../shared/utils/frontend/useListProjection';
@@ -35,7 +36,8 @@ import { buildRowContexts, financialFieldLabel } from '../../shared/utils/fronte
 import BankAccountTable from './BankAccountTable';
 import LoadingNotice from './LoadingNotice';
 import ListToolbar from './ListToolbar';
-import { expenseAPI, creditCardAPI } from '../../shared/utils/frontend/apiUtils';
+import SavingsLoanRepaymentDialog from './SavingsLoanRepaymentDialog';
+import { expenseAPI, creditCardAPI, savingsLedgerAPI } from '../../shared/utils/frontend/apiUtils';
 import { useSession } from '../contexts/SessionContext';
 import { useListCriteria } from '../contexts/ListViewContext';
 import { showToast } from '../../shared/utils/frontend/toast';
@@ -57,6 +59,12 @@ interface ExpenseTableProps {
   onRegisterSave?: (handler: (() => Promise<void>) | null) => void;
   onSaved?: () => void;
   markDirty?: () => void;
+  /** key ของแถวที่ควร scroll ไปโฟกัสตอน mount (มาจาก ?focus= บน dashboard, S1) — null เมื่อไม่มี/ถูก consume แล้ว */
+  focusKey?: string | null;
+  /** เดือนที่ focusKey อ้างถึง — ต้องตรงกับเดือนที่โหลดอยู่จริง (loadedMonth) ก่อนจะ scroll (F-10) */
+  focusMonth?: string | null;
+  /** เรียกครั้งเดียวหลัง intake effect ประมวลผล focusKey เสร็จ (สำเร็จหรือ no-op) ให้ผู้เรียก consume token */
+  onFocusHandled?: () => void;
 }
 
 interface InstallmentMetadata {
@@ -186,7 +194,7 @@ function DueBadge({ status, children }: { status: DueStatus; children: ReactNode
   return <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-space-2 py-[2px] text-xs font-medium ${DUE_BADGE_TONE[status] || DUE_BADGE_TONE.none}`}>{children}</span>;
 }
 
-export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, markDirty }: ExpenseTableProps) {
+export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, markDirty, focusKey = null, focusMonth = null, onFocusHandled }: ExpenseTableProps) {
   const [editExpense, setEditExpense] = useState<ExpenseValues>({});
   const [bankAccounts, setBankAccounts] = useState<string[]>([]);
   const [previousMonthTotal, setPreviousMonthTotal] = useState<number | null>(null);
@@ -194,11 +202,29 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
   const [isLoading, setIsLoading] = useState(false);
   const [persistedKeys, setPersistedKeys] = useState<string[]>([]);
   const [pendingScrollKey, setPendingScrollKey] = useState<string | null>(null);
+  // S1 (dashboard-upcoming-click-to-view): เดือนที่ editExpense ปัจจุบันเป็นข้อมูลจริงของ — ต้อง set คู่กับ
+  // setEditExpense ใน .then/.catch ของ effect โหลดข้อมูล ไม่ derive จาก isLoading (isLoading flip ช้าไปหนึ่ง render)
+  const [loadedMonth, setLoadedMonth] = useState<MonthKey | null>(null);
+  // แถวที่เป็นปลายทางของการ arrival จาก dashboard — คงอยู่ตลอด (ไม่ timed) เพื่อไม่ให้ tabIndex หลุดตอน focus ค้าง (F-3)
+  const [arrivalFocusKey, setArrivalFocusKey] = useState<string | null>(null);
+  // แถวที่กำลังแสดง highlight outline — เคลียร์อัตโนมัติหลัง 4000ms เหมือน highlight บน dashboard
+  const [arrivalHighlightKey, setArrivalHighlightKey] = useState<string | null>(null);
+  const arrivalHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // โหมดของ tryScroll effect: 'edit' = โฟกัส input[type=text] เดิม (เพิ่มแถวใหม่), 'view' = โฟกัสตัว row เอง (arrival)
+  const scrollFocusModeRef = useRef<'edit' | 'view'>('edit');
+  // กันการประมวลผล focusKey/focusMonth คู่เดิมซ้ำ (เช่น remount จาก refreshTrigger ขณะ ?focus= ยังอยู่ใน URL, E-5/E-6)
+  const handledFocusRef = useRef<string | null>(null);
   const [pendingPaidKeys, setPendingPaidKeys] = useState<string[]>([]);
   const [cardPayment, setCardPayment] = useState<{ key: string; month: string; paid: boolean; cycleMonth?: string; row: ExpenseRow & { breakdown: CardTotalExpenseRow['breakdown'] } } | null>(null);
   const [selectedCardDetails, setSelectedCardDetails] = useState<SelectedCardDetails | null>(null);
   const cardDetailsOpenerRef = useRef<HTMLButtonElement | null>(null);
   const expenseListFallbackRef = useRef<HTMLHeadingElement | null>(null);
+  // S5 (savings-loan-withdrawal §5.1): ปุ่ม "คืนเงินกู้ (เงินออม)" แสดงเมื่อมีเงินกู้ที่ยังไม่คืน ≥ 1 รายการเท่านั้น
+  // โหลดครั้งเดียวตอน mount + หลังคืนเงินทุกครั้ง; โหลดไม่สำเร็จ => ปุ่มไม่แสดงเฉยๆ ไม่ทำให้หน้ารายจ่ายพัง
+  const [hasOpenSavingsLoan, setHasOpenSavingsLoan] = useState(false);
+  const [repaymentDialogOpen, setRepaymentDialogOpen] = useState(false);
+  const addExpenseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const repayButtonRef = useRef<HTMLButtonElement | null>(null);
   const selectedMonthRef = useRef(selectedMonth);
   selectedMonthRef.current = selectedMonth;
   useEffect(() => {
@@ -206,6 +232,33 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
     setSelectedCardDetails(null);
   }, [selectedMonth]);
   const pendingPaidRef = useRef<Set<string>>(new Set());
+
+  // S5 §5.1: ตรวจเงินกู้ที่ยังไม่คืนครั้งเดียวตอน mount — ไม่ผูกกับ selectedMonth เพราะเงินกู้ไม่ใช่ข้อมูลรายเดือน
+  const refreshSavingsLoanGate = async () => {
+    try {
+      const response = await savingsLedgerAPI.getLoans();
+      const openCount = Array.isArray(response?.loans) ? response.loans.filter(loan => loan?.status === 'open').length : 0;
+      setHasOpenSavingsLoan(openCount > 0);
+    } catch {
+      setHasOpenSavingsLoan(false);
+    }
+  };
+  useEffect(() => {
+    void refreshSavingsLoanGate();
+  }, []);
+  // F-S5-4: ปุ่ม "คืนเงินกู้ (เงินออม)" unmount ทันทีที่ hasOpenSavingsLoan เปลี่ยนเป็น false (เงินกู้ก้อนสุดท้ายปิด)
+  // ต้องรอ transition นี้จริง (หลัง commit) แทนการใช้ timer คงที่ — เพราะตอนนี้ dialog ปิด (onClose) ก่อน
+  // onSaved รีเฟรชเสร็จ (F-S5-3) ปุ่มนี้อาจยัง mount อยู่ตอนปิด dialog แล้ว unmount ทีหลังเมื่อ gate รีเฟรชเสร็จ
+  // ทำให้โฟกัสที่เพิ่งคืนให้ปุ่มนี้หลุดไป <body> — ถ้าเกิดแบบนั้น ง้างโฟกัสไปปุ่ม "+ เพิ่มรายการ" แทน
+  const hadOpenSavingsLoanRef = useRef(hasOpenSavingsLoan);
+  useEffect(() => {
+    const previouslyOpen = hadOpenSavingsLoanRef.current;
+    hadOpenSavingsLoanRef.current = hasOpenSavingsLoan;
+    if (!previouslyOpen || hasOpenSavingsLoan) return;
+    const active = document.activeElement;
+    const focusLost = !active || active === document.body || !document.contains(active);
+    if (focusLost) addExpenseButtonRef.current?.focus();
+  }, [hasOpenSavingsLoan]);
   const [installmentMeta, setInstallmentMeta] = useState<Record<string, InstallmentMetadata>>({});
   const [expenseLoadRevision, setExpenseLoadRevision] = useState(0);
   const [criteria, setCriteria] = useListCriteria('monthly-expenses');
@@ -220,17 +273,26 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
       const target = targets.find(node => node.offsetParent !== null) || targets[0];
       if (!target) return false;
       target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      target.querySelector<HTMLInputElement>('input[type="text"]')?.focus({ preventScroll: true });
+      // S1: arrival จาก dashboard โฟกัสตัว row เอง (ต้องไม่เปิดคีย์บอร์ดมือถือ, F-9); flow เพิ่มแถวใหม่ยังโฟกัส input เดิม
+      if (scrollFocusModeRef.current === 'view') {
+        target.focus({ preventScroll: true });
+      } else {
+        target.querySelector<HTMLInputElement>('input[type="text"]')?.focus({ preventScroll: true });
+      }
       return true;
     };
     let timer: ReturnType<typeof setTimeout> | undefined;
     if (!tryScroll()) {
       timer = setTimeout(() => {
-        if (tryScroll()) setPendingScrollKey(null);
+        if (tryScroll()) {
+          setPendingScrollKey(null);
+          scrollFocusModeRef.current = 'edit';
+        }
       }, 80);
       return () => { if (timer) clearTimeout(timer); };
     }
     setPendingScrollKey(null);
+    scrollFocusModeRef.current = 'edit';
     return () => { if (timer) clearTimeout(timer); };
   }, [editExpense, pendingScrollKey]);
 
@@ -239,6 +301,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
       setEditExpense({});
       setBankAccounts([]);
       setPersistedKeys([]);
+      setLoadedMonth(null);
       setExpenseLoadRevision(revision => revision + 1);
       return;
     }
@@ -251,6 +314,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
         const mergedAccounts = toBankAccountNames([...monthAccounts, ...(currentUser?.bankAccounts || [])]);
         setBankAccounts(mergedAccounts);
         setPersistedKeys(formatted.persistedKeys || []);
+        setLoadedMonth(selectedMonth);
       })
       .catch(error => {
         console.error('Error loading expense data:', error);
@@ -258,6 +322,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
         setEditExpense(formatted.values as ExpenseValues || {});
         setBankAccounts(toBankAccountNames(currentUser?.bankAccounts));
         setPersistedKeys(formatted.persistedKeys || []);
+        setLoadedMonth(selectedMonth);
       })
       .finally(() => {
         setExpenseLoadRevision(revision => revision + 1);
@@ -502,6 +567,46 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
     }
   };
 
+  /**
+   * S5 §5.3, C-S5-4: รีเฟรชเฉพาะแถว slr_ ของเดือนที่เปิด dialog อยู่ หลังคืนเงินกู้สำเร็จ — refetch เดือนนั้น
+   * แล้วแทนที่เฉพาะคีย์ slr_ ใน state แถวอื่นและ dirty state ของ FAB ไม่ถูกแตะ (AC-SLW-29)
+   * sibling function แยกจาก refreshCardRows โดยตั้งใจ — ไม่แก้ refreshCardRows ให้รับ parameter เพิ่ม (C-S5-4)
+   */
+  const refreshRepaymentRows = async (month: string) => {
+    const data = await expenseAPI.getByMonth(month);
+    const formatted = formatExpenseData(data || {}, month);
+    if (selectedMonthRef.current === month) setEditExpense(previous => {
+      const refreshed = formatted.values as ExpenseValues;
+      const next = { ...previous };
+      Object.keys(next).filter(isSavingsLoanRepaymentRowKey).forEach(item => { delete next[item]; });
+      Object.entries(refreshed).filter(([item]) => isSavingsLoanRepaymentRowKey(item)).forEach(([item, row]) => { next[item] = row; });
+      return next;
+    });
+  };
+
+  const handleRepaymentSaved = async () => {
+    // F-S5-4 (minor): refreshSavingsLoanGate (and the focus-fallback effect it can trigger, above) must still run
+    // even if refreshRepaymentRows throws — otherwise the repay button stays visible/stale after a failed row
+    // refresh. Harmless either way (repayLoan itself already succeeded), but try/finally keeps the gate accurate.
+    try {
+      if (selectedMonth) await refreshRepaymentRows(selectedMonth);
+    } finally {
+      await refreshSavingsLoanGate();
+    }
+    // S5 fix (F-S5-1): a repayment is its own write, scoped to slr_ rows only — it must never call onSaved(),
+    // which on /workspace/expense is wired to WorkspaceShell's markClean (WorkspaceShell.tsx:264). Calling it here
+    // would clear the *whole page's* dirty state and hide the Save FAB / disarm the leave-guard even while another
+    // row still has a genuine unsaved edit, silently risking that edit's loss (breaks AC-SLW-29, C-S5-7).
+  };
+
+  const closeRepaymentDialog = () => {
+    setRepaymentDialogOpen(false);
+    // §5.3 item 4: โฟกัสกลับปุ่ม "คืนเงินกู้ (เงินออม)" — dialog เองพยายามคืนโฟกัสให้ trigger element แล้ว
+    // (ปุ่มนี้ยัง mount อยู่ตอนปิด เพราะ onClose เกิดก่อน onSaved รีเฟรชเสร็จ — F-S5-3). ถ้าเงินกู้ก้อนสุดท้าย
+    // ถูกปิดจริง ปุ่มนี้จะ unmount ทีหลังตอน gate รีเฟรชเสร็จ — fallback ไปปุ่ม "+ เพิ่มรายการ" อยู่ใน effect
+    // ด้านบนที่ฟัง hasOpenSavingsLoan transition (F-S5-4) ไม่ใช่ timer คงที่ที่นี่ เพราะจังหวะรีเฟรชไม่แน่นอน
+  };
+
   /** caption "รอบบิล ..." เฉพาะแถวบัตรที่แสดงรอบบิลคนละเดือนกับตาราง (spec-credit-card-due-month-placement §UX) */
   const cycleCaption = (row: ExpenseRow) => {
     const cycleMonth = getRowCycleMonth(row);
@@ -570,8 +675,11 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
     const defaultKeys = DEFAULT_EXPENSE_KEY_ORDER.filter(key => keys.includes(key));
     const revolvingKeys = keys.filter(key => isRevolvingRowKey(key));
     const installmentKeys = keys.filter(key => isCreditCardRowKey(key) && !isRevolvingRowKey(key));
-    const customKeys = keys.filter(key => !DEFAULT_EXPENSE_KEY_ORDER.includes(key) && !isCreditCardRowKey(key));
-    return [...defaultKeys, ...customKeys, ...revolvingKeys, ...installmentKeys];
+    // S5 C-S5-1: ตัด slr_ ออกจาก customKeys ก่อน ไม่เช่นนั้นจะเรนเดอร์ผ่านแถวที่แก้ไขได้ (ช่องชื่อ/จำนวนเงิน/ปุ่มลบ)
+    // แทน read-only branch — repaymentKeys แทรกหลัง customKeys ก่อนแถวบัตร (UX_SPEC §5.5)
+    const repaymentKeys = keys.filter(key => isSavingsLoanRepaymentRowKey(key));
+    const customKeys = keys.filter(key => !DEFAULT_EXPENSE_KEY_ORDER.includes(key) && !isCreditCardRowKey(key) && !isSavingsLoanRepaymentRowKey(key));
+    return [...defaultKeys, ...customKeys, ...repaymentKeys, ...revolvingKeys, ...installmentKeys];
   }, [editExpense]);
 
   const accountOptions = useMemo(() => {
@@ -633,6 +741,39 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
     datasetKey: `${selectedMonth ?? ''}:${isLoading ? 'loading' : 'ready'}:${expenseLoadRevision}`,
     editable: true,
   });
+
+  // S1 (dashboard-upcoming-click-to-view): รับ focusKey/focusMonth จาก ?focus=/?month= ที่ parent ส่งมา —
+  // เลียนแบบ pattern focusItemId ของ CreditSpendItems.tsx. handledFocusRef กัน token เดิมซ้ำ (E-5/E-6)
+  useEffect(() => {
+    if (!focusKey) return;
+    const token = `${focusMonth}|${focusKey}`;
+    if (handledFocusRef.current === token) return;
+    if (loadedMonth == null) return; // รอข้อมูลเดือนปัจจุบันโหลดเสร็จก่อน (F-2)
+    handledFocusRef.current = token;
+    // F-10: key เดียวกันอาจมีอยู่ในหลายเดือน — ต้องตรงกับเดือนที่โหลดอยู่จริงก่อนค่อยค้นหา/scroll
+    if (loadedMonth !== focusMonth) {
+      onFocusHandled?.();
+      return;
+    }
+    // E-4: ถูกซ่อนด้วย filter ของผู้ใช้เอง หรือถูกลบไปแล้ว — เงียบๆ ไม่แก้ filter ของผู้ใช้ (KL-1), ไม่ set pendingScrollKey (F-4)
+    if (!expenseProjection.items.includes(focusKey)) {
+      onFocusHandled?.();
+      return;
+    }
+    scrollFocusModeRef.current = 'view';
+    setArrivalFocusKey(focusKey);
+    setArrivalHighlightKey(focusKey);
+    if (arrivalHighlightTimerRef.current) clearTimeout(arrivalHighlightTimerRef.current);
+    arrivalHighlightTimerRef.current = setTimeout(() => setArrivalHighlightKey(null), 4000);
+    setPendingScrollKey(focusKey);
+    onFocusHandled?.();
+  }, [focusKey, focusMonth, loadedMonth, expenseProjection.items, onFocusHandled]);
+
+  // เคลียร์ timer ของ highlight ตอน unmount กันเรียก setState หลัง component ถูกถอดออกไปแล้ว
+  useEffect(() => () => {
+    if (arrivalHighlightTimerRef.current) clearTimeout(arrivalHighlightTimerRef.current);
+  }, []);
+
   const selectedCardDetailsRow = selectedCardDetails ? editExpense[selectedCardDetails.key] : undefined;
   const selectedCardDetailsMeta = selectedCardDetails ? installmentMeta[selectedCardDetails.key] : undefined;
   const showSelectedCardDetails = Boolean(
@@ -646,6 +787,8 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
     if (selectedCardDetails && !showSelectedCardDetails) setSelectedCardDetails(null);
   }, [selectedCardDetails, showSelectedCardDetails]);
   const firstCreditCardKey = useMemo(() => expenseProjection.items.find(key => isCreditCardRowKey(key)) || null, [expenseProjection.items]);
+  // S5 UX_SPEC §5.5: หัวกลุ่มแถวคืนเงินกู้ แสดงเฉพาะก่อนแถวแรกของกลุ่ม (รูปแบบเดียวกับ firstCreditCardKey)
+  const firstRepaymentKey = useMemo(() => expenseProjection.items.find(key => isSavingsLoanRepaymentRowKey(key)) || null, [expenseProjection.items]);
   // หัวกลุ่มแถวบัตร: มีสินเชื่ออยู่ในกลุ่มด้วย → "บัตร & สินเชื่อ" (UX §3)
   const cardGroupLabel = expenseProjection.items.some(key => isCreditCardRowKey(key) && isLoanCardType(editExpense[key]?.cardType))
     ? 'บัตร & สินเชื่อ (ซิงก์อัตโนมัติ)'
@@ -759,7 +902,19 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
       <span role="status" aria-live="polite" className="sr-only">{pendingPaidKeys.length > 0 ? 'กำลังบันทึกสถานะการจ่าย' : ''}</span>
       <div className="mb-space-4 flex flex-wrap items-start justify-between gap-space-3">
         <div><h3 ref={expenseListFallbackRef} tabIndex={-1} className="text-lg font-medium text-primary">รายการค่าใช้จ่าย</h3><p className="mt-space-1 text-sm text-secondary">บันทึกยอดค่าใช้จ่ายรายเดือนแบบยอดเดียว</p></div>
-        <button type="button" className="min-h-11 shrink-0 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2" onClick={handleAddExpenseItem}>+ เพิ่มรายการค่าใช้จ่าย</button>
+        <div className="flex shrink-0 flex-wrap gap-space-2">
+          {hasOpenSavingsLoan && (
+            <button
+              type="button"
+              ref={repayButtonRef}
+              className={`min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm font-medium text-primary hover:bg-surface-3 ${FOCUS_RING}`}
+              onClick={() => setRepaymentDialogOpen(true)}
+            >
+              คืนเงินกู้ (เงินออม)
+            </button>
+          )}
+          <button type="button" ref={addExpenseButtonRef} className="min-h-11 shrink-0 rounded-sm bg-accent px-space-4 text-sm font-medium text-on-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2" onClick={handleAddExpenseItem}>+ เพิ่มรายการค่าใช้จ่าย</button>
+        </div>
       </div>
 
       {hasExpenseRows && (
@@ -814,6 +969,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
                   const selectedAccount = typeof row.account === 'string' && row.account.trim().length > 0 ? row.account : bankAccounts[0] || 'ไม่ระบุบัญชี';
                   const dueInfo = describeDueTiming(row, paid, selectedMonth, parseToNumber(row.actual));
                   const isCreditCardRow = isCreditCardRowKey(item);
+                  const isRepaymentRow = isSavingsLoanRepaymentRowKey(item);
                   const meta = installmentMeta[item];
                   if (isCreditCardRow) {
                     return <Fragment key={item}>
@@ -825,7 +981,26 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
                       </tr>
                     </Fragment>;
                   }
-                  return <tr key={item} className="border-b border-border-subtle last:border-b-0" data-expense-key={item}>
+                  // S5 UX_SPEC §5.5: แถวคืนเงินกู้ — อ่านอย่างเดียวทั้งหมด ไม่มี input/ปุ่มลบ/ปุ่มสลับ paid (D-SLW-15, C-S5-3)
+                  if (isRepaymentRow) {
+                    return <Fragment key={item}>
+                      {item === firstRepaymentKey && <tr><td className="border-t border-dashed border-border-default p-space-3 text-xs font-medium text-tertiary" colSpan={5}>คืนเงินกู้ (เงินออม) · แก้ไข/ลบไม่ได้</td></tr>}
+                      <tr className="border-b border-border-subtle bg-info/5" data-expense-key={item}>
+                        <td className="p-space-3 align-middle">
+                          <span className="flex items-center gap-space-2 text-secondary" title={displayName}><span aria-hidden="true">🔒</span>{displayName}</span>
+                          <div className="mt-space-1 flex flex-col gap-space-1">
+                            <span className="inline-flex w-fit items-center gap-1 rounded-full border border-info/35 bg-info/15 px-space-2 py-[2px] text-xs font-medium text-info">คืนเงินกู้ (เงินออม)</span>
+                            <Link href="/workspace/savings#savings-ledger" className={`inline-flex min-h-11 items-center text-xs text-accent underline-offset-2 hover:underline ${FOCUS_RING}`}>ดูรายการยืมที่หน้าเงินออม →</Link>
+                          </div>
+                        </td>
+                        <td className="p-space-3 text-right align-middle"><span className="font-[family-name:var(--font-numeric)] tabular-nums text-secondary">{formatCurrency(row.actual)}</span></td>
+                        <td className="p-space-3 align-middle text-secondary">{selectedAccount}</td>
+                        <td className="p-space-3 align-middle text-secondary">{formatRowDueText(row, selectedMonth) || 'ไม่ระบุ'}</td>
+                        <td className="p-space-3 text-center align-middle"><span className="inline-flex items-center gap-space-2 text-xs font-semibold text-pos" aria-label="จ่ายแล้ว (แก้ไขไม่ได้)">✓ จ่ายแล้ว</span></td>
+                      </tr>
+                    </Fragment>;
+                  }
+                  return <tr key={item} className={`border-b border-border-subtle last:border-b-0 [scroll-margin-top:calc(var(--topbar-safe-top,90px)+8px)] ${arrivalFocusKey === item ? 'focus:outline-none' : ''} ${arrivalHighlightKey === item ? 'outline outline-2 outline-accent -outline-offset-2' : ''}`} data-expense-key={item} tabIndex={arrivalFocusKey === item ? -1 : undefined}>
                     <td className="p-space-3 align-middle"><div className="flex min-w-0 items-center gap-space-3"><input type="text" value={String(displayName)} onChange={event => handleExpenseChange(item, 'name', event.target.value)} onBlur={event => handleExpenseBlur(item, 'name', event.target.value)} className={`${INPUT} flex-1`} placeholder="ชื่อรายการ" /><button type="button" className={REMOVE_BTN} onClick={() => handleDeleteExpenseItem(item)} aria-label={`ลบ ${displayName}`}><Icons.X size={16} /></button></div></td>
                     <td className="p-space-3 align-middle"><input type="text" inputMode="decimal" value={String(row.actual ?? '')} onChange={event => handleNumberInput(event.target.value, value => handleExpenseChange(item, 'actual', value))} onBlur={event => handleNumberBlur(event.target.value, value => handleExpenseBlur(item, 'actual', value))} onFocus={handleAmountInputFocus} aria-label={fieldLabel('จำนวนเงินรายจ่าย', item)} className={`${INPUT} text-right font-[family-name:var(--font-numeric)] tabular-nums`} /></td>
                     <td className="p-space-3 align-middle"><select value={selectedAccount} onChange={event => handleExpenseChange(item, 'account', event.target.value)} aria-label={fieldLabel('บัญชีที่ใช้จ่าย', item)} className={SELECT}>{bankAccounts.map(account => <option key={account} value={account}>{account}</option>)}</select></td>
@@ -846,6 +1021,7 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
               const selectedAccount = typeof row.account === 'string' && row.account.trim().length > 0 ? row.account : bankAccounts[0] || 'ไม่ระบุบัญชี';
               const dueInfo = describeDueTiming(row, paid, selectedMonth, parseToNumber(row.actual));
               const isCreditCardRow = isCreditCardRowKey(item);
+              const isRepaymentRow = isSavingsLoanRepaymentRowKey(item);
               const meta = installmentMeta[item];
               if (isCreditCardRow) {
                 return <Fragment key={item}>{item === firstCreditCardKey && <p className="mt-space-2 text-xs font-medium text-tertiary">{cardGroupLabel}</p>}<div className={`min-h-14 rounded-md border border-info/30 bg-surface-2 p-space-4 [scroll-margin-top:calc(var(--topbar-safe-top,90px)+8px)] ${paid ? 'opacity-70' : ''}`} data-expense-key={item}>
@@ -858,7 +1034,23 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
                   {meta && <Link href={`/credits?card=${meta.cardId}`} className={`mt-space-2 inline-flex min-h-11 items-center text-xs text-accent underline-offset-2 hover:underline ${FOCUS_RING}`}>จัดการที่หน้าบัตร & สินเชื่อ →</Link>}
                 </div></Fragment>;
               }
-              return <div className={`min-h-14 rounded-md border border-border-default bg-surface-2 p-space-4 [scroll-margin-top:calc(var(--topbar-safe-top,90px)+8px)] ${paid ? 'opacity-70' : ''}`} key={item} data-expense-key={item}>
+              // S5 UX_SPEC §5.5: มือถือ — เหมือนเดสก์ท็อป อ่านอย่างเดียวทั้งหมด ไม่มี input/ปุ่มลบ/ปุ่มสลับ paid
+              if (isRepaymentRow) {
+                return <Fragment key={item}>
+                  {item === firstRepaymentKey && <p className="mt-space-2 text-xs font-medium text-tertiary">คืนเงินกู้ (เงินออม) · แก้ไข/ลบไม่ได้</p>}
+                  <div className="min-h-14 rounded-md border border-info/30 bg-surface-2 p-space-4 opacity-70 [scroll-margin-top:calc(var(--topbar-safe-top,90px)+8px)]" data-expense-key={item}>
+                    <div className="flex flex-wrap items-center justify-between gap-space-2">
+                      <span className="flex min-w-0 flex-[1_1_12rem] items-center gap-space-2 font-medium text-secondary" title={displayName}><span aria-hidden="true">🔒</span><span className="min-w-0 break-words">{displayName}</span></span>
+                      <span className="inline-flex w-fit shrink-0 items-center gap-1 rounded-full border border-info/35 bg-info/15 px-space-2 py-[2px] text-xs font-medium text-info">คืนเงินกู้ (เงินออม)</span>
+                    </div>
+                    <p className="mt-space-2 font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums text-primary">{formatCurrency(row.actual)}</p>
+                    <p className="mt-space-1 text-xs text-secondary">{`ครบกำหนด ${formatRowDueText(row, selectedMonth) || 'ไม่ระบุ'} · ${selectedAccount}`}</p>
+                    <span className="mt-space-3 flex min-h-11 w-full items-center justify-center text-sm font-semibold text-pos" aria-label="จ่ายแล้ว (แก้ไขไม่ได้)">✓ จ่ายแล้ว</span>
+                    <Link href="/workspace/savings#savings-ledger" className={`mt-space-2 inline-flex min-h-11 items-center text-xs text-accent underline-offset-2 hover:underline ${FOCUS_RING}`}>ดูรายการยืมที่หน้าเงินออม →</Link>
+                  </div>
+                </Fragment>;
+              }
+              return <div className={`min-h-14 rounded-md border border-border-default bg-surface-2 p-space-4 [scroll-margin-top:calc(var(--topbar-safe-top,90px)+8px)] ${paid ? 'opacity-70' : ''} ${arrivalFocusKey === item ? 'focus:outline-none' : ''} ${arrivalHighlightKey === item ? 'outline outline-2 outline-accent outline-offset-2' : ''}`} key={item} data-expense-key={item} tabIndex={arrivalFocusKey === item ? -1 : undefined}>
                 <div className="flex items-center gap-space-2"><input type="text" value={String(displayName)} onChange={event => handleExpenseChange(item, 'name', event.target.value)} onBlur={event => handleExpenseBlur(item, 'name', event.target.value)} className={`${INPUT} flex-1 font-medium`} placeholder="ชื่อรายการ" /><button type="button" className={REMOVE_BTN} onClick={() => handleDeleteExpenseItem(item)} aria-label={`ลบ ${displayName}`}><Icons.X size={16} /></button></div>
                 <input type="text" inputMode="decimal" value={String(row.actual ?? '')} onChange={event => handleNumberInput(event.target.value, value => handleExpenseChange(item, 'actual', value))} onBlur={event => handleNumberBlur(event.target.value, value => handleExpenseBlur(item, 'actual', value))} onFocus={handleAmountInputFocus} aria-label={fieldLabel('จำนวนเงินรายจ่าย', item)} className={`${INPUT} mt-space-3 text-right font-[family-name:var(--font-numeric)] text-lg font-semibold tabular-nums`} placeholder="0.00" />
                 <div className="mt-space-3 flex gap-space-2"><select value={selectedAccount} onChange={event => handleExpenseChange(item, 'account', event.target.value)} aria-label={fieldLabel('บัญชีที่ใช้จ่าย', item)} className={`${SELECT} flex-1`}>{bankAccounts.map(account => <option key={account} value={account}>{account}</option>)}</select><select value={String(row.dueDay || END_OF_MONTH_DUE_DAY)} onChange={event => handleExpenseChange(item, 'dueDay', event.target.value)} aria-label={fieldLabel('วันครบกำหนด', item)} className={`${SELECT} flex-1`}><option value={END_OF_MONTH_DUE_DAY}>สิ้นเดือน</option>{dueDayOptions.map(day => <option key={day} value={day}>วันที่ {day}</option>)}</select></div>
@@ -893,6 +1085,21 @@ export default function ExpenseTable({ selectedMonth, onRegisterSave, onSaved, m
         onCancel={() => setCardPayment(null)}
         onConfirm={confirmCardPayment}
       />}
+      {repaymentDialogOpen && selectedMonth && (
+        // S5 fix (F-S5-2, same shape as S4's F-S4-3): stop onInput/onChange from bubbling into WorkspaceShell's
+        // dirty-tracking container (WorkspaceShell.tsx:402). The dialog persists on its own confirm button
+        // (expenseAPI.repayLoan), so typing an amount or ticking the checkbox then cancelling must never mark a
+        // clean page dirty. Pattern copied from SavingsLedgerPanel.tsx:79-86.
+        <div onInput={event => event.stopPropagation()} onChange={event => event.stopPropagation()}>
+          <SavingsLoanRepaymentDialog
+            open={repaymentDialogOpen}
+            month={selectedMonth}
+            bankAccounts={bankAccounts}
+            onClose={closeRepaymentDialog}
+            onSaved={handleRepaymentSaved}
+          />
+        </div>
+      )}
     </div>
   );
 }

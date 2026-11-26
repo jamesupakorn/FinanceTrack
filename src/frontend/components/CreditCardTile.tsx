@@ -210,6 +210,9 @@ export default function CreditCardTile({
   }
 
   const bankLine = [card.bankName, card.last4 ? `····${card.last4}` : ''].filter(Boolean).join(' · ') || 'ไม่ระบุธนาคาร';
+  // The bottom is already pinned when the utilisation block (mt-auto, :318) or the
+  // loan-empty filler (mt-auto flex-1, :271) renders. Only otherwise does the bank line take the free space.
+  const bankLineNeedsAnchor = !loanEmpty && creditLimit <= 0;
   const amountText = formatCurrency(totalDue);
 
   // ไม่ล็อก aspect-ratio — หน้าบัตรสูงตามเนื้อหาจริง (ขั้นต่ำ 13rem), rotor เป็น h-full เพื่อให้ grid row stretch ดันทุกใบในแถวให้สูงเท่ากัน
@@ -334,7 +337,7 @@ export default function CreditCardTile({
           </>
           )}
 
-          <span className="text-xs">{bankLine}</span>
+          <span className={bankLineNeedsAnchor ? 'mt-auto text-xs' : 'text-xs'}>{bankLine}</span>
         </div>
 
         {/* BACK */}

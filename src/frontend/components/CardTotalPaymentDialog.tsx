@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CardTotalExpenseRow } from '../../shared/utils/backend/creditCardSync';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 
 const BUTTON = 'min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-4 text-sm text-primary disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent';
 
@@ -17,6 +18,9 @@ export default function CardTotalPaymentDialog({ row, paid, busy, onCancel, onCo
   const dialogRef = useRef<HTMLDivElement>(null);
   const revolving = row.breakdown.revolving;
   const needsChoice = paid && revolving.totalDue > 0 && revolving.paymentAction === null;
+  // row 13 (spec §I5): mounted = open (parent conditionally mounts it, ExpenseTable.tsx:1081-1087),
+  // onBack = onCancel (same path the Escape handler below already uses), blocked = busy (same guard)
+  useBackToClose(true, onCancel, { blocked: busy });
 
   useEffect(() => {
     const opener = document.activeElement;

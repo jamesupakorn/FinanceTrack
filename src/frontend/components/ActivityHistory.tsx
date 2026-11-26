@@ -17,6 +17,16 @@ export const RESOURCE_LABELS: Record<string, string> = {
   user_profile: 'การตั้งค่าโปรไฟล์',
   account: 'บัญชีผู้ใช้',
   line_link: 'การเชื่อมต่อ LINE',
+  // savings-loan-withdrawal S6 (C-S6-1): keys are the real `item.resource` values traced through
+  // lib/auditJsonStore.ts (JSON-mode file base name) / lib/auditedMutation.ts (Mongo-mode collection
+  // name) — NOT the `source` string passed to withAudit({ source: 'savings_loans' }), which is a
+  // different, unrelated field and never reaches RESOURCE_LABELS's lookup key.
+  'savings-loans': 'การยืมเงินออม',
+  savingsLoans: 'การยืมเงินออม',
+  'savings-withdrawals': 'การถอนเงินออม',
+  savingsWithdrawals: 'การถอนเงินออม',
+  'savings-carry-forward': 'ยอดยกมาจากเงินออมเก่า', // D-SLW-29
+  savingsCarryForward: 'ยอดยกมาจากเงินออมเก่า', // D-SLW-29
 };
 
 export const ACTION_LABELS: Record<string, string> = {

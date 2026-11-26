@@ -3,7 +3,7 @@
  * จัดการเป้าหมายเงินออมต่อ user
  * GET  - ดึงเป้าหมายทั้งหมด พร้อมคำนวณ currentAmount จากข้อมูล savings จริง
  * POST - สร้างเป้าหมายใหม่
- * PUT  - อัปเดตเป้าหมาย
+ * PUT  - อัปเดตเป้าหมาย / allocations แบบ bulk / ปรับยอด (action: addAdjustment | editAdjustment | deleteAdjustment)
  * DELETE - ลบเป้าหมาย
  */
 
@@ -18,19 +18,25 @@ import {
   updateUserData,
 } from '../../src/backend/data/userUtils';
 import { withAudit } from '../../lib/auditedMutation';
+import {
+  applyAdjustmentAction,
+  isAdjustmentAction,
+  isAdjustmentAmountWithinCap,
+  normalizeAdjustmentNote,
+  readAdjustments,
+  toAdjustmentAmount,
+  type AdjustmentRequest,
+  type SavingsGoalAdjustment,
+} from '../../src/shared/utils/savingsGoalAdjustments';
+import {
+  computeCurrentAmounts,
+  type SavingsGoal,
+} from '../../src/shared/utils/backend/savingsGoalBalances';
+import { acquireLedgerGuard, loadLedgerContext } from '../../src/shared/utils/backend/savingsLedgerStore';
+import { summarizeLedger } from '../../src/shared/utils/savingsLedger';
 
 const GOALS_JSON_FILE = 'savings-goals.json';
-const SAVINGS_JSON_FILE = 'savings.json';
 
-interface SavingsGoal {
-  _id: string;
-  goalName: string;
-  targetAmount: number;
-  status: string;
-  allocationPercent?: number | null;
-  metadata?: Record<string, unknown>;
-  [key: string]: unknown;
-}
 interface MongoSavingsGoal extends Document {
   _id: string | ObjectId;
   goalName: string;
@@ -38,18 +44,7 @@ interface MongoSavingsGoal extends Document {
   status: string;
   allocationPercent?: number | null;
   metadata?: Record<string, unknown>;
-  [key: string]: unknown;
-}
-
-interface SavingsEntry {
-  savings_type?: string;
-  รายการ?: string;
-  savings_amount?: number | string;
-  จำนวนเงิน?: number | string;
-}
-
-interface SavingsDocument {
-  savings_list?: SavingsEntry[];
+  adjustments?: unknown;
   [key: string]: unknown;
 }
 
@@ -60,47 +55,67 @@ function toAllocationPercent(value: unknown): number | null {
   return Math.min(100, Math.round(parsed * 100) / 100);
 }
 
-/**
- * คำนวณ currentAmount ของแต่ละ goal โดยรวมจาก savings collection
- * ตรงกับ goalName (case-insensitive trim match)
- * @param {Array} goals - goals array
- * @param {Array} savingsDocs - savings docs array (all months for this user)
- */
-function computeCurrentAmounts(goals: SavingsGoal[], savingsDocs: SavingsDocument[]) {
-  return goals.map(goal => {
-    const goalName = (goal.goalName || '').trim().toLowerCase();
-    let currentAmount = 0;
+// ---- adjustment actions (shared by JSON + Mongo PUT) ----
 
-    savingsDocs.forEach(doc => {
-      if (!doc || !doc.savings_list || !Array.isArray(doc.savings_list)) return;
-      doc.savings_list.forEach(item => {
-        const itemType = (item?.savings_type || item?.รายการ || '').trim().toLowerCase();
-        if (itemType === goalName) {
-          const raw = item.savings_amount ?? item.จำนวนเงิน ?? 0;
-          const amt = typeof raw === 'number'
-            ? raw
-            : Number(String(raw).replace(/,/g, '')) || 0;
-          currentAmount += amt;
-        }
-      });
-    });
+type ParsedAdjustmentRequest =
+  | { ok: true; goalId: string; request: AdjustmentRequest }
+  | { ok: false; error: string };
 
-    const targetAmount = Number(goal.targetAmount) || 0;
-    const progressPercentage = targetAmount > 0
-      ? Math.min(100, Math.round((currentAmount / targetAmount) * 10000) / 100)
-      : 0;
-    const remainingAmount = Math.max(0, targetAmount - currentAmount);
+/** Steps 2-6 of the action contract; reads only action/goalId/adjustmentId/amount/note. */
+function parseAdjustmentRequest(body: Record<string, unknown> | undefined): ParsedAdjustmentRequest {
+  const action = body?.action;
+  if (!isAdjustmentAction(action)) return { ok: false, error: 'unknown action' };
 
-    return {
-      ...goal,
-      currentAmount,
-      metadata: {
-        ...(goal.metadata || {}),
-        progressPercentage,
-        remainingAmount,
-      }
-    };
-  });
+  const goalId = asPlainString(body?.goalId);
+  if (!goalId) return { ok: false, error: 'goalId required' };
+
+  let adjustmentId = '';
+  if (action !== 'addAdjustment') {
+    adjustmentId = asPlainString(body?.adjustmentId) || '';
+    if (!adjustmentId) return { ok: false, error: 'adjustmentId required' };
+  }
+
+  if (action === 'deleteAdjustment') {
+    return { ok: true, goalId, request: { action, adjustmentId } };
+  }
+
+  const amount = toAdjustmentAmount(body?.amount);
+  if (amount === null) return { ok: false, error: 'amount must be a non-zero number' };
+  if (!isAdjustmentAmountWithinCap(amount)) return { ok: false, error: 'amount too large' };
+
+  const rawNote = body?.note;
+  if (typeof rawNote !== 'string' || rawNote.trim().length === 0) return { ok: false, error: 'note required' };
+  const note = normalizeAdjustmentNote(rawNote);
+  if (note === null) return { ok: false, error: 'note too long' };
+
+  return action === 'addAdjustment'
+    ? { ok: true, goalId, request: { action, amount, note } }
+    : { ok: true, goalId, request: { action, adjustmentId, amount, note } };
+}
+
+interface AdjustmentStore {
+  /** Owner-scoped lookup; null when the goal doesn't exist for this user. */
+  load(goalId: string): Promise<{ adjustments?: unknown } | null>;
+  /** Persist exactly `adjustments` + the goal's `updatedAt`; nothing derived. */
+  save(goalId: string, adjustments: SavingsGoalAdjustment[], now: Date): Promise<void>;
+}
+
+async function handleAdjustmentAction(req: NextApiRequest, res: NextApiResponse, store: AdjustmentStore) {
+  const parsed = parseAdjustmentRequest(req.body);
+  if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+
+  const goal = await store.load(parsed.goalId);
+  if (!goal) return res.status(404).json({ error: 'Goal not found' });
+
+  const now = new Date();
+  const newId = crypto.randomBytes(12).toString('hex');
+  const result = applyAdjustmentAction(readAdjustments(goal), parsed.request, now.toISOString(), newId);
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+
+  await store.save(parsed.goalId, result.adjustments, now);
+  return result.adjustment
+    ? res.status(200).json({ success: true, adjustment: result.adjustment })
+    : res.status(200).json({ success: true });
 }
 
 // ---- JSON mode helpers ----
@@ -114,17 +129,33 @@ function setJsonGoals(userId: string, goals: SavingsGoal[]) {
   updateUserData(GOALS_JSON_FILE, userId, () => ({ goals }));
 }
 
-function computeCurrentAmountsFromJson(goals: SavingsGoal[], userId: string) {
-  const savingsBucket = getUserData(SAVINGS_JSON_FILE, userId);
-  const savingsDocs = Object.values(savingsBucket || {}) as SavingsDocument[];
-  return computeCurrentAmounts(goals, savingsDocs);
+// ---- GET (shared by JSON + Mongo) ----
+
+/**
+ * Savings months and the carry-forward come from one loadLedgerContext read (C-S2c-10 revision
+ * bracket), so a concurrent prune is never seen half-applied; the ledger term (S2-F-1) and the
+ * carried term (S2c) both enter through computeCurrentAmounts, the single goal formula.
+ */
+async function computeGoalsWithProgress(goals: SavingsGoal[], userId: string) {
+  const ctx = await loadLedgerContext(userId, { includeSavings: true });
+  const ledgerByGoal = summarizeLedger(ctx.loans, ctx.withdrawals).byGoal;
+  return computeCurrentAmounts(goals, ctx.savingsDocs ?? [], ledgerByGoal, ctx.carryForward?.goalAmounts);
 }
 
-function handleJsonMode(req: NextApiRequest, res: NextApiResponse, userId: string) {
+/** GET only: the bracket throws after repeated concurrent prunes; answer 500, never skewed numbers. */
+async function respondWithGoals(res: NextApiResponse, userId: string, loadGoals: () => Promise<SavingsGoal[]>) {
+  try {
+    const goals = await loadGoals();
+    return res.status(200).json({ goals: await computeGoalsWithProgress(goals, userId) });
+  } catch (error) {
+    console.error('savings-goals GET failed', (error as Error)?.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+async function handleJsonMode(req: NextApiRequest, res: NextApiResponse, userId: string) {
   if (req.method === 'GET') {
-    const goals = getJsonGoals(userId).filter(g => g.status !== 'abandoned');
-    const goalsWithProgress = computeCurrentAmountsFromJson(goals, userId);
-    return res.status(200).json({ goals: goalsWithProgress });
+    return respondWithGoals(res, userId, async () => getJsonGoals(userId).filter(g => g.status !== 'abandoned'));
   }
 
   if (req.method === 'POST') {
@@ -156,6 +187,18 @@ function handleJsonMode(req: NextApiRequest, res: NextApiResponse, userId: strin
   }
 
   if (req.method === 'PUT') {
+    if (req.body?.action !== undefined) {
+      return await handleAdjustmentAction(req, res, {
+        load: async (goalId) => getJsonGoals(userId).find(g => g._id === goalId) ?? null,
+        save: async (goalId, adjustments, now) => {
+          const goals = getJsonGoals(userId);
+          const idx = goals.findIndex(g => g._id === goalId);
+          goals[idx] = { ...goals[idx], adjustments, updatedAt: now.toISOString() };
+          setJsonGoals(userId, goals);
+        },
+      });
+    }
+
     const allocations = Array.isArray(req.body?.allocations) ? req.body.allocations : null;
     if (allocations) {
       const goals = getJsonGoals(userId);
@@ -206,15 +249,32 @@ function handleJsonMode(req: NextApiRequest, res: NextApiResponse, userId: strin
   }
 
   if (req.method === 'DELETE') {
-    const goalId = req.body?.goalId || req.body?.id || req.query?.goalId || req.query?.id;
+    const goalId = asPlainString(req.body?.goalId || req.body?.id || req.query?.goalId || req.query?.id);
     if (!goalId) {
       return res.status(400).json({ error: 'goalId required' });
     }
+
+    // S2 / C-S2-4: guard first (no-op in JSON mode, kept for parity with the Mongo branch),
+    // then the existing 404 lookup, then the open-loan check — in that order, so a goalId that
+    // no longer exists still answers 404, never 409, even if a stray open loan references it
+    // (S2-F-3 / E-SLW-16's "เป้าหมายที่ลบแล้ว" case).
+    await acquireLedgerGuard(userId);
+
     const goals = getJsonGoals(userId);
     const idx = goals.findIndex(g => g._id === goalId);
     if (idx === -1) {
       return res.status(404).json({ error: 'Goal not found' });
     }
+
+    const { loans } = await loadLedgerContext(userId);
+    const openLoans = loans.filter(
+      l => l.status === 'open' && l.source.type === 'goal' && l.source.goalId === goalId
+    );
+    if (openLoans.length > 0) {
+      const outstanding = Math.round(openLoans.reduce((sum, l) => sum + l.outstandingAmount, 0) * 100) / 100;
+      return res.status(409).json({ error: 'goal_has_open_loans', outstanding });
+    }
+
     goals.splice(idx, 1);
     setJsonGoals(userId, goals);
     return res.status(200).json({ success: true });
@@ -235,27 +295,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   const goalsCol = await getMongoCollection<MongoSavingsGoal>('savingsGoals');
-  const savingsCol = await getMongoCollection('savings');
-
-  // ดึง savings ทุกเดือนของ user มาใช้คำนวณ currentAmount
-  async function getAllSavings() {
-    return savingsCol.find({ userId, month: { $exists: true } }).toArray() as Promise<SavingsDocument[]>;
-  }
 
   // ------- GET -------
   if (req.method === 'GET') {
-    const goals = await goalsCol
-      .find<MongoSavingsGoal>({ userId, status: { $ne: 'abandoned' } })
-      .sort({ createdAt: -1 })
-      .toArray();
-
-    const savingsDocs = await getAllSavings();
-    const goalsWithProgress = computeCurrentAmounts(
-      goals.map(g => ({ ...g, _id: g._id.toString() })),
-      savingsDocs
-    );
-
-    return res.status(200).json({ goals: goalsWithProgress });
+    return respondWithGoals(res, userId, async () => {
+      const goals = await goalsCol
+        .find<MongoSavingsGoal>({ userId, status: { $ne: 'abandoned' } })
+        .sort({ createdAt: -1 })
+        .toArray();
+      return goals.map(g => ({ ...g, _id: g._id.toString() }) as SavingsGoal);
+    });
   }
 
   // ------- POST (create) -------
@@ -297,6 +346,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   // ------- PUT (update) -------
   if (req.method === 'PUT') {
+    // findOne/updateOne run in withAudit's transaction (session bound by getMongoCollection)
+    if (req.body?.action !== undefined) {
+      return await handleAdjustmentAction(req, res, {
+        load: (goalId) => goalsCol.findOne({ _id: goalId, userId }),
+        save: async (goalId, adjustments, now) => {
+          await goalsCol.updateOne({ _id: goalId, userId }, { $set: { adjustments, updatedAt: now } });
+        },
+      });
+    }
+
     const allocations = Array.isArray(req.body?.allocations)
       ? req.body.allocations as Array<Record<string, unknown>>
       : null;
@@ -367,6 +426,28 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const goalId = asPlainString(req.body?.goalId || req.body?.id || req.query?.goalId || req.query?.id);
     if (!goalId) {
       return res.status(400).json({ error: 'goalId required' });
+    }
+
+    // S2 / C-S2-4: guard first (first write in this branch, D-SLW-16), then a dedicated
+    // owner-scoped lookup for 404 (Mongo had none before S2 — the old code derived 404 purely
+    // from deleteOne's deletedCount), then the open-loan check, then the existing delete. This
+    // ordering keeps a nonexistent goalId answering 404 even if a stray open loan's
+    // source.goalId happens to equal it (S2-F-3 / E-SLW-16's "เป้าหมายที่ลบแล้ว" case) — the
+    // open-loan check must never run before the existence check.
+    await acquireLedgerGuard(userId);
+
+    const existing = await goalsCol.findOne({ _id: goalId, userId });
+    if (!existing) {
+      return res.status(404).json({ error: 'Goal not found' });
+    }
+
+    const { loans } = await loadLedgerContext(userId);
+    const openLoans = loans.filter(
+      l => l.status === 'open' && l.source.type === 'goal' && l.source.goalId === goalId
+    );
+    if (openLoans.length > 0) {
+      const outstanding = Math.round(openLoans.reduce((sum, l) => sum + l.outstandingAmount, 0) * 100) / 100;
+      return res.status(409).json({ error: 'goal_has_open_loans', outstanding });
     }
 
     const result = await goalsCol.deleteOne({ _id: goalId, userId });

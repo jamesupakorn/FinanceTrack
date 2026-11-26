@@ -18,6 +18,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { assertUserId } from '../../../src/shared/utils/backend/userRequest';
 import { validateApiRequest } from '../../../src/shared/utils/backend/apiRequestValidation';
 import { updateUserCreditData, type CreditPlan } from '../../../src/shared/utils/backend/creditCardStore';
+import { rethrowIfTransientTransactionError } from '../../../src/shared/utils/backend/mongoTransactionErrors';
 import {
   summarisePlan,
   isLoanCardType,
@@ -26,22 +27,18 @@ import {
   MAX_RATE_REVISIONS_PER_PLAN,
   PLAN_STATUS
 } from '../../../src/shared/utils/creditCardUtils';
-// k จากเดือนที่เลือก: helper ตัวเดียวกับ preview ใน LoanRateRevisionDialog (N-4)
-import { findRevisionInstallmentNo, reviseEffectiveScheduleTail } from '../../../src/shared/utils/creditCardAmortization';
+// k จากเดือนที่เลือก + guard ตารางที่เก็บไว้: helper ตัวเดียวกับ preview ใน LoanRateRevisionDialog (N-4)
+// ตารางต้องเป็นตัวเลขครบทุกแถวโดยไม่แปลงค่า เพื่อให้งวดก่อน k คงค่าเดิมทุก byte
+import {
+  findRevisionInstallmentNo,
+  isRevisableSchedule,
+  reviseEffectiveScheduleTail
+} from '../../../src/shared/utils/creditCardAmortization';
 import { withAudit } from '../../../lib/auditedMutation';
 
 const MONTH_KEY_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 type Failure = { status: number; body: Record<string, unknown> };
-
-type RevisableRow = {
-  no: number;
-  dueMonth: string;
-  payment: number;
-  principal: number;
-  interest: number;
-  paid?: boolean;
-};
 
 type RateRevision = {
   id: string;
@@ -58,17 +55,6 @@ function generateRevisionId() {
 
 function readRevisions(plan: CreditPlan): RateRevision[] {
   return Array.isArray(plan.rateRevisions) ? (plan.rateRevisions as RateRevision[]) : [];
-}
-
-/** ตารางที่เก็บไว้ต้องเป็นตัวเลขครบทุกแถว — ใช้ตรงตามเดิมโดยไม่แปลงค่า เพื่อให้งวดก่อน k คงค่าเดิมทุก byte */
-function isRevisableSchedule(rows: unknown[]): rows is RevisableRow[] {
-  return rows.every(row => {
-    const r = row as Partial<RevisableRow> | null;
-    return !!r
-      && Number.isInteger(r.no)
-      && typeof r.dueMonth === 'string'
-      && [r.payment, r.principal, r.interest].every(v => typeof v === 'number' && Number.isFinite(v));
-  });
 }
 
 function parseBody(body: unknown): { ok: true; planId: string; effectiveMonth: string; rate: number } | { ok: false; failure: Failure } {
@@ -213,6 +199,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     return await handlePost(req, res, userId);
   } catch (error) {
+    rethrowIfTransientTransactionError(error); // a real E-28 overlap retries and the loser gets 409 (D-SLW-16)
     console.error('Rate revision API error:', error);
     return res.status(500).json({ error: 'ไม่สามารถปรับอัตราดอกเบี้ยได้' });
   }

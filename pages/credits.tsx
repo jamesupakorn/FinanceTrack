@@ -37,6 +37,7 @@ import { formatCurrency } from '../src/shared/utils/frontend/numberUtils';
 import { formatMonthKeyTH } from '../src/shared/utils/dateUtils';
 import { addMonths, buildSchedule, getCardDueMonth, getCurrentMonthKey, isLoanCardType, PLAN_STATUS } from '../src/shared/utils/creditCardUtils';
 import { getTabbableElements } from '../src/shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../src/shared/utils/frontend/useBackToClose';
 import AddCardExpenseSheet, {
   type AddExpenseSheetMode,
   type AddExpenseSheetStep,
@@ -159,6 +160,9 @@ function ConfirmDialog({ open, title, message, confirmLabel, onCancel, onConfirm
     };
   }, [open]);
 
+  // row 22 (spec §I5): onBack = onCancel, never onConfirm (Back's target is always the dismiss path)
+  useBackToClose(open, onCancel);
+
   if (!open) return null;
 
   return (
@@ -251,6 +255,9 @@ export default function CreditCardsPage() {
   const [backdateFailure, setBackdateFailure] = useState<BackdateFailureState | null>(null);
 
   const selectedCardId = typeof router.query.card === 'string' ? router.query.card : null;
+  // S2 (dashboard-upcoming-click-to-view): ปลายทาง "ดู" จาก UpcomingItem ของเดชบอร์ด — ส่งต่อให้ CreditCardDetail
+  // แยกวิเคราะห์เอง (parseCreditFocusKey); goTo(...) แทนที่ query ทั้งก้อนทุกครั้ง ทำให้ focus หายไปเองตอนนำทางในหน้า
+  const focusParam = typeof router.query.focus === 'string' ? router.query.focus : null;
 
   const loadData = useCallback(async ({ silent = false }: { silent?: boolean } = {}): Promise<void> => {
     if (!currentUser?.id) return;
@@ -767,6 +774,7 @@ export default function CreditCardsPage() {
             card={selectedCard}
             plans={selectedCardPlans}
             pendingKeys={pendingKeys}
+            focusKey={focusParam}
             onBack={() => goTo({})}
             onEditCard={handleOpenEditCard}
             onDeleteCard={handleDeleteCard}

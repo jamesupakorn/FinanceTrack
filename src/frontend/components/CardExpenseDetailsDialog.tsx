@@ -1,9 +1,11 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react';
 import Link from 'next/link';
+import Router from 'next/router';
 import type { CardTotalExpenseRow } from '../../shared/utils/backend/creditCardSync';
 import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 import type { MonthKey } from '../../shared/types/domain';
 import { Icons } from './Icons';
 
@@ -34,6 +36,16 @@ export default function CardExpenseDetailsDialog({
 }: CardExpenseDetailsDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  // row 12 (spec §I5): mounted = open (parent conditionally mounts/unmounts it, ExpenseTable.tsx:1069-1080),
+  // onBack = the same onClose Escape already uses (handleKeyDown below)
+  const back = useBackToClose(true, onClose);
+  const managementHref = `/credits?card=${encodeURIComponent(cardId)}`;
+  // S-2 follow-up (review Minor #1): the overlay token is spliced synchronously inside back.release(),
+  // so isHeld() goes false before the self-pop's go(-1)/popstate actually settles. A second plain click
+  // inside that narrow window would otherwise fall through to Next's default push while the first click's
+  // push is still queued. navigatingRef closes that window: once the sequenced path starts, every further
+  // plain click is unconditionally prevented and ignored until this component unmounts.
+  const navigatingRef = useRef(false);
 
   useEffect(() => {
     const pageScrollContainer = dialogRef.current?.closest<HTMLElement>('main') ?? null;
@@ -153,7 +165,22 @@ export default function CardExpenseDetailsDialog({
 
         <footer className="shrink-0 border-t border-border-subtle p-space-4 pb-[calc(env(safe-area-inset-bottom,0px)_+_1rem)]">
           <Link
-            href={`/credits?card=${encodeURIComponent(cardId)}`}
+            href={managementHref}
+            // S-2 (F-SBC-7): only a plain primary click while this dialog's overlay entry is held needs
+            // sequencing — release it before the cross-page push, so Back from /credits returns to this
+            // page in one press instead of landing on a dead same-URL entry. Every other click (modified,
+            // or the overlay module not installed) behaves exactly as today's plain <Link>.
+            onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+              if (navigatingRef.current) {
+                event.preventDefault();
+                return;
+              }
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              if (!back.isHeld()) return;
+              event.preventDefault();
+              navigatingRef.current = true;
+              back.release(() => { void Router.push(managementHref); });
+            }}
             className={`flex min-h-11 w-full items-center justify-center rounded-sm bg-accent px-space-4 text-sm font-semibold text-on-accent ${FOCUS_RING}`}
           >
             จัดการที่หน้าบัตร & สินเชื่อ →

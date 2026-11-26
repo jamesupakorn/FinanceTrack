@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useListCriteria } from '../contexts/ListViewContext';
 import { compareListValues, matchesListQuery, emptyListCriteria } from '../../shared/utils/frontend/listView';
 import { useListProjection } from '../../shared/utils/frontend/useListProjection';
@@ -24,9 +25,13 @@ import { formatIsoDateTH, describeDueDistance } from '../../shared/utils/creditC
 import { collectUpcomingPayments, collectPaidCardPayments } from '../../shared/utils/frontend/expenseEvents';
 import { cardGroupKey, groupUpcomingByCard, isCardGroup } from '../../shared/utils/frontend/upcomingCardGroups';
 import type { UpcomingCardGroup, UpcomingRow } from '../../shared/utils/frontend/upcomingCardGroups';
+import { upcomingItemHref, upcomingCardHref } from '../../shared/utils/frontend/upcomingLinks';
 
 const FOCUS_RING = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2';
 const PAID_PILL = `w-full min-h-11 rounded-sm border border-border-interactive bg-surface-2 px-space-3 py-space-2 text-center text-sm font-semibold text-secondary tabular-nums ${FOCUS_RING}`;
+// คลาส Link สำหรับ "ช่องคลิกเพื่อดูรายละเอียด" ที่หุ้มเฉพาะบล็อกข้อมูล (ไม่ใช่ปุ่ม) — ใช้ร่วมกันทั้ง
+// UpcomingItem (installment/revolving) และ UpcomingCard เพื่อให้ปุ่มเดิมยังเป็น sibling ไม่ใช่ descendant ของ <a>
+const INFO_LINK = `-m-space-2 flex flex-col gap-space-2 rounded-sm p-space-2 cursor-pointer no-underline transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING}`;
 
 type UpcomingEvent = ReturnType<typeof collectUpcomingPayments>['overdue'][number];
 type UpcomingFilter = 'generalExpense' | 'creditCard' | 'dailyExpense' | 'savings';
@@ -103,18 +108,22 @@ function UpcomingItem({ event, pendingKeys, onToggleInstallment, onRevolvingFull
   const typeLabel = event.source === 'installment' ? 'ผ่อนชำระ' : (event.source === 'revolving' ? 'ยอดหมุนเวียน' : 'รายจ่าย');
   const isOverdue = event.daysDiff < 0;
   const cardColor = event.card?.color as string | undefined;
+  const href = upcomingItemHref(event);
+  const amountLabel = formatCurrency(event.amount ?? 0);
+  // compact = อยู่ในการ์ดบัตร วันที่แสดงที่หัวการ์ดแล้ว จึงไม่ซ้ำใน aria-label ของบรรทัดย่อย
+  const ariaLabel = compact
+    ? `เปิดดูรายการ ${event.name} ${amountLabel} บาท`
+    : `เปิดดูรายการ ${event.name} ${amountLabel} บาท · ${describeDueDistance(event.daysDiff)}`;
 
-  return (
-    <div
-      id={`upcoming-item-${event.key}`}
-      // bg-surface-2, not bg-surface-1 — this row sits inside the section's own bg-surface-1 card, so
-      // the surface step needs to actually step up (C1: "nested grouping uses --surface-2 with a border
-      // and no shadow") to read as distinct from the parent, not just repeat the same fill (Stage 4 finding)
-      className={`flex flex-col gap-space-2 rounded-md border border-border-default border-l-4 bg-surface-2 p-space-4 ${
-        isOverdue && !cardColor ? 'border-l-neg' : 'border-l-border-default'
-      } ${highlighted ? 'outline outline-2 outline-accent outline-offset-2' : ''}`}
-      style={cardColor ? { borderLeftColor: cardColor } : undefined}
-    >
+  // bg-surface-2, not bg-surface-1 — this row sits inside the section's own bg-surface-1 card, so
+  // the surface step needs to actually step up (C1: "nested grouping uses --surface-2 with a border
+  // and no shadow") to read as distinct from the parent, not just repeat the same fill (Stage 4 finding)
+  const cardClassName = `flex flex-col gap-space-2 rounded-md border border-border-default border-l-4 bg-surface-2 p-space-4 ${
+    isOverdue && !cardColor ? 'border-l-neg' : 'border-l-border-default'
+  } ${highlighted ? 'outline outline-2 outline-accent outline-offset-2' : ''}`;
+
+  const infoBlock = (
+    <>
       <div className="flex flex-wrap items-baseline justify-between gap-space-3">
         <span className="inline-flex items-center gap-space-2 font-semibold text-primary">
           {isOverdue && <span aria-hidden="true">⚠ </span>}
@@ -127,7 +136,7 @@ function UpcomingItem({ event, pendingKeys, onToggleInstallment, onRevolvingFull
           )}
           {event.name}
         </span>
-        <span className="whitespace-nowrap text-lg font-bold text-primary tabular-nums">{`${formatCurrency(event.amount ?? 0)} บาท`}</span>
+        <span className="whitespace-nowrap text-lg font-bold text-primary tabular-nums">{`${amountLabel} บาท`}</span>
       </div>
       <span className="text-sm text-secondary">
         {[event.account, typeLabel].filter(Boolean).join(' · ')}
@@ -137,6 +146,43 @@ function UpcomingItem({ event, pendingKeys, onToggleInstallment, onRevolvingFull
           {`${formatIsoDateTH(event.isoDate)} · ${describeDueDistance(event.daysDiff)}`}
         </span>
       )}
+    </>
+  );
+
+  // plain ไม่มีปุ่มการทำรายการ: การ์ดทั้งใบเป็น <Link> ได้โดยไม่เสี่ยงซ้อน <a>/<button> (I-2)
+  if (event.source === 'plain') {
+    if (!href) {
+      // ไม่มีปลายทางที่ resolve ได้ (เดือนไม่ถูกต้อง/key ว่าง) — เรนเดอร์เหมือนเดิมโดยไม่มีลิงก์
+      return (
+        <div id={`upcoming-item-${event.key}`} className={cardClassName} style={cardColor ? { borderLeftColor: cardColor } : undefined}>
+          {infoBlock}
+        </div>
+      );
+    }
+    return (
+      <Link
+        id={`upcoming-item-${event.key}`}
+        href={href}
+        aria-label={ariaLabel}
+        className={`${cardClassName} cursor-pointer no-underline transition-colors duration-fast ease-graphite hover:bg-surface-3 ${FOCUS_RING}`}
+        style={cardColor ? { borderLeftColor: cardColor } : undefined}
+      >
+        {infoBlock}
+      </Link>
+    );
+  }
+
+  return (
+    <div
+      id={`upcoming-item-${event.key}`}
+      className={cardClassName}
+      style={cardColor ? { borderLeftColor: cardColor } : undefined}
+    >
+      {href ? (
+        <Link href={href} aria-label={ariaLabel} className={INFO_LINK}>
+          {infoBlock}
+        </Link>
+      ) : infoBlock}
 
       {event.source === 'installment' && (
         <button
@@ -189,6 +235,8 @@ function UpcomingCard({ group, open, forcedOpen, onToggle, paidCount, highlighte
   const cardColor = group.card.color as string | undefined;
   const panelId = `upcoming-card-panel-${group.groupKey}`;
   const total = group.lines.length;
+  const href = upcomingCardHref(group);
+  const ariaLabel = `เปิดดูบัตร ${group.name} ยอดที่ต้องชำระ ${formatCurrency(group.amount)} บาท · ${describeDueDistance(group.daysDiff)}`;
   return (
     <div
       id={`upcoming-card-${group.groupKey}`}
@@ -197,26 +245,28 @@ function UpcomingCard({ group, open, forcedOpen, onToggle, paidCount, highlighte
       }`}
       style={cardColor ? { borderLeftColor: cardColor } : undefined}
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-space-3">
-        <span className="inline-flex min-w-0 items-center gap-space-2 break-words font-semibold text-primary">
-          {isOverdue && <span aria-hidden="true">⚠ </span>}
-          <span className="h-3 w-3 shrink-0 rounded-xs" style={{ backgroundColor: cardColor }} aria-hidden="true" />
-          <span className="min-w-0 break-words">{group.name}</span>
+      <Link href={href} aria-label={ariaLabel} className={INFO_LINK}>
+        <div className="flex flex-wrap items-baseline justify-between gap-space-3">
+          <span className="inline-flex min-w-0 items-center gap-space-2 break-words font-semibold text-primary">
+            {isOverdue && <span aria-hidden="true">⚠ </span>}
+            <span className="h-3 w-3 shrink-0 rounded-xs" style={{ backgroundColor: cardColor }} aria-hidden="true" />
+            <span className="min-w-0 break-words">{group.name}</span>
+          </span>
+          <span className="flex flex-col items-end">
+            <span className="text-xs text-secondary">ยอดที่ต้องชำระ</span>
+            <span className="whitespace-nowrap text-lg font-bold text-primary tabular-nums">{`${formatCurrency(group.amount)} บาท`}</span>
+          </span>
+        </div>
+        <span className="text-sm text-secondary">
+          {[group.account, group.cycleMonth ? `รอบบิล ${group.cycleMonth}` : ''].filter(Boolean).join(' · ')}
         </span>
-        <span className="flex flex-col items-end">
-          <span className="text-xs text-secondary">ยอดที่ต้องชำระ</span>
-          <span className="whitespace-nowrap text-lg font-bold text-primary tabular-nums">{`${formatCurrency(group.amount)} บาท`}</span>
+        <span className="text-sm text-secondary">
+          {`${formatIsoDateTH(group.isoDate)} · ${describeDueDistance(group.daysDiff)}`}
         </span>
-      </div>
-      <span className="text-sm text-secondary">
-        {[group.account, group.cycleMonth ? `รอบบิล ${group.cycleMonth}` : ''].filter(Boolean).join(' · ')}
-      </span>
-      <span className="text-sm text-secondary">
-        {`${formatIsoDateTH(group.isoDate)} · ${describeDueDistance(group.daysDiff)}`}
-      </span>
-      {paidCount > 0 && (
-        <span className="text-sm text-tertiary">{`ชำระแล้ว ${paidCount}/${total + paidCount} รายการ`}</span>
-      )}
+        {paidCount > 0 && (
+          <span className="text-sm text-tertiary">{`ชำระแล้ว ${paidCount}/${total + paidCount} รายการ`}</span>
+        )}
+      </Link>
       <button
         type="button"
         className={`flex min-h-11 w-full items-center gap-space-2 rounded-sm border border-border-interactive bg-transparent px-space-3 text-left text-sm font-semibold text-primary ${forcedOpen ? 'opacity-60' : ''} ${FOCUS_RING}`}

@@ -28,6 +28,7 @@ import {
 } from '../../shared/utils/creditCardUtils';
 import { MONTH_KEY_RE } from '../../shared/utils/creditCardBasics';
 import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
+import { parseCreditFocusKey, revolvingFocusKey } from '../../shared/utils/frontend/upcomingLinks';
 import type { CreditSpendItem } from '../../shared/utils/frontend/apiUtils';
 import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { BP } from '../../shared/utils/frontend/breakpoints';
@@ -109,6 +110,17 @@ interface CreditPlanDetail {
 type PlanAction = (plan: CreditPlanDetail) => void;
 type InstallmentAction = (planId: string, installmentNo: number, paid: boolean, pendingKey: string) => void | Promise<void>;
 
+/**
+ * S2 (dashboard-upcoming-click-to-view): การ "มาถึง" ที่รอค้างอยู่หนึ่งรายการ — querySelector เป้าหมาย,
+ * element ที่ต้อง focus จริง ('self' = เป้าหมายเดียวกัน, string อื่น = querySelector ย่อยภายในเป้าหมาย),
+ * และ key ที่ใช้เทียบเพื่อไฮไลต์ (plan.id หรือ revolvingFocusKey(...))
+ */
+interface PendingFocusTarget {
+  selector: string;
+  focus: 'self' | string;
+  highlightKey: string;
+}
+
 interface CreditCardDetailProps {
   card: CreditCardDetailData | null;
   plans?: CreditPlanDetail[];
@@ -137,6 +149,11 @@ interface CreditCardDetailProps {
   spendSavedMonth?: string | null;
   /** id ของรายการที่เพิ่งบันทึก — ใช้ focus ปุ่ม ⋯ ของแถวนั้นเมื่อย้ายไปเดือนอื่น (I-9/I-34) */
   spendSavedItemId?: string | null;
+  /**
+   * S2 (dashboard-upcoming-click-to-view): `?focus=` จากการ์ด "รายการที่จะมาถึง" ของเดชบอร์ด — planId
+   * ตรง ๆ หรือ `${cardId}_${cycleMonth}` ของรอบยอดหมุนเวียน (parseCreditFocusKey แยกวิเคราะห์)
+   */
+  focusKey?: string | null;
 }
 
 interface PlanRowProps {
@@ -150,6 +167,10 @@ interface PlanRowProps {
   onEdit?: PlanAction;
   onCancel?: PlanAction;
   onDelete?: PlanAction;
+  /** S2: บังคับกางแผนนี้ (มาจาก ?focus=<planId>) — prop ไม่ใช่ state ที่ยก lift ขึ้นมา (R-1) */
+  forceOpen?: boolean;
+  /** S2: ไฮไลต์ชั่วคราว 4s หลัง "มาถึง" จาก ?focus= */
+  highlighted?: boolean;
 }
 
 const COLLAPSED_UNPAID_PREVIEW = 6;
@@ -185,7 +206,9 @@ function PlanRow({
   onRename,
   onEdit,
   onCancel,
-  onDelete
+  onDelete,
+  forceOpen = false,
+  highlighted = false
 }: PlanRowProps) {
   // R-D: มือถือพับ / desktop กาง; ข้าม 768px แล้วรีเซ็ตตามเดิม
   const [open, setOpen] = useState(!isMobileView);
@@ -197,6 +220,13 @@ function PlanRow({
     setOpen(!isMobileView);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobileView]);
+
+  // S2 (R-1): ต้องประกาศ "หลัง" effect ของ isMobileView ข้างบนเสมอ — ทั้งสอง effect รันตอน mount ตามลำดับ
+  // ประกาศ จึงทำให้ force-open ชนะค่าเริ่มต้นแบบพับของมือถือได้ ถ้าสลับลำดับ มือถือจะพับทับการบังคับกางทุกครั้ง
+  useEffect(() => {
+    if (forceOpen) setOpen(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceOpen]);
 
   // รีเซ็ตพรีวิวเมื่อสลับไปดูแผน/ตารางผ่อนอื่น
   useEffect(() => {
@@ -276,7 +306,10 @@ function PlanRow({
   ];
 
   return (
-    <div className="rounded-sm border border-border-default bg-surface-2 p-space-3">
+    <div
+      data-plan-key={plan.id}
+      className={`rounded-sm border border-border-default bg-surface-2 p-space-3 [scroll-margin-top:calc(var(--topbar-safe-top,90px)+8px)] ${highlighted ? 'outline outline-2 outline-accent outline-offset-2' : ''}`}
+    >
       <div className="flex items-start gap-space-2">
         <button
           type="button"
@@ -412,7 +445,8 @@ export default function CreditCardDetail({
   onRevolvingChanged,
   spendRefreshKey = 0,
   spendSavedMonth = null,
-  spendSavedItemId = null
+  spendSavedItemId = null,
+  focusKey = null
 }: CreditCardDetailProps) {
   const payableCycle = useMemo(
     () => (card ? getPayableCycleMonth(card, getCurrentMonthKey()) : ''),
@@ -492,6 +526,92 @@ export default function CreditCardDetail({
   const settledPlans = orderedPlans.filter(plan => plan.status !== PLAN_STATUS.ONGOING);
   const [settledOpen, setSettledOpen] = useState(false);
 
+  // S2 (dashboard-upcoming-click-to-view): การ "มาถึง" ที่รอค้าง — รอ DOM commit (force-open/settled panel/
+  // เปลี่ยนเดือน) ก่อนจะ scroll/focus จริง; forceOpenPlanId/highlightKey อ่านโดย PlanRow/revolving wrapper ด้านล่าง
+  const [pendingFocusTarget, setPendingFocusTarget] = useState<PendingFocusTarget | null>(null);
+  const [forceOpenPlanId, setForceOpenPlanId] = useState<string | null>(null);
+  const [highlightKey, setHighlightKey] = useState<string | null>(null);
+  // token = `${card.id}|${focusKey}` กัน intake effect รันซ้ำตอน plans refresh เงียบ ๆ (AC-20)
+  const handledFocusRef = useRef<string | null>(null);
+
+  // Intake: แยกวิเคราะห์ ?focus= แล้วเตรียม state ที่ต้องกาง/สลับก่อน scroll — deps ตาม spec I-2 เท่านั้น
+  // (ไม่รวม statementMonth: เทียบ "เดือนปัจจุบัน" ตอนรันครั้งนี้พอ ไม่ต้องรันซ้ำเมื่อผู้ใช้ขยับเดือนเอง)
+  useEffect(() => {
+    if (!focusKey || !card) return;
+    const token = `${card.id}|${focusKey}`;
+    if (handledFocusRef.current === token) return;
+    handledFocusRef.current = token;
+    const target = parseCreditFocusKey(focusKey, card.id);
+    if (!target) return;
+    if (target.kind === 'revolving') {
+      // สินเชื่อไม่มียอดหมุนเวียน (BR-CC-038, E-10) — เพิกเฉย
+      if (isLoanCardType(card.cardType)) return;
+      if (target.month !== statementMonth) {
+        setStatementMonth(target.month);
+        setMonthTouched(true);
+      }
+      setPendingFocusTarget({
+        selector: `[data-revolving-key="${revolvingFocusKey(card.id, target.month)}"]`,
+        focus: 'self',
+        highlightKey: revolvingFocusKey(card.id, target.month)
+      });
+      return;
+    }
+    const plan = plans.find(candidate => candidate.id === target.planId);
+    if (!plan) return; // ไม่พบแผน (บัตรอื่น/id ที่ไม่มีจริง) — เงียบ ๆ ไม่ทำอะไร (E-9)
+    if (plan.status !== PLAN_STATUS.ONGOING) setSettledOpen(true); // E-7
+    setForceOpenPlanId(plan.id); // E-8
+    setPendingFocusTarget({
+      selector: `[data-plan-key="${plan.id}"]`,
+      focus: `button[aria-controls="plan-detail-${plan.id}"]`,
+      highlightKey: plan.id
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey, card?.id, plans]);
+
+  // Scroll: รอ requestAnimationFrame หนึ่งรอบให้ re-render ของ force-open/settled panel/เดือนใหม่ commit ก่อน
+  // ลองซ้ำอีกครั้งหลัง 80ms ถ้ายังไม่พบ (DOM ช้า) ไม่พบทั้งสองครั้ง → เงียบ ๆ (เบี่ยงเบนจาก ExpenseTable โดยตั้งใจ)
+  useEffect(() => {
+    if (!pendingFocusTarget) return undefined;
+    const applyFocus = (target: HTMLElement) => {
+      const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+      target.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+      const focusTarget = pendingFocusTarget.focus === 'self' ? target : target.querySelector<HTMLElement>(pendingFocusTarget.focus);
+      focusTarget?.focus({ preventScroll: true });
+      setHighlightKey(pendingFocusTarget.highlightKey);
+    };
+    const tryFocus = (): boolean => {
+      if (typeof document === 'undefined') return false;
+      const target = document.querySelector<HTMLElement>(pendingFocusTarget.selector);
+      if (!target) return false;
+      applyFocus(target);
+      return true;
+    };
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const raf = requestAnimationFrame(() => {
+      if (tryFocus()) {
+        setPendingFocusTarget(null);
+        return;
+      }
+      retryTimer = setTimeout(() => {
+        tryFocus();
+        setPendingFocusTarget(null);
+      }, 80);
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [pendingFocusTarget, statementMonth, settledOpen, forceOpenPlanId]);
+
+  // ไฮไลต์เคลียร์เองหลัง 4s — แยก effect จากตัว scroll ด้านบนโดยตั้งใจ: ถ้าผูกไว้ใน effect เดียวกัน
+  // การเคลียร์ pendingFocusTarget ทันทีหลัง scroll สำเร็จจะสั่ง cleanup ของ timer นี้ไปด้วย ไฮไลต์เลยไม่ขึ้นเลย
+  useEffect(() => {
+    if (!highlightKey) return undefined;
+    const timer = setTimeout(() => setHighlightKey(null), 4000);
+    return () => clearTimeout(timer);
+  }, [highlightKey]);
+
   if (!card) {
     return (
       <div className="flex flex-col items-center gap-space-3 rounded-md border border-dashed border-border-default bg-sunken px-space-5 py-space-7 text-center">
@@ -568,6 +688,8 @@ export default function CreditCardDetail({
       onEdit={onEditPlan}
       onCancel={onCancelPlan}
       onDelete={onDeletePlan}
+      forceOpen={plan.id === forceOpenPlanId}
+      highlighted={highlightKey === plan.id}
     />
   );
 
@@ -678,27 +800,33 @@ export default function CreditCardDetail({
           )}
 
           {!isLoan && (
-          <CardPayNextSummary
-            card={card}
-            month={statementMonth}
-            status={rev.status}
-            currentCycle={rev.currentCycle}
-            previousMonthCycle={rev.previousMonthCycle}
-            cardTotal={rev.cardTotal}
-            busy={rev.busy}
-            onPayFull={() => { void rev.payFull(); }}
-            onPayMinimum={rev.payMinimum}
-            onUndo={() => { void rev.undoPayment(); }}
-            onRetry={rev.retry}
-            switcher={(
-              <BillingMonthSwitcher
-                month={statementMonth}
-                payableCycle={payableCycle}
-                onChange={handleMonthChange}
-                onReset={handleResetToPayable}
-              />
-            )}
-          />
+          <div
+            data-revolving-key={revolvingFocusKey(card.id, statementMonth)}
+            tabIndex={-1}
+            className={`rounded-md focus:outline-none [scroll-margin-top:calc(var(--topbar-safe-top,90px)+8px)] ${highlightKey === revolvingFocusKey(card.id, statementMonth) ? 'outline outline-2 outline-accent outline-offset-2' : ''}`}
+          >
+            <CardPayNextSummary
+              card={card}
+              month={statementMonth}
+              status={rev.status}
+              currentCycle={rev.currentCycle}
+              previousMonthCycle={rev.previousMonthCycle}
+              cardTotal={rev.cardTotal}
+              busy={rev.busy}
+              onPayFull={() => { void rev.payFull(); }}
+              onPayMinimum={rev.payMinimum}
+              onUndo={() => { void rev.undoPayment(); }}
+              onRetry={rev.retry}
+              switcher={(
+                <BillingMonthSwitcher
+                  month={statementMonth}
+                  payableCycle={payableCycle}
+                  onChange={handleMonthChange}
+                  onReset={handleResetToPayable}
+                />
+              )}
+            />
+          </div>
           )}
         </div>
 

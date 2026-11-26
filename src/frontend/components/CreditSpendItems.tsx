@@ -11,6 +11,7 @@ import { formatCurrency } from '../../shared/utils/frontend/numberUtils';
 import { formatMonthKeyTH } from '../../shared/utils/dateUtils';
 import { formatIsoDateTH } from '../../shared/utils/creditCardUtils';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 import { showToast } from '../../shared/utils/frontend/toast';
 import { Icons } from './Icons';
 import LoadingSkeleton, { SkeletonBlock } from './LoadingSkeleton';
@@ -145,6 +146,9 @@ export default function CreditSpendItems({
       setBusy(false);
     }
   };
+
+  // row 21 (spec §I5): onBack = the same cancel path the ✕/Escape already use, blocked = busy
+  useBackToClose(deleting !== null, () => setDeleting(null), { blocked: busy });
 
   const collapsible = isMobileView && items.length > MOBILE_VISIBLE_ROWS;
   const visibleItems = collapsible && !showAll ? items.slice(0, MOBILE_VISIBLE_ROWS) : items;

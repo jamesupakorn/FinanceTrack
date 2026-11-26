@@ -6,6 +6,7 @@ import {
   expenseAPI,
   incomeAPI,
   savingsGoalsAPI,
+  savingsLedgerAPI,
   setSessionInvalidHandler,
   withCsrfHeaders
 } from '../../../../src/shared/utils/frontend/apiUtils';
@@ -194,6 +195,14 @@ describe('ADR-027 validation error handling', () => {
     expect(err).not.toBeInstanceOf(ApiValidationError);
     expect(err.message).toBe('ข้อมูลรายการไม่ถูกต้อง');
     expect(err.errors).toEqual(errors);
+  });
+
+  it('attaches the server-sent available balance to the thrown Error (F-S4-1 regression)', async () => {
+    mockFetchOnce({ status: 409, body: { error: 'insufficient_balance', available: 500 } });
+    const err = await savingsLedgerAPI.createLoan({ source: { type: 'pool' }, amount: 1000 }).catch(e => e);
+    expect(err.code).toBe('insufficient_balance');
+    expect(err.available).toBe(500);
+    expect(err.data).toEqual({ error: 'insufficient_balance', available: 500 });
   });
 
   it('leaves errors undefined when the body has none or a non-object', async () => {

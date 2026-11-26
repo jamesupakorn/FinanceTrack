@@ -10,7 +10,7 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { Collection, Document } from 'mongodb';
-import { calculateTotalSavings, enforceMonthLimit } from '../../src/shared/utils/backend/apiUtils';
+import { calculateTotalSavings } from '../../src/shared/utils/backend/apiUtils';
 import { assertUserId, asPlainString } from '../../src/shared/utils/backend/userRequest';
 import { validateApiRequest } from '../../src/shared/utils/backend/apiRequestValidation';
 import {
@@ -24,15 +24,94 @@ import {
   enforceUserMonthLimit,
 } from '../../src/backend/data/userUtils';
 import { withAudit } from '../../lib/auditedMutation';
+import {
+  CARRY_FORWARD_JSON_FILE,
+  assertPrunedMonthsMatchPreview,
+  foldPrunedMonths,
+  pruneSavingsMonthsWithCarryForward,
+  type CarryForwardGoal,
+  type PrunedMonthDoc,
+} from '../../src/shared/utils/backend/savingsCarryForward';
 
 const COLLECTION_NAME = 'savings';
 const JSON_FILENAME = 'savings.json';
+const GOALS_JSON_FILENAME = 'savings-goals.json';
 
 type SavingsDoc = { month?: string; total_savings?: unknown; savings_list?: unknown; [key: string]: unknown };
 type SavingsBucket = Record<string, SavingsDoc>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * What a JSON savings updater captures for the carry-forward (spec §5.3, C-S2c-2). Filled inside
+ * the `savings.json` updater; consumed only after `updateUserData` returns (A-4: no nested write).
+ */
+interface JsonPruneCapture {
+  /** True iff this request created its own month bucket entry (C-S2c-11, F-6). */
+  ownMonthCreated: boolean;
+  /** Bucket keys handed to `enforceUserMonthLimit`. */
+  candidateMonths: string[];
+  /** Months `enforceUserMonthLimit` removed, keyed by map key, with their content at prune time. */
+  prunedDocs: PrunedMonthDoc[];
+}
+
+function newJsonPruneCapture(): JsonPruneCapture {
+  return { ownMonthCreated: false, candidateMonths: [], prunedDocs: [] };
+}
+
+/** Captured from the updater's input before anything else (C-S2c-2/C-S2c-11). Own keys only, so
+ *  any month string, `__proto__` included, is checked safely. */
+function didCreateOwnMonth(bucket: SavingsBucket, month: string): boolean {
+  return !Object.hasOwn(bucket, month);
+}
+
+/**
+ * Runs the unchanged `enforceUserMonthLimit` and records, by diffing before/after keys, which
+ * months it pruned (spec §5.2 point 5, §5.5). JSON months are identified by map key.
+ */
+function limitAndCapturePruned(nextBucket: SavingsBucket, capture: JsonPruneCapture): SavingsBucket {
+  const limitedBucket = enforceUserMonthLimit(nextBucket) as SavingsBucket;
+  capture.candidateMonths = Object.keys(nextBucket);
+  capture.prunedDocs = capture.candidateMonths
+    .filter(monthKey => !Object.hasOwn(limitedBucket, monthKey))
+    .map(monthKey => ({ month: monthKey, savings_list: nextBucket[monthKey]?.savings_list }));
+  return limitedBucket;
+}
+
+/**
+ * Credits the months pruned by this request's `savings.json` write to `savings-carry-forward.json`
+ * (spec §5.3 + §5.8 A-1/A-2/A-4, C-S2c-2, C-S2c-11). Must run after the savings `updateUserData`
+ * returned, inside the same handler call, so both writes stage into the same `runJsonTransaction`
+ * and commit (or roll back) together with the prune.
+ *
+ * Fail-closed: first cross-checks that the months credited are exactly the months missing from the
+ * persisted bucket (C-S2c-1's check, JSON form). A mismatch throws; nothing catches it, so
+ * `withAudit` answers 500 and commits neither the savings write nor the carry-forward.
+ */
+function creditPrunedMonthsJson(
+  userId: string,
+  month: string,
+  capture: JsonPruneCapture,
+  storedBucket: unknown
+): void {
+  const stored = isRecord(storedBucket) ? storedBucket : {};
+  const actualPruned = capture.candidateMonths.filter(monthKey => !Object.hasOwn(stored, monthKey));
+  assertPrunedMonthsMatchPreview(capture.prunedDocs.map(doc => doc.month as string), actualPruned);
+  if (capture.prunedDocs.length === 0) return;
+
+  const storedGoals = getUserData(GOALS_JSON_FILENAME, userId).goals;
+  const goals = (Array.isArray(storedGoals) ? storedGoals as CarryForwardGoal[] : [])
+    .filter(goal => goal?.status !== 'abandoned');
+  const { next, creditedMonths } = foldPrunedMonths(
+    getUserData(CARRY_FORWARD_JSON_FILE, userId),
+    capture.prunedDocs,
+    goals,
+    { excludeMonth: capture.ownMonthCreated ? month : null, nowIso: new Date().toISOString() }
+  );
+  if (creditedMonths.length === 0) return;
+  updateUserData(CARRY_FORWARD_JSON_FILE, userId, () => next);
 }
 
 /**
@@ -92,7 +171,9 @@ function handleJsonSavingsPost(req: NextApiRequest, res: NextApiResponse, userId
       return res.status(400).json({ error: 'valid transfer amount and key required' });
     }
     let created = false;
-    updateUserData(JSON_FILENAME, userId, (bucket: SavingsBucket) => {
+    const capture = newJsonPruneCapture();
+    const storedBucket = updateUserData(JSON_FILENAME, userId, (bucket: SavingsBucket) => {
+      capture.ownMonthCreated = didCreateOwnMonth(bucket, month);
       const nextBucket: SavingsBucket = { ...bucket };
       const existing = nextBucket[month] || { month, savings_list: [] };
       const existingList = Array.isArray(existing.savings_list) ? existing.savings_list : [];
@@ -108,20 +189,25 @@ function handleJsonSavingsPost(req: NextApiRequest, res: NextApiResponse, userId
           source: 'transferable-savings'
         }]
       });
-      return enforceUserMonthLimit(nextBucket);
+      return limitAndCapturePruned(nextBucket, capture);
     });
+    // The idempotent early return above prunes nothing, so it credits nothing (A-4).
+    creditPrunedMonthsJson(userId, month, capture, storedBucket);
     return res.status(201).json({ success: true, created });
   }
   const updateObj: SavingsDoc = { month, savings_list };
   if (typeof total_savings !== 'undefined') {
     updateObj.total_savings = total_savings;
   }
-  updateUserData(JSON_FILENAME, userId, (bucket: SavingsBucket) => {
+  const capture = newJsonPruneCapture();
+  const storedBucket = updateUserData(JSON_FILENAME, userId, (bucket: SavingsBucket) => {
+    capture.ownMonthCreated = didCreateOwnMonth(bucket, month);
     const nextBucket: SavingsBucket = { ...bucket };
     const existing = nextBucket[month] || {};
     nextBucket[month] = withGeneratedId({ ...existing, ...updateObj });
-    return enforceUserMonthLimit(nextBucket);
+    return limitAndCapturePruned(nextBucket, capture);
   });
+  creditPrunedMonthsJson(userId, month, capture, storedBucket);
   return res.status(201).json({ success: true });
 }
 
@@ -204,7 +290,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       if (!Number.isFinite(amount) || amount <= 0 || !transferKey) {
         return res.status(400).json({ error: 'valid transfer amount and key required' });
       }
-      await collection.updateOne(
+      // Kept: its upsertedCount says whether this request created the month (C-S2c-11).
+      const ensureMonth = await collection.updateOne(
         { month, ...userFilter },
         { $setOnInsert: { month, ...userFilter, savings_list: [] } },
         { upsert: true }
@@ -219,7 +306,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         { month, ...userFilter, 'savings_list.transferKey': { $ne: transferKey } },
         { $push: { savings_list: transferItem } } as Document
       );
-      await enforceMonthLimit(collection, 15, { filter: userFilter });
+      // Mongo prunes (and credits) even on an idempotent transfer — pre-existing behaviour (F-9).
+      await pruneSavingsMonthsWithCarryForward(collection, userId, {
+        ownMonth: month,
+        ownMonthCreated: ensureMonth.upsertedCount === 1
+      });
       return res.status(201).json({ success: true, created: result.modifiedCount === 1 });
     }
     // สร้าง object สำหรับบันทึก โดยไม่ใส่ total_savings ถ้าไม่ได้ส่งมา
@@ -227,12 +318,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (typeof total_savings !== 'undefined') {
       updateObj.total_savings = total_savings;
     }
-    await collection.updateOne(
+    const saved = await collection.updateOne(
       { month, ...userFilter },
       { $set: { ...updateObj, ...userFilter } },
       { upsert: true }
     );
-    await enforceMonthLimit(collection, 15, { filter: userFilter });
+    await pruneSavingsMonthsWithCarryForward(collection, userId, {
+      ownMonth: month,
+      ownMonthCreated: saved.upsertedCount === 1
+    });
     return res.status(201).json({ success: true });
   } else {
     res.status(405).end();

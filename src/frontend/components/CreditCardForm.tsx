@@ -23,6 +23,7 @@ import { parseAndFormat } from '../../shared/utils/frontend/numberUtils';
 import { showToast } from '../../shared/utils/frontend/toast';
 import type { BankAccount } from '../../shared/utils/bankAccountShape';
 import { getTabbableElements } from '../../shared/utils/frontend/focusTrap';
+import { useBackToClose } from '../../shared/utils/frontend/useBackToClose';
 import { Icons } from './Icons';
 import BankIssuerMark from './BankIssuerMark';
 
@@ -178,6 +179,9 @@ export default function CreditCardForm({
   const usedColors = useMemo(() => new Set(
     existingCards.filter(item => item?.id !== card?.id).map(item => item?.color)
   ), [existingCards, card?.id]);
+
+  // row 15 (spec §I5): onBack = the same onClose the ✕/backdrop/"ยกเลิก"/Escape paths already use
+  useBackToClose(open, () => onClose?.());
 
   if (!open) return null;
 

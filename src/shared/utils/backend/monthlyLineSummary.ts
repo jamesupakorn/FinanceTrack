@@ -16,6 +16,12 @@ import {
 } from './monthlySummaryContent';
 import { LINE_THEME, textComponent, valueRow as sharedValueRow } from './lineFlexTheme';
 import type { MetricDelta, UpcomingDues } from './monthlySummaryContent';
+import { readAdjustments, sumAdjustments } from '../savingsGoalAdjustments';
+import { readLoans, readWithdrawals, summarizeLedger } from '../savingsLedger';
+import type { SavingsLoan, SavingsWithdrawal, LedgerSourceTotals } from '../savingsLedger';
+import { readCarryForward } from './savingsCarryForward';
+import type { CarryForwardTotals } from './savingsCarryForward';
+import { LOANS_JSON_FILE, WITHDRAWALS_JSON_FILE, LOANS_COLLECTION, WITHDRAWALS_COLLECTION } from './savingsLedgerStore';
 
 type MonthlyModel = ReturnType<typeof getMonthlySummaryModel>;
 type MonthlyModelInput = NonNullable<Parameters<typeof getMonthlySummaryModel>[0]>;
@@ -34,7 +40,7 @@ type SummaryPayload = {
   comparison?: SummaryComparison;
   upcoming?: UpcomingDues | null;
 };
-type StoredGoal = Document & { goalName?: string; targetAmount?: number | string; status?: string };
+type StoredGoal = Document & { goalName?: string; targetAmount?: number | string; status?: string; adjustments?: unknown };
 type TaxDocument = Document & { year?: string; accumulated_tax?: number | string };
 type SavingsDocument = {
   savings_list?: Array<{
@@ -54,6 +60,9 @@ type MonthlyData = {
   tax: { year?: string; accumulated_tax?: number | string };
   goals: StoredGoal[];
   savingsDocs: SavingsDocument[];
+  loans: SavingsLoan[];
+  withdrawals: SavingsWithdrawal[];
+  carryForward: CarryForwardTotals;
 };
 
 function amount(value: unknown): string {
@@ -64,15 +73,31 @@ function amount(value: unknown): string {
   });
 }
 
-function getGoalSummary(goals: StoredGoal[] = [], savingsDocs: SavingsDocument[] = []): SummaryGoal[] {
+function getGoalSummary(
+  goals: StoredGoal[] = [],
+  savingsDocs: SavingsDocument[] = [],
+  ledgerByGoal?: Map<string, LedgerSourceTotals>,
+  carriedByGoal?: Record<string, number>
+): SummaryGoal[] {
   const activeGoals = goals.filter(goal => goal?.status !== 'abandoned' && goal?.status !== 'completed');
   return activeGoals.map(goal => {
     const name = String(goal.goalName || '').trim().toLowerCase();
-    const current = savingsDocs.reduce((total, doc) => total + (doc?.savings_list || []).reduce((sum, item) => {
+    const goalId = String(goal._id);
+    let current = savingsDocs.reduce((total, doc) => total + (doc?.savings_list || []).reduce((sum, item) => {
       const itemName = String(item?.savings_type || item?.รายการ || '').trim().toLowerCase();
       if (itemName !== name) return sum;
       return sum + (Number(String(item?.savings_amount ?? item?.จำนวนเงิน ?? 0).replace(/,/g, '')) || 0);
     }, 0), 0);
+
+    const carried = carriedByGoal && Object.hasOwn(carriedByGoal, goalId) ? Number(carriedByGoal[goalId]) || 0 : 0;
+    if (carried !== 0) current = Math.round((current + carried) * 100) / 100;
+
+    current += sumAdjustments(readAdjustments(goal)); // sibling's S4 term — position unchanged
+
+    const ledger = ledgerByGoal?.get(goalId);
+    const ledgerTotal = ledger ? ledger.outstanding + ledger.withdrawn : 0;
+    if (ledgerTotal !== 0) current = Math.round((current - ledgerTotal) * 100) / 100;
+
     const target = Number(goal.targetAmount) || 0;
     return {
       name: goal.goalName || 'เป้าหมายเงินออม',
@@ -95,10 +120,13 @@ async function readMonthlyData(userId: string, monthKey: string): Promise<Monthl
     const tax = getUserData('tax_accumulated.json', userId)?.[year] || {};
     const goals = getUserData('savings-goals.json', userId)?.goals || [];
     const savingsDocs = Object.values(getUserData('savings.json', userId) || {}) as SavingsDocument[];
-    return { income, expense, savings, salary, dailyExpense, tax, goals, savingsDocs };
+    const loans = readLoans(getUserData(LOANS_JSON_FILE, userId)?.loans);
+    const withdrawals = readWithdrawals(getUserData(WITHDRAWALS_JSON_FILE, userId)?.withdrawals);
+    const carryForward = await readCarryForward(userId).catch(() => ({ poolAmount: 0, goalAmounts: {}, prunedMonths: [] }));
+    return { income, expense, savings, salary, dailyExpense, tax, goals, savingsDocs, loans, withdrawals, carryForward };
   }
 
-  const [income, expense, savings, salary, dailyExpense, tax, savingsDocs, goals] = await Promise.all([
+  const [income, expense, savings, salary, dailyExpense, tax, savingsDocs, goals, rawLoans, rawWithdrawals, rawCarryForward] = await Promise.all([
     getMongoCollection('monthly_income').then(collection => collection.findOne({ userId, month: monthKey })).catch(() => null),
     getMongoCollection('monthly_expense').then(collection => collection.findOne({ userId, month: monthKey })).catch(() => null),
     getMongoCollection('savings').then(collection => collection.findOne({ userId, month: monthKey })).catch(() => null),
@@ -106,9 +134,18 @@ async function readMonthlyData(userId: string, monthKey: string): Promise<Monthl
     getMongoCollection('daily_expenses').then(collection => collection.findOne({ userId, month: monthKey })).catch(() => null),
     getMongoCollection<TaxDocument>('tax_accumulated').then(collection => collection.findOne({ userId, year })).catch(() => null),
     getMongoCollection('savings').then(collection => collection.find({ userId, month: { $exists: true } }).toArray()).catch(() => []),
-    getMongoCollection<StoredGoal>('savingsGoals').then(collection => collection.find({ userId }).toArray()).catch(() => [])
+    getMongoCollection<StoredGoal>('savingsGoals').then(collection => collection.find({ userId }).toArray()).catch(() => []),
+    getMongoCollection(LOANS_COLLECTION).then(collection => collection.find({ userId }).toArray()).catch(() => null),
+    getMongoCollection(WITHDRAWALS_COLLECTION).then(collection => collection.find({ userId }).toArray()).catch(() => null),
+    readCarryForward(userId).catch(() => null)
   ]);
-  return { income: income || {}, expense: expense || {}, savings: savings || {}, salary: salary || {}, dailyExpense: dailyExpense || {}, tax: (tax || {}) as MonthlyData['tax'], goals, savingsDocs };
+  return {
+    income: income || {}, expense: expense || {}, savings: savings || {}, salary: salary || {}, dailyExpense: dailyExpense || {},
+    tax: (tax || {}) as MonthlyData['tax'], goals, savingsDocs,
+    loans: readLoans(rawLoans || []),
+    withdrawals: readWithdrawals(rawWithdrawals || []),
+    carryForward: rawCarryForward || { poolAmount: 0, goalAmounts: {}, prunedMonths: [] }
+  };
 }
 
 const hasMonthData = (data: MonthlyData): boolean => (['income', 'expense', 'savings', 'dailyExpense'] as const)
@@ -148,7 +185,12 @@ export async function buildMonthlySummaryPayload(userId: string, monthKey: strin
   return {
     model,
     taxAccumulated: Number(data.tax.accumulated_tax) || 0,
-    goals: getGoalSummary(data.goals, data.savingsDocs),
+    goals: getGoalSummary(
+      data.goals,
+      data.savingsDocs,
+      summarizeLedger(data.loans, data.withdrawals).byGoal,
+      data.carryForward.goalAmounts
+    ),
     comparison: {
       income: computeDelta(model.totalIncome, prev.model.totalIncome, hasPrevious),
       expense: computeDelta(totalExpenseOf(model), totalExpenseOf(prev.model), hasPrevious),
@@ -201,7 +243,7 @@ export function buildMonthlySummaryFlex(monthLabel: string, payload: SummaryPayl
     ? goals.slice(0, 4).flatMap(goal => [
       valueRow('🎯', goal.name, goal.current, LINE_THEME.info),
       valueRow(' ', 'คงเหลือ', goal.remaining, LINE_THEME.textSecondary),
-      ...(goal.progress === undefined ? [] : [textComponent(`ถึงเป้าแล้ว ${goal.progress}%`, 'xs', LINE_THEME.info)])
+      ...(goal.progress === undefined ? [] : [textComponent(`ถึงเป้าแล้ว ${Math.max(0, goal.progress)}%`, 'xs', LINE_THEME.info)])
     ])
     : [textComponent('ยังไม่มีเป้าหมายเงินออมที่กำลังดำเนินการ', 'sm', LINE_THEME.textSecondary)];
 
@@ -244,7 +286,7 @@ export function buildMonthlySummaryFlex(monthLabel: string, payload: SummaryPayl
 export function formatMonthlySummaryText(monthLabel: string, payload: SummaryPayload): string {
   const { model, taxAccumulated, goals, comparison, upcoming } = payload;
   const goalText = goals.length
-    ? goals.map(goal => `${goal.name}: คงเหลือ ${amount(goal.remaining)} บาท${goal.progress === undefined ? '' : ` (ถึงเป้าแล้ว ${goal.progress}%)`}`).join('\n')
+    ? goals.map(goal => `${goal.name}: คงเหลือ ${amount(goal.remaining)} บาท${goal.progress === undefined ? '' : ` (ถึงเป้าแล้ว ${Math.max(0, goal.progress)}%)`}`).join('\n')
     : 'ยังไม่มีเป้าหมายเงินออม';
   const withDelta = (line: string, delta: MetricDelta | undefined) => (delta ? `${line} · ${formatDeltaLabel(delta)}` : line);
   const lines = [

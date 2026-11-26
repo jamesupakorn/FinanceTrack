@@ -1,5 +1,6 @@
 import { requireActiveUserId } from './sessionClient';
 import type { BankAccount } from '../bankAccountShape';
+import type { PoolBalance, SavingsLoanSource, SavingsLoanWithBalance, SavingsWithdrawal } from '../savingsLedger';
 
 interface UserSettingsResponse {
 	bankAccounts: BankAccount[];
@@ -191,6 +192,14 @@ async function jsonFetch(url: string, options: RequestInit = {}): Promise<any> {
 		if (data?.errors && typeof data.errors === 'object' && !Array.isArray(data.errors)) {
 			(error as Error & { errors?: Record<string, unknown> }).errors = data.errors;
 		}
+		// แนบ response body ทั้งก้อนไว้ด้วย (เช่น savings-loans/withdrawals 409 {error:'insufficient_balance', available})
+		// — เผื่อ error payload อื่น ๆ ในอนาคตที่มี field เกินกว่า status/code/errors โดยไม่ต้อง special-case ทีละ field
+		if (data && typeof data === 'object' && !Array.isArray(data)) {
+			(error as Error & { data?: unknown }).data = data;
+			if (typeof data.available === 'number') {
+				(error as Error & { available?: number }).available = data.available;
+			}
+		}
 		throw error;
 	}
 	return data;
@@ -240,6 +249,19 @@ export const expenseAPI = {
 			...(paymentAction ? { paymentAction } : {}),
 			...(cycleMonth ? { cycleMonth } : {})
 		})
+	}),
+	/**
+	 * คืนเงินกู้ออม (spec-savings-loan-withdrawal §4.10/§5, S5's own addition — not `savingsLedgerAPI`,
+	 * S4's object). POST { month, repayment } → server เขียนแถว slr_ ให้เอง, client ไม่สร้าง/แก้แถวนี้เอง
+	 * (D-SLW-15). `account` ไม่ส่ง = ไม่ระบุบัญชี (server ใส่ default label เอง).
+	 */
+	repayLoan: async (
+		month: string,
+		repayment: { loanId: string; amount: number | string; account?: string }
+	): Promise<any> => jsonFetch(API_URLS.EXPENSE, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ month, repayment })
 	})
 };
 
@@ -392,6 +414,67 @@ export const savingsGoalsAPI = {
 		method: 'DELETE',
 		headers: { 'Content-Type': 'application/json' },
 		body: withUserPayload({ goalId: id })
+	}),
+	addAdjustment: async (goalId: string, input: { amount: number; note: string }): Promise<any> => jsonFetch('/api/savings-goals', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ action: 'addAdjustment', goalId, ...input })
+	}),
+	editAdjustment: async (goalId: string, adjustmentId: string, input: { amount: number; note: string }): Promise<any> => jsonFetch('/api/savings-goals', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ action: 'editAdjustment', goalId, adjustmentId, ...input })
+	}),
+	deleteAdjustment: async (goalId: string, adjustmentId: string): Promise<any> => jsonFetch('/api/savings-goals', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ action: 'deleteAdjustment', goalId, adjustmentId })
+	})
+};
+
+/** `GET /api/savings-loans` response shape (spec-savings-loan-withdrawal §4.4). `summary` is the server's
+ * own-transaction pool math — the UI must read it verbatim, never re-derive it (ARCHITECTURE constraint 19). */
+export interface SavingsLoansGetResponse {
+	loans: SavingsLoanWithBalance[];
+	summary: PoolBalance & { totalOutstanding: number; openLoanCount: number };
+}
+
+export interface SavingsWithdrawalsGetResponse {
+	withdrawals: SavingsWithdrawal[];
+}
+
+export interface SavingsLedgerCreatePayload {
+	source: SavingsLoanSource;
+	amount: number | string;
+	note?: string | null;
+}
+
+/**
+ * S4 scope only (architecture-review-savings-loan-withdrawal-s4.md C-S4-1): the six methods the borrow/withdraw
+ * dialogs and the history list need. `expenseAPI.repayLoan` is S5's addition to this file, not this object's.
+ */
+export const savingsLedgerAPI = {
+	getLoans: async (): Promise<SavingsLoansGetResponse> => jsonFetch(buildUrl('/api/savings-loans')),
+	createLoan: async (payload: SavingsLedgerCreatePayload): Promise<any> => jsonFetch('/api/savings-loans', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ ...payload })
+	}),
+	deleteLoan: async (loanId: string): Promise<any> => jsonFetch('/api/savings-loans', {
+		method: 'DELETE',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ loanId })
+	}),
+	getWithdrawals: async (): Promise<SavingsWithdrawalsGetResponse> => jsonFetch(buildUrl('/api/savings-withdrawals')),
+	createWithdrawal: async (payload: SavingsLedgerCreatePayload): Promise<any> => jsonFetch('/api/savings-withdrawals', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ ...payload })
+	}),
+	deleteWithdrawal: async (withdrawalId: string): Promise<any> => jsonFetch('/api/savings-withdrawals', {
+		method: 'DELETE',
+		headers: { 'Content-Type': 'application/json' },
+		body: withUserPayload({ withdrawalId })
 	})
 };
 
