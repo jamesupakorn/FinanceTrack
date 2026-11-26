@@ -136,6 +136,10 @@ export default function SavingsLedgerPanel({ reloadKey = 0 }: SavingsLedgerPanel
             <button ref={withdrawalButtonRef} type="button" className={ACTION_BUTTON} onClick={() => setOpenDialog('withdrawal')}>ถอนเงินออม</button>
           </div>
 
+          <p className="m-0 text-xs text-secondary">
+            ยืมเงินและถอนเงินออมบันทึกทันทีเมื่อกดยืนยัน ไม่ต้องกดปุ่มบันทึกของหน้า
+          </p>
+
           <SavingsLedgerHistory
             loans={loans}
             withdrawals={withdrawals}
